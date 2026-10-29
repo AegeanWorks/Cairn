@@ -1,5 +1,211 @@
 {
   "version": 1,
-  "active_task": null,
-  "checkpoints": []
+  "active_task": {
+    "task_id": "cairn-core-values",
+    "last_phase": "phase 4",
+    "active_phase": 5,
+    "status": "completed",
+    "updated_at": 1793265803.5490491,
+    "owner": "kilo:cairn",
+    "started_by": "kilo:cairn",
+    "continuations": [],
+    "completed_at": 1793265825.460302
+  },
+  "checkpoints": [
+    {
+      "task_id": "cairn-native-language",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/6] Build Cairn: an agent-first language with its own x86-64 backend that emits Windows PE executables directly, no C toolchain",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793253745.155414,
+      "timestamp_str": "2026-10-29 09:02:25",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "The user wants a new language whose internals are easy for AI agents to learn, with machine-level speed and its own compiler rather than a C backend.",
+        "benefits": "One numeric type and one obvious syntax remove ambiguity for agents; direct machine-code emission gives zero-cost semantics, no libc, no external toolchain, and deterministic binaries",
+        "risks": "contract: language surface and CLI are new, so they must be frozen in an ADR; dependency: Python 3.10+ bootstrap only, stdlib only; concurrency: none; state: builds are written atomically and are byte-reproducible",
+        "mitigation": "Freeze v0.1 in ADR-001, keep the backend behind a documented instruction set subset, cover every stage with failing-first unit tests plus end-to-end runs of the produced .exe, and run every project gate"
+      }
+    },
+    {
+      "task_id": "cairn-native-language",
+      "phase": "phase 3",
+      "phase_num": 3,
+      "description": "[2/6-5/6] Implemented the compiler: lexer, parser, sema with slots, x86-64 emitter, print and divide-by-zero helpers as machine code, PE32+ writer with imports and fixups, atomic build pipeline and CLI",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793255984.019,
+      "timestamp_str": "2026-10-29 09:39:44",
+      "agent": "kilo:cairn",
+      "handoff": {
+        "state": "all modules under cairn/, 4 examples, 65 tests",
+        "next": "record Phase 4 after the gates",
+        "evidence": "examples/fib.crn prints 55 and 5050 from a 2048-byte exe"
+      }
+    },
+    {
+      "task_id": "cairn-native-language",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[6/6] Verified: 65 tests pass in 0.3s, 4/4 gates pass (test, hygiene, guidelines, secrets), builds are byte-reproducible, end-to-end executables run and match expected output; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793256060.5156484,
+      "timestamp_str": "2026-10-29 09:41:00",
+      "agent": "kilo:cairn",
+      "handoff": {
+        "state": "v0.1 surface frozen in ADR-001, backend in ADR-002, diagnostics in ADR-003, performance claim in ADR-004",
+        "next": "none, task complete",
+        "failed": "none",
+        "open": "no optimiser and no aggregate types, both recorded as non-goals",
+        "evidence": "python aikit.py check cairn -> 4/4"
+      }
+    },
+    {
+      "task_id": "cairn-native-language",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-native-language' completed successfully.",
+      "status": "completed",
+      "timestamp": 1793256060.808921,
+      "timestamp_str": "2026-10-29 09:41:00",
+      "agent": "kilo:cairn"
+    },
+    {
+      "task_id": "cairn-optimizer",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/6] Add an optimiser pass, a register fast path in codegen, and a reproducible benchmark harness with an optional C baseline",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793258467.727731,
+      "timestamp_str": "2026-10-29 10:21:07",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "Cairn 0.1 proves the pipeline but has no optimiser and no repeatable way to compare its output against C, so its speed claim rests on one ad-hoc measurement.",
+        "benefits": "Constant folding and a register fast path cut the instructions per expression; a benchmark harness makes every future speed claim checkable, and detects a C compiler only when one exists.",
+        "risks": "contract: the optimiser must preserve wrapping arithmetic and the divide-by-zero trap, or semantics drift silently; dependency: stdlib only, C compiler optional; concurrency: none; state: benchmarks write JSON only when asked.",
+        "mitigation": "Fold only when semantics are identical, never fold a division whose divisor is zero, add a differential test running folded and unfolded builds, keep the C comparison opt-in and reported as unavailable when no compiler is found, and re-run every gate."
+      }
+    },
+    {
+      "task_id": "cairn-optimizer",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[6/6] Optimiser, benchmark harness and frame hardening complete: 92 tests pass, 4/4 gates pass; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793260517.2201552,
+      "timestamp_str": "2026-10-29 10:55:17",
+      "agent": "kilo:cairn",
+      "handoff": {
+        "state": "optimize.py folds constants with i64 wrap and never folds a zero divisor, benchmarks/run_benchmarks.py is the only source of speed numbers, every frame slot is zeroed on entry",
+        "next": "none, task complete",
+        "evidence": "folded_math 35.5ms vs 71.9ms unoptimised, 4/4 gates"
+      }
+    },
+    {
+      "task_id": "cairn-optimizer",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-optimizer' completed successfully.",
+      "status": "completed",
+      "timestamp": 1793260517.4695404,
+      "timestamp_str": "2026-10-29 10:55:17",
+      "agent": "kilo:cairn"
+    },
+    {
+      "task_id": "cairn-verifiable-core",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/6] Make the core values machine-checkable: a diagnostic code registry, an executable verifier, an agent capabilities manifest, a machine-code listing and a stdlib-only proof",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793262236.2516968,
+      "timestamp_str": "2026-10-29 11:23:56",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "The stated core values (fast, no dependency, machine-level, verifiable, tested with error codes, agent-compatible) are currently claims in prose; only some are enforced by a gate.",
+        "benefits": "Each value becomes a command or a test an agent can run: verify proves an artifact's structure without executing it, capabilities publishes the surface as JSON, a listing shows the emitted instructions, and a test proves the compiler imports nothing outside the standard library.",
+        "risks": "contract: new CLI subcommands and a codes registry become permanent; dependency: stdlib only must hold, so no third-party imports anywhere; concurrency: none; state: verification is read-only and never rewrites an artifact.",
+        "mitigation": "Keep the registry generated from what the source emits and assert both directions against README, make verification pure over bytes, add no dependency, and run every gate."
+      }
+    },
+    {
+      "task_id": "cairn-verifiable-core",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[6/6] Implemented and verified the machine-checkable core: codes.py registry, capabilities.py manifest with three new CLI commands, verify.py with ten V codes, listing.py, stdlib-only AST proof; 113 tests pass, 4/4 gates pass; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793264314.2087677,
+      "timestamp_str": "2026-10-29 11:58:34",
+      "agent": "kilo:cairn",
+      "handoff": {
+        "state": "capabilities/verify/listing wired into the CLI and documented",
+        "next": "none, task complete",
+        "open": "none",
+        "evidence": "python aikit.py check cairn -> 4/4, python -m unittest discover -> 113 tests OK"
+      }
+    },
+    {
+      "task_id": "cairn-verifiable-core",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-verifiable-core' completed successfully.",
+      "status": "completed",
+      "timestamp": 1793264319.4714937,
+      "timestamp_str": "2026-10-29 11:58:39",
+      "agent": "kilo:cairn"
+    },
+    {
+      "task_id": "cairn-core-values",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/4] Bind the six core values (No Dependency, AI Compatible, Easily Understandable, Almost Machine Language Like, Verifiable, Error Codes) to executable evidence and a failing guard each",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793264606.6876845,
+      "timestamp_str": "2026-10-29 12:03:26",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "The six core values are stated in prose and repeated by hand; a value with no check can silently stop being true, and an agent has no way to tell which command proves which value.",
+        "benefits": "One record per value with the command that demonstrates it and the test that fails when it breaks; the manifest publishes them, the README renders them, and a test asserts every guard resolves and every evidence names a real subcommand.",
+        "risks": "contract: the value names, keys and order become permanent identifiers; dependency: stdlib only must keep holding; concurrency: none; state: read-only, values.py holds no state.",
+        "mitigation": "Freeze the six values and their order in an ADR, point each guard at an existing test instead of duplicating it, assert guard resolution with ast, and re-run every gate."
+      },
+      "handoff": {
+        "next": "write values.py, publish in capabilities, add README table, add tests/test_values.py, then phase 4"
+      }
+    },
+    {
+      "task_id": "cairn-core-values",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[4/4] Six core values frozen in values.py with a proving command and a guard test each, published by capabilities and rendered in README; faster-than-C recorded as a measured goal with per-case verdicts and --strict; 124 tests pass, 4/4 gates pass; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793265803.5490491,
+      "timestamp_str": "2026-10-29 12:23:23",
+      "agent": "kilo:cairn",
+      "handoff": {
+        "state": "values.py + tests/test_values.py, harness verdict/--strict, ADR-009 and ADR-010",
+        "next": "none, task complete",
+        "open": "beating -O2 C needs a register allocator and loop transforms",
+        "evidence": "python -m unittest discover -> 124 OK, python aikit.py check cairn -> 4/4, run_benchmarks.py --strict -> exit 2 (no C compiler)"
+      }
+    },
+    {
+      "task_id": "cairn-core-values",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-core-values' completed successfully.",
+      "status": "completed",
+      "timestamp": 1793265825.4603033,
+      "timestamp_str": "2026-10-29 12:23:45",
+      "agent": "kilo:cairn"
+    }
+  ]
 }

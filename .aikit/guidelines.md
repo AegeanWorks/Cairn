@@ -9,3 +9,6 @@ Persisted state carries a format version. A loader refuses a version it does not
 without modifying or quarantining that file; older versions migrate when a migration exists.
 
 ## Rules
+- **G-001** (ADR-003): a new diagnostic check takes a new code from its stage family and is listed in README.md in the same change.
+- **G-002** (ADR-002): a new machine instruction enters machine.py as one documented method with a test, never as an inline byte string elsewhere.
+- **G-003** (ADR-009): a core value or its evidence command changes only with a new ADR, and every value keeps a live guard test named in values.py

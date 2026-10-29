@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+license = "LicenseRef-AL-1.1"
+license-files = ["LICENSE"]
+name = "cairn-lang"
+version = "0.1.0"
+description = "An agent-first systems language with its own x86-64 backend that emits Windows PE executables directly"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Aegean-E", email = "aegean-licensing@proton.me" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Software Development :: Compilers",
+]
+
+[project.scripts]
+cairn = "cairn.cli:command_line"
+
+[tool.setuptools]
+packages = ["cairn"]

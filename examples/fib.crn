@@ -1,0 +1,23 @@
+// Recursion, comparison and an accumulating loop, all on one i64 type.
+fn fib(n: i64) -> i64 {
+    if n < 2 {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+fn sum_to(n: i64) -> i64 {
+    var total: i64 = 0;
+    var i: i64 = 1;
+    while i <= n {
+        total = total + i;
+        i = i + 1;
+    }
+    return total;
+}
+
+fn main() -> i64 {
+    print(fib(10));
+    print(sum_to(100));
+    return 0;
+}

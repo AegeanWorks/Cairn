@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "name": "cairn",
+  "repo": "Cairn",
+  "has_ui": false,
+  "ui_kind": "library",
+  "palette": [
+    "#12070d",
+    "#301213",
+    "#f566a4",
+    "#f5d68e"
+  ],
+  "motif": "stack",
+  "layout": "editorial",
+  "assets": {
+    "logo": {
+      "path": "assets/logo.svg",
+      "status": "pending_review",
+      "commit": "",
+      "generated_at": "2026-10-29T08:50:30",
+      "review": null
+    },
+    "social_preview": {
+      "path": "assets/social-preview.svg",
+      "status": "pending_review",
+      "commit": "",
+      "generated_at": "2026-10-29T08:50:30",
+      "review": null
+    }
+  },
+  "screenshots": []
+}

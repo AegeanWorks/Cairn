@@ -1,0 +1,5 @@
+// The smallest complete Cairn program: one expression, one call, one exit code.
+fn main() -> i64 {
+    print(40 + 2);
+    return 0;
+}

@@ -1,0 +1,9 @@
+// Integer arithmetic edge cases, including the value that needs unsigned digit printing.
+fn main() -> i64 {
+    print(-7 / 2);
+    print(-7 % 2);
+    print(1 << 40);
+    print(9223372036854775807);
+    print(0);
+    return 3;
+}

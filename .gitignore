@@ -6,3 +6,7 @@
 __pycache__/
 *.py[cod]
 node_modules/
+
+# Built executables and build temporaries
+*.exe
+*.exe.tmp_*
