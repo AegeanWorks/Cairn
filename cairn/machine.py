@@ -163,6 +163,34 @@ class Assembler:
         dst, src = REGISTERS[destination], REGISTERS[source]
         self.emit(bytes([_rex(True, src >> 3, 0, dst >> 3), opcode, *_modrm(3, src, dst)]))
 
+    def _group1_imm(self, extension: int, reg: str, value: int) -> None:
+        """`op r/m64, imm8` (83 /n) or `op r/m64, imm32` (81 /n), sign-extended.
+
+        Group 1 holds add (0), or (1), and (4), sub (5) and cmp (7); only the extensions the
+        generator uses are reachable, and the immediate must fit in 32 signed bits.
+        """
+        if not -0x80000000 <= value <= 0x7FFFFFFF:
+            raise ValueError("immediate does not fit in 32 signed bits")
+        code = REGISTERS[reg]
+        rex = _rex(True, 0, 0, code >> 3)
+        modrm = 0xC0 | (extension << 3) | (code & 7)
+        if -128 <= value <= 127:
+            self.emit(bytes([rex, 0x83, modrm, value & 0xFF]))
+        else:
+            self.emit(bytes([rex, 0x81, modrm]), (value & 0xFFFFFFFF).to_bytes(4, "little"))
+
+    def add_imm(self, reg: str, value: int) -> None:
+        """`add r64, imm`, used for `x = x + constant` without a register copy."""
+        self._group1_imm(0, reg, value)
+
+    def sub_imm(self, reg: str, value: int) -> None:
+        """`sub r64, imm`, used for `x = x - constant` without a register copy."""
+        self._group1_imm(5, reg, value)
+
+    def cmp_imm(self, reg: str, value: int) -> None:
+        """`cmp r64, imm`, so a comparison with a small literal needs no second register."""
+        self._group1_imm(7, reg, value)
+
     def imul(self, destination: str, source: str) -> None:
         """`imul r64, r/m64`: two-operand signed multiply."""
         dst, src = REGISTERS[destination], REGISTERS[source]

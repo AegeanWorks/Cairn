@@ -75,11 +75,19 @@ def run_command(argv: Sequence[str], timeout: float,
                           errors="replace", timeout=timeout, check=False, cwd=cwd)
 
 
-def build_cairn(source: Path, destination: Path) -> float:
+def cairn_build_command(source: Path, destination: Path, optimise: bool = True) -> List[str]:
+    """The exact `cairn build` command for one case, with the folding pass optional."""
+    argv = [sys.executable, "-m", "cairn", "build", str(source), "-o", str(destination)]
+    if not optimise:
+        argv.append("--no-optimize")
+    return argv
+
+
+def build_cairn(source: Path, destination: Path, optimise: bool = True) -> float:
     """Compile one Cairn case and return the compile time in milliseconds."""
     started = time.perf_counter()
-    completed = run_command([sys.executable, "-m", "cairn", "build", str(source),
-                             "-o", str(destination)], BUILD_TIMEOUT, cwd=ROOT)
+    completed = run_command(cairn_build_command(source, destination, optimise),
+                            BUILD_TIMEOUT, cwd=ROOT)
     elapsed = (time.perf_counter() - started) * 1000.0
     if completed.returncode != 0:
         raise RuntimeError(f"cairn build failed for {source.name}:\n{completed.stderr}")
@@ -140,8 +148,8 @@ def verdict(best_cairn: Optional[float], best_c: Optional[float]) -> str:
     return "tie"
 
 
-def benchmark_case(case: Case, compiler: Optional[str], rounds: int,
-                   folder: Path) -> Dict[str, object]:
+def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Path,
+                   optimise: bool = True) -> Dict[str, object]:
     """Measure one case in Cairn and, when available, in C."""
     cairn_source = ROOT / case.cairn
     cairn_exe = folder / f"{case.name}.cairn.exe"
@@ -149,7 +157,7 @@ def benchmark_case(case: Case, compiler: Optional[str], rounds: int,
         "case": case.name, "unit": case.unit, "iterations": case.iterations,
         "cairn": {}, "c": None, "c_compiler": compiler, "verdict": "unavailable",
     }
-    compile_ms = build_cairn(cairn_source, cairn_exe)
+    compile_ms = build_cairn(cairn_source, cairn_exe, optimise)
     cairn = summarise(measure(cairn_exe, rounds), case.iterations)
     cairn["compile_ms"] = round(compile_ms, 2)
     cairn["image_bytes"] = cairn_exe.stat().st_size
@@ -170,7 +178,8 @@ def benchmark_case(case: Case, compiler: Optional[str], rounds: int,
     return report
 
 
-def render(reports: List[Dict[str, object]], compiler: Optional[str]) -> str:
+def render(reports: List[Dict[str, object]], compiler: Optional[str],
+           optimise: bool = True) -> str:
     """The human table; one line per case and per measured language."""
     lines = ["case        language  best ms  median ms  compile ms  ns/unit  size",
              "----------  --------  -------  ---------  ----------  -------  ----"]
@@ -184,6 +193,8 @@ def render(reports: List[Dict[str, object]], compiler: Optional[str]) -> str:
                 f"{data['median_ms']:9.2f}  {data.get('compile_ms', 0.0):10.2f}  "
                 f"{data['ns_per_unit']:7.3f}  {data.get('image_bytes', '-')}")
     lines.append("")
+    if not optimise:
+        lines.append("Cairn build: --no-optimize (the folding pass is skipped)")
     lines.append(f"C baseline: {compiler}" if compiler
                  else "C baseline: unavailable (no gcc, clang or cl on PATH)")
     ratios = [float(data["ratio_to_c"]) for report in reports
@@ -219,23 +230,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--rounds", type=_number, default=DEFAULT_ROUNDS,
                         help=f"runs per executable (default: {DEFAULT_ROUNDS})")
     parser.add_argument("--json", action="store_true", help="print one JSON report object")
+    parser.add_argument("--no-optimize", action="store_true",
+                        help="build Cairn without the folding pass, to measure what it buys")
     parser.add_argument("--strict", action="store_true",
                         help="exit 1 unless Cairn is at least as fast as C on every case; "
                              "exit 2 when no C compiler can be measured")
     arguments = parser.parse_args(argv)
     compiler = find_c_compiler()
+    optimise = not arguments.no_optimize
     with tempfile.TemporaryDirectory(prefix="cairn-bench-") as folder:
-        reports = [benchmark_case(case, compiler, arguments.rounds, Path(folder))
+        reports = [benchmark_case(case, compiler, arguments.rounds, Path(folder), optimise)
                    for case in CASES]
     verdicts = [str(report.get("verdict")) for report in reports]
     met = all(item in ("faster", "tie") for item in verdicts)
     if arguments.json:
         print(json.dumps({"compiler": compiler, "rounds": arguments.rounds,
+                          "optimise": optimise,
                           "goal": {"faster_than_c": met if "unavailable" not in verdicts else None,
                                    "verdicts": verdicts},
                           "cases": reports}, indent=2))
     else:
-        print(render(reports, compiler))
+        print(render(reports, compiler, optimise))
     if not arguments.strict:
         return EXIT_OK
     if "unavailable" in verdicts:

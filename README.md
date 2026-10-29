@@ -193,7 +193,7 @@ source.crn
    │  parser.py       recursive descent, C operator precedence
    │  sema.py         names, slots, mutability, arity, return paths
    │  optimize.py     constant folding, neutral operands, dead branches
-   │  codegen.py      x86-64, values in rax, arguments in rcx/rdx/r8/r9
+   │  codegen.py      x86-64, first six slots in callee-saved registers
    │  runtime.py      print and divide-by-zero trap as machine code
    │  pe.py           section layout, fixups, PE32+ headers, imports
    ▼
@@ -224,39 +224,64 @@ design: a rewrite happens only when the result is byte-for-byte what the machine
 
 `--no-optimize` skips the pass on `build`, `check` and `run`, which is how the differential test
 in `tests/test_end_to_end.py` proves both code paths behave identically. `check --json` reports
-how many rewrites fired in the `folded` field.
+how many rewrites fired in the `folded` field. The benchmark harness accepts the same flag, so the
+effect is reproducible with `python benchmarks/run_benchmarks.py --no-optimize`.
 
-Measured effect on the constant-heavy benchmark, same source, five runs each:
+Measured effect on the constant-heavy benchmark, same source, nine runs each:
 
 | Build | Best wall clock | Instructions per iteration |
 |---|---|---|
-| `--no-optimize` | 71.9 ms | one move and one operation per source operator |
-| default | 34.7-35.5 ms | one move and one operation per source *statement* |
+| `--no-optimize` | 65.1 ms | one move and one operation per source operator |
+| default | 18.0 ms | one in-place update per source statement |
 
 On code with nothing to fold the pass is neutral, and the loop benchmark below shows that: the
 loop body is already two names and two additions, so there is no constant to remove.
 
+## The backend: slot homes, in-place updates, direct branches
+
+`codegen.py` gives a function's first six slots — parameters first, then locals in declaration
+order — a home in a callee-saved register (`rbx`, `r12`-`r15`, `rdi`) instead of a frame slot.
+Every function saves the homes it uses on entry and restores them in a single epilogue that every
+`return` jumps to, so a call cannot clobber the caller's locals. A function with more than six
+slots keeps the stack path for the rest.
+
+Three rewrites then remove the copies those homes would otherwise need:
+
+| Pattern | Emitted |
+|---|---|
+| `x = x + e` (also `-`, `*`, `&`, `\|`, `^`) | evaluate `e`, then one arithmetic instruction into `x`'s register |
+| `x = x + <literal>`, `x = x - <literal>` (32-bit immediate) | one group-1 immediate instruction |
+| a comparison used as an `if`/`while` condition | `cmp` plus a conditional jump; no `setcc`, `movzx` and second `test` |
+| a comparison against a 32-bit literal | `cmp r64, imm32` instead of materialising the literal in `rcx` |
+
+These are backend rewrites, not language changes. `--no-optimize` still skips only the folding
+pass; the differential end-to-end test runs both build modes against the same expected output.
+
 ## Performance, measured and honestly bounded
 
 Cairn emits direct machine code with no interpreter loop, no bounds checks and no GC. On the
-integer subset it implements, the generated code is one instruction per operation plus the loads
-and stores its flat slots need. `benchmarks/run_benchmarks.py` reproduces every number below and
-adds a C baseline whenever `gcc`, `clang` or `cl` is already on `PATH`; on a machine with none it
-reports `C baseline: unavailable` rather than inventing a comparison.
+integer subset it implements, the generated code is one instruction per operation; the first six
+slots stay in registers, and only the rest are loaded and stored. `benchmarks/run_benchmarks.py`
+reproduces every number below and adds a C baseline whenever `gcc`, `clang` or `cl` is already on
+`PATH`; on a machine with none it reports `C baseline: unavailable` rather than inventing a
+comparison.
 
-Measured on the development machine (Windows x86-64, Python 3.14 bootstrap, `--rounds 5`):
+Measured on the development machine (Windows x86-64, Python 3.14 bootstrap, `--rounds 9`):
 
 | Case | Work | Best | Per unit | Size |
 |---|---|---|---|---|
-| `loop_sum` | 200,000,000 loop iterations | 170 ms | 0.85 ns | 2,048 bytes |
-| `fib30` | 2,692,537 recursive calls | 12.7 ms | 4.7 ns | 2,560 bytes |
-| `folded_math` | 20,000,000 iterations of constant arithmetic | 35.5 ms | 1.8 ns | 2,560 bytes |
+| `loop_sum` | 200,000,000 loop iterations | 61.5 ms | 0.31 ns | 2,048 bytes |
+| `fib30` | 2,692,537 recursive calls | 13.3 ms | 4.9 ns | 2,048 bytes |
+| `folded_math` | 20,000,000 iterations of constant arithmetic | 18.0 ms | 0.90 ns | 2,048 bytes |
+
+Before the register-home work in ADR-011, the same harness and round count measured 192 ms, 14.7 ms
+and 37.7 ms: the loop is 3.1 times faster, the constant case 2.1 times, and recursion 11 percent.
 
 Run-to-run spread on this machine is about 10 percent, so treat these as an order of magnitude
 rather than three significant figures; the harness prints best, median and worst for that reason.
 
-Compile time is about 150-250 ms per case, nearly all of it Python interpreter startup; the
-produced executable is two to three kilobytes because there is no runtime to link.
+Compile time is about 150-280 ms per case, nearly all of it Python interpreter startup; the
+produced executable is two kilobytes because there is no runtime to link.
 
 What is *not* claimed: that Cairn is faster than C in general. Beating an optimising C compiler
 on arbitrary code is a claim about optimisers and workloads, not about syntax, and this compiler
@@ -313,10 +338,11 @@ cairn/
 │   ├── verify.py             <- structural checks over a built image
 │   ├── values.py             <- the six core values with their proving commands
 │   ├── version.py            <- the one version string
+│   ├── __init__.py           <- package docstring and public exports
 │   └── __main__.py           <- `python -m cairn`
 ├── benchmarks/               <- three cases, their C twins, and the harness
 ├── examples/                 <- hello, fibonacci, arithmetic
-├── tests/                    <- lexer, parser, sema, optimiser, emitter, PE, CLI, harness, capabilities, verifier, values, end-to-end
+├── tests/                    <- lexer, parser, sema, optimiser, codegen, emitter, PE, CLI, harness, capabilities, verifier, values, end-to-end
 └── assets/                   <- generated brand candidates
 ```
 

@@ -59,6 +59,23 @@ fn main() -> i64 {
 }
 """
 
+CALLS_AROUND_LOCALS = """
+fn bump(x: i64) -> i64 {
+    return x + 1;
+}
+
+fn main() -> i64 {
+    var a: i64 = 1;
+    var b: i64 = 2;
+    var c: i64 = 3;
+    a = bump(a);
+    b = bump(b);
+    c = bump(c);
+    print(a * 100 + b * 10 + c);
+    return 0;
+}
+"""
+
 
 @WINDOWS_ONLY
 class EndToEndTest(unittest.TestCase):
@@ -127,6 +144,11 @@ class EndToEndTest(unittest.TestCase):
                   "fn main() -> i64 { print(sub(1, print(2), 3)); return 0; }")
         completed = self.execute(source)
         self.assertEqual(completed.stdout, "2\n-4\n")
+
+    def test_calls_preserve_locals_held_in_callee_saved_registers(self) -> None:
+        completed = self.execute(CALLS_AROUND_LOCALS)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "234\n")
 
     def test_forty_locals_use_wide_frame_displacements(self) -> None:
         declarations = "".join(f"    let v{index}: i64 = {index};\n" for index in range(40))

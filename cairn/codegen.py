@@ -4,10 +4,15 @@ Every Cairn expression is an i64 in a register, so the lowering never needs a ty
 operand of a binary operator lives in a temporary register when the right operand cannot call a
 function, and on the stack otherwise; calls pass arguments in the Windows x64 integer registers,
 which the same backend also uses internally.
+
+A function's first few slots live in callee-saved registers instead of the frame. A call therefore
+cannot clobber a local, and a hot loop stops reloading its counters on every iteration; a function
+that uses those registers saves them on entry and restores them on every exit. Functions with more
+slots than registers keep the stack path for the rest.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from cairn import syntax
 from cairn.image import ENTRY_LABEL, Artifact, ReadOnlyData, iat_label
@@ -20,14 +25,27 @@ COMPARISON_CONDITIONS = {
     "==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge",
 }
 
+# The condition that jumps when the compared relation is false.
+INVERTED_CONDITIONS = {"e": "ne", "ne": "e", "l": "ge", "ge": "l", "le": "g", "g": "le"}
+
 ARITHMETIC_OPCODES = {
     "+": 0x01, "&": 0x21, "|": 0x09, "^": 0x31,
 }
+
+# Binary operators that can update a destination in place: `slot = slot op value`.
+UPDATE_OPCODES = {"+": 0x01, "-": 0x29, "&": 0x21, "|": 0x09, "^": 0x31}
+COMMUTATIVE_UPDATES = frozenset({"+", "*", "&", "|", "^"})
+IMMEDIATE_UPDATES = frozenset({"+", "-"})
+IMMEDIATE_MIN = -0x80000000
+IMMEDIATE_MAX = 0x7FFFFFFF
 
 # Volatile registers that hold a left operand across a nested expression, innermost last.
 TEMPORARY_REGISTERS = ("r11", "r10")
 # Scratch for division and shifting: never a temporary register and never live across a call.
 SCRATCH = "rsi"
+# Callee-saved registers that can hold a function's slots, in allocation order. `rsi` is the
+# division scratch and `rbp` is the frame pointer, so neither can be a home.
+HOME_REGISTERS = ("rbx", "r12", "r13", "r14", "r15", "rdi")
 
 
 def function_label(name: str) -> str:
@@ -45,6 +63,20 @@ def align16(value: int) -> int:
     return (value + 15) & ~15
 
 
+def slot_of(expression: Optional[syntax.Expr]) -> Optional[int]:
+    """The slot a parenthesised name refers to, or None for every other expression."""
+    while isinstance(expression, syntax.Parens):
+        expression = expression.inner
+    return expression.slot if isinstance(expression, syntax.Name) else None
+
+
+def is_leaf(expression: Optional[syntax.Expr]) -> bool:
+    """Whether evaluating the expression is a load or a literal move and nothing else."""
+    while isinstance(expression, syntax.Parens):
+        expression = expression.inner
+    return isinstance(expression, (syntax.IntLiteral, syntax.Name))
+
+
 @dataclass
 class CodeGenerator:
     """One lowering pass over a checked program."""
@@ -56,6 +88,9 @@ class CodeGenerator:
     break_targets: List[str] = field(default_factory=list)
     continue_targets: List[str] = field(default_factory=list)
     counter: int = 0
+    homes: Tuple[str, ...] = ()
+    save_base: int = 0
+    epilogue: str = ""
 
     def generate(self, program: syntax.Program) -> Artifact:
         """Emit the entry stub, every function, then the runtime helpers."""
@@ -84,33 +119,139 @@ class CodeGenerator:
         self.assembler.hlt()
 
     def _emit_function(self, function: syntax.Function) -> None:
-        """Prologue, zeroed frame, parameter spills, body, and an unreachable zero return."""
+        """Prologue, saved homes, cleared frame, parameter spills, body, and one epilogue.
+
+        Every `return` jumps to the single epilogue, so a home is restored on every path out.
+        """
         asm = self.assembler
-        frame = align16(function.slots * 8)
+        self.homes = HOME_REGISTERS[:min(function.slots, len(HOME_REGISTERS))]
+        self.save_base = function.slots
+        self.epilogue = f"{function_label(function.name)}.epilogue"
+        frame = align16((function.slots + len(self.homes)) * 8)
         asm.label(function_label(function.name))
         asm.push("rbp")
         asm.mov_reg_reg("rbp", "rsp")
         if frame:
             asm.sub_rsp(frame)
-            self._zero_frame(function.slots)
+        self._save_homes()
+        self._clear_frame(function)
         for index, parameter in enumerate(function.parameters[:MAX_PARAMETERS]):
-            asm.mov_store_rbp(slot_offset(parameter.slot), ARGUMENT_REGISTERS[index])
+            self._store_slot(parameter.slot, ARGUMENT_REGISTERS[index])
         self.depth = 0
         self.temporaries = 0
         self._emit_block(function.body)
         asm.mov_imm64("rax", 0)
+        asm.label(self.epilogue)
+        self._restore_homes()
         asm.leave_ret()
 
-    def _zero_frame(self, slots: int) -> None:
+    def _save_homes(self) -> None:
+        """Keep the caller's values for every callee-saved register this function uses."""
+        for index, home in enumerate(self.homes):
+            self.assembler.mov_store_rbp(slot_offset(self.save_base + index), home)
+
+    def _restore_homes(self) -> None:
+        """Put the caller's values back before returning."""
+        for index, home in enumerate(self.homes):
+            self.assembler.mov_load_rbp(home, slot_offset(self.save_base + index))
+
+    def _clear_frame(self, function: syntax.Function) -> None:
         """Clear every slot so a binding declared in a branch that never ran reads as zero.
 
         Cairn has one flat function scope, so a name declared inside an `if` is visible after it.
-        Zeroing the frame makes that read defined instead of whatever the previous call left.
+        A home is cleared in its register; a stack slot is cleared in the frame. A parameter needs
+        neither, because the argument register is stored over it before the body runs.
         """
         asm = self.assembler
-        asm.xor_zero("rax")
-        for slot in range(slots):
-            asm.mov_store_rbp(slot_offset(slot), "rax")
+        if len(self.homes) < function.slots:
+            asm.xor_zero("rax")
+            for slot in range(len(self.homes), function.slots):
+                asm.mov_store_rbp(slot_offset(slot), "rax")
+        for index, home in enumerate(self.homes):
+            if index >= len(function.parameters):
+                asm.xor_zero(home)
+
+    def _home(self, slot: int) -> Optional[str]:
+        """The register that holds `slot`, or None when the slot stays in the frame."""
+        if 0 <= slot < len(self.homes):
+            return self.homes[slot]
+        return None
+
+    def _load_slot(self, slot: int, destination: str = "rax") -> None:
+        """Move one slot into `destination` from its register or its frame slot."""
+        home = self._home(slot)
+        if home is None:
+            self.assembler.mov_load_rbp(destination, slot_offset(slot))
+        elif home != destination:
+            self.assembler.mov_reg_reg(destination, home)
+
+    def _store_slot(self, slot: int, source: str = "rax") -> None:
+        """Write `source` into one slot's register or frame slot."""
+        home = self._home(slot)
+        if home is None:
+            self.assembler.mov_store_rbp(slot_offset(slot), source)
+        elif home != source:
+            self.assembler.mov_reg_reg(home, source)
+
+    def _emit_value(self, slot: int, expression: Optional[syntax.Expr]) -> None:
+        """Assign an expression to a slot, folding `slot = slot op value` in place."""
+        home = self._home(slot)
+        if home is not None and self._fold_update(home, slot, expression):
+            return
+        self._emit_expression(expression)
+        self._store_slot(slot)
+
+    def _fold_update(self, home: str, slot: int, expression: Optional[syntax.Expr]) -> bool:
+        """Emit `home = home op value` when the expression updates its own slot.
+
+        Folding is safe because a Cairn function has no globals or pointers: evaluating the other
+        side cannot change the slot, and the operation is the same wrapping instruction the
+        general path would use. `+` and `-` with a small literal need no scratch register.
+        """
+        if not isinstance(expression, syntax.Binary):
+            return False
+        operator = expression.op
+        other = None
+        if operator in COMMUTATIVE_UPDATES:
+            if slot_of(expression.left) == slot:
+                other = expression.right
+            elif slot_of(expression.right) == slot:
+                other = expression.left
+        elif operator == "-" and slot_of(expression.left) == slot:
+            other = expression.right
+        if other is None:
+            return False
+        if (operator in IMMEDIATE_UPDATES and isinstance(other, syntax.IntLiteral)
+                and IMMEDIATE_MIN <= other.value <= IMMEDIATE_MAX):
+            if operator == "+":
+                self.assembler.add_imm(home, other.value)
+            else:
+                self.assembler.sub_imm(home, other.value)
+            return True
+        self._emit_into(other, "rax")
+        if operator == "*":
+            self.assembler.imul(home, "rax")
+        else:
+            self.assembler.binary(UPDATE_OPCODES[operator], home, "rax")
+        return True
+
+    def _emit_into(self, expression: Optional[syntax.Expr], destination: str) -> None:
+        """Lower an expression, using `destination` directly when it is a leaf.
+
+        A call is the only thing that can clobber a register, and a leaf never calls, so a name or
+        literal can be loaded straight into the register that needs it instead of going via rax.
+        """
+        if destination == "rax":
+            self._emit_expression(expression)
+        elif isinstance(expression, syntax.IntLiteral):
+            self.assembler.mov_imm64(destination, expression.value)
+        elif isinstance(expression, syntax.Name):
+            self._load_slot(expression.slot, destination)
+        elif isinstance(expression, syntax.Parens):
+            self._emit_into(expression.inner, destination)
+        else:
+            self._emit_expression(expression)
+            self.assembler.mov_reg_reg(destination, "rax")
 
     def _emit_block(self, block: Optional[syntax.Block]) -> None:
         """Emit every statement of a block in order."""
@@ -123,18 +264,16 @@ class CodeGenerator:
         """Lower one statement."""
         asm = self.assembler
         if isinstance(statement, syntax.Let):
-            self._emit_expression(statement.value)
-            asm.mov_store_rbp(slot_offset(statement.slot), "rax")
+            self._emit_value(statement.slot, statement.value)
         elif isinstance(statement, syntax.Assign):
-            self._emit_expression(statement.value)
-            asm.mov_store_rbp(slot_offset(statement.slot), "rax")
+            self._emit_value(statement.slot, statement.value)
         elif isinstance(statement, syntax.If):
             self._emit_if(statement)
         elif isinstance(statement, syntax.While):
             self._emit_while(statement)
         elif isinstance(statement, syntax.Return):
             self._emit_expression(statement.value)
-            asm.leave_ret()
+            asm.jmp(self.epilogue)
         elif isinstance(statement, syntax.Break):
             if self.break_targets:
                 asm.jmp(self.break_targets[-1])
@@ -147,13 +286,11 @@ class CodeGenerator:
             self._emit_expression(statement.expression)
 
     def _emit_if(self, statement: syntax.If) -> None:
-        """`if` as a test, a conditional jump and two labelled bodies."""
+        """`if` as a conditional branch and two labelled bodies."""
         asm = self.assembler
         otherwise = self._fresh("if.else")
         end = self._fresh("if.end")
-        self._emit_expression(statement.condition)
-        asm.test("rax")
-        asm.jcc("z", otherwise)
+        self._emit_condition(statement.condition, otherwise, when_true=False)
         self._emit_block(statement.then_block)
         if statement.else_block is not None:
             asm.jmp(end)
@@ -169,9 +306,7 @@ class CodeGenerator:
         start = self._fresh("while.start")
         end = self._fresh("while.end")
         asm.label(start)
-        self._emit_expression(statement.condition)
-        asm.test("rax")
-        asm.jcc("z", end)
+        self._emit_condition(statement.condition, end, when_true=False)
         self.break_targets.append(end)
         self.continue_targets.append(start)
         self._emit_block(statement.body)
@@ -179,6 +314,43 @@ class CodeGenerator:
         self.continue_targets.pop()
         asm.jmp(start)
         asm.label(end)
+
+    def _emit_condition(self, expression: Optional[syntax.Expr], target: str,
+                        when_true: bool) -> None:
+        """Jump to `target` when the condition has the requested truth value.
+
+        A comparison branches on its own flags instead of materialising 0 or 1 and testing it
+        again, which is most of the overhead in a tight loop. `!` flips the requested value; every
+        other expression falls back to evaluating it and testing the result.
+        """
+        while isinstance(expression, syntax.Parens):
+            expression = expression.inner
+        if isinstance(expression, syntax.Unary) and expression.op == "!":
+            self._emit_condition(expression.operand, target, not when_true)
+            return
+        if isinstance(expression, syntax.Binary) and expression.op in COMPARISON_CONDITIONS:
+            self._emit_comparison_branch(expression, target, when_true)
+            return
+        self._emit_expression(expression)
+        self.assembler.test("rax")
+        self.assembler.jcc("nz" if when_true else "z", target)
+
+    def _emit_comparison_branch(self, expression: syntax.Binary, target: str,
+                                when_true: bool) -> None:
+        """Compare two operands and branch, using an immediate form when the right side is small."""
+        asm = self.assembler
+        condition = COMPARISON_CONDITIONS[expression.op]
+        if not when_true:
+            condition = INVERTED_CONDITIONS[condition]
+        right = expression.right
+        if (isinstance(right, syntax.IntLiteral)
+                and IMMEDIATE_MIN <= right.value <= IMMEDIATE_MAX):
+            self._emit_into(expression.left, "rax")
+            asm.cmp_imm("rax", right.value)
+        else:
+            self._emit_left_operand(expression.left, expression.right)
+            asm.binary(0x39, "rcx", "rax")
+        asm.jcc(condition, target)
 
     def _emit_expression(self, expression: Optional[syntax.Expr]) -> None:
         """Lower one expression, leaving its value in rax."""
@@ -190,7 +362,7 @@ class CodeGenerator:
         elif isinstance(expression, syntax.Parens):
             self._emit_expression(expression.inner)
         elif isinstance(expression, syntax.Name):
-            asm.mov_load_rbp("rax", slot_offset(expression.slot))
+            self._load_slot(expression.slot)
         elif isinstance(expression, syntax.Unary):
             self._emit_unary(expression)
         elif isinstance(expression, syntax.Binary):
@@ -245,15 +417,19 @@ class CodeGenerator:
         clobber it, so that case keeps the stack form the ABI already tolerates.
         """
         asm = self.assembler
-        self._emit_expression(left)
         if self.temporaries < len(TEMPORARY_REGISTERS) and not has_call(right):
-            temporary = TEMPORARY_REGISTERS[self.temporaries]
-            asm.mov_reg_reg(temporary, "rax")
-            self.temporaries += 1
-            self._emit_expression(right)
-            self.temporaries -= 1
-            asm.mov_reg_reg("rcx", temporary)
+            if is_leaf(right):
+                self._emit_into(left, "rcx")
+                self._emit_expression(right)
+            else:
+                temporary = TEMPORARY_REGISTERS[self.temporaries]
+                self._emit_into(left, temporary)
+                self.temporaries += 1
+                self._emit_expression(right)
+                self.temporaries -= 1
+                asm.mov_reg_reg("rcx", temporary)
             return
+        self._emit_expression(left)
         asm.push("rax")
         self.depth += 8
         self._emit_expression(right)
@@ -339,4 +515,5 @@ def generate(program: syntax.Program) -> Artifact:
     return CodeGenerator().generate(program)
 
 
-__all__ = ["CodeGenerator", "align16", "function_label", "generate", "slot_offset"]
+__all__ = ["CodeGenerator", "HOME_REGISTERS", "align16", "function_label", "generate",
+           "slot_offset"]

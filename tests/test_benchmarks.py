@@ -30,6 +30,18 @@ class SummaryTest(unittest.TestCase):
         self.assertIn("C baseline: unavailable", text)
         self.assertIn("cairn", text)
 
+    def test_build_command_skips_folding_only_when_asked(self) -> None:
+        source, destination = run_benchmarks.ROOT / "x.crn", run_benchmarks.ROOT / "x.exe"
+        self.assertNotIn("--no-optimize",
+                         run_benchmarks.cairn_build_command(source, destination))
+        self.assertIn("--no-optimize",
+                      run_benchmarks.cairn_build_command(source, destination, optimise=False))
+
+    def test_render_names_an_unoptimised_build(self) -> None:
+        report = {"case": "x", "unit": "iterations", "iterations": 10,
+                  "cairn": run_benchmarks.summarise([1.0], 10), "c": None}
+        self.assertIn("--no-optimize", run_benchmarks.render([report], None, optimise=False))
+
 
 class VerdictTest(unittest.TestCase):
     """The `faster than C` goal is decided by measurements, never assumed."""

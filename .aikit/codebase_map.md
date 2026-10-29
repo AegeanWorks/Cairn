@@ -6,11 +6,11 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `36`
-- **Total Classes**: `58`
-- **Total Top-Level Functions**: `100`
-- **Total Class Methods**: `252`
-- **Total Source Lines**: `4535`
+- **Total Python Modules**: `37`
+- **Total Classes**: `60`
+- **Total Top-Level Functions**: `104`
+- **Total Class Methods**: `280`
+- **Total Source Lines**: `4908`
 
 ---
 
@@ -26,7 +26,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, a C baseline.*
 
-**Size**: `250` lines (`10268` bytes)
+**Size**: `265` lines (`11044` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, an equivalent C source, and what one iteration is.*
@@ -34,13 +34,14 @@
 **Functions:**
 - `def find_c_compiler()` - *The first C compiler already installed, or None when the machine has none.*
 - `def run_command(argv, timeout, cwd)` - *Run one command with a hard limit, capturing text.*
-- `def build_cairn(source, destination)` - *Compile one Cairn case and return the compile time in milliseconds.*
+- `def cairn_build_command(source, destination, optimise)` - *The exact `cairn build` command for one case, with the folding pass optional.*
+- `def build_cairn(source, destination, optimise)` - *Compile one Cairn case and return the compile time in milliseconds.*
 - `def build_c(compiler, source, destination)` - *Compile one C case; None when this compiler does not produce an executable.*
 - `def measure(executable, rounds)` - *Wall-clock milliseconds for each run of one executable.*
 - `def summarise(samples, iterations)` - *Best, median and per-unit cost from one set of wall-clock samples.*
 - `def verdict(best_cairn, best_c)` - *The measured standing against C: `faster`, `slower`, `tie` or `unavailable`.*
-- `def benchmark_case(case, compiler, rounds, folder)` - *Measure one case in Cairn and, when available, in C.*
-- `def render(reports, compiler)` - *The human table; one line per case and per measured language.*
+- `def benchmark_case(case, compiler, rounds, folder, optimise)` - *Measure one case in Cairn and, when available, in C.*
+- `def render(reports, compiler, optimise)` - *The human table; one line per case and per measured language.*
 - `def _number(text)` - *A positive sample count from the command line.*
 - `def main(argv)` - *Parse options, run every case and print the report.*
 
@@ -115,19 +116,29 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `342` lines (`13394` bytes)
+**Size**: `519` lines (`22025` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
   - Method `.generate(program)` - *Emit the entry stub, every function, then the runtime helpers.*
   - Method `._fresh(stem)` - *A label name no other construct uses.*
   - Method `._emit_entry()` - *The PE entry point: call main, then exit with main's return value.*
-  - Method `._emit_function(function)` - *Prologue, zeroed frame, parameter spills, body, and an unreachable zero return.*
-  - Method `._zero_frame(slots)` - *Clear every slot so a binding declared in a branch that never ran reads as zero.*
+  - Method `._emit_function(function)` - *Prologue, saved homes, cleared frame, parameter spills, body, and one epilogue.*
+  - Method `._save_homes()` - *Keep the caller's values for every callee-saved register this function uses.*
+  - Method `._restore_homes()` - *Put the caller's values back before returning.*
+  - Method `._clear_frame(function)` - *Clear every slot so a binding declared in a branch that never ran reads as zero.*
+  - Method `._home(slot)` - *The register that holds `slot`, or None when the slot stays in the frame.*
+  - Method `._load_slot(slot, destination)` - *Move one slot into `destination` from its register or its frame slot.*
+  - Method `._store_slot(slot, source)` - *Write `source` into one slot's register or frame slot.*
+  - Method `._emit_value(slot, expression)` - *Assign an expression to a slot, folding `slot = slot op value` in place.*
+  - Method `._fold_update(home, slot, expression)` - *Emit `home = home op value` when the expression updates its own slot.*
+  - Method `._emit_into(expression, destination)` - *Lower an expression, using `destination` directly when it is a leaf.*
   - Method `._emit_block(block)` - *Emit every statement of a block in order.*
   - Method `._emit_statement(statement)` - *Lower one statement.*
-  - Method `._emit_if(statement)` - *`if` as a test, a conditional jump and two labelled bodies.*
+  - Method `._emit_if(statement)` - *`if` as a conditional branch and two labelled bodies.*
   - Method `._emit_while(statement)` - *`while` with its own break and continue targets.*
+  - Method `._emit_condition(expression, target, when_true)` - *Jump to `target` when the condition has the requested truth value.*
+  - Method `._emit_comparison_branch(expression, target, when_true)` - *Compare two operands and branch, using an immediate form when the right side is small.*
   - Method `._emit_expression(expression)` - *Lower one expression, leaving its value in rax.*
   - Method `._emit_unary(expression)` - *Negate, complement, or compare with zero.*
   - Method `._emit_binary(expression)` - *Short-circuit `&&`/`||`, otherwise place the left operand, then combine.*
@@ -142,6 +153,8 @@
 - `def function_label(name)` - *The assembler label of a Cairn function.*
 - `def slot_offset(slot)` - *The rbp-relative offset of a frame slot; slot 0 is the first parameter.*
 - `def align16(value)` - *Round a frame size up to the 16-byte stack alignment the ABI requires.*
+- `def slot_of(expression)` - *The slot a parenthesised name refers to, or None for every other expression.*
+- `def is_leaf(expression)` - *Whether evaluating the expression is a load or a literal move and nothing else.*
 - `def generate(program)` - *Lower a checked program to a linked artifact.*
 
 ---
@@ -239,7 +252,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `257` lines (`10743` bytes)
+**Size**: `285` lines (`12081` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -263,6 +276,10 @@
   - Method `.lea_rip(destination, target)` - *`lea r64, [rip+disp32]`, used for read-only data addresses.*
   - Method `.xor_zero(reg)` - *`xor r32, r32`: the zero idiom, which also clears the upper 32 bits.*
   - Method `.binary(opcode, destination, source)` - *A 64-bit `op r/m64, r64` form: add, sub, and, or, xor and cmp share it.*
+  - Method `._group1_imm(extension, reg, value)` - *`op r/m64, imm8` (83 /n) or `op r/m64, imm32` (81 /n), sign-extended.*
+  - Method `.add_imm(reg, value)` - *`add r64, imm`, used for `x = x + constant` without a register copy.*
+  - Method `.sub_imm(reg, value)` - *`sub r64, imm`, used for `x = x - constant` without a register copy.*
+  - Method `.cmp_imm(reg, value)` - *`cmp r64, imm`, so a comparison with a small literal needs no second register.*
   - Method `.imul(destination, source)` - *`imul r64, r/m64`: two-operand signed multiply.*
   - Method `.test(reg)` - *`test r64, r64`, setting flags from a value without changing it.*
   - Method `.setcc(condition)` - *`setcc al` followed by `movzx rax, al`: a comparison result as 0 or 1 in rax.*
@@ -497,7 +514,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `75` lines (`3564` bytes)
+**Size**: `87` lines (`4289` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -505,6 +522,8 @@
   - Method `.test_zero_iterations_does_not_divide()`
   - Method `.test_every_case_declares_an_existing_cairn_and_c_source()`
   - Method `.test_render_says_unavailable_when_there_is_no_c_compiler()`
+  - Method `.test_build_command_skips_folding_only_when_asked()`
+  - Method `.test_render_names_an_unoptimised_build()`
 - `class VerdictTest` - *The `faster than C` goal is decided by measurements, never assumed.*
   - Method `.test_lower_best_time_wins()`
   - Method `.test_missing_baseline_is_unavailable_not_a_win()`
@@ -571,10 +590,33 @@
 
 ---
 
+### [`tests/test_codegen.py`](tests/test_codegen.py)
+> *Code-generation tests: where a value lives, and what the frame must carry for it.*
+
+**Size**: `110` lines (`4122` bytes)
+
+**Classes:**
+- `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
+  - Method `.__init__()`
+  - Method `.label(name)` - *Track which function the next frame access belongs to.*
+  - Method `.mov_load_rbp(destination, offset)` - *Record a frame load, then emit it.*
+  - Method `.mov_store_rbp(offset, source)` - *Record a frame store, then emit it.*
+  - Method `.loads_of(function)` - *Offsets of frame loads inside one function.*
+  - Method `.stores_of(function)` - *Offsets of frame stores inside one function.*
+- `class SlotHomeTest` - *A slot with a home register must not be read from or written to the stack.*
+  - Method `.test_two_hot_locals_never_touch_their_frame_slots()`
+  - Method `.test_used_homes_are_saved_and_restored()`
+  - Method `.test_the_seventh_slot_keeps_the_stack_fallback()`
+
+**Functions:**
+- `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
+
+---
+
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `170` lines (`6143` bytes)
+**Size**: `192` lines (`6637` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -590,6 +632,7 @@
   - Method `.test_comparison_and_logical_operators_yield_one_or_zero()`
   - Method `.test_four_argument_call_uses_every_argument_register()`
   - Method `.test_print_inside_an_argument_list_evaluates_left_to_right()`
+  - Method `.test_calls_preserve_locals_held_in_callee_saved_registers()`
   - Method `.test_forty_locals_use_wide_frame_displacements()`
   - Method `.test_a_binding_from_a_branch_that_never_ran_reads_as_zero()`
   - Method `.test_optimised_and_unoptimised_builds_behave_identically()`
@@ -615,7 +658,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `68` lines (`2929` bytes)
+**Size**: `77` lines (`3494` bytes)
 
 **Classes:**
 - `class EncodingTest` - *Each test names one encoding and its expected bytes.*
@@ -628,6 +671,8 @@
   - Method `.test_arithmetic_shift_uses_cl()`
   - Method `.test_comparison_result_is_zero_extended_into_rax()`
   - Method `.test_shell_alignment_is_one_instruction()`
+  - Method `.test_register_immediate_add_uses_the_short_form_when_it_fits()`
+  - Method `.test_register_immediate_sub_and_cmp_use_the_group_one_encoding()`
   - Method `.test_relative_call_records_a_fixup_at_the_displacement()`
   - Method `.test_label_records_the_current_offset()`
 

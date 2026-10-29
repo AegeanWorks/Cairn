@@ -1,15 +1,15 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-core-values",
+    "task_id": "cairn-register-homes",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1793265803.5490491,
-    "owner": "kilo:cairn",
-    "started_by": "kilo:cairn",
+    "updated_at": 1793304499.7645364,
+    "owner": "opencode:cairn",
+    "started_by": "opencode:cairn",
     "continuations": [],
-    "completed_at": 1793265825.460302
+    "completed_at": 1793304502.9817407
   },
   "checkpoints": [
     {
@@ -206,6 +206,65 @@
       "timestamp": 1793265825.4603033,
       "timestamp_str": "2026-10-29 12:23:45",
       "agent": "kilo:cairn"
+    },
+    {
+      "task_id": "cairn-register-homes",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/4] Plan: keep up to six parameters and locals in callee-saved registers, with a stack fallback and one epilogue",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793299876.5657778,
+      "timestamp_str": "2026-10-29 21:51:16",
+      "agent": "opencode:cairn",
+      "impact_assessment": {
+        "why": "Every local read and write is an rbp-relative load or store, and the hot benchmark loops spend most of their instructions moving values between rax and their frame slot; that slot traffic is the largest gap between Cairn and the C twin.",
+        "benefits": "The first six slots, parameters included, live in callee-saved registers for the whole function; only the registers a function actually uses are saved and restored, and functions with more than six slots keep the existing stack path.",
+        "risks": "contract: emitted code changes but the language surface does not; dependency: none, standard library only; concurrency: none; state: builds stay deterministic and no persisted format changes, but the ABI save and restore must be exact or a caller value is corrupted",
+        "mitigation": "A recording-assembler test proves a promoted slot never touches its frame slot, behaviour tests cover calls, recursion, more than six slots and a branch that never ran, and the differential optimised/unoptimised test and the benchmark harness run before and after"
+      }
+    },
+    {
+      "task_id": "cairn-register-homes",
+      "phase": "phase 3",
+      "phase_num": 3,
+      "description": "[2/4-3/4] Implemented register homes: first six slots in rbx/r12-r15/rdi, saved and restored in one epilogue; in-place updates and direct comparison branches; add_imm/sub_imm/cmp_imm encodings; recording-assembler, behaviour, differential and benchmark coverage",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793304496.5022857,
+      "timestamp_str": "2026-10-29 23:08:16",
+      "agent": "opencode:cairn",
+      "handoff": {
+        "state": "132 tests pass, 4/4 gates pass",
+        "next": "record phase 4 and commit",
+        "evidence": "loop_sum 58.9 ms, fib30 14.0 ms, folded_math 17.6 ms at --rounds 9"
+      }
+    },
+    {
+      "task_id": "cairn-register-homes",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[4/4] Verified: 132 tests pass in 0.7s, 4/4 gates pass (test, hygiene, guidelines, secrets), examples run and the differential build modes agree; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793304499.7645364,
+      "timestamp_str": "2026-10-29 23:08:19",
+      "agent": "opencode:cairn",
+      "handoff": {
+        "state": "ready to commit",
+        "next": "commit and push",
+        "evidence": "hello 42, fib 55/5050, verify ok 2048 bytes, loop_sum 58.9 ms, fib30 14.0 ms, folded_math 17.6 ms"
+      }
+    },
+    {
+      "task_id": "cairn-register-homes",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-register-homes' completed successfully.",
+      "status": "completed",
+      "timestamp": 1793304502.9817421,
+      "timestamp_str": "2026-10-29 23:08:22",
+      "agent": "opencode:cairn"
     }
   ]
 }

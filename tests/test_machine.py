@@ -49,6 +49,15 @@ class EncodingTest(unittest.TestCase):
     def test_shell_alignment_is_one_instruction(self) -> None:
         self.assertEqual(self.code(lambda a: a.align_rsp()), b"\x48\x83\xe4\xf0")
 
+    def test_register_immediate_add_uses_the_short_form_when_it_fits(self) -> None:
+        self.assertEqual(self.code(lambda a: a.add_imm("r12", 1)), b"\x49\x83\xc4\x01")
+        self.assertEqual(self.code(lambda a: a.add_imm("rbx", -1)), b"\x48\x83\xc3\xff")
+
+    def test_register_immediate_sub_and_cmp_use_the_group_one_encoding(self) -> None:
+        self.assertEqual(self.code(lambda a: a.sub_imm("r12", 1)), b"\x49\x83\xec\x01")
+        self.assertEqual(self.code(lambda a: a.cmp_imm("rax", 1000)),
+                         b"\x48\x81\xf8\xe8\x03\x00\x00")
+
     def test_relative_call_records_a_fixup_at_the_displacement(self) -> None:
         assembler = Assembler()
         assembler.call("target")
