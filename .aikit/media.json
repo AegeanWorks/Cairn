@@ -15,17 +15,31 @@
   "assets": {
     "logo": {
       "path": "assets/logo.svg",
-      "status": "pending_review",
+      "status": "approved",
       "commit": "",
       "generated_at": "2026-10-29T08:50:30",
-      "review": null
+      "review": {
+        "status": "approved",
+        "reviewer": "agent:opencode",
+        "method": "structural",
+        "notes": "512x512 SVG parses; stack motif, recorded palette, Cairn monogram and AegeanWorks lockup; no scripts or external references.",
+        "score": null,
+        "reviewed_at": "2026-10-29T23:12:11"
+      }
     },
     "social_preview": {
       "path": "assets/social-preview.svg",
-      "status": "pending_review",
+      "status": "approved",
       "commit": "",
       "generated_at": "2026-10-29T08:50:30",
-      "review": null
+      "review": {
+        "status": "approved",
+        "reviewer": "agent:opencode",
+        "method": "structural",
+        "notes": "1280x640 SVG parses; Cairn title, library kicker, stack mark and three badges; corrected the stale C-backend sentence to its own x86-64 backend; no scripts or external references.",
+        "score": null,
+        "reviewed_at": "2026-10-29T23:12:14"
+      }
     }
   },
   "screenshots": []
