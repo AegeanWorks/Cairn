@@ -23,6 +23,6 @@
     "benchmarks/run_benchmarks.py",
     "cairn/cli.py"
   ],
-  "ui_checked_at": "2026-10-29",
+  "ui_checked_at": "2026-11-02",
   "ui_source": "detected"
 }

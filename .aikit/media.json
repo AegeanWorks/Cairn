@@ -3,42 +3,42 @@
   "name": "cairn",
   "repo": "Cairn",
   "has_ui": false,
-  "ui_kind": "library",
+  "ui_kind": "cli",
   "palette": [
-    "#12070d",
-    "#301213",
-    "#f566a4",
-    "#f5d68e"
+    "#13070d",
+    "#301214",
+    "#f35e99",
+    "#f4d990"
   ],
-  "motif": "stack",
+  "motif": "code",
   "layout": "editorial",
   "assets": {
     "logo": {
       "path": "assets/logo.svg",
       "status": "approved",
       "commit": "",
-      "generated_at": "2026-10-29T08:50:30",
+      "generated_at": "2026-11-02T00:52:42",
       "review": {
         "status": "approved",
-        "reviewer": "agent:opencode",
+        "reviewer": "agent:kilo",
         "method": "structural",
-        "notes": "512x512 SVG parses; stack motif, recorded palette, Cairn monogram and AegeanWorks lockup; no scripts or external references.",
-        "score": null,
-        "reviewed_at": "2026-10-29T23:12:11"
+        "notes": "Code-chevron mark for the systems language: crisp symmetric geometry, correct CA monogram, valid SVG.",
+        "score": 90,
+        "reviewed_at": "2026-11-02T00:53:15"
       }
     },
     "social_preview": {
       "path": "assets/social-preview.svg",
       "status": "approved",
       "commit": "",
-      "generated_at": "2026-10-29T08:50:30",
+      "generated_at": "2026-11-02T00:52:42",
       "review": {
         "status": "approved",
-        "reviewer": "agent:opencode",
+        "reviewer": "agent:kilo",
         "method": "structural",
-        "notes": "1280x640 SVG parses; Cairn title, library kicker, stack mark and three badges; corrected the stale C-backend sentence to its own x86-64 backend; no scripts or external references.",
-        "score": null,
-        "reviewed_at": "2026-10-29T23:12:14"
+        "notes": "Editorial card: Cairn title, LANGUAGE kicker, tagline legible, chevron mark suits a systems language.",
+        "score": 90,
+        "reviewed_at": "2026-11-02T00:53:15"
       }
     }
   },
