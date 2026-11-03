@@ -6,11 +6,11 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `37`
-- **Total Classes**: `60`
-- **Total Top-Level Functions**: `104`
-- **Total Class Methods**: `281`
-- **Total Source Lines**: `4917`
+- **Total Python Modules**: `39`
+- **Total Classes**: `66`
+- **Total Top-Level Functions**: `108`
+- **Total Class Methods**: `303`
+- **Total Source Lines**: `5302`
 
 ---
 
@@ -192,6 +192,32 @@
 **Functions:**
 - `def _excerpt(source, span)` - *The source line the span starts on, without its line ending.*
 - `def fail(code, message, fix, span, path)` - *One diagnostic as an exception, for the stage that cannot continue past it.*
+
+---
+
+### [`cairn/filetable.py`](cairn/filetable.py)
+> *qwenFS toy for Cairn: a deterministic in-memory file table with integer handles.*
+
+**Size**: `192` lines (`8017` bytes)
+
+**Classes:**
+- `class FileTable` - *Deterministic exact-match file table plus a directed link graph.*
+  - Method `.__init__()`
+  - Method `.__len__()` - *The number of files currently stored.*
+  - Method `.__contains__(handle)` - *Whether an integer handle names a stored file.*
+  - Method `.write(handle, data)` - *Create or overwrite one file with its whole content.*
+  - Method `.read(handle)` - *Return the whole content of one file, or raise KeyError when missing.*
+  - Method `.list()` - *Every stored handle in sorted order (no search, exact enumeration).*
+  - Method `.link(source, target)` - *Add one directed edge source -> target between two existing files.*
+  - Method `.unlink_link(source, target)` - *Remove one directed edge, or raise KeyError when it is absent.*
+  - Method `.unlink(handle)` - *Remove one file and every incident link edge.*
+  - Method `.list_links(handle)` - *Outgoing edges of one file in sorted order.*
+  - Method `.list_backlinks(handle)` - *Incoming edges of one file in sorted order.*
+
+**Functions:**
+- `def _check_handle(handle)` - *Validate one integer-handle path for the i64-only language.*
+- `def _check_data(data)` - *Validate one file payload: whole bytes, never a partial view.*
+- `def emit_filetable(assembler, rodata)` - *Emit the additive filetable descriptor, mirroring runtime.emit_runtime.*
 
 ---
 
@@ -636,6 +662,34 @@
   - Method `.test_forty_locals_use_wide_frame_displacements()`
   - Method `.test_a_binding_from_a_branch_that_never_ran_reads_as_zero()`
   - Method `.test_optimised_and_unoptimised_builds_behave_identically()`
+
+---
+
+### [`tests/test_filetable.py`](tests/test_filetable.py)
+> *Scripted exactness proofs for the qwenFS toy file table.*
+
+**Size**: `193` lines (`7903` bytes)
+
+**Classes:**
+- `class ScriptedSessionTest`
+  - Method `.test_write_overwrite_read_missing_list()`
+  - Method `.test_link_duplicate_unlink()`
+  - Method `.test_session_is_deterministic()`
+- `class DenseGraphTest`
+  - Method `.test_dense_graph_links_and_backlinks_stay_exact()`
+- `class MountPageSimulationTest`
+  - Method `.test_mount_copies_whole_values_under_a_base_offset()`
+  - Method `.test_page_chunks_reassemble_to_the_exact_value()`
+- `class CapAndHandlesTest`
+  - Method `.test_32_file_cap_with_overwrite_allowed_when_full()`
+  - Method `.test_integer_handles_are_i64_only()`
+- `class EmitAdditiveTest`
+  - Method `.test_emit_uses_rodata_add_and_lea_rip_with_no_new_section()`
+  - Method `.test_additive_emit_on_a_real_build_still_verifies()`
+  - Method `.test_default_build_path_never_invokes_the_filetable()`
+
+**Functions:**
+- `def scripted_session()` - *One deterministic session every exactness test replays.*
 
 ---
 
