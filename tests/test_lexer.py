@@ -49,6 +49,13 @@ class LexerTest(unittest.TestCase):
         self.assertEqual(len(tokens), 1)
         self.assertEqual(tokens[0].kind, "eof")
 
+    def test_non_ascii_identifier_is_rejected_as_unexpected_character(self) -> None:
+        with self.assertRaises(DiagnosticError) as caught:
+            tokenize("let caf\u00e9: i64 = 1;")
+        diagnostic = caught.exception.diagnostics[0]
+        self.assertEqual(diagnostic.code, "E1001")
+        self.assertIn("ASCII", diagnostic.fix)
+
 
 if __name__ == "__main__":
     unittest.main()

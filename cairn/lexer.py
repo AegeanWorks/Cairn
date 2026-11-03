@@ -85,9 +85,9 @@ class Lexer:
         """Scan one token that is not whitespace or a comment."""
         start = Span.point(self.offset, self.line, self.column)
         char = self.source[self.offset]
-        if char.isdigit():
+        if char.isascii() and char.isdigit():
             return self._number(start)
-        if char.isalpha() or char == "_":
+        if char.isascii() and (char.isalpha() or char == "_"):
             return self._identifier(start)
         for symbol in MULTI_CHAR_SYMBOLS:
             if self.source.startswith(symbol, self.offset):
@@ -112,7 +112,9 @@ class Lexer:
 
     def _number(self, start: Span) -> Token:
         """A decimal integer literal that must fit in a signed 64-bit integer."""
-        while self.offset < len(self.source) and self.source[self.offset].isdigit():
+        while (self.offset < len(self.source)
+               and self.source[self.offset].isascii()
+               and self.source[self.offset].isdigit()):
             self._advance(self.source[self.offset])
         text = self.source[start.start:self.offset]
         value = int(text)
@@ -126,7 +128,7 @@ class Lexer:
         """A name, or one of the fixed keywords."""
         while self.offset < len(self.source):
             char = self.source[self.offset]
-            if not (char.isalnum() or char == "_"):
+            if not ((char.isascii() and char.isalnum()) or char == "_"):
                 break
             self._advance(char)
         text = self.source[start.start:self.offset]

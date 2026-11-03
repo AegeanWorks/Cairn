@@ -9,8 +9,8 @@
 - **Total Python Modules**: `37`
 - **Total Classes**: `60`
 - **Total Top-Level Functions**: `104`
-- **Total Class Methods**: `280`
-- **Total Source Lines**: `4908`
+- **Total Class Methods**: `281`
+- **Total Source Lines**: `4917`
 
 ---
 
@@ -216,7 +216,7 @@
 ### [`cairn/lexer.py`](cairn/lexer.py)
 > *Lexer: source text to a flat token list.*
 
-**Size**: `142` lines (`5523` bytes)
+**Size**: `144` lines (`5655` bytes)
 
 **Classes:**
 - `class Token` - *One lexical unit: its kind, its text, its value when it is an integer, and its span.*
@@ -642,7 +642,7 @@
 ### [`tests/test_lexer.py`](tests/test_lexer.py)
 > *Lexer tests: token shape, spans, comments and the two literal failures.*
 
-**Size**: `54` lines (`2253` bytes)
+**Size**: `61` lines (`2597` bytes)
 
 **Classes:**
 - `class LexerTest` - *The scanner is the first stage an agent's source touches, so its reports must be exact.*
@@ -652,6 +652,7 @@
   - Method `.test_integer_beyond_i64_is_a_positioned_error()`
   - Method `.test_unexpected_character_names_the_fix()`
   - Method `.test_tokenize_reports_eof_at_the_end()`
+  - Method `.test_non_ascii_identifier_is_rejected_as_unexpected_character()`
 
 ---
 
