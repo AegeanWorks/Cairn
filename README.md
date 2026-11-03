@@ -29,6 +29,13 @@ by `cairn capabilities --json` and asserted by `tests/test_values.py`.
 | **Verifiable** | An artifact is proved well formed from its bytes alone, and two builds are byte-identical. | `python -m cairn verify examples/hello.crn` |
 | **Easily Problem Understood via Error Codes** | Every diagnostic code is registered, documented and published; a corrupt image names the invariant it broke. | `python -m cairn check broken.crn --json` |
 
+## Specification
+
+The language law is `SPEC.md` (§-numbered, with the §16 validity checklist an LLM can walk),
+the compressed agent card is `LLM_SYSTEM.md`, and `examples/alloy_probe/` records the Alloy
+backend probe (fit and misfit with equal weight). If this README and the machine sources
+disagree, `python -m cairn capabilities --json` wins.
+
 ## ⚡ 30-Second Cold-Start Quick Reference
 
 - **Runtime Prerequisites**: Python 3.10 or newer to run the compiler (developed on Python 3.14);
@@ -321,6 +328,8 @@ cairn/
 ├── LICENSES/                 <- REUSE license texts
 ├── REUSE.toml                <- machine-readable SPDX metadata
 ├── README.md
+├── SPEC.md                     <- language law (§-numbered, §16 checklist)
+├── LLM_SYSTEM.md               <- compressed agent card
 ├── pyproject.toml            <- package metadata and the `cairn` console script
 ├── cairn/                    <- the bootstrap compiler
 │   ├── cli.py                <- build, check, run; exit codes and JSON diagnostics
@@ -345,7 +354,7 @@ cairn/
 │   ├── __init__.py           <- package docstring and public exports
 │   └── __main__.py           <- `python -m cairn`
 ├── benchmarks/               <- three cases, their C twins, and the harness
-├── examples/                 <- hello, fibonacci, arithmetic
+├── examples/                 <- hello, fibonacci, arithmetic, alloy_probe (Alloy backend probe)
 ├── tests/                    <- lexer, parser, sema, optimiser, codegen, emitter, PE, CLI, harness, capabilities, verifier, values, end-to-end
 └── assets/                   <- generated brand candidates
 ```

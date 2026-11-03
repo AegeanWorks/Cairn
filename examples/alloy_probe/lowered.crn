@@ -1,0 +1,19 @@
+// Lowered from examples/alloy_probe/src/main.al by mechanical adapter:
+// function -> fn, (n: i32): i32 -> (n: i64) -> i64, let/var types i32 -> i64.
+// Added print(total) because Cairn has no strings: the value 55 is observable.
+// Returns total - 55, so exit 0 means the sum was correct.
+fn sum_to(n: i64) -> i64 {
+    var total: i64 = 0;
+    var i: i64 = 1;
+    while i <= n {
+        total = total + i;
+        i = i + 1;
+    }
+    return total;
+}
+
+fn main() -> i64 {
+    let total: i64 = sum_to(10);
+    print(total);
+    return total - 55;
+}
