@@ -341,6 +341,7 @@ cairn/
 │   ├── codegen.py            <- syntax tree to x86-64
 │   ├── machine.py            <- x86-64 encodings and label fixups
 │   ├── runtime.py            <- print and divide-by-zero helpers as machine code
+│   ├── filetable.py          <- qwenFS toy table plus additive emitter (never in default build)
 │   ├── pe.py                 <- PE32+ writer and fixup resolution
 │   ├── builder.py            <- the stages and the atomic file write
 │   ├── capabilities.py       <- the accepted surface as one JSON object
@@ -355,7 +356,7 @@ cairn/
 │   └── __main__.py           <- `python -m cairn`
 ├── benchmarks/               <- three cases, their C twins, and the harness
 ├── examples/                 <- hello, fibonacci, arithmetic, alloy_probe (Alloy backend probe)
-├── tests/                    <- lexer, parser, sema, optimiser, codegen, emitter, PE, CLI, harness, capabilities, verifier, values, end-to-end
+├── tests/                    <- lexer, parser, sema, optimiser, codegen, emitter, PE, CLI, harness, capabilities, verifier, values, filetable, end-to-end
 └── assets/                   <- generated brand candidates
 ```
 
