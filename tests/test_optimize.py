@@ -101,6 +101,16 @@ class RewriteTest(unittest.TestCase):
         self.assertEqual(pure.expression.arguments[0].value, 0)
         self.assertIsInstance(effectful.expression.arguments[0], syntax.Binary)
 
+    def test_zero_fold_never_drops_a_division_trap(self) -> None:
+        literal = optimized_body("print((1 / 0) * 0);").statements[0]
+        dynamic = optimized_body("var zero: i64 = 0; print((10 / zero) * 0);").statements[1]
+        remainder = optimized_body("print((1 % 0) & 0);").statements[0]
+        for statement in (literal, dynamic, remainder):
+            self.assertIsInstance(statement.expression.arguments[0], syntax.Binary)
+        safe = optimized_body("print((8 / 2) * 0);").statements[0]
+        self.assertIsInstance(safe.expression.arguments[0], syntax.IntLiteral)
+        self.assertEqual(safe.expression.arguments[0].value, 0)
+
     def test_constant_condition_selects_the_taken_branch(self) -> None:
         body = optimized_body("if 1 { print(1); } else { print(2); }")
         self.assertEqual(len(body.statements), 1)

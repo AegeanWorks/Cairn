@@ -91,6 +91,11 @@ class Analyzer:
         self.slots = 0
         self.loop_depth = 0
         for parameter in function.parameters:
+            if parameter.name in BUILTINS:
+                self._report("E3012", f"'{parameter.name}' is a builtin and cannot be redefined",
+                             "Rename the parameter; the builtin keeps its meaning.",
+                             parameter.span)
+                continue
             if parameter.name in self.bindings:
                 self._report("E3006", f"parameter '{parameter.name}' is declared twice",
                              "Give each parameter a distinct name.", parameter.span)
@@ -159,10 +164,16 @@ class Analyzer:
 
     def _check_assign(self, statement: syntax.Assign) -> None:
         """Assignment requires an existing `var` binding."""
-        binding = self.bindings.get(statement.name)
+        if statement.name in BUILTINS:
+            self._report("E3012", f"'{statement.name}' is a builtin and cannot be redefined",
+                         "Rename the variable; the builtin keeps its meaning.", statement.span)
+            binding = None
+        else:
+            binding = self.bindings.get(statement.name)
         if binding is None:
-            self._report("E3007", f"'{statement.name}' is not declared",
-                         "Declare it first with 'var name: i64 = value;'.", statement.span)
+            if statement.name not in BUILTINS:
+                self._report("E3007", f"'{statement.name}' is not declared",
+                             "Declare it first with 'var name: i64 = value;'.", statement.span)
         elif not binding.mutable:
             self._report("E3005", f"'{statement.name}' is immutable",
                          "Declare it with 'var' if it must change, otherwise remove the "

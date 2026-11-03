@@ -1,8 +1,8 @@
 """Diagnostics: every failure carries a stable code, a span and a fix.
 
 An agent reads the code and the span, not the prose, so the machine-readable form is part of
-the contract: `{"code", "severity", "line", "column", "end_line", "end_column", "message",
-"fix", "path"}`.
+the contract: `{"code", "severity", "path", "line", "column", "end_line", "end_column",
+"message", "fix"}`.
 """
 
 from dataclasses import dataclass

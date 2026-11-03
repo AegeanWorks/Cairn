@@ -81,8 +81,9 @@ def _read_source(path: Path) -> Tuple[Optional[str], int]:
     """The source text, or an explained usage failure."""
     try:
         return path.read_text(encoding="utf-8-sig"), EXIT_OK
-    except OSError as error:
-        print(f"[INVALID INPUT] cannot read {path}: {error.strerror or error}", file=sys.stderr)
+    except (OSError, UnicodeDecodeError) as error:
+        detail = getattr(error, "strerror", None) or error
+        print(f"[INVALID INPUT] cannot read {path}: {detail}", file=sys.stderr)
         print("Why: the compiler needs a readable UTF-8 .crn file.", file=sys.stderr)
         print("Fix: pass an existing file path, for example 'cairn check examples/hello.crn'.",
               file=sys.stderr)

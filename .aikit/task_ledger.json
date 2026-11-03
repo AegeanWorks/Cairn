@@ -1,44 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-audit-unicode",
-    "last_phase": "phase 4",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1793722168.7684612,
+    "task_id": "cairn-swarm-fixes",
+    "last_phase": "in_progress",
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1793745765.6300192,
     "owner": "kilo:cairn",
     "started_by": "kilo:cairn",
-    "continuations": [],
-    "completed_at": 1793722207.4140775
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-native-language",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-native-language' completed successfully.",
-      "status": "completed",
-      "timestamp": 1793256060.808921,
-      "timestamp_str": "2026-10-29 09:41:00",
-      "agent": "kilo:cairn"
-    },
-    {
-      "task_id": "cairn-optimizer",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/6] Add an optimiser pass, a register fast path in codegen, and a reproducible benchmark harness with an optional C baseline",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793258467.727731,
-      "timestamp_str": "2026-10-29 10:21:07",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "Cairn 0.1 proves the pipeline but has no optimiser and no repeatable way to compare its output against C, so its speed claim rests on one ad-hoc measurement.",
-        "benefits": "Constant folding and a register fast path cut the instructions per expression; a benchmark harness makes every future speed claim checkable, and detects a C compiler only when one exists.",
-        "risks": "contract: the optimiser must preserve wrapping arithmetic and the divide-by-zero trap, or semantics drift silently; dependency: stdlib only, C compiler optional; concurrency: none; state: benchmarks write JSON only when asked.",
-        "mitigation": "Fold only when semantics are identical, never fold a division whose divisor is zero, add a differential test running folded and unfolded builds, keep the C comparison opt-in and reported as unavailable when no compiler is found, and re-run every gate."
-      }
-    },
     {
       "task_id": "cairn-optimizer",
       "phase": "phase 4",
@@ -290,6 +262,35 @@
       "status": "completed",
       "timestamp": 1793722207.414079,
       "timestamp_str": "2026-11-03 19:10:07",
+      "agent": "kilo:cairn"
+    },
+    {
+      "task_id": "cairn-swarm-fixes",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/5] Swarm triage: 6 S0 crashes verified by repro, minimal fixes with failing-first tests",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793745418.4249606,
+      "timestamp_str": "2026-11-04 01:36:58",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "Seven-module swarm returned 60+ findings; 6 S0 crashes reproduced locally (lexer ValueError, parens E2004, print-param/assign, duplicate label, summarise empty, invalid UTF-8 traceback)",
+        "benefits": "Kills unhandled exceptions, closes spec-range hole, restores diagnostic contract without changing language surface",
+        "risks": "contract: diagnostic codes unchanged, only paths tightened; dependency: stdlib only; concurrency: none; state: no persisted format change",
+        "mitigation": "Failing-first tests per fix, minimal diffs, full unittest plus aikit check after every fix, verifier/PE untouched in this batch"
+      },
+      "plan_digest": "c90fecabcb95bf3e8dcee91349b0fce353298aa023474d4de2409c5edcfcf06c"
+    },
+    {
+      "task_id": "cairn-swarm-fixes",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[5/5] Verified: 155 tests pass, 4/4 gates pass; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793745765.6300192,
+      "timestamp_str": "2026-11-04 01:42:45",
       "agent": "kilo:cairn"
     }
   ]

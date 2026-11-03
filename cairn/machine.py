@@ -68,6 +68,8 @@ class Assembler:
 
     def label(self, name: str) -> None:
         """Bind `name` to the current offset; a duplicate name is a compiler bug."""
+        if name in self.labels:
+            raise ValueError(f"duplicate label {name!r}: a label may be bound once")
         self.labels[name] = self.here()
 
     def rel32(self, target: str) -> None:

@@ -4,7 +4,7 @@ import unittest
 
 from cairn import syntax
 from cairn.diagnostics import DiagnosticError
-from cairn.parser import parse
+from cairn.parser import Parser, parse
 
 
 def body(source: str) -> syntax.Block:
@@ -64,6 +64,26 @@ class ParserTest(unittest.TestCase):
         with self.assertRaises(DiagnosticError) as caught:
             parse("fn main() -> i64 { 1 + 2; return 0; }")
         self.assertEqual(caught.exception.diagnostics[0].code, "E2004")
+
+    def test_parens_call_statement_is_accepted(self) -> None:
+        statement = body("(print(1));").statements[0]
+        self.assertIsInstance(statement, syntax.ExprStmt)
+        unwrapped = statement.expression
+        while isinstance(unwrapped, syntax.Parens):
+            unwrapped = unwrapped.inner
+        self.assertIsInstance(unwrapped, syntax.Call)
+
+    def test_bare_token_list_is_E2001_not_an_index_error(self) -> None:
+        with self.assertRaises(DiagnosticError) as caught:
+            Parser([], "<test>").parse_program()
+        self.assertEqual(caught.exception.diagnostics[0].code, "E2001")
+
+    def test_break_and_continue_spans_include_the_semicolon(self) -> None:
+        source = "fn main() -> i64 { while 1 { break; continue; } return 0; }"
+        loop = parse(source).functions[0].body.statements[0]
+        broken, continued = loop.body.statements
+        self.assertEqual(source[broken.span.start:broken.span.end], "break;")
+        self.assertEqual(source[continued.span.start:continued.span.end], "continue;")
     def test_true_and_false_are_integers(self) -> None:
         values = [statement.expression.arguments[0].value
                   for statement in body("print(true); print(false);").statements]

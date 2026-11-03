@@ -63,6 +63,11 @@ class SemaTest(unittest.TestCase):
     def test_print_is_callable_not_redefinable(self) -> None:
         self.assertEqual(codes("fn main() -> i64 { return print; }"), ["E3012"])
 
+    def test_builtin_cannot_be_a_parameter_or_an_assignment_target(self) -> None:
+        self.assertEqual(codes("fn f(print: i64) -> i64 { return 0; }"
+                               "fn main() -> i64 { return f(1); }"), ["E3012"])
+        self.assertEqual(codes("fn main() -> i64 { print = 1; return 0; }"), ["E3012"])
+
     def test_break_outside_a_loop(self) -> None:
         self.assertEqual(codes("fn main() -> i64 { break; return 0; }"), ["E3008"])
 

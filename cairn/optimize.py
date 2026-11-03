@@ -99,6 +99,34 @@ def has_call(expression: Optional[syntax.Expr]) -> bool:
     return False
 
 
+def _may_trap(expression: Optional[syntax.Expr]) -> bool:
+    """Whether evaluating `expression` can trap on `/` or `%`.
+
+    A divisor that is provably a safe non-zero literal (and not the single
+    `INT64_MIN / -1` overflow) cannot trap; anything else carrying a `/` or
+    `%` must be kept so the backend still emits its trap check.
+    """
+    if expression is None:
+        return False
+    if isinstance(expression, syntax.Binary):
+        if expression.op in ("/", "%"):
+            left = _constant(expression.left)
+            right = _constant(expression.right)
+            if (right is not None and right != 0
+                    and not (right == -1 and (left is None or left == INT64_MIN))):
+                # Provably safe divisor; only the operands themselves could trap.
+                return _may_trap(expression.left) or _may_trap(expression.right)
+            return True
+        return _may_trap(expression.left) or _may_trap(expression.right)
+    if isinstance(expression, syntax.Parens):
+        return _may_trap(expression.inner)
+    if isinstance(expression, syntax.Unary):
+        return _may_trap(expression.operand)
+    if isinstance(expression, syntax.Call):
+        return any(_may_trap(argument) for argument in expression.arguments)
+    return False
+
+
 @dataclass
 class Optimizer:
     """One folding pass, rewriting expressions in place and returning the same nodes."""
@@ -211,7 +239,8 @@ class Optimizer:
         if expression.op in ("*", "&") and (right == 0 or left == 0):
             dropped = expression.right if right == 0 else expression.left
             kept = expression.left if right == 0 else expression.right
-            if not has_call(dropped) and not has_call(kept):
+            if (not has_call(dropped) and not has_call(kept)
+                    and not _may_trap(dropped) and not _may_trap(kept)):
                 self.folded += 1
                 return syntax.IntLiteral(span=expression.span, value=0)
         return expression

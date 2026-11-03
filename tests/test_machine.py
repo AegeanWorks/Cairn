@@ -72,6 +72,12 @@ class EncodingTest(unittest.TestCase):
         self.assertEqual(assembler.labels["here"], 1)
         self.assertEqual(bytes(assembler.code), b"\x90\xc3")
 
+    def test_duplicate_label_is_a_compiler_bug(self) -> None:
+        assembler = Assembler()
+        assembler.label("dup")
+        with self.assertRaises(ValueError):
+            assembler.label("dup")
+
 
 if __name__ == "__main__":
     unittest.main()

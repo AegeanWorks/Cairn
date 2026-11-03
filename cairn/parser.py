@@ -47,6 +47,12 @@ class Parser:
 
     def parse_program(self) -> syntax.Program:
         """Parse top-level functions until end of file."""
+        if not self.tokens or self.tokens[-1].kind != "eof":
+            span = self.tokens[-1].span if self.tokens else Span.point(0, 1, 1)
+            raise fail("E2001", "expected a complete token list ending in end of file, "
+                                "found a truncated list",
+                       "Parse with cairn.parser.parse so the input ends in an 'eof' token.",
+                       span, self.path)
         functions: List[syntax.Function] = []
         while not self._at_end():
             if not self._peek().is_keyword("fn"):
@@ -119,12 +125,12 @@ class Parser:
             return self._parse_return()
         if token.is_keyword("break"):
             self._advance()
-            self._expect_symbol(";")
-            return syntax.Break(span=token.span)
+            semi = self._expect_symbol(";")
+            return syntax.Break(span=Span.join(token.span, semi.span))
         if token.is_keyword("continue"):
             self._advance()
-            self._expect_symbol(";")
-            return syntax.Continue(span=token.span)
+            semi = self._expect_symbol(";")
+            return syntax.Continue(span=Span.join(token.span, semi.span))
         if token.is_symbol("{"):
             return self._parse_block()
         return self._parse_expression_statement()
@@ -190,7 +196,10 @@ class Parser:
             return syntax.Assign(span=Span.join(start_span, semi.span),
                                  name=expression.name, value=value)
         semi = self._expect_symbol(";")
-        if not isinstance(expression, syntax.Call):
+        unwrapped = expression
+        while isinstance(unwrapped, syntax.Parens):
+            unwrapped = unwrapped.inner
+        if not isinstance(unwrapped, syntax.Call):
             raise fail("E2004", "this expression has no effect",
                        "Assign it to a 'let' or 'var', or call a function instead.",
                        expression.span, self.path)

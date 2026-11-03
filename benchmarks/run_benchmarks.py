@@ -123,6 +123,8 @@ def measure(executable: Path, rounds: int) -> List[float]:
 
 def summarise(samples: List[float], iterations: int) -> Dict[str, float]:
     """Best, median and per-unit cost from one set of wall-clock samples."""
+    if not samples:
+        raise ValueError("summarise needs at least one sample")
     best = min(samples)
     return {
         "runs": len(samples),

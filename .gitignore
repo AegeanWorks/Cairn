@@ -10,3 +10,5 @@ node_modules/
 # Built executables and build temporaries
 *.exe
 *.exe.tmp_*
+# AIKit transient state
+.aikit/*.log

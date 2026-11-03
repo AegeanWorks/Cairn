@@ -117,7 +117,16 @@ class Lexer:
                and self.source[self.offset].isdigit()):
             self._advance(self.source[self.offset])
         text = self.source[start.start:self.offset]
-        value = int(text)
+        if len(text) > 19:
+            raise fail("E1003", f"integer literal {text} does not fit in i64",
+                       f"Write a value at most {INT64_MAX}.",
+                       self._span_from(start), self.path)
+        try:
+            value = int(text)
+        except ValueError:
+            raise fail("E1003", f"integer literal {text} does not fit in i64",
+                       f"Write a value at most {INT64_MAX}.",
+                       self._span_from(start), self.path)
         if value > INT64_MAX:
             raise fail("E1003", f"integer literal {text} does not fit in i64",
                        f"Write a value at most {INT64_MAX}.",

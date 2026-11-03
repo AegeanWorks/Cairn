@@ -18,6 +18,10 @@ class SummaryTest(unittest.TestCase):
     def test_zero_iterations_does_not_divide(self) -> None:
         self.assertEqual(run_benchmarks.summarise([5.0], 0)["ns_per_unit"], 0.0)
 
+    def test_summarise_rejects_empty_samples(self) -> None:
+        with self.assertRaises(ValueError):
+            run_benchmarks.summarise([], 10)
+
     def test_every_case_declares_an_existing_cairn_and_c_source(self) -> None:
         for case in run_benchmarks.CASES:
             self.assertTrue((run_benchmarks.ROOT / case.cairn).is_file(), case.cairn)

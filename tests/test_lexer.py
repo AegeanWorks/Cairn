@@ -56,6 +56,11 @@ class LexerTest(unittest.TestCase):
         self.assertEqual(diagnostic.code, "E1001")
         self.assertIn("ASCII", diagnostic.fix)
 
+    def test_long_digit_run_is_E1003_not_ValueError(self) -> None:
+        with self.assertRaises(DiagnosticError) as caught:
+            tokenize("9" * 5000 + ";")
+        self.assertEqual(caught.exception.diagnostics[0].code, "E1003")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -68,6 +68,14 @@ class CliTest(unittest.TestCase):
         _, status = _capture(lambda: main(["check", str(self.folder / "absent.crn")]))
         self.assertEqual(status, EXIT_USAGE)
 
+    def test_undecodable_input_is_a_usage_error_not_a_traceback(self) -> None:
+        garbled = self.folder / "garbled.crn"
+        garbled.write_bytes(b"\xff\xfe\x00let x: i64 = 1;\n")
+        output, status = _capture(lambda: main(["check", str(garbled)]))
+        self.assertEqual(status, EXIT_USAGE)
+        self.assertIn("INVALID INPUT", output)
+        self.assertNotIn("Traceback", output)
+
     def test_version_is_printed(self) -> None:
         buffer = io.StringIO()
         with contextlib.redirect_stdout(buffer):

@@ -8,9 +8,9 @@
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `39`
 - **Total Classes**: `66`
-- **Total Top-Level Functions**: `108`
-- **Total Class Methods**: `303`
-- **Total Source Lines**: `5302`
+- **Total Top-Level Functions**: `109`
+- **Total Class Methods**: `314`
+- **Total Source Lines**: `5443`
 
 ---
 
@@ -26,7 +26,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, a C baseline.*
 
-**Size**: `265` lines (`11044` bytes)
+**Size**: `267` lines (`11128` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, an equivalent C source, and what one iteration is.*
@@ -92,7 +92,7 @@
 ### [`cairn/cli.py`](cairn/cli.py)
 > *Command line: build, check and run Cairn programs.*
 
-**Size**: `298` lines (`13250` bytes)
+**Size**: `299` lines (`13314` bytes)
 
 **Functions:**
 - `def _parser()` - *The whole command surface, declared in one place.*
@@ -198,7 +198,7 @@
 ### [`cairn/filetable.py`](cairn/filetable.py)
 > *qwenFS toy for Cairn: a deterministic in-memory file table with integer handles.*
 
-**Size**: `192` lines (`8017` bytes)
+**Size**: `198` lines (`8346` bytes)
 
 **Classes:**
 - `class FileTable` - *Deterministic exact-match file table plus a directed link graph.*
@@ -242,7 +242,7 @@
 ### [`cairn/lexer.py`](cairn/lexer.py)
 > *Lexer: source text to a flat token list.*
 
-**Size**: `144` lines (`5655` bytes)
+**Size**: `153` lines (`6124` bytes)
 
 **Classes:**
 - `class Token` - *One lexical unit: its kind, its text, its value when it is an integer, and its span.*
@@ -278,7 +278,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `285` lines (`12081` bytes)
+**Size**: `287` lines (`12198` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -335,7 +335,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `252` lines (`10359` bytes)
+**Size**: `281` lines (`11717` bytes)
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -354,6 +354,7 @@
 - `def fold_constant(op, left, right)` - *The folded value of `left op right`, or None when folding would change behaviour.*
 - `def fold_unary(op, value)` - *The folded value of a unary operator, or None when it must stay dynamic.*
 - `def has_call(expression)` - *Whether evaluating `expression` can run a call, and therefore an effect.*
+- `def _may_trap(expression)` - *Whether evaluating `expression` can trap on `/` or `%`.*
 - `def _constant(expression)` - *The literal value of an expression, or None when it is not a constant.*
 - `def _flatten(statements)` - *Splice a branch selected by folding into its parent, since Cairn has one flat scope.*
 - `def _reachable(statements)` - *Drop statements after one that cannot fall through: `return`, `break`, `continue`.*
@@ -364,7 +365,7 @@
 ### [`cairn/parser.py`](cairn/parser.py)
 > *Parser: recursive descent over the token list.*
 
-**Size**: `308` lines (`12547` bytes)
+**Size**: `317` lines (`13148` bytes)
 
 **Classes:**
 - `class Parser` - *A cursor over one token list; every parse method consumes what it matches.*
@@ -428,7 +429,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `245` lines (`11435` bytes)
+**Size**: `256` lines (`12060` bytes)
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -540,12 +541,13 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `87` lines (`4289` bytes)
+**Size**: `91` lines (`4439` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
   - Method `.test_summary_reports_best_median_worst_and_per_unit_cost()`
   - Method `.test_zero_iterations_does_not_divide()`
+  - Method `.test_summarise_rejects_empty_samples()`
   - Method `.test_every_case_declares_an_existing_cairn_and_c_source()`
   - Method `.test_render_says_unavailable_when_there_is_no_c_compiler()`
   - Method `.test_build_command_skips_folding_only_when_asked()`
@@ -590,7 +592,7 @@
 ### [`tests/test_cli.py`](tests/test_cli.py)
 > *CLI tests: exit codes, JSON diagnostics, build output and atomic overwrite.*
 
-**Size**: `149` lines (`6454` bytes)
+**Size**: `157` lines (`6853` bytes)
 
 **Classes:**
 - `class CliTest` - *An agent drives the compiler through this surface, so it is tested as a contract.*
@@ -601,6 +603,7 @@
   - Method `.test_build_writes_the_requested_path()`
   - Method `.test_build_twice_produces_identical_bytes()`
   - Method `.test_missing_input_is_a_usage_error()`
+  - Method `.test_undecodable_input_is_a_usage_error_not_a_traceback()`
   - Method `.test_version_is_printed()`
   - Method `.test_capabilities_json_publishes_codes_and_commands()`
   - Method `.test_capabilities_text_names_the_surface()`
@@ -668,7 +671,7 @@
 ### [`tests/test_filetable.py`](tests/test_filetable.py)
 > *Scripted exactness proofs for the qwenFS toy file table.*
 
-**Size**: `193` lines (`7903` bytes)
+**Size**: `207` lines (`8479` bytes)
 
 **Classes:**
 - `class ScriptedSessionTest`
@@ -687,6 +690,8 @@
   - Method `.test_emit_uses_rodata_add_and_lea_rip_with_no_new_section()`
   - Method `.test_additive_emit_on_a_real_build_still_verifies()`
   - Method `.test_default_build_path_never_invokes_the_filetable()`
+  - Method `.test_second_emit_is_rejected_instead_of_orphaning_bytes()`
+  - Method `.test_emit_rejects_wrong_types_without_assert()`
 
 **Functions:**
 - `def scripted_session()` - *One deterministic session every exactness test replays.*
@@ -696,7 +701,7 @@
 ### [`tests/test_lexer.py`](tests/test_lexer.py)
 > *Lexer tests: token shape, spans, comments and the two literal failures.*
 
-**Size**: `61` lines (`2597` bytes)
+**Size**: `66` lines (`2835` bytes)
 
 **Classes:**
 - `class LexerTest` - *The scanner is the first stage an agent's source touches, so its reports must be exact.*
@@ -707,13 +712,14 @@
   - Method `.test_unexpected_character_names_the_fix()`
   - Method `.test_tokenize_reports_eof_at_the_end()`
   - Method `.test_non_ascii_identifier_is_rejected_as_unexpected_character()`
+  - Method `.test_long_digit_run_is_E1003_not_ValueError()`
 
 ---
 
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `77` lines (`3494` bytes)
+**Size**: `83` lines (`3699` bytes)
 
 **Classes:**
 - `class EncodingTest` - *Each test names one encoding and its expected bytes.*
@@ -730,13 +736,14 @@
   - Method `.test_register_immediate_sub_and_cmp_use_the_group_one_encoding()`
   - Method `.test_relative_call_records_a_fixup_at_the_displacement()`
   - Method `.test_label_records_the_current_offset()`
+  - Method `.test_duplicate_label_is_a_compiler_bug()`
 
 ---
 
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `138` lines (`6359` bytes)
+**Size**: `148` lines (`7011` bytes)
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -753,6 +760,7 @@
   - Method `.test_neutral_right_operand_disappears()`
   - Method `.test_neutral_left_operand_disappears_except_for_subtraction()`
   - Method `.test_zero_multiply_is_dropped_only_when_nothing_calls()`
+  - Method `.test_zero_fold_never_drops_a_division_trap()`
   - Method `.test_constant_condition_selects_the_taken_branch()`
   - Method `.test_constant_false_while_loop_disappears()`
   - Method `.test_statements_after_return_are_unreachable_and_dropped()`
@@ -769,7 +777,7 @@
 ### [`tests/test_parser.py`](tests/test_parser.py)
 > *Parser tests: shapes, precedence and the grammar's positioned refusals.*
 
-**Size**: `74` lines (`3225` bytes)
+**Size**: `94` lines (`4278` bytes)
 
 **Classes:**
 - `class ParserTest` - *The tree shape decides code shape, so these assertions are about generated code too.*
@@ -781,6 +789,9 @@
   - Method `.test_unknown_type_is_refused_with_the_one_type_cairn_has()`
   - Method `.test_missing_semicolon_reports_what_was_expected()`
   - Method `.test_expression_statement_must_be_a_call()`
+  - Method `.test_parens_call_statement_is_accepted()`
+  - Method `.test_bare_token_list_is_E2001_not_an_index_error()`
+  - Method `.test_break_and_continue_spans_include_the_semicolon()`
   - Method `.test_true_and_false_are_integers()`
 
 **Functions:**
@@ -818,7 +829,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `83` lines (`3734` bytes)
+**Size**: `88` lines (`4056` bytes)
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -833,6 +844,7 @@
   - Method `.test_unknown_function()`
   - Method `.test_wrong_argument_count()`
   - Method `.test_print_is_callable_not_redefinable()`
+  - Method `.test_builtin_cannot_be_a_parameter_or_an_assignment_target()`
   - Method `.test_break_outside_a_loop()`
   - Method `.test_function_must_return_on_every_path()`
   - Method `.test_if_else_returning_both_ways_is_accepted()`

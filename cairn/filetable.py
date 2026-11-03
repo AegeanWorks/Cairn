@@ -173,8 +173,14 @@ def emit_filetable(assembler, rodata) -> None:
     from cairn.machine import Assembler as _Asm
     from cairn.image import ReadOnlyData as _Rodata
 
-    assert isinstance(assembler, _Asm), "emit_filetable needs a machine.Assembler"
-    assert isinstance(rodata, _Rodata), "emit_filetable needs an image.ReadOnlyData"
+    if not isinstance(assembler, _Asm):
+        raise TypeError("emit_filetable needs a machine.Assembler")
+    if not isinstance(rodata, _Rodata):
+        raise TypeError("emit_filetable needs an image.ReadOnlyData")
+    if FILETABLE_MANIFEST_LABEL in rodata.labels:
+        raise ValueError("emit_filetable ran twice: the manifest label is already bound")
+    if FILETABLE_HELPER_LABEL in assembler.labels:
+        raise ValueError("emit_filetable ran twice: the helper label is already bound")
     payload = FILETABLE_MAGIC + MAX_FILES.to_bytes(8, "little") + (0).to_bytes(8, "little")
     rodata.add(FILETABLE_MANIFEST_LABEL, payload)
     assembler.label(FILETABLE_HELPER_LABEL)

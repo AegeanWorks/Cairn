@@ -188,6 +188,20 @@ class EmitAdditiveTest(unittest.TestCase):
             source = (PACKAGE / name).read_text(encoding="utf-8")
             self.assertNotIn("filetable", source.lower())
 
+    def test_second_emit_is_rejected_instead_of_orphaning_bytes(self) -> None:
+        assembler = Assembler()
+        rodata = ReadOnlyData()
+        emit_filetable(assembler, rodata)
+        with self.assertRaises(ValueError):
+            emit_filetable(assembler, rodata)
+        self.assertEqual(len(rodata), 20)
+
+    def test_emit_rejects_wrong_types_without_assert(self) -> None:
+        with self.assertRaises(TypeError):
+            emit_filetable(object(), ReadOnlyData())
+        with self.assertRaises(TypeError):
+            emit_filetable(Assembler(), object())
+
 
 if __name__ == "__main__":
     unittest.main()
