@@ -141,6 +141,13 @@ class EndToEndTest(unittest.TestCase):
                                  "print(-8 >> s); return 0; }")
         self.assertEqual(completed.stdout.splitlines(), ["64", "-1"])
 
+    def test_more_slots_than_registers_spill_to_the_stack(self) -> None:
+        completed = self.execute("fn main() -> i64 { var a: i64 = 1; var b: i64 = 2; "
+                                 "var c: i64 = 3; var d: i64 = 4; var e: i64 = 5; "
+                                 "var f: i64 = 6; var g: i64 = 7; var h: i64 = 8; "
+                                 "print(a + b + c + d + e + f + g + h); return 0; }")
+        self.assertEqual(completed.stdout, "36\n")
+
     def test_min_int_divided_by_minus_one_traps_like_division_by_zero(self) -> None:
         source = ("fn main() -> i64 { var lo: i64 = -9223372036854775807 - 1; "
                   "var neg: i64 = -1; print(lo / neg); return 0; }")

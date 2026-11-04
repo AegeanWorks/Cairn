@@ -9,8 +9,8 @@
 - **Total Python Modules**: `41`
 - **Total Classes**: `69`
 - **Total Top-Level Functions**: `115`
-- **Total Class Methods**: `353`
-- **Total Source Lines**: `5921`
+- **Total Class Methods**: `354`
+- **Total Source Lines**: `5928`
 
 ---
 
@@ -658,7 +658,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `226` lines (`8629` bytes)
+**Size**: `233` lines (`9095` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -673,6 +673,7 @@
   - Method `.test_traps_behave_identically_without_the_folding_pass()`
   - Method `.test_run_forwards_the_programs_own_exit_code()`
   - Method `.test_shift_count_beyond_63_wraps_on_the_machine()`
+  - Method `.test_more_slots_than_registers_spill_to_the_stack()`
   - Method `.test_min_int_divided_by_minus_one_traps_like_division_by_zero()`
   - Method `.test_min_int64_prints_with_its_sign()`
   - Method `.test_comparison_and_logical_operators_yield_one_or_zero()`
