@@ -157,10 +157,16 @@ def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Pat
     cairn_exe = folder / f"{case.name}.cairn.exe"
     report: Dict[str, object] = {
         "case": case.name, "unit": case.unit, "iterations": case.iterations,
-        "cairn": {}, "c": None, "c_compiler": compiler, "verdict": "unavailable",
+        "cairn": None, "c": None, "c_compiler": compiler, "verdict": "unavailable",
+        "error": None,
     }
-    compile_ms = build_cairn(cairn_source, cairn_exe, optimise)
-    cairn = summarise(measure(cairn_exe, rounds), case.iterations)
+    try:
+        compile_ms = build_cairn(cairn_source, cairn_exe, optimise)
+        cairn = summarise(measure(cairn_exe, rounds), case.iterations)
+    except RuntimeError as failure:
+        report["verdict"] = "error"
+        report["error"] = str(failure)
+        return report
     cairn["compile_ms"] = round(compile_ms, 2)
     cairn["image_bytes"] = cairn_exe.stat().st_size
     report["cairn"] = cairn
@@ -170,10 +176,16 @@ def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Pat
     c_compile = build_c(compiler, ROOT / case.c_source, c_exe)
     if c_compile is None:
         return report
-    baseline = summarise(measure(c_exe, rounds), case.iterations)
+    try:
+        baseline = summarise(measure(c_exe, rounds), case.iterations)
+    except RuntimeError as failure:
+        report["verdict"] = "error"
+        report["error"] = str(failure)
+        return report
     best_cairn = float(cairn["best_ms"])
     best_c = float(baseline["best_ms"])
     baseline["compile_ms"] = round(c_compile, 2)
+    baseline["image_bytes"] = c_exe.stat().st_size
     baseline["ratio_to_c"] = round(best_cairn / best_c, 3) if best_c else 0.0
     report["c"] = baseline
     report["verdict"] = verdict(best_cairn, best_c)
@@ -207,6 +219,11 @@ def render(reports: List[Dict[str, object]], compiler: Optional[str],
     verdicts = [str(report.get("verdict")) for report in reports]
     if "unavailable" in verdicts:
         lines.append("Goal: faster than C -> unavailable (install gcc, clang or cl to measure)")
+    elif "error" in verdicts:
+        errored = [str(report["case"]) for report in reports
+                   if report.get("verdict") == "error"]
+        lines.append(f"Goal: faster than C -> errored on {', '.join(errored)} "
+                     f"(see the report 'error' fields)")
     elif all(item in ("faster", "tie") for item in verdicts):
         lines.append("Goal: faster than C -> measured on every case in this run")
     else:

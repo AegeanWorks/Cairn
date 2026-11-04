@@ -78,16 +78,17 @@ def _add_optimise_flag(parser: argparse.ArgumentParser) -> None:
                         help="skip constant folding, to compare against the unoptimised build")
 
 
-def _read_source(path: Path) -> Tuple[Optional[str], int]:
-    """The source text, or an explained usage failure."""
+def _read_source(path: Path, json_mode: bool = False) -> Tuple[Optional[str], int]:
+    """The source text, or an explained usage failure (silent under `--json`)."""
     try:
         return path.read_text(encoding="utf-8-sig"), EXIT_OK
     except (OSError, UnicodeDecodeError) as error:
         detail = getattr(error, "strerror", None) or error
-        print(f"[INVALID INPUT] cannot read {path}: {detail}", file=sys.stderr)
-        print("Why: the compiler needs a readable UTF-8 .crn file.", file=sys.stderr)
-        print("Fix: pass an existing file path, for example 'cairn check examples/hello.crn'.",
-              file=sys.stderr)
+        if not json_mode:
+            print(f"[INVALID INPUT] cannot read {path}: {detail}", file=sys.stderr)
+            print("Why: the compiler needs a readable UTF-8 .crn file.", file=sys.stderr)
+            print("Fix: pass an existing file path, for example 'cairn check examples/hello.crn'.",
+                  file=sys.stderr)
         return None, EXIT_USAGE
 
 
@@ -102,10 +103,24 @@ def _report_failure(error: DiagnosticError, source: str, json_mode: bool) -> int
     return EXIT_FAILURE
 
 
+def _report_unreadable(arguments: argparse.Namespace, path: str,
+                       extra: Dict[str, object]) -> None:
+    """The `--json` envelope for input that could not be read.
+
+    This is the only output in JSON mode; in human mode `_read_source` and
+    `_read_executable` already explained the failure on stderr.
+    """
+    if arguments.json:
+        print(json.dumps({"ok": False, "path": path, "error": "unreadable-input",
+                          "diagnostics": [], **extra}, indent=2))
+
+
 def _build_command(arguments: argparse.Namespace) -> int:
-    """`build`: compile, write the executable, report its size."""
-    source, status = _read_source(arguments.source)
+    """`build`: compile a source file to a Windows executable, atomically."""
+    source, status = _read_source(arguments.source, arguments.json)
     if source is None:
+        _report_unreadable(arguments, str(arguments.source),
+                           {"output": None, "image_bytes": 0, "functions": 0, "folded": 0})
         return status
     try:
         result = builder.compile_source(source, str(arguments.source), not arguments.no_optimize)
@@ -132,8 +147,10 @@ def _build_command(arguments: argparse.Namespace) -> int:
 
 def _check_command(arguments: argparse.Namespace) -> int:
     """`check`: compile in memory and report, writing nothing."""
-    source, status = _read_source(arguments.source)
+    source, status = _read_source(arguments.source, arguments.json)
     if source is None:
+        _report_unreadable(arguments, str(arguments.source),
+                           {"functions": 0, "folded": 0, "image_bytes": 0})
         return status
     try:
         result = builder.compile_source(source, str(arguments.source), not arguments.no_optimize)
@@ -191,36 +208,41 @@ def _execute(executable: Path, timeout: float) -> int:
     return completed.returncode
 
 
-def _read_executable(path: Path) -> Tuple[Optional[bytes], int]:
-    """The artifact bytes, or an explained usage failure."""
+def _read_executable(path: Path, json_mode: bool = False) -> Tuple[Optional[bytes], int]:
+    """The artifact bytes, or an explained usage failure (silent under `--json`)."""
     try:
         return path.read_bytes(), EXIT_OK
     except OSError as error:
-        print(f"[INVALID INPUT] cannot read {path}: {error.strerror or error}", file=sys.stderr)
-        print("Why: verification needs a readable executable image.", file=sys.stderr)
-        print("Fix: build one first with 'cairn build', then pass that path.",
-              file=sys.stderr)
+        if not json_mode:
+            print(f"[INVALID INPUT] cannot read {path}: {error.strerror or error}",
+                  file=sys.stderr)
+            print("Why: verification needs a readable executable image.", file=sys.stderr)
+            print("Fix: build one first with 'cairn build', then pass that path.",
+                  file=sys.stderr)
         return None, EXIT_USAGE
 
 
 def _verify_command(arguments: argparse.Namespace) -> int:
     """`verify`: structural checks over a built image or over a source compiled in memory."""
     is_executable = arguments.target.suffix.lower() == ".exe"
+    kind = "executable" if is_executable else "source"
     if is_executable:
-        image, status = _read_executable(arguments.target)
+        image, status = _read_executable(arguments.target, arguments.json)
         if image is None:
+            _report_unreadable(arguments, str(arguments.target),
+                               {"kind": kind, "image_bytes": 0, "problems": []})
             return status
-        kind = "executable"
     else:
-        source, status = _read_source(arguments.target)
+        source, status = _read_source(arguments.target, arguments.json)
         if source is None:
+            _report_unreadable(arguments, str(arguments.target),
+                               {"kind": kind, "image_bytes": 0, "problems": []})
             return status
         try:
             image = builder.compile_source(source, str(arguments.target),
                                            not arguments.no_optimize).image
         except DiagnosticError as error:
             return _report_failure(error, source, arguments.json)
-        kind = "source"
     problems = verify.verify_image(image)
     if arguments.json:
         print(json.dumps({"ok": not problems, "path": str(arguments.target), "kind": kind,
@@ -240,8 +262,10 @@ def _verify_command(arguments: argparse.Namespace) -> int:
 
 def _listing_command(arguments: argparse.Namespace) -> int:
     """`listing`: compile in memory and print the bytes of every label in `.text`."""
-    source, status = _read_source(arguments.source)
+    source, status = _read_source(arguments.source, arguments.json)
     if source is None:
+        _report_unreadable(arguments, str(arguments.source),
+                           {"text_bytes": 0, "labels": [], "listing": ""})
         return status
     try:
         result = builder.compile_source(source, str(arguments.source),

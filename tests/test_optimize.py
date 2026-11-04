@@ -133,6 +133,11 @@ class RewriteTest(unittest.TestCase):
         self.assertEqual(len(loop.body.statements), 1)
         self.assertGreaterEqual(folder.folded, 1)
 
+    def test_double_negation_folds_to_the_value(self) -> None:
+        argument = optimized_body("print(--1);").statements[0].expression.arguments[0]
+        self.assertIsInstance(argument, syntax.IntLiteral)
+        self.assertEqual(argument.value, 1)
+
     def test_statements_after_return_are_unreachable_and_dropped(self) -> None:
         body = optimized_body("while 1 { return 1; print(9); }")
         loop = body.statements[0]

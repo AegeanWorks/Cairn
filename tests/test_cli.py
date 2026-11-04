@@ -148,7 +148,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(len(set(paths)), 8)
 
     def test_concurrent_writes_leave_no_temporaries_behind(self) -> None:
-        destination = self.folder / "race.exe"
+        destination = self.folder / "race.bin"
         image = builder.compile_source(GOOD).image
         threads = [threading.Thread(target=builder.write_executable,
                                     args=(destination, image)) for _ in range(8)]
@@ -157,7 +157,7 @@ class CliTest(unittest.TestCase):
         for thread in threads:
             thread.join()
         self.assertEqual(destination.read_bytes(), image)
-        self.assertEqual(list(self.folder.glob("race.exe.tmp_*")), [])
+        self.assertEqual(list(self.folder.glob("race.bin.tmp_*")), [])
 
     def test_run_rejects_a_non_positive_timeout(self) -> None:
         source = self.folder / "tiny.crn"
@@ -166,6 +166,36 @@ class CliTest(unittest.TestCase):
         _, nan_status = _capture(lambda: main(["run", str(source), "--timeout", "nan"]))
         self.assertEqual(zero_status, EXIT_USAGE)
         self.assertEqual(nan_status, EXIT_USAGE)
+
+    def test_json_envelope_for_unreadable_build_input(self) -> None:
+        missing = self.folder / "absent.crn"
+        out, status = _capture(lambda: main(["build", str(missing), "--json"]))
+        self.assertEqual(status, EXIT_USAGE)
+        self.assertFalse(json.loads(out)["ok"])
+        self.assertEqual(json.loads(out)["error"], "unreadable-input")
+
+    def test_json_envelope_for_unreadable_check_input(self) -> None:
+        missing = self.folder / "absent.crn"
+        out, status = _capture(lambda: main(["check", str(missing), "--json"]))
+        self.assertEqual(status, EXIT_USAGE)
+        self.assertFalse(json.loads(out)["ok"])
+        self.assertEqual(json.loads(out)["error"], "unreadable-input")
+
+    def test_json_envelope_for_unreadable_verify_target(self) -> None:
+        missing = self.folder / "absent.exe"
+        out, status = _capture(lambda: main(["verify", str(missing), "--json"]))
+        self.assertEqual(status, EXIT_USAGE)
+        envelope = json.loads(out)
+        self.assertFalse(envelope["ok"])
+        self.assertEqual(envelope["error"], "unreadable-input")
+        self.assertEqual(envelope["kind"], "executable")
+
+    def test_json_envelope_for_unreadable_listing_input(self) -> None:
+        missing = self.folder / "absent.crn"
+        out, status = _capture(lambda: main(["listing", str(missing), "--json"]))
+        self.assertEqual(status, EXIT_USAGE)
+        self.assertFalse(json.loads(out)["ok"])
+        self.assertEqual(json.loads(out)["error"], "unreadable-input")
 
 def _capture(call) -> tuple:
     """Run a CLI call with both streams redirected; returns their text and the exit code."""

@@ -122,6 +122,25 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 3)
         self.assertIn("divide by zero", completed.stderr)
 
+    def test_traps_behave_identically_without_the_folding_pass(self) -> None:
+        executable = self.folder / "plain.exe"
+        write_executable(executable, compile_source(DIVIDE_BY_ZERO, optimise=False).image)
+        completed = subprocess.run([str(executable)], capture_output=True, text=True,
+                                   encoding="utf-8", errors="replace", timeout=TIMEOUT_SECONDS)
+        folded = self.execute(DIVIDE_BY_ZERO)
+        self.assertEqual(folded.returncode, 3)
+        self.assertEqual(completed.returncode, folded.returncode)
+        self.assertIn("divide by zero", completed.stderr)
+
+    def test_run_forwards_the_programs_own_exit_code(self) -> None:
+        completed = self.execute("fn main() -> i64 { return 7; }")
+        self.assertEqual(completed.returncode, 7)
+
+    def test_shift_count_beyond_63_wraps_on_the_machine(self) -> None:
+        completed = self.execute("fn main() -> i64 { var s: i64 = 70; print(1 << s); "
+                                 "print(-8 >> s); return 0; }")
+        self.assertEqual(completed.stdout.splitlines(), ["64", "-1"])
+
     def test_min_int_divided_by_minus_one_traps_like_division_by_zero(self) -> None:
         source = ("fn main() -> i64 { var lo: i64 = -9223372036854775807 - 1; "
                   "var neg: i64 = -1; print(lo / neg); return 0; }")

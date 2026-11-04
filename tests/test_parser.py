@@ -48,6 +48,19 @@ class ParserTest(unittest.TestCase):
         self.assertIsInstance(statement, syntax.Assign)
         self.assertEqual(statement.name, "x")
 
+    def test_assignment_to_a_literal_or_a_call_is_E2003(self) -> None:
+        for source in ("fn main() -> i64 { 1 = 2; return 0; }",
+                       "fn main() -> i64 { print(1) = 2; return 0; }"):
+            with self.subTest(source=source):
+                with self.assertRaises(DiagnosticError) as caught:
+                    parse(source)
+                self.assertEqual(caught.exception.diagnostics[0].code, "E2003")
+
+    def test_bare_literal_is_E2004(self) -> None:
+        with self.assertRaises(DiagnosticError) as caught:
+            parse("fn main() -> i64 { 1; return 0; }")
+        self.assertEqual(caught.exception.diagnostics[0].code, "E2004")
+
     def test_unknown_type_is_refused_with_the_one_type_cairn_has(self) -> None:
         with self.assertRaises(DiagnosticError) as caught:
             parse("fn main() -> f64 { return 0; }")

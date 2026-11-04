@@ -1,6 +1,9 @@
 """Benchmark harness tests: summarising and rendering, without running a benchmark."""
 
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from benchmarks import run_benchmarks
 
@@ -77,6 +80,27 @@ class VerdictTest(unittest.TestCase):
         report = {"case": "x", "unit": "iterations", "iterations": 10,
                   "cairn": run_benchmarks.summarise([1.0], 10), "c": None}
         self.assertIn("unavailable", run_benchmarks.render([report], None))
+
+    def test_render_shows_c_image_size_when_present(self) -> None:
+        report = {"case": "x", "unit": "iterations", "iterations": 10,
+                  "cairn": run_benchmarks.summarise([2.0], 10),
+                  "c": {**run_benchmarks.summarise([1.0], 10), "ratio_to_c": 2.0,
+                        "image_bytes": 4096},
+                  "verdict": "slower"}
+        self.assertIn("4096", run_benchmarks.render([report], "gcc"))
+
+    def test_errored_case_is_reported_not_raised(self) -> None:
+        folder = Path(tempfile.mkdtemp(prefix="cairn-bench-test-"))
+        self.addCleanup(lambda: [child.unlink(missing_ok=True) for child in
+                                 sorted(folder.rglob("*"), reverse=True)] +
+                        [folder.rmdir()])
+        with mock.patch.object(run_benchmarks, "measure",
+                               side_effect=RuntimeError("boom")):
+            report = run_benchmarks.benchmark_case(run_benchmarks.CASES[0], None, 1,
+                                                  folder)
+        self.assertEqual(report["verdict"], "error")
+        self.assertIn("boom", str(report["error"]))
+        self.assertIn("errored on loop_sum", run_benchmarks.render([report], None))
 
 
 class CompilerProbeTest(unittest.TestCase):

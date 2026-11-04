@@ -60,6 +60,11 @@ class SemaTest(unittest.TestCase):
         self.assertEqual(codes("fn f(a: i64) -> i64 { return a; }"
                                "fn main() -> i64 { return f(1, 2); }"), ["E3004"])
 
+    def test_five_arguments_hits_the_four_parameter_limit(self) -> None:
+        self.assertEqual(codes("fn f(a: i64, b: i64, c: i64, d: i64) -> i64 { return a; }"
+                               "fn main() -> i64 { return f(1, 2, 3, 4, 5); }"),
+                          ["E3004"])
+
     def test_print_is_callable_not_redefinable(self) -> None:
         self.assertEqual(codes("fn main() -> i64 { return print; }"), ["E3012"])
 

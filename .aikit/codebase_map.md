@@ -8,9 +8,9 @@
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `41`
 - **Total Classes**: `69`
-- **Total Top-Level Functions**: `114`
-- **Total Class Methods**: `340`
-- **Total Source Lines**: `5784`
+- **Total Top-Level Functions**: `115`
+- **Total Class Methods**: `353`
+- **Total Source Lines**: `5921`
 
 ---
 
@@ -26,7 +26,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, a C baseline.*
 
-**Size**: `267` lines (`11128` bytes)
+**Size**: `284` lines (`11784` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, an equivalent C source, and what one iteration is.*
@@ -93,18 +93,19 @@
 ### [`cairn/cli.py`](cairn/cli.py)
 > *Command line: build, check and run Cairn programs.*
 
-**Size**: `308` lines (`13797` bytes)
+**Size**: `332` lines (`15316` bytes)
 
 **Functions:**
 - `def _parser()` - *The whole command surface, declared in one place.*
 - `def _add_optimise_flag(parser)` - *Every command shares one switch for the folding pass, so builds can be compared.*
-- `def _read_source(path)` - *The source text, or an explained usage failure.*
+- `def _read_source(path, json_mode)` - *The source text, or an explained usage failure (silent under `--json`).*
 - `def _report_failure(error, source, json_mode)` - *Print every diagnostic, as JSON or as positioned text.*
-- `def _build_command(arguments)` - *`build`: compile, write the executable, report its size.*
+- `def _report_unreadable(arguments, path, extra)` - *The `--json` envelope for input that could not be read.*
+- `def _build_command(arguments)` - *`build`: compile a source file to a Windows executable, atomically.*
 - `def _check_command(arguments)` - *`check`: compile in memory and report, writing nothing.*
 - `def _run_command(arguments)` - *`run`: compile into a temporary folder, execute, and forward the exit code.*
 - `def _execute(executable, timeout)` - *Run the produced executable with inherited streams and a hard time limit.*
-- `def _read_executable(path)` - *The artifact bytes, or an explained usage failure.*
+- `def _read_executable(path, json_mode)` - *The artifact bytes, or an explained usage failure (silent under `--json`).*
 - `def _verify_command(arguments)` - *`verify`: structural checks over a built image or over a source compiled in memory.*
 - `def _listing_command(arguments)` - *`listing`: compile in memory and print the bytes of every label in `.text`.*
 - `def _capabilities_command(arguments)` - *`capabilities`: the surface as JSON for an agent, or one screen of text for a human.*
@@ -543,7 +544,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `91` lines (`4439` bytes)
+**Size**: `115` lines (`5729` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -559,6 +560,8 @@
   - Method `.test_missing_baseline_is_unavailable_not_a_win()`
   - Method `.test_render_states_the_goal_for_each_outcome()`
   - Method `.test_a_report_without_a_verdict_is_treated_as_unmeasured()`
+  - Method `.test_render_shows_c_image_size_when_present()`
+  - Method `.test_errored_case_is_reported_not_raised()`
 - `class CompilerProbeTest` - *Compiler detection must return a name the harness knows, or nothing at all.*
   - Method `.test_detected_compiler_is_one_of_the_known_families()`
 
@@ -595,7 +598,7 @@
 ### [`tests/test_cli.py`](tests/test_cli.py)
 > *CLI tests: exit codes, JSON diagnostics, build output and atomic overwrite.*
 
-**Size**: `189` lines (`8364` bytes)
+**Size**: `219` lines (`9885` bytes)
 
 **Classes:**
 - `class CliTest` - *An agent drives the compiler through this surface, so it is tested as a contract.*
@@ -618,6 +621,10 @@
   - Method `.test_concurrent_writes_use_distinct_temporaries()`
   - Method `.test_concurrent_writes_leave_no_temporaries_behind()`
   - Method `.test_run_rejects_a_non_positive_timeout()`
+  - Method `.test_json_envelope_for_unreadable_build_input()`
+  - Method `.test_json_envelope_for_unreadable_check_input()`
+  - Method `.test_json_envelope_for_unreadable_verify_target()`
+  - Method `.test_json_envelope_for_unreadable_listing_input()`
 
 **Functions:**
 - `def _capture(call)` - *Run a CLI call with both streams redirected; returns their text and the exit code.*
@@ -651,7 +658,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `207` lines (`7534` bytes)
+**Size**: `226` lines (`8629` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -663,6 +670,9 @@
   - Method `.test_arithmetic_truncates_shifts_and_returns_the_exit_code()`
   - Method `.test_recursion_and_loop_control()`
   - Method `.test_division_by_zero_is_a_trap_with_a_message_and_exit_code_3()`
+  - Method `.test_traps_behave_identically_without_the_folding_pass()`
+  - Method `.test_run_forwards_the_programs_own_exit_code()`
+  - Method `.test_shift_count_beyond_63_wraps_on_the_machine()`
   - Method `.test_min_int_divided_by_minus_one_traps_like_division_by_zero()`
   - Method `.test_min_int64_prints_with_its_sign()`
   - Method `.test_comparison_and_logical_operators_yield_one_or_zero()`
@@ -778,7 +788,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `161` lines (`7637` bytes)
+**Size**: `166` lines (`7891` bytes)
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -800,6 +810,7 @@
   - Method `.test_constant_false_while_loop_disappears()`
   - Method `.test_while_zero_counts_its_rewrite()`
   - Method `.test_dropped_unreachable_statements_count()`
+  - Method `.test_double_negation_folds_to_the_value()`
   - Method `.test_statements_after_return_are_unreachable_and_dropped()`
   - Method `.test_a_call_is_never_removed()`
   - Method `.test_folded_count_reports_what_changed()`
@@ -814,7 +825,7 @@
 ### [`tests/test_parser.py`](tests/test_parser.py)
 > *Parser tests: shapes, precedence and the grammar's positioned refusals.*
 
-**Size**: `101` lines (`4599` bytes)
+**Size**: `114` lines (`5271` bytes)
 
 **Classes:**
 - `class ParserTest` - *The tree shape decides code shape, so these assertions are about generated code too.*
@@ -823,6 +834,8 @@
   - Method `.test_parentheses_override_precedence()`
   - Method `.test_else_if_nests_as_a_block()`
   - Method `.test_assignment_is_a_statement_only_for_a_name()`
+  - Method `.test_assignment_to_a_literal_or_a_call_is_E2003()`
+  - Method `.test_bare_literal_is_E2004()`
   - Method `.test_unknown_type_is_refused_with_the_one_type_cairn_has()`
   - Method `.test_missing_semicolon_reports_what_was_expected()`
   - Method `.test_expression_statement_must_be_a_call()`
@@ -876,7 +889,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `92` lines (`4244` bytes)
+**Size**: `97` lines (`4527` bytes)
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -890,6 +903,7 @@
   - Method `.test_duplicate_binding_without_shadowing()`
   - Method `.test_unknown_function()`
   - Method `.test_wrong_argument_count()`
+  - Method `.test_five_arguments_hits_the_four_parameter_limit()`
   - Method `.test_print_is_callable_not_redefinable()`
   - Method `.test_builtin_cannot_be_a_parameter_or_an_assignment_target()`
   - Method `.test_literal_above_max_plus_one_is_refused()`
