@@ -171,7 +171,7 @@ means success; any other return is that exit code. (Cf. Alloy SPEC §11, whose
 ```
 python -m cairn build <file>.crn [-o out.exe] [--json] [--no-optimize]
 python -m cairn check <file>.crn [--json] [--no-optimize]
-python -m cairn run <file>.crn [--timeout S] [--no-optimize]
+python -m cairn run <file>.crn [--timeout S] [--no-optimize] [--json]
 python -m cairn verify <target.exe|file.crn> [--json]
 python -m cairn listing <file>.crn [--json]
 python -m cairn capabilities [--json]

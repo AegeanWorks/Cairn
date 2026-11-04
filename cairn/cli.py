@@ -49,6 +49,7 @@ def _parser() -> argparse.ArgumentParser:
 
     run = commands.add_parser("run", help="build to a temporary file and run it")
     run.add_argument("source", type=Path, help="the .crn file to run")
+    run.add_argument("--json", action="store_true", help="print one JSON result object")
     _add_optimise_flag(run)
     run.add_argument("--timeout", type=float, default=DEFAULT_RUN_TIMEOUT,
                      help="seconds before the program is stopped (default: 60)")
@@ -166,46 +167,87 @@ def _check_command(arguments: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _run_envelope(path: Path, *, ok: bool, returncode: object,
+                  timed_out: bool, stdout: str, stderr: str,
+                  error: Optional[str] = None) -> Dict[str, object]:
+    """One JSON result object for `run`: the exit code and the captured streams."""
+    envelope: Dict[str, object] = {"ok": ok, "path": str(path), "returncode": returncode,
+                                   "timed_out": timed_out, "stdout": stdout,
+                                   "stderr": stderr, "diagnostics": []}
+    if error is not None:
+        envelope["error"] = error
+    return envelope
+
+
 def _run_command(arguments: argparse.Namespace) -> int:
     """`run`: compile into a temporary folder, execute, and forward the exit code."""
     if not math.isfinite(arguments.timeout) or arguments.timeout <= 0:
-        print(f"[INVALID INPUT] --timeout must be a positive number of seconds, "
-              f"got {arguments.timeout}", file=sys.stderr)
-        print("Why: the runner needs a real deadline before starting the program.",
-              file=sys.stderr)
-        print("Fix: pass --timeout with a positive value, for example '--timeout 5'.",
-              file=sys.stderr)
+        if arguments.json:
+            print(json.dumps(_run_envelope(arguments.source, ok=False, returncode=None,
+                                           timed_out=False, stdout="", stderr="",
+                                           error="invalid-timeout"), indent=2))
+        else:
+            print(f"[INVALID INPUT] --timeout must be a positive number of seconds, "
+                  f"got {arguments.timeout}", file=sys.stderr)
+            print("Why: the runner needs a real deadline before starting the program.",
+                  file=sys.stderr)
+            print("Fix: pass --timeout with a positive value, for example '--timeout 5'.",
+                  file=sys.stderr)
         return EXIT_USAGE
-    source, status = _read_source(arguments.source)
+    source, status = _read_source(arguments.source, arguments.json)
     if source is None:
+        if arguments.json:
+            print(json.dumps(_run_envelope(arguments.source, ok=False, returncode=None,
+                                           timed_out=False, stdout="", stderr="",
+                                           error="unreadable-input"), indent=2))
         return status
     try:
         result = builder.compile_source(source, str(arguments.source), not arguments.no_optimize)
     except DiagnosticError as error:
-        return _report_failure(error, source, False)
+        return _report_failure(error, source, arguments.json)
     with tempfile.TemporaryDirectory(prefix="cairn-run-") as folder:
         executable = Path(folder) / "program.exe"
         builder.write_executable(executable, result.image)
-        return _execute(executable, arguments.timeout)
+        exit_code, timed_out, captured_out, captured_err = _execute(
+            executable, arguments.timeout, arguments.json)
+        if arguments.json:
+            print(json.dumps(_run_envelope(arguments.source, ok=exit_code == 0 and not timed_out,
+                                           returncode=None if timed_out else exit_code,
+                                           timed_out=timed_out, stdout=captured_out,
+                                           stderr=captured_err), indent=2))
+        return exit_code
 
 
-def _execute(executable: Path, timeout: float) -> int:
-    """Run the produced executable with inherited streams and a hard time limit."""
+def _execute(executable: Path, timeout: float,
+             json_mode: bool = False) -> Tuple[int, bool, str, str]:
+    """Run the produced executable; return its exit code, timeout flag and streams.
+
+    Streams are inherited in human mode and captured in JSON mode. Human text is
+    printed only in human mode, matching the other commands.
+    """
     try:
-        completed = subprocess.run([str(executable)], timeout=timeout, check=False)
-    except subprocess.TimeoutExpired:
-        print(f"[TIMEOUT] the program ran longer than {timeout:g} seconds", file=sys.stderr)
-        print("Why: a Cairn program is expected to finish; an endless loop is a bug.",
-              file=sys.stderr)
-        print("Fix: correct the loop condition, or raise --timeout for a deliberate wait.",
-              file=sys.stderr)
-        return EXIT_FAILURE
+        completed = subprocess.run([str(executable)], timeout=timeout, check=False,
+                                   capture_output=json_mode, text=True,
+                                   encoding="utf-8", errors="replace")
+    except subprocess.TimeoutExpired as error:
+        stdout = error.stdout if isinstance(error.stdout, str) else ""
+        stderr = error.stderr if isinstance(error.stderr, str) else ""
+        if not json_mode:
+            print(f"[TIMEOUT] the program ran longer than {timeout:g} seconds", file=sys.stderr)
+            print("Why: a Cairn program is expected to finish; an endless loop is a bug.",
+                  file=sys.stderr)
+            print("Fix: correct the loop condition, or raise --timeout for a deliberate wait.",
+                  file=sys.stderr)
+        return EXIT_FAILURE, True, stdout, stderr
     except OSError as error:
-        print(f"[RUN ERROR] cannot start {executable}: {error}", file=sys.stderr)
-        print("Why: the generated image could not be loaded by Windows.", file=sys.stderr)
-        print("Fix: report the .crn file, because this is a compiler defect.", file=sys.stderr)
-        return EXIT_FAILURE
-    return completed.returncode
+        if not json_mode:
+            print(f"[RUN ERROR] cannot start {executable}: {error}", file=sys.stderr)
+            print("Why: the generated image could not be loaded by Windows.", file=sys.stderr)
+            print("Fix: report the .crn file, because this is a compiler defect.", file=sys.stderr)
+        return EXIT_FAILURE, False, "", ""
+    if json_mode:
+        return completed.returncode, False, completed.stdout or "", completed.stderr or ""
+    return completed.returncode, False, "", ""
 
 
 def _read_executable(path: Path, json_mode: bool = False) -> Tuple[Optional[bytes], int]:

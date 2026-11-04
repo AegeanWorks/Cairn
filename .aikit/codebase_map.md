@@ -8,9 +8,9 @@
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `41`
 - **Total Classes**: `69`
-- **Total Top-Level Functions**: `115`
-- **Total Class Methods**: `354`
-- **Total Source Lines**: `5928`
+- **Total Top-Level Functions**: `116`
+- **Total Class Methods**: `359`
+- **Total Source Lines**: `6016`
 
 ---
 
@@ -93,7 +93,7 @@
 ### [`cairn/cli.py`](cairn/cli.py)
 > *Command line: build, check and run Cairn programs.*
 
-**Size**: `332` lines (`15316` bytes)
+**Size**: `374` lines (`17844` bytes)
 
 **Functions:**
 - `def _parser()` - *The whole command surface, declared in one place.*
@@ -103,8 +103,9 @@
 - `def _report_unreadable(arguments, path, extra)` - *The `--json` envelope for input that could not be read.*
 - `def _build_command(arguments)` - *`build`: compile a source file to a Windows executable, atomically.*
 - `def _check_command(arguments)` - *`check`: compile in memory and report, writing nothing.*
+- `def _run_envelope(path, *, ok, returncode, timed_out, stdout, stderr, error)` - *One JSON result object for `run`: the exit code and the captured streams.*
 - `def _run_command(arguments)` - *`run`: compile into a temporary folder, execute, and forward the exit code.*
-- `def _execute(executable, timeout)` - *Run the produced executable with inherited streams and a hard time limit.*
+- `def _execute(executable, timeout, json_mode)` - *Run the produced executable; return its exit code, timeout flag and streams.*
 - `def _read_executable(path, json_mode)` - *The artifact bytes, or an explained usage failure (silent under `--json`).*
 - `def _verify_command(arguments)` - *`verify`: structural checks over a built image or over a source compiled in memory.*
 - `def _listing_command(arguments)` - *`listing`: compile in memory and print the bytes of every label in `.text`.*
@@ -598,7 +599,7 @@
 ### [`tests/test_cli.py`](tests/test_cli.py)
 > *CLI tests: exit codes, JSON diagnostics, build output and atomic overwrite.*
 
-**Size**: `219` lines (`9885` bytes)
+**Size**: `265` lines (`12176` bytes)
 
 **Classes:**
 - `class CliTest` - *An agent drives the compiler through this surface, so it is tested as a contract.*
@@ -621,6 +622,11 @@
   - Method `.test_concurrent_writes_use_distinct_temporaries()`
   - Method `.test_concurrent_writes_leave_no_temporaries_behind()`
   - Method `.test_run_rejects_a_non_positive_timeout()`
+  - Method `.test_run_json_reports_success_with_captured_output()`
+  - Method `.test_run_json_reports_a_trap_with_its_stderr()`
+  - Method `.test_run_json_envelope_for_unreadable_input()`
+  - Method `.test_run_json_envelope_for_a_bad_timeout()`
+  - Method `.test_run_json_reports_a_timeout()`
   - Method `.test_json_envelope_for_unreadable_build_input()`
   - Method `.test_json_envelope_for_unreadable_check_input()`
   - Method `.test_json_envelope_for_unreadable_verify_target()`

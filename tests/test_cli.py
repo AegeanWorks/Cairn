@@ -167,6 +167,52 @@ class CliTest(unittest.TestCase):
         self.assertEqual(zero_status, EXIT_USAGE)
         self.assertEqual(nan_status, EXIT_USAGE)
 
+    def test_run_json_reports_success_with_captured_output(self) -> None:
+        output, status = _capture(lambda: main(["run", str(self.good), "--json"]))
+        self.assertEqual(status, EXIT_OK)
+        payload = json.loads(output)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["returncode"], 0)
+        self.assertFalse(payload["timed_out"])
+        self.assertEqual(payload["stdout"], "7\n")
+
+    def test_run_json_reports_a_trap_with_its_stderr(self) -> None:
+        source = self.folder / "trap.crn"
+        source.write_text("fn main() -> i64 { var zero: i64 = 0; print(1 / zero); "
+                          "return 0; }", encoding="utf-8")
+        output, status = _capture(lambda: main(["run", str(source), "--json"]))
+        self.assertEqual(status, 3)
+        payload = json.loads(output)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["returncode"], 3)
+        self.assertIn("divide by zero", payload["stderr"])
+
+    def test_run_json_envelope_for_unreadable_input(self) -> None:
+        output, status = _capture(lambda: main(["run", str(self.folder / "absent.crn"),
+                                                  "--json"]))
+        self.assertEqual(status, EXIT_USAGE)
+        payload = json.loads(output)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "unreadable-input")
+
+    def test_run_json_envelope_for_a_bad_timeout(self) -> None:
+        output, status = _capture(lambda: main(["run", str(self.good), "--json",
+                                                  "--timeout", "0"]))
+        self.assertEqual(status, EXIT_USAGE)
+        payload = json.loads(output)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "invalid-timeout")
+
+    def test_run_json_reports_a_timeout(self) -> None:
+        source = self.folder / "loop.crn"
+        source.write_text("fn main() -> i64 { while 1 { } return 0; }", encoding="utf-8")
+        output, status = _capture(lambda: main(["run", str(source), "--json",
+                                                  "--timeout", "1"]))
+        self.assertEqual(status, EXIT_FAILURE)
+        payload = json.loads(output)
+        self.assertFalse(payload["ok"])
+        self.assertTrue(payload["timed_out"])
+
     def test_json_envelope_for_unreadable_build_input(self) -> None:
         missing = self.folder / "absent.crn"
         out, status = _capture(lambda: main(["build", str(missing), "--json"]))
