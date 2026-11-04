@@ -122,6 +122,18 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 3)
         self.assertIn("divide by zero", completed.stderr)
 
+    def test_min_int_divided_by_minus_one_traps_like_division_by_zero(self) -> None:
+        source = ("fn main() -> i64 { var lo: i64 = -9223372036854775807 - 1; "
+                  "var neg: i64 = -1; print(lo / neg); return 0; }")
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 3)
+        self.assertIn("divide by zero", completed.stderr)
+        remainder = ("fn main() -> i64 { var lo: i64 = -9223372036854775807 - 1; "
+                     "var neg: i64 = -1; print(lo % neg); return 0; }")
+        completed = self.execute(remainder)
+        self.assertEqual(completed.returncode, 3)
+        self.assertIn("divide by zero", completed.stderr)
+
     def test_min_int64_prints_with_its_sign(self) -> None:
         completed = self.execute("fn main() -> i64 { print(-9223372036854775807 - 1); return 0; }")
         self.assertEqual(completed.stdout, "-9223372036854775808\n")

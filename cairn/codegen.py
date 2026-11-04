@@ -17,7 +17,7 @@ from typing import List, Optional, Tuple
 from cairn import syntax
 from cairn.image import ENTRY_LABEL, Artifact, ReadOnlyData, iat_label
 from cairn.machine import ARGUMENT_REGISTERS, Assembler
-from cairn.optimize import has_call
+from cairn.optimize import INT64_MIN, has_call
 from cairn.runtime import DIV_ZERO_LABEL, PRINT_LABEL, emit_runtime
 from cairn.sema import MAX_PARAMETERS
 
@@ -437,10 +437,21 @@ class CodeGenerator:
         self.depth -= 8
 
     def _emit_division(self, operator: str) -> None:
-        """Signed division with an explicit zero-divisor trap, quotient or remainder."""
+        """Signed division with an explicit zero-divisor trap, quotient or remainder.
+
+        `idiv` faults on `INT64_MIN / -1` as well as on a zero divisor, so both
+        route to the `DIV_ZERO` helper the folding pass already preserves.
+        """
         asm = self.assembler
         asm.test("rax")
         asm.jcc("z", DIV_ZERO_LABEL)
+        no_overflow = self._fresh("div.no_overflow")
+        asm.cmp_imm("rax", -1)
+        asm.jcc("nz", no_overflow)
+        asm.mov_imm64(SCRATCH, INT64_MIN)
+        asm.binary(0x39, "rcx", SCRATCH)
+        asm.jcc("e", DIV_ZERO_LABEL)
+        asm.label(no_overflow)
         asm.mov_reg_reg(SCRATCH, "rax")
         asm.mov_reg_reg("rax", "rcx")
         asm.cqo()

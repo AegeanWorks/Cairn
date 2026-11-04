@@ -31,7 +31,12 @@ DESCRIPTOR_SIZE = 40
 
 def align(value: int, boundary: int) -> int:
     """Round `value` up to the next multiple of `boundary`."""
+    if boundary <= 0:
+        raise ValueError(f"alignment boundary must be positive, got {boundary}")
     return (value + boundary - 1) // boundary * boundary
+
+
+RESERVED_BLOB_NAMES = frozenset({"ilt", "dll"})
 
 
 def import_blob(imports: Tuple[str, ...]) -> Tuple[bytearray, Dict[str, int]]:
@@ -40,6 +45,9 @@ def import_blob(imports: Tuple[str, ...]) -> Tuple[bytearray, Dict[str, int]]:
     RVA fields inside the blob stay zero until `patch_imports` runs, because they depend on the
     section addresses, which depend on the blob's size.
     """
+    for function in imports:
+        if function in RESERVED_BLOB_NAMES:
+            raise ValueError(f"import name {function!r} collides with the blob layout")
     ilt_offset = DESCRIPTOR_SIZE
     ilt_size = 8 * (len(imports) + 1)
     dll_offset = ilt_offset + ilt_size
@@ -127,6 +135,13 @@ def _import_address_table(imports: Tuple[str, ...], offsets: Dict[str, int],
 
 def link(artifact: Artifact) -> bytes:
     """Lay out sections, resolve fixups and return the executable image bytes."""
+    if not artifact.text:
+        raise ValueError("cannot link an artifact with empty .text")
+    if artifact.entry not in artifact.text_labels:
+        raise ValueError(f"entry {artifact.entry!r} is not a .text label")
+    shared = set(artifact.text_labels) & set(artifact.rodata.labels)
+    if shared:
+        raise ValueError(f"label {sorted(shared)[0]!r} is bound in .text and .rdata")
     text = bytearray(artifact.text)
     imports = artifact.imports
     blob, offsets = import_blob(imports)
@@ -152,6 +167,9 @@ def link(artifact: Artifact) -> bytes:
     for offset, target in artifact.fixups:
         if target not in targets:
             raise KeyError(f"unresolved label {target!r} at text offset {offset}")
+        if not 0 <= offset <= len(text) - 4:
+            raise KeyError(f"fixup for {target!r} at text offset {offset} "
+                           f"is outside the {len(text)}-byte .text")
         displacement = targets[target] - (TEXT_RVA + offset + 4)
         struct.pack_into("<i", text, offset, displacement)
 

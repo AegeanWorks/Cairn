@@ -5,8 +5,8 @@ import unittest
 
 from cairn import codegen, parser, sema
 from cairn.builder import compile_source
-from cairn.image import ENTRY_LABEL
-from cairn.pe import link
+from cairn.image import ENTRY_LABEL, Artifact, ReadOnlyData
+from cairn.pe import align, import_blob, link
 
 HELLO = "fn main() -> i64 { print(40 + 2); return 0; }"
 OPTIONAL = 0x98
@@ -52,6 +52,41 @@ class CodegenTest(unittest.TestCase):
         artifact.fixups.append((0, "no.such.label"))
         with self.assertRaises(KeyError):
             link(artifact)
+
+    def test_fixup_past_the_text_is_a_compiler_bug_report(self) -> None:
+        artifact = artifact_for(HELLO)
+        artifact.fixups.append((len(artifact.text) + 100, ENTRY_LABEL))
+        with self.assertRaises(KeyError):
+            link(artifact)
+
+    def test_entry_outside_text_is_refused_at_link(self) -> None:
+        artifact = artifact_for(HELLO)
+        artifact.entry = "iat.WriteFile"
+        with self.assertRaises(ValueError):
+            link(artifact)
+
+    def test_text_and_rodata_share_no_label(self) -> None:
+        rodata = ReadOnlyData(data=bytearray(b"12345678"), labels={"dup": 0})
+        artifact = Artifact(text=b"\x90\x90\x90\x90", text_labels={"dup": 0, ENTRY_LABEL: 0},
+                            fixups=[(0, "dup")], rodata=rodata, entry=ENTRY_LABEL)
+        with self.assertRaises(ValueError):
+            link(artifact)
+
+    def test_reserved_import_names_are_refused(self) -> None:
+        for reserved in ("ilt", "dll"):
+            with self.subTest(name=reserved):
+                with self.assertRaises(ValueError):
+                    import_blob((reserved,))
+
+    def test_empty_text_is_refused_at_link(self) -> None:
+        artifact = Artifact(text=b"", text_labels={ENTRY_LABEL: 0}, fixups=[],
+                            rodata=ReadOnlyData(), entry=ENTRY_LABEL)
+        with self.assertRaises(ValueError):
+            link(artifact)
+
+    def test_align_rejects_a_zero_boundary(self) -> None:
+        with self.assertRaises(ValueError):
+            align(16, 0)
 
     def test_build_is_byte_reproducible(self) -> None:
         self.assertEqual(compile_source(HELLO).image, compile_source(HELLO).image)
@@ -108,6 +143,21 @@ class PeHeaderTest(unittest.TestCase):
                     for index in range(3)]
         self.assertEqual(pointers[0], 0x200)
         self.assertEqual(pointers, sorted(pointers))
+
+
+class ImageDataTest(unittest.TestCase):
+    """The read-only blob must not silently orphan bytes or divide by zero."""
+
+    def test_rodata_duplicate_label_is_refused(self) -> None:
+        rodata = ReadOnlyData()
+        rodata.add("x", b"AA")
+        with self.assertRaises(ValueError):
+            rodata.add("x", b"BB")
+        self.assertEqual(bytes(rodata.data), b"AA")
+
+    def test_rodata_align_rejects_a_zero_boundary(self) -> None:
+        with self.assertRaises(ValueError):
+            ReadOnlyData().align(0)
 
 
 if __name__ == "__main__":

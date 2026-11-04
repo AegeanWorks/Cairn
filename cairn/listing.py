@@ -25,6 +25,10 @@ def _rows(chunk: bytes, start: int) -> List[str]:
 def render_listing(artifact: Artifact) -> str:
     """Every label with its offset and the bytes up to the next label."""
     ordered = sorted(artifact.text_labels.items(), key=lambda item: item[1])
+    for name, offset in ordered:
+        if not 0 <= offset <= len(artifact.text):
+            raise ValueError(f"label {name!r} at offset {offset} "
+                             f"is outside the {len(artifact.text)}-byte .text")
     lines = [f"# .text, {len(artifact.text)} bytes, {len(ordered)} labels"]
     for position, (name, offset) in enumerate(ordered):
         end = ordered[position + 1][1] if position + 1 < len(ordered) else len(artifact.text)

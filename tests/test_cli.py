@@ -5,9 +5,11 @@ import io
 import json
 import struct
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
+from cairn import builder
 from cairn.cli import EXIT_FAILURE, EXIT_OK, EXIT_USAGE, main
 
 GOOD = "fn main() -> i64 { print(7); return 0; }\n"
@@ -134,6 +136,28 @@ class CliTest(unittest.TestCase):
         _, status = _capture(lambda: main(["verify", str(self.folder / "absent.exe")]))
         self.assertEqual(status, EXIT_USAGE)
 
+    def test_concurrent_writes_use_distinct_temporaries(self) -> None:
+        destination = self.folder / "shared.exe"
+        paths: list = []
+        threads = [threading.Thread(target=lambda: paths.append(
+            builder._temporary_path(destination))) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(len(set(paths)), 8)
+
+    def test_concurrent_writes_leave_no_temporaries_behind(self) -> None:
+        destination = self.folder / "race.exe"
+        image = builder.compile_source(GOOD).image
+        threads = [threading.Thread(target=builder.write_executable,
+                                    args=(destination, image)) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(destination.read_bytes(), image)
+        self.assertEqual(list(self.folder.glob("race.exe.tmp_*")), [])
 
 def _capture(call) -> tuple:
     """Run a CLI call with both streams redirected; returns their text and the exit code."""

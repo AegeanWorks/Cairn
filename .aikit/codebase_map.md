@@ -6,11 +6,11 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `39`
-- **Total Classes**: `66`
-- **Total Top-Level Functions**: `109`
-- **Total Class Methods**: `314`
-- **Total Source Lines**: `5443`
+- **Total Python Modules**: `40`
+- **Total Classes**: `68`
+- **Total Top-Level Functions**: `113`
+- **Total Class Methods**: `331`
+- **Total Source Lines**: `5678`
 
 ---
 
@@ -64,7 +64,7 @@
 ### [`cairn/builder.py`](cairn/builder.py)
 > *Build pipeline: source text to executable bytes.*
 
-**Size**: `61` lines (`2195` bytes)
+**Size**: `68` lines (`2420` bytes)
 
 **Classes:**
 - `class Build` - *One successful build: the parsed program, the linked artifact and the image bytes.*
@@ -73,6 +73,7 @@
 - `def compile_source(source, path, optimise)` - *Run every stage over one source text and return the executable image.*
 - `def compile_file(path, optimise)` - *Read a `.crn` file as UTF-8 and compile it.*
 - `def output_path(source, requested)` - *The executable path: `-o` when given, otherwise the source stem plus `.exe`.*
+- `def _temporary_path(destination)` - *A sibling no other thread or process is writing: pid plus thread identity.*
 - `def write_executable(destination, image)` - *Write the image to a temporary sibling, then rename it into place in one step.*
 
 ---
@@ -116,7 +117,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `519` lines (`22025` bytes)
+**Size**: `530` lines (`22471` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -224,7 +225,7 @@
 ### [`cairn/image.py`](cairn/image.py)
 > *Image pieces shared by the backend: read-only data and the linked artifact.*
 
-**Size**: `59` lines (`1759` bytes)
+**Size**: `63` lines (`1994` bytes)
 
 **Classes:**
 - `class ReadOnlyData` - *A byte blob with named offsets, placed in the `.rdata` section.*
@@ -267,7 +268,7 @@
 ### [`cairn/listing.py`](cairn/listing.py)
 > *Machine-code listing: the emitted bytes, grouped by the label that owns them.*
 
-**Size**: `42` lines (`1747` bytes)
+**Size**: `46` lines (`1977` bytes)
 
 **Functions:**
 - `def _rows(chunk, start)` - *Hex rows with the offset of each row's first byte.*
@@ -400,7 +401,7 @@
 ### [`cairn/pe.py`](cairn/pe.py)
 > *PE writer: link an artifact and emit a Windows PE32+ console executable.*
 
-**Size**: `170` lines (`7444` bytes)
+**Size**: `188` lines (`8339` bytes)
 
 **Functions:**
 - `def align(value, boundary)` - *Round `value` up to the next multiple of `boundary`.*
@@ -500,7 +501,7 @@
 ### [`cairn/verify.py`](cairn/verify.py)
 > *Verification of a built artifact: structural checks that need no execution.*
 
-**Size**: `229` lines (`10632` bytes)
+**Size**: `255` lines (`11956` bytes)
 
 **Classes:**
 - `class Problem` - *One failed invariant, addressed by its code.*
@@ -511,6 +512,7 @@
 - `def _u32(image, offset)`
 - `def _sections(image)` - *`(name, header offset)` for every section table entry that fits in the file.*
 - `def _rva_to_offset(image, rva)` - *Translate an RVA through the section table; -1 when it lands in no section.*
+- `def _section_of(image, rva)` - *The section name an RVA lands in; the empty string when it lands in none.*
 - `def _check_signatures(image, problems)` - *MZ at the start, e_lfanew at 0x3C, and `PE\0\0` where it points.*
 - `def _check_coff(image, problems)` - *Machine, section count and the optional header size.*
 - `def _check_optional(image, problems)` - *PE32+ magic and the console subsystem.*
@@ -592,7 +594,7 @@
 ### [`tests/test_cli.py`](tests/test_cli.py)
 > *CLI tests: exit codes, JSON diagnostics, build output and atomic overwrite.*
 
-**Size**: `157` lines (`6853` bytes)
+**Size**: `181` lines (`7904` bytes)
 
 **Classes:**
 - `class CliTest` - *An agent drives the compiler through this surface, so it is tested as a contract.*
@@ -612,6 +614,8 @@
   - Method `.test_verify_reports_a_broken_image_with_its_code()`
   - Method `.test_verify_forwards_a_compile_failure()`
   - Method `.test_verify_missing_target_is_a_usage_error()`
+  - Method `.test_concurrent_writes_use_distinct_temporaries()`
+  - Method `.test_concurrent_writes_leave_no_temporaries_behind()`
 
 **Functions:**
 - `def _capture(call)` - *Run a CLI call with both streams redirected; returns their text and the exit code.*
@@ -645,7 +649,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `192` lines (`6637` bytes)
+**Size**: `204` lines (`7328` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -657,6 +661,7 @@
   - Method `.test_arithmetic_truncates_shifts_and_returns_the_exit_code()`
   - Method `.test_recursion_and_loop_control()`
   - Method `.test_division_by_zero_is_a_trap_with_a_message_and_exit_code_3()`
+  - Method `.test_min_int_divided_by_minus_one_traps_like_division_by_zero()`
   - Method `.test_min_int64_prints_with_its_sign()`
   - Method `.test_comparison_and_logical_operators_yield_one_or_zero()`
   - Method `.test_four_argument_call_uses_every_argument_register()`
@@ -713,6 +718,18 @@
   - Method `.test_tokenize_reports_eof_at_the_end()`
   - Method `.test_non_ascii_identifier_is_rejected_as_unexpected_character()`
   - Method `.test_long_digit_run_is_E1003_not_ValueError()`
+
+---
+
+### [`tests/test_listing.py`](tests/test_listing.py)
+> *Listing tests: the label-grouped view of the bytes the writer will place.*
+
+**Size**: `27` lines (`956` bytes)
+
+**Classes:**
+- `class ListingTest` - *A corrupt artifact must fail loudly instead of printing negative sizes.*
+  - Method `.test_label_past_the_text_is_refused()`
+  - Method `.test_labels_render_with_their_bytes()`
 
 ---
 
@@ -802,13 +819,19 @@
 ### [`tests/test_pe.py`](tests/test_pe.py)
 > *Backend and PE tests: labels, fixups, determinism and the produced image's structure.*
 
-**Size**: `114` lines (`5087` bytes)
+**Size**: `164` lines (`7166` bytes)
 
 **Classes:**
 - `class CodegenTest` - *The backend is checked through the artifact it produces.*
   - Method `.test_artifact_names_entry_main_and_runtime()`
   - Method `.test_every_fixup_resolves()`
   - Method `.test_unresolved_label_is_a_compiler_bug_report()`
+  - Method `.test_fixup_past_the_text_is_a_compiler_bug_report()`
+  - Method `.test_entry_outside_text_is_refused_at_link()`
+  - Method `.test_text_and_rodata_share_no_label()`
+  - Method `.test_reserved_import_names_are_refused()`
+  - Method `.test_empty_text_is_refused_at_link()`
+  - Method `.test_align_rejects_a_zero_boundary()`
   - Method `.test_build_is_byte_reproducible()`
 - `class PeHeaderTest` - *Byte-level checks, because there is no loader to ask at test time.*
   - Method `.setUp()`
@@ -819,6 +842,9 @@
   - Method `.test_entry_point_lies_inside_text()`
   - Method `.test_import_directory_and_iat_are_filled()`
   - Method `.test_section_raw_pointers_follow_the_headers()`
+- `class ImageDataTest` - *The read-only blob must not silently orphan bytes or divide by zero.*
+  - Method `.test_rodata_duplicate_label_is_refused()`
+  - Method `.test_rodata_align_rejects_a_zero_boundary()`
 
 **Functions:**
 - `def artifact_for(source)` - *The linked artifact for a source, without going through the file writer.*
@@ -880,16 +906,22 @@
 ### [`tests/test_verify.py`](tests/test_verify.py)
 > *Verifier tests: every artifact invariant is decided from bytes and names its code.*
 
-**Size**: `64` lines (`2383` bytes)
+**Size**: `116` lines (`5009` bytes)
 
 **Classes:**
 - `class VerifyTest` - *Each test breaks one rule and expects exactly the code that names it.*
   - Method `.test_a_fresh_build_has_no_problems()`
   - Method `.test_every_verification_code_is_reachable()`
   - Method `.test_a_problem_renders_with_its_code()`
+  - Method `.test_import_directory_must_live_in_rdata()`
+  - Method `.test_iat_must_live_in_data()`
+  - Method `.test_entry_is_checked_against_the_text_section()`
+  - Method `.test_text_must_be_readable()`
 
 **Functions:**
 - `def image_bytes()` - *A real build, which verification must accept unchanged.*
 - `def patched(offset, payload)` - *A build with one field overwritten, to isolate the invariant it belongs to.*
+- `def section_field(image, index, field)` - *One dword from a section header: field 8 is size, 12 is VA, 20 is the raw pointer.*
+- `def file_offset(image, rva)` - *Translate one RVA through the section table.*
 
 ---

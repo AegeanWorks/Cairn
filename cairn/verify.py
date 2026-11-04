@@ -61,6 +61,16 @@ def _rva_to_offset(image: bytes, rva: int) -> int:
     return -1
 
 
+def _section_of(image: bytes, rva: int) -> str:
+    """The section name an RVA lands in; the empty string when it lands in none."""
+    for name, header in _sections(image):
+        start = _u32(image, header + 12)
+        size = max(_u32(image, header + 8), 1)
+        if start <= rva < start + size:
+            return name.rstrip(b"\x00").decode("ascii", "replace")
+    return ""
+
+
 def _check_signatures(image: bytes, problems: List[Problem]) -> None:
     """MZ at the start, e_lfanew at 0x3C, and `PE\\0\\0` where it points."""
     if len(image) < HEADERS_SIZE:
@@ -129,10 +139,13 @@ def _check_permissions(image: bytes, problems: List[Problem]) -> None:
     for name, header in _sections(image):
         flags = _u32(image, header + 36)
         label = name.rstrip(b"\x00").decode("ascii", "replace")
+        readable = bool(flags & SECTION_READ)
         writable = bool(flags & SECTION_WRITE)
         executable = bool(flags & SECTION_EXECUTE)
         if writable and executable:
             problems.append(Problem("V0009", f"{label} is both writable and executable"))
+        if not readable:
+            problems.append(Problem("V0009", f"{label} is not readable"))
         if label == ".text" and (writable or not executable):
             problems.append(Problem("V0009", ".text must be executable and not writable"))
         if label == ".data" and (not writable or executable):
@@ -144,13 +157,14 @@ def _check_permissions(image: bytes, problems: List[Problem]) -> None:
 def _check_entry(image: bytes, problems: List[Problem]) -> None:
     """The entry point must fall inside `.text`, or Windows would start in data."""
     entry = _u32(image, OPTIONAL_OFFSET + 16)
-    text_size = 0
+    text_range: Tuple[int, int] = (TEXT_RVA, TEXT_RVA)
     for name, header in _sections(image):
         if name.rstrip(b"\x00") == b".text":
-            text_size = max(_u32(image, header + 8), 1)
-    if not TEXT_RVA <= entry < TEXT_RVA + text_size:
+            start = _u32(image, header + 12)
+            text_range = (start, start + max(_u32(image, header + 8), 1))
+    if not text_range[0] <= entry < text_range[1]:
         problems.append(Problem("V0006", f"entry RVA {entry:#x} is outside "
-                                         f".text [{TEXT_RVA:#x}, {TEXT_RVA + text_size:#x})"))
+                                          f".text [{text_range[0]:#x}, {text_range[1]:#x})"))
 
 
 def _check_image_size(image: bytes, problems: List[Problem]) -> None:
@@ -183,16 +197,28 @@ def _check_imports(image: bytes, problems: List[Problem]) -> None:
     offset = _rva_to_offset(image, directory_rva)
     if offset + DESCRIPTOR_SIZE > len(image):
         problems.append(Problem("V0007", f"import directory at {offset:#x} is past the "
-                                         f"{len(image):#x}-byte file"))
+                                          f"{len(image):#x}-byte file"))
+        return
+    if _section_of(image, directory_rva) != ".rdata":
+        problems.append(Problem("V0007", f"import directory RVA {directory_rva:#x} is in "
+                                          f"{_section_of(image, directory_rva) or 'no section'}, "
+                                          "expected .rdata"))
         return
     ilt_rva, _, _, dll_rva, iat_rva = struct.unpack_from("<IIIII", image, offset)
     if not ilt_rva or not dll_rva or not iat_rva:
         problems.append(Problem("V0007", "the import descriptor has an empty field"))
         return
-    for label, rva in (("ILT", ilt_rva), ("DLL name", dll_rva), ("IAT", iat_rva)):
-        if _rva_to_offset(image, rva) < 0:
-            problems.append(Problem("V0007", f"{label} RVA {rva:#x} is outside every section"))
+    for label, rva in (("ILT", ilt_rva), ("DLL name", dll_rva)):
+        section = _section_of(image, rva)
+        if section != ".rdata":
+            problems.append(Problem("V0007", f"{label} RVA {rva:#x} is in "
+                                              f"{section or 'no section'}, expected .rdata"))
             return
+    if _section_of(image, iat_rva) != ".data":
+        problems.append(Problem("V0007", f"IAT RVA {iat_rva:#x} is in "
+                                          f"{_section_of(image, iat_rva) or 'no section'}, "
+                                          "expected .data"))
+        return
     dll_offset = _rva_to_offset(image, dll_rva)
     iat = _rva_to_offset(image, iat_rva)
     if dll_offset + 16 > len(image):

@@ -6,6 +6,7 @@ leaves a half-written `.exe` behind.
 """
 
 import os
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -46,10 +47,16 @@ def output_path(source: Path, requested: Optional[Path] = None) -> Path:
     return requested if requested is not None else source.with_suffix(".exe")
 
 
+def _temporary_path(destination: Path) -> Path:
+    """A sibling no other thread or process is writing: pid plus thread identity."""
+    return destination.with_name(
+        f"{destination.name}.tmp_{os.getpid()}_{threading.get_ident()}")
+
+
 def write_executable(destination: Path, image: bytes) -> None:
     """Write the image to a temporary sibling, then rename it into place in one step."""
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f"{destination.name}.tmp_{os.getpid()}")
+    temporary = _temporary_path(destination)
     try:
         temporary.write_bytes(image)
         os.replace(temporary, destination)

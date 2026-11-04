@@ -31,6 +31,8 @@ class ReadOnlyData:
 
     def label(self, name: str) -> None:
         """Bind `name` to the current offset."""
+        if name in self.labels:
+            raise ValueError(f"duplicate rodata label {name!r}: a label may be bound once")
         self.labels[name] = len(self.data)
 
     def add(self, name: str, payload: bytes) -> None:
@@ -40,6 +42,8 @@ class ReadOnlyData:
 
     def align(self, boundary: int) -> None:
         """Pad with zero bytes to the next multiple of `boundary`."""
+        if boundary <= 0:
+            raise ValueError(f"alignment boundary must be positive, got {boundary}")
         padding = (-len(self.data)) % boundary
         self.data.extend(b"\x00" * padding)
 
