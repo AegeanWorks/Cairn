@@ -19,7 +19,7 @@ fn name(a: i64, b: i64) -> i64 { return a + b; }
 let x: i64 = 1;
 var y: i64 = 1;
 y = y + 1;
-print(x)
+print(x);
 if x < 2 { return x; }
 while i < 10 { i = i + 1; }
 break;  continue;

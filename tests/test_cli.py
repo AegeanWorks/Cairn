@@ -159,6 +159,14 @@ class CliTest(unittest.TestCase):
         self.assertEqual(destination.read_bytes(), image)
         self.assertEqual(list(self.folder.glob("race.exe.tmp_*")), [])
 
+    def test_run_rejects_a_non_positive_timeout(self) -> None:
+        source = self.folder / "tiny.crn"
+        source.write_text("fn main() -> i64 { return 0; }", encoding="utf-8")
+        _, zero_status = _capture(lambda: main(["run", str(source), "--timeout", "0"]))
+        _, nan_status = _capture(lambda: main(["run", str(source), "--timeout", "nan"]))
+        self.assertEqual(zero_status, EXIT_USAGE)
+        self.assertEqual(nan_status, EXIT_USAGE)
+
 def _capture(call) -> tuple:
     """Run a CLI call with both streams redirected; returns their text and the exit code."""
     buffer = io.StringIO()

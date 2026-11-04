@@ -5,6 +5,7 @@ Tests assert three directions: every code used in the package is registered, eve
 is documented in README.md, and every registered code appears in `cairn capabilities`.
 
 Families: E1xxx lexer, E2xxx parser, E3xxx semantics, Vxxxx verification of a built artifact.
+E1002 and E3002 are reserved for future stages and must not be reused.
 """
 
 from dataclasses import dataclass

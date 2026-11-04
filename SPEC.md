@@ -188,9 +188,25 @@ function-item::= "fn" ident "(" [ params ] ")" "->" "i64" block
 params       ::= param { "," param }
 param        ::= ident ":" "i64"
 block        ::= "{" { stmt } "}"
-stmt         ::= let-stmt | var-stmt | if-stmt | while-stmt | return-stmt | break | continue | block | expr-stmt
+stmt         ::= let-stmt | if-stmt | while-stmt | return-stmt | break-stmt | continue-stmt | block | expr-stmt
 let-stmt     ::= ("let" | "var") ident ":" "i64" "=" expr ";"
+if-stmt      ::= "if" expr block [ "else" (if-stmt | block) ]
+while-stmt   ::= "while" expr block
+return-stmt  ::= "return" expr ";"
+break-stmt   ::= "break" ";"
+continue-stmt ::= "continue" ";"
+expr-stmt    ::= expr ";"
+expr         ::= binary-expr
+binary-expr  ::= unary-expr { binop unary-expr }
+unary-expr   ::= ("-" | "!" | "~") unary-expr | primary
+primary      ::= int | "true" | "false" | ident | call | "(" expr ")"
+call         ::= ident "(" [ expr { "," expr } ] ")"
 ```
+
+An `expr-stmt` is valid only when `expr` is an assignment to a name
+(`E2003` otherwise) or a call, optionally parenthesised (`E2004` otherwise).
+Operator precedence and associativity follow the tiers in §6.1; `-x`, `!x`
+and `~x` bind tightest and nest right-associatively.
 
 ## 14. Style rules for generated code
 

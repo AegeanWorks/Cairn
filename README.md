@@ -45,6 +45,7 @@ disagree, `python -m cairn capabilities --json` wins.
   ```bash
   python -m unittest discover
   ```
+  (run from `projects/cairn`)
 - **Compile and run something now** (under 10 seconds):
   ```bash
   python -m cairn run examples/hello.crn

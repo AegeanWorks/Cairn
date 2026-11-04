@@ -6,11 +6,11 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `40`
-- **Total Classes**: `68`
-- **Total Top-Level Functions**: `113`
-- **Total Class Methods**: `337`
-- **Total Source Lines**: `5734`
+- **Total Python Modules**: `41`
+- **Total Classes**: `69`
+- **Total Top-Level Functions**: `114`
+- **Total Class Methods**: `340`
+- **Total Source Lines**: `5784`
 
 ---
 
@@ -93,7 +93,7 @@
 ### [`cairn/cli.py`](cairn/cli.py)
 > *Command line: build, check and run Cairn programs.*
 
-**Size**: `299` lines (`13314` bytes)
+**Size**: `308` lines (`13797` bytes)
 
 **Functions:**
 - `def _parser()` - *The whole command surface, declared in one place.*
@@ -163,7 +163,7 @@
 ### [`cairn/codes.py`](cairn/codes.py)
 > *The diagnostic code registry: one record per code the compiler can emit.*
 
-**Size**: `76` lines (`3343` bytes)
+**Size**: `77` lines (`3414` bytes)
 
 **Classes:**
 - `class Code` - *One diagnostic code: its stage family and a one-line statement of what it means.*
@@ -595,7 +595,7 @@
 ### [`tests/test_cli.py`](tests/test_cli.py)
 > *CLI tests: exit codes, JSON diagnostics, build output and atomic overwrite.*
 
-**Size**: `181` lines (`7904` bytes)
+**Size**: `189` lines (`8364` bytes)
 
 **Classes:**
 - `class CliTest` - *An agent drives the compiler through this surface, so it is tested as a contract.*
@@ -617,6 +617,7 @@
   - Method `.test_verify_missing_target_is_a_usage_error()`
   - Method `.test_concurrent_writes_use_distinct_temporaries()`
   - Method `.test_concurrent_writes_leave_no_temporaries_behind()`
+  - Method `.test_run_rejects_a_non_positive_timeout()`
 
 **Functions:**
 - `def _capture(call)` - *Run a CLI call with both streams redirected; returns their text and the exit code.*
@@ -732,6 +733,21 @@
 - `class ListingTest` - *A corrupt artifact must fail loudly instead of printing negative sizes.*
   - Method `.test_label_past_the_text_is_refused()`
   - Method `.test_labels_render_with_their_bytes()`
+
+---
+
+### [`tests/test_llm_card.py`](tests/test_llm_card.py)
+> *LLM card tests: the fenced programs in LLM_SYSTEM.md must actually compile.*
+
+**Size**: `32` lines (`964` bytes)
+
+**Classes:**
+- `class LlmCardTest` - *If the card shows a program, that program is checked.*
+  - Method `.test_card_has_a_canonical_program()`
+  - Method `.test_every_card_program_compiles()`
+
+**Functions:**
+- `def main_programs()` - *Every fenced block that claims to be a complete program.*
 
 ---
 

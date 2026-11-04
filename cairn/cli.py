@@ -8,6 +8,7 @@ renders, which is what an agent should read.
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import tempfile
@@ -150,6 +151,14 @@ def _check_command(arguments: argparse.Namespace) -> int:
 
 def _run_command(arguments: argparse.Namespace) -> int:
     """`run`: compile into a temporary folder, execute, and forward the exit code."""
+    if not math.isfinite(arguments.timeout) or arguments.timeout <= 0:
+        print(f"[INVALID INPUT] --timeout must be a positive number of seconds, "
+              f"got {arguments.timeout}", file=sys.stderr)
+        print("Why: the runner needs a real deadline before starting the program.",
+              file=sys.stderr)
+        print("Fix: pass --timeout with a positive value, for example '--timeout 5'.",
+              file=sys.stderr)
+        return EXIT_USAGE
     source, status = _read_source(arguments.source)
     if source is None:
         return status
