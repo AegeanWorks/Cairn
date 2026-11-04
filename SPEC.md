@@ -38,7 +38,9 @@ symbol       ::= "->" | "==" | "!=" | "<=" | ">=" | "&&" | "||" | "<<" | ">>"
 ```
 
 Whitespace separates tokens. Anything else is `E1001`. An integer above
-`9223372036854775807` is `E1003`. `true` is `1`, `false` is `0`.
+`9223372036854775808` is `E1003`. `9223372036854775808` itself lexes so that
+unary minus can spell `i64.min`, and is `E1003` anywhere else. `true` is `1`,
+`false` is `0`.
 
 ## 3. Compilation units
 

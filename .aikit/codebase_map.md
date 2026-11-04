@@ -9,8 +9,8 @@
 - **Total Python Modules**: `40`
 - **Total Classes**: `68`
 - **Total Top-Level Functions**: `113`
-- **Total Class Methods**: `331`
-- **Total Source Lines**: `5678`
+- **Total Class Methods**: `337`
+- **Total Source Lines**: `5734`
 
 ---
 
@@ -81,7 +81,7 @@
 ### [`cairn/capabilities.py`](cairn/capabilities.py)
 > *The machine-readable description of what this compiler accepts and emits.*
 
-**Size**: `104` lines (`5047` bytes)
+**Size**: `105` lines (`5095` bytes)
 
 **Functions:**
 - `def _operators()` - *Operators grouped by precedence tier, loosest first.*
@@ -163,7 +163,7 @@
 ### [`cairn/codes.py`](cairn/codes.py)
 > *The diagnostic code registry: one record per code the compiler can emit.*
 
-**Size**: `76` lines (`3331` bytes)
+**Size**: `76` lines (`3343` bytes)
 
 **Classes:**
 - `class Code` - *One diagnostic code: its stage family and a one-line statement of what it means.*
@@ -243,7 +243,7 @@
 ### [`cairn/lexer.py`](cairn/lexer.py)
 > *Lexer: source text to a flat token list.*
 
-**Size**: `153` lines (`6124` bytes)
+**Size**: `157` lines (`6286` bytes)
 
 **Classes:**
 - `class Token` - *One lexical unit: its kind, its text, its value when it is an integer, and its span.*
@@ -336,7 +336,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `281` lines (`11717` bytes)
+**Size**: `285` lines (`11850` bytes)
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -366,7 +366,7 @@
 ### [`cairn/parser.py`](cairn/parser.py)
 > *Parser: recursive descent over the token list.*
 
-**Size**: `317` lines (`13148` bytes)
+**Size**: `322` lines (`13457` bytes)
 
 **Classes:**
 - `class Parser` - *A cursor over one token list; every parse method consumes what it matches.*
@@ -430,7 +430,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `256` lines (`12060` bytes)
+**Size**: `262` lines (`12414` bytes)
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -567,7 +567,7 @@
 ### [`tests/test_capabilities.py`](tests/test_capabilities.py)
 > *The machine-checkable core: registry, manifest, listing and the stdlib-only proof.*
 
-**Size**: `110` lines (`4752` bytes)
+**Size**: `114` lines (`4963` bytes)
 
 **Classes:**
 - `class RegistryTest` - *ADR-003 makes codes a contract, so all three directions are asserted.*
@@ -576,6 +576,7 @@
   - Method `.test_every_registered_code_is_in_the_capabilities_manifest()`
   - Method `.test_the_registry_has_no_duplicate_codes()`
   - Method `.test_codes_group_by_stage_in_registry_order()`
+  - Method `.test_codes_found_regardless_of_quote_style()`
 - `class CapabilitiesTest` - *The manifest is the first thing an agent reads, so it must be complete and valid.*
   - Method `.test_manifest_is_json_serialisable_and_names_every_command()`
   - Method `.test_manifest_publishes_the_frozen_surface()`
@@ -649,7 +650,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `204` lines (`7328` bytes)
+**Size**: `207` lines (`7534` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -706,7 +707,7 @@
 ### [`tests/test_lexer.py`](tests/test_lexer.py)
 > *Lexer tests: token shape, spans, comments and the two literal failures.*
 
-**Size**: `66` lines (`2835` bytes)
+**Size**: `71` lines (`3074` bytes)
 
 **Classes:**
 - `class LexerTest` - *The scanner is the first stage an agent's source touches, so its reports must be exact.*
@@ -714,6 +715,7 @@
   - Method `.test_comment_runs_to_end_of_line()`
   - Method `.test_two_character_operators_win_over_one()`
   - Method `.test_integer_beyond_i64_is_a_positioned_error()`
+  - Method `.test_two_to_the_63_lexes_so_unary_minus_can_fold_it()`
   - Method `.test_unexpected_character_names_the_fix()`
   - Method `.test_tokenize_reports_eof_at_the_end()`
   - Method `.test_non_ascii_identifier_is_rejected_as_unexpected_character()`
@@ -760,7 +762,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `148` lines (`7011` bytes)
+**Size**: `161` lines (`7637` bytes)
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -780,6 +782,8 @@
   - Method `.test_zero_fold_never_drops_a_division_trap()`
   - Method `.test_constant_condition_selects_the_taken_branch()`
   - Method `.test_constant_false_while_loop_disappears()`
+  - Method `.test_while_zero_counts_its_rewrite()`
+  - Method `.test_dropped_unreachable_statements_count()`
   - Method `.test_statements_after_return_are_unreachable_and_dropped()`
   - Method `.test_a_call_is_never_removed()`
   - Method `.test_folded_count_reports_what_changed()`
@@ -794,7 +798,7 @@
 ### [`tests/test_parser.py`](tests/test_parser.py)
 > *Parser tests: shapes, precedence and the grammar's positioned refusals.*
 
-**Size**: `94` lines (`4278` bytes)
+**Size**: `101` lines (`4599` bytes)
 
 **Classes:**
 - `class ParserTest` - *The tree shape decides code shape, so these assertions are about generated code too.*
@@ -809,6 +813,7 @@
   - Method `.test_parens_call_statement_is_accepted()`
   - Method `.test_bare_token_list_is_E2001_not_an_index_error()`
   - Method `.test_break_and_continue_spans_include_the_semicolon()`
+  - Method `.test_min_int_is_spellable_as_negated_two_to_the_63()`
   - Method `.test_true_and_false_are_integers()`
 
 **Functions:**
@@ -855,7 +860,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `88` lines (`4056` bytes)
+**Size**: `92` lines (`4244` bytes)
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -871,6 +876,7 @@
   - Method `.test_wrong_argument_count()`
   - Method `.test_print_is_callable_not_redefinable()`
   - Method `.test_builtin_cannot_be_a_parameter_or_an_assignment_target()`
+  - Method `.test_literal_above_max_plus_one_is_refused()`
   - Method `.test_break_outside_a_loop()`
   - Method `.test_function_must_return_on_every_path()`
   - Method `.test_if_else_returning_both_ways_is_accepted()`

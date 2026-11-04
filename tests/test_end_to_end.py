@@ -137,6 +137,9 @@ class EndToEndTest(unittest.TestCase):
     def test_min_int64_prints_with_its_sign(self) -> None:
         completed = self.execute("fn main() -> i64 { print(-9223372036854775807 - 1); return 0; }")
         self.assertEqual(completed.stdout, "-9223372036854775808\n")
+        direct = self.execute("fn main() -> i64 { print(-9223372036854775808); return 0; }")
+        self.assertEqual(direct.returncode, 0)
+        self.assertEqual(direct.stdout, "-9223372036854775808\n")
 
     def test_comparison_and_logical_operators_yield_one_or_zero(self) -> None:
         source = ("fn main() -> i64 { print(2 < 3); print(3 < 2); print(!0); "

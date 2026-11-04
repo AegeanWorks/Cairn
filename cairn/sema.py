@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 
 from cairn import syntax
 from cairn.diagnostics import Diagnostic, DiagnosticError
+from cairn.optimize import INT64_MAX
 
 BUILTINS = {"print": 1}
 MAX_PARAMETERS = 4
@@ -187,6 +188,11 @@ class Analyzer:
         if expression is None:
             return
         if isinstance(expression, syntax.IntLiteral):
+            if expression.value > INT64_MAX:
+                self._report("E1003",
+                             f"integer literal {expression.value} does not fit in i64",
+                             "Write a value between -9223372036854775808 and 9223372036854775807.",
+                             expression.span)
             return
         if isinstance(expression, syntax.Parens):
             self._check_expression(expression.inner)

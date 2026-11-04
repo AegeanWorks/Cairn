@@ -144,7 +144,10 @@ class Optimizer:
         if block is None:
             return None
         statements = [self._statement(statement) for statement in block.statements]
-        block.statements = _reachable(_flatten(statements))
+        flattened = _flatten(statements)
+        kept = _reachable(flattened)
+        self.folded += len(flattened) - len(kept)
+        block.statements = kept
         return block
 
     def _statement(self, statement: syntax.Stmt) -> syntax.Stmt:
@@ -166,6 +169,7 @@ class Optimizer:
             statement.condition = self._expression(statement.condition)
             statement.body = self._block(statement.body)
             if _constant(statement.condition) == 0:
+                self.folded += 1
                 return syntax.Block(span=statement.span, statements=[])
         elif isinstance(statement, syntax.Block):
             self._block(statement)

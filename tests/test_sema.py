@@ -68,6 +68,10 @@ class SemaTest(unittest.TestCase):
                                "fn main() -> i64 { return f(1); }"), ["E3012"])
         self.assertEqual(codes("fn main() -> i64 { print = 1; return 0; }"), ["E3012"])
 
+    def test_literal_above_max_plus_one_is_refused(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { return 9223372036854775809; }"),
+                          ["E1003"])
+
     def test_break_outside_a_loop(self) -> None:
         self.assertEqual(codes("fn main() -> i64 { break; return 0; }"), ["E3008"])
 

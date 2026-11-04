@@ -111,7 +111,11 @@ class Lexer:
         return Span(start.start, self.offset, start.line, start.column, self.line, self.column)
 
     def _number(self, start: Span) -> Token:
-        """A decimal integer literal that must fit in a signed 64-bit integer."""
+        """A decimal integer literal that must fit in a signed 64-bit integer.
+
+        `2**63` itself lexes so unary minus can fold `-9223372036854775808`;
+        anywhere else the semantic pass refuses it with the same code.
+        """
         while (self.offset < len(self.source)
                and self.source[self.offset].isascii()
                and self.source[self.offset].isdigit()):
@@ -127,7 +131,7 @@ class Lexer:
             raise fail("E1003", f"integer literal {text} does not fit in i64",
                        f"Write a value at most {INT64_MAX}.",
                        self._span_from(start), self.path)
-        if value > INT64_MAX:
+        if value > INT64_MAX + 1:
             raise fail("E1003", f"integer literal {text} does not fit in i64",
                        f"Write a value at most {INT64_MAX}.",
                        self._span_from(start), self.path)

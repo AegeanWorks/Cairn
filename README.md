@@ -100,7 +100,7 @@ Defined semantics a C programmer would have to look up:
 | Integer overflow | Wraps two's complement; no undefined behaviour |
 | Division by zero | Trap: message on stderr, exit code 3 |
 | Division rounding | Truncates toward zero; `%` keeps the dividend's sign |
-| Right shift | Arithmetic (`>>` keeps the sign) |
+| Right shift | Arithmetic (`>>` keeps the sign); shift counts mask to 63 |
 | Comparison result | `0` or `1`, usable as a condition or an integer |
 | Evaluation order | Left to right; `&&` and `||` short-circuit |
 | Uninitialised values | Impossible: every `let`/`var` needs an initialiser, and every frame slot is zeroed on entry |

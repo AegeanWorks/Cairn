@@ -31,10 +31,15 @@ class LexerTest(unittest.TestCase):
 
     def test_integer_beyond_i64_is_a_positioned_error(self) -> None:
         with self.assertRaises(DiagnosticError) as caught:
-            tokenize("let x: i64 = 9223372036854775808;")
+            tokenize("let x: i64 = 9223372036854775809;")
         diagnostic = caught.exception.diagnostics[0]
         self.assertEqual(diagnostic.code, "E1003")
         self.assertIn("i64", diagnostic.message)
+
+    def test_two_to_the_63_lexes_so_unary_minus_can_fold_it(self) -> None:
+        number = [token for token in tokenize("9223372036854775808;")
+                  if token.kind == "int"][0]
+        self.assertEqual(number.value, 2 ** 63)
 
     def test_unexpected_character_names_the_fix(self) -> None:
         with self.assertRaises(DiagnosticError) as caught:

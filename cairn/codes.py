@@ -10,7 +10,7 @@ Families: E1xxx lexer, E2xxx parser, E3xxx semantics, Vxxxx verification of a bu
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Set, Tuple
 
-CODE_PATTERN = r'"[EV]\d{4}"'
+CODE_PATTERN = r"""['"][EV]\d{4}['"]"""
 
 
 @dataclass(frozen=True)
@@ -61,7 +61,7 @@ def codes_in_source(texts: Iterable[str]) -> Set[str]:
 
     found: Set[str] = set()
     for text in texts:
-        found.update(match.strip('"') for match in re.findall(CODE_PATTERN, text))
+        found.update(match.strip("\"'") for match in re.findall(CODE_PATTERN, text))
     return found
 
 

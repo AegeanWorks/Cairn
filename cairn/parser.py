@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from cairn.diagnostics import DiagnosticError, Span, fail
 from cairn.lexer import Token, tokenize
+from cairn.optimize import INT64_MIN
 from cairn import syntax
 
 PRECEDENCE = {
@@ -226,6 +227,10 @@ class Parser:
         if token.kind == "symbol" and token.text in UNARY_OPERATORS:
             self._advance()
             operand = self._parse_unary()
+            if (token.text == "-" and isinstance(operand, syntax.IntLiteral)
+                    and operand.value == -INT64_MIN):
+                return syntax.IntLiteral(span=Span.join(token.span, operand.span),
+                                         value=INT64_MIN)
             return syntax.Unary(span=Span.join(token.span, operand.span), op=token.text,
                                 operand=operand)
         return self._parse_primary()

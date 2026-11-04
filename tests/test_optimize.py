@@ -120,6 +120,19 @@ class RewriteTest(unittest.TestCase):
         body = optimized_body("while 0 { print(1); }")
         self.assertEqual(body.statements, [])
 
+    def test_while_zero_counts_its_rewrite(self) -> None:
+        folder = optimize.Optimizer()
+        folder.run(analyze(parse("fn main() -> i64 { while 0 { print(1); } return 0; }")))
+        self.assertGreaterEqual(folder.folded, 1)
+
+    def test_dropped_unreachable_statements_count(self) -> None:
+        folder = optimize.Optimizer()
+        program = folder.run(analyze(parse(
+            "fn main() -> i64 { while 1 { return 1; print(9); } return 0; }")))
+        loop = program.functions[0].body.statements[0]
+        self.assertEqual(len(loop.body.statements), 1)
+        self.assertGreaterEqual(folder.folded, 1)
+
     def test_statements_after_return_are_unreachable_and_dropped(self) -> None:
         body = optimized_body("while 1 { return 1; print(9); }")
         loop = body.statements[0]

@@ -46,6 +46,10 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(list(grouped["lexer"]), ["E1001", "E1003"])
         self.assertEqual(grouped["verify"][0], "V0001")
 
+    def test_codes_found_regardless_of_quote_style(self) -> None:
+        self.assertEqual(codes.codes_in_source(["'E3001'"]), {"E3001"})
+        self.assertEqual(codes.codes_in_source(['"E3001"']), {"E3001"})
+
 
 class CapabilitiesTest(unittest.TestCase):
     """The manifest is the first thing an agent reads, so it must be complete and valid."""
