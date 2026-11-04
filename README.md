@@ -310,11 +310,12 @@ languages in the same run and derives one verdict per case.
 ```bash
 python benchmarks/run_benchmarks.py           # table plus a "Goal: faster than C" line
 python benchmarks/run_benchmarks.py --json    # goal.faster_than_c: true, false or null
-python benchmarks/run_benchmarks.py --strict  # gate: 0 won, 1 slower, 2 no C compiler
+python benchmarks/run_benchmarks.py --strict  # gate: 0 won, 1 slower or errored, 2 no C compiler
 ```
 
-A verdict is `faster`, `tie`, `slower` or `unavailable`. `unavailable` means no `gcc`, `clang` or
-`cl` was found, and `--strict` then exits `2` rather than reporting a win it did not measure. The
+A verdict is `faster`, `tie`, `slower`, `unavailable` or `error`. `unavailable` means no `gcc`, `clang` or
+`cl` was found, and `--strict` then exits `2` rather than reporting a win it did not measure. `error`
+means the case's own build or run failed instead of producing a time, and `--strict` exits `1`. The
 development machine has no C compiler, so the goal is currently unmeasured there, and the three
 cases cover integer loops, recursion and constant arithmetic only.
 
