@@ -165,6 +165,10 @@ class Assembler:
         dst, src = REGISTERS[destination], REGISTERS[source]
         self.emit(bytes([_rex(True, src >> 3, 0, dst >> 3), opcode, *_modrm(3, src, dst)]))
 
+    def cmp_reg_reg(self, left: str, right: str) -> None:
+        """`cmp r64, r64`: compare `left` against `right` (G-002 named wrapper)."""
+        self.binary(0x39, left, right)
+
     def _group1_imm(self, extension: int, reg: str, value: int) -> None:
         """`op r/m64, imm8` (83 /n) or `op r/m64, imm32` (81 /n), sign-extended.
 

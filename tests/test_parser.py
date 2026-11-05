@@ -104,6 +104,12 @@ class ParserTest(unittest.TestCase):
         self.assertIsInstance(value, syntax.IntLiteral)
         self.assertEqual(value.value, -(2 ** 63))
 
+    def test_parenthesised_min_int_folds_like_the_bare_form(self) -> None:
+        program = parse("fn main() -> i64 { return -(9223372036854775808); }")
+        value = program.functions[0].body.statements[0].value
+        self.assertIsInstance(value, syntax.IntLiteral)
+        self.assertEqual(value.value, -(2 ** 63))
+
     def test_true_and_false_are_integers(self) -> None:
         values = [statement.expression.arguments[0].value
                   for statement in body("print(true); print(false);").statements]

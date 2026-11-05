@@ -243,6 +243,43 @@ class CliTest(unittest.TestCase):
         self.assertFalse(json.loads(out)["ok"])
         self.assertEqual(json.loads(out)["error"], "unreadable-input")
 
+    def test_check_json_failure_carries_path_and_error(self) -> None:
+        out, status = _capture(lambda: main(["check", str(self.bad), "--json"]))
+        self.assertEqual(status, EXIT_FAILURE)
+        payload = json.loads(out)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["path"], str(self.bad))
+        self.assertEqual(payload["error"], "compile-error")
+        self.assertEqual(payload["diagnostics"][0]["code"], "E3007")
+
+    def test_run_json_compile_failure_keeps_the_run_envelope(self) -> None:
+        out, status = _capture(lambda: main(["run", str(self.bad), "--json"]))
+        self.assertEqual(status, EXIT_FAILURE)
+        payload = json.loads(out)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "compile-error")
+        self.assertIsNone(payload["returncode"])
+        self.assertFalse(payload["timed_out"])
+        self.assertEqual(payload["diagnostics"][0]["code"], "E3007")
+
+    def test_verify_json_compile_failure_keeps_kind_and_empty_image(self) -> None:
+        out, status = _capture(lambda: main(["verify", str(self.bad), "--json"]))
+        self.assertEqual(status, EXIT_FAILURE)
+        payload = json.loads(out)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "compile-error")
+        self.assertEqual(payload["kind"], "source")
+        self.assertEqual(payload["image_bytes"], 0)
+
+    def test_listing_json_compile_failure_keeps_empty_listing(self) -> None:
+        out, status = _capture(lambda: main(["listing", str(self.bad), "--json"]))
+        self.assertEqual(status, EXIT_FAILURE)
+        payload = json.loads(out)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "compile-error")
+        self.assertEqual(payload["listing"], "")
+        self.assertEqual(payload["labels"], [])
+
 def _capture(call) -> tuple:
     """Run a CLI call with both streams redirected; returns their text and the exit code."""
     buffer = io.StringIO()

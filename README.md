@@ -119,6 +119,8 @@ python -m cairn check broken.crn --json
 ```json
 {
   "ok": false,
+  "path": "broken.crn",
+  "error": "compile-error",
   "diagnostics": [
     {
       "code": "E3007",
@@ -154,6 +156,8 @@ python -m cairn check broken.crn --json
 | E3010 | More than four parameters |
 | E3011 | Missing or ill-formed `main` |
 | E3012 | Builtin redefined or used as a value |
+
+`E1002` and `E3002` are reserved for future stages and must not be reused.
 
 A built executable is checked by the same contract. `verify` reads the bytes and never runs them:
 

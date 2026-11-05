@@ -163,7 +163,7 @@ def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Pat
     try:
         compile_ms = build_cairn(cairn_source, cairn_exe, optimise)
         cairn = summarise(measure(cairn_exe, rounds), case.iterations)
-    except RuntimeError as failure:
+    except (RuntimeError, subprocess.TimeoutExpired, OSError) as failure:
         report["verdict"] = "error"
         report["error"] = str(failure)
         return report
@@ -173,12 +173,19 @@ def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Pat
     if compiler is None:
         return report
     c_exe = folder / f"{case.name}.c.exe"
-    c_compile = build_c(compiler, ROOT / case.c_source, c_exe)
+    try:
+        c_compile = build_c(compiler, ROOT / case.c_source, c_exe)
+    except (RuntimeError, subprocess.TimeoutExpired, OSError) as failure:
+        report["verdict"] = "error"
+        report["error"] = f"c build failed: {failure}"
+        return report
     if c_compile is None:
+        report["verdict"] = "error"
+        report["error"] = "c-build-failed"
         return report
     try:
         baseline = summarise(measure(c_exe, rounds), case.iterations)
-    except RuntimeError as failure:
+    except (RuntimeError, subprocess.TimeoutExpired, OSError) as failure:
         report["verdict"] = "error"
         report["error"] = str(failure)
         return report
@@ -217,13 +224,13 @@ def render(reports: List[Dict[str, object]], compiler: Optional[str],
         lines.append(f"Cairn/C best-time ratio: {min(ratios):.2f} to {max(ratios):.2f} "
                      f"(1.00 means equal)")
     verdicts = [str(report.get("verdict")) for report in reports]
-    if "unavailable" in verdicts:
-        lines.append("Goal: faster than C -> unavailable (install gcc, clang or cl to measure)")
-    elif "error" in verdicts:
+    if "error" in verdicts:
         errored = [str(report["case"]) for report in reports
                    if report.get("verdict") == "error"]
         lines.append(f"Goal: faster than C -> errored on {', '.join(errored)} "
                      f"(see the report 'error' fields)")
+    elif "unavailable" in verdicts:
+        lines.append("Goal: faster than C -> unavailable (install gcc, clang or cl to measure)")
     elif all(item in ("faster", "tie") for item in verdicts):
         lines.append("Goal: faster than C -> measured on every case in this run")
     else:

@@ -1,42 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-swarm-fixes",
-    "last_phase": "in_progress",
+    "task_id": "cairn-verify-push",
+    "last_phase": "phase 4",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1793745765.6300192,
-    "owner": "kilo:cairn",
-    "started_by": "kilo:cairn",
+    "updated_at": 1793905176.6279614,
+    "owner": "kilo:goal",
+    "started_by": "kilo:goal",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-optimizer",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[6/6] Optimiser, benchmark harness and frame hardening complete: 92 tests pass, 4/4 gates pass; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793260517.2201552,
-      "timestamp_str": "2026-10-29 10:55:17",
-      "agent": "kilo:cairn",
-      "handoff": {
-        "state": "optimize.py folds constants with i64 wrap and never folds a zero divisor, benchmarks/run_benchmarks.py is the only source of speed numbers, every frame slot is zeroed on entry",
-        "next": "none, task complete",
-        "evidence": "folded_math 35.5ms vs 71.9ms unoptimised, 4/4 gates"
-      }
-    },
-    {
-      "task_id": "cairn-optimizer",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-optimizer' completed successfully.",
-      "status": "completed",
-      "timestamp": 1793260517.4695404,
-      "timestamp_str": "2026-10-29 10:55:17",
-      "agent": "kilo:cairn"
-    },
     {
       "task_id": "cairn-verifiable-core",
       "phase": "phase 2",
@@ -292,6 +266,27 @@
       "timestamp": 1793745765.6300192,
       "timestamp_str": "2026-11-04 01:42:45",
       "agent": "kilo:cairn"
+    },
+    {
+      "task_id": "cairn-swarm-fixes",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-swarm-fixes' completed successfully.",
+      "status": "completed",
+      "timestamp": 1793745821.1994066,
+      "timestamp_str": "2026-11-04 01:43:41",
+      "agent": "kilo:cairn"
+    },
+    {
+      "task_id": "cairn-verify-push",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] Verify 12 unpushed commits plus fix pass: 207 tests green, 4/4 gates pass; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1793905176.6279614,
+      "timestamp_str": "2026-11-05 21:59:36",
+      "agent": "kilo:goal"
     }
   ]
 }

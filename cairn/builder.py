@@ -7,6 +7,7 @@ leaves a half-written `.exe` behind.
 
 import os
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -54,12 +55,24 @@ def _temporary_path(destination: Path) -> Path:
 
 
 def write_executable(destination: Path, image: bytes) -> None:
-    """Write the image to a temporary sibling, then rename it into place in one step."""
+    """Write the image to a temporary sibling, then rename it into place in one step.
+
+    Parallel tests must use distinct `-o`/temp directories: concurrent writers to
+    the same destination race for last-writer-wins. On Windows a locked target
+    raises `PermissionError`, so the rename retries briefly before giving up.
+    """
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = _temporary_path(destination)
     try:
         temporary.write_bytes(image)
-        os.replace(temporary, destination)
+        for attempt in range(3):
+            try:
+                os.replace(temporary, destination)
+                break
+            except PermissionError:
+                if attempt == 2:
+                    raise
+                time.sleep(0.05)
     except OSError:
         temporary.unlink(missing_ok=True)
         raise

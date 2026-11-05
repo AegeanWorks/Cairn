@@ -74,7 +74,7 @@ def capabilities() -> Dict[str, Any]:
                    "identifiers": "ASCII letters, digits and underscore; no shadowing"},
         "semantics": {"overflow": "wraps", "division": "truncates toward zero",
                       "division_by_zero": "trap, exit code 3",
-                      "right_shift": "arithmetic, shift count masked to 63",
+                      "right_shift": "arithmetic, shift count masked to 63 in folding and hardware",
                       "comparison_result": "0 or 1", "evaluation": "left to right",
                       "short_circuit": ["&&", "||"]},
         "commands": COMMANDS,

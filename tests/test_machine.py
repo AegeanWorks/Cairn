@@ -78,6 +78,10 @@ class EncodingTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             assembler.label("dup")
 
+    def test_cmp_reg_reg_matches_the_cmp_encoding(self) -> None:
+        self.assertEqual(self.code(lambda a: a.cmp_reg_reg("rcx", "rax")),
+                         self.code(lambda a: a.binary(0x39, "rcx", "rax")))
+
 
 if __name__ == "__main__":
     unittest.main()

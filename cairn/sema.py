@@ -155,9 +155,13 @@ class Analyzer:
         if statement.name in BUILTINS:
             self._report("E3012", f"'{statement.name}' is a builtin and cannot be redefined",
                          "Rename the variable.", statement.span)
-        elif statement.name in self.bindings:
+            self._check_expression(statement.value)
+            return
+        if statement.name in self.bindings:
             self._report("E3006", f"'{statement.name}' is already declared in this function",
                          "Use a new name; Cairn has no shadowing.", statement.span)
+            self._check_expression(statement.value)
+            return
         self._check_expression(statement.value)
         statement.slot = self._new_slot()
         self.bindings.setdefault(statement.name, Binding(statement.slot, statement.mutable,

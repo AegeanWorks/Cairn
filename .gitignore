@@ -12,3 +12,4 @@ node_modules/
 *.exe.tmp_*
 # AIKit transient state
 .aikit/*.log
+.aikit/reforge.reviews/

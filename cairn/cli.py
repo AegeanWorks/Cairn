@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from cairn import builder, capabilities, listing, verify
 from cairn.diagnostics import DiagnosticError
@@ -93,10 +93,11 @@ def _read_source(path: Path, json_mode: bool = False) -> Tuple[Optional[str], in
         return None, EXIT_USAGE
 
 
-def _report_failure(error: DiagnosticError, source: str, json_mode: bool) -> int:
+def _report_failure(error: DiagnosticError, source: str, json_mode: bool,
+                      path: str = "") -> int:
     """Print every diagnostic, as JSON or as positioned text."""
     if json_mode:
-        print(json.dumps({"ok": False,
+        print(json.dumps({"ok": False, "path": path, "error": "compile-error",
                           "diagnostics": [item.to_dict() for item in error.diagnostics]},
                          indent=2))
     else:
@@ -126,15 +127,20 @@ def _build_command(arguments: argparse.Namespace) -> int:
     try:
         result = builder.compile_source(source, str(arguments.source), not arguments.no_optimize)
     except DiagnosticError as error:
-        return _report_failure(error, source, arguments.json)
+        return _report_failure(error, source, arguments.json, str(arguments.source))
     destination = builder.output_path(arguments.source, arguments.output)
     try:
         builder.write_executable(destination, result.image)
     except OSError as error:
-        print(f"[OUTPUT ERROR] cannot write {destination}: {error}", file=sys.stderr)
-        print("Why: the executable needs a writable destination folder.", file=sys.stderr)
-        print("Fix: pass -o with a path inside a folder that exists and is writable.",
-              file=sys.stderr)
+        if not arguments.json:
+            print(f"[OUTPUT ERROR] cannot write {destination}: {error}", file=sys.stderr)
+            print("Why: the executable needs a writable destination folder.", file=sys.stderr)
+            print("Fix: pass -o with a path inside a folder that exists and is writable.",
+                  file=sys.stderr)
+        else:
+            print(json.dumps({"ok": False, "path": str(arguments.source),
+                              "error": "write-failed",
+                              "diagnostics": []}, indent=2))
         return EXIT_USAGE
     if arguments.json:
         print(json.dumps({"ok": True, "path": str(arguments.source),
@@ -156,7 +162,7 @@ def _check_command(arguments: argparse.Namespace) -> int:
     try:
         result = builder.compile_source(source, str(arguments.source), not arguments.no_optimize)
     except DiagnosticError as error:
-        return _report_failure(error, source, arguments.json)
+        return _report_failure(error, source, arguments.json, str(arguments.source))
     if arguments.json:
         print(json.dumps({"ok": True, "path": str(arguments.source),
                           "functions": len(result.program.functions), "folded": result.folded,
@@ -169,11 +175,13 @@ def _check_command(arguments: argparse.Namespace) -> int:
 
 def _run_envelope(path: Path, *, ok: bool, returncode: object,
                   timed_out: bool, stdout: str, stderr: str,
-                  error: Optional[str] = None) -> Dict[str, object]:
+                  error: Optional[str] = None,
+                  diagnostics: Optional[List[Dict[str, object]]] = None) -> Dict[str, object]:
     """One JSON result object for `run`: the exit code and the captured streams."""
     envelope: Dict[str, object] = {"ok": ok, "path": str(path), "returncode": returncode,
                                    "timed_out": timed_out, "stdout": stdout,
-                                   "stderr": stderr, "diagnostics": []}
+                                   "stderr": stderr,
+                                   "diagnostics": diagnostics or []}
     if error is not None:
         envelope["error"] = error
     return envelope
@@ -204,10 +212,26 @@ def _run_command(arguments: argparse.Namespace) -> int:
     try:
         result = builder.compile_source(source, str(arguments.source), not arguments.no_optimize)
     except DiagnosticError as error:
-        return _report_failure(error, source, arguments.json)
+        if arguments.json:
+            print(json.dumps(_run_envelope(arguments.source, ok=False, returncode=None,
+                                           timed_out=False, stdout="", stderr="",
+                                           error="compile-error",
+                                           diagnostics=[item.to_dict() for item in error.diagnostics]),
+                             indent=2))
+            return EXIT_FAILURE
+        return _report_failure(error, source, arguments.json, str(arguments.source))
     with tempfile.TemporaryDirectory(prefix="cairn-run-") as folder:
         executable = Path(folder) / "program.exe"
-        builder.write_executable(executable, result.image)
+        try:
+            builder.write_executable(executable, result.image)
+        except OSError:
+            if arguments.json:
+                print(json.dumps(_run_envelope(arguments.source, ok=False, returncode=None,
+                                               timed_out=False, stdout="", stderr="",
+                                               error="write-failed"), indent=2))
+            else:
+                print(f"[OUTPUT ERROR] cannot write {executable}", file=sys.stderr)
+            return EXIT_USAGE
         exit_code, timed_out, captured_out, captured_err = _execute(
             executable, arguments.timeout, arguments.json)
         if arguments.json:
@@ -284,7 +308,14 @@ def _verify_command(arguments: argparse.Namespace) -> int:
             image = builder.compile_source(source, str(arguments.target),
                                            not arguments.no_optimize).image
         except DiagnosticError as error:
-            return _report_failure(error, source, arguments.json)
+            if arguments.json:
+                print(json.dumps({"ok": False, "path": str(arguments.target),
+                                  "kind": kind, "image_bytes": 0, "problems": [],
+                                  "error": "compile-error",
+                                  "diagnostics": [item.to_dict() for item in error.diagnostics]},
+                                 indent=2))
+                return EXIT_FAILURE
+            return _report_failure(error, source, arguments.json, str(arguments.target))
     problems = verify.verify_image(image)
     if arguments.json:
         print(json.dumps({"ok": not problems, "path": str(arguments.target), "kind": kind,
@@ -313,7 +344,14 @@ def _listing_command(arguments: argparse.Namespace) -> int:
         result = builder.compile_source(source, str(arguments.source),
                                         not arguments.no_optimize)
     except DiagnosticError as error:
-        return _report_failure(error, source, arguments.json)
+        if arguments.json:
+            print(json.dumps({"ok": False, "path": str(arguments.source),
+                              "text_bytes": 0, "labels": [], "listing": "",
+                              "error": "compile-error",
+                              "diagnostics": [item.to_dict() for item in error.diagnostics]},
+                             indent=2))
+            return EXIT_FAILURE
+        return _report_failure(error, source, arguments.json, str(arguments.source))
     rendered = listing.render_listing(result.artifact)
     if arguments.json:
         print(json.dumps({"ok": True, "path": str(arguments.source),

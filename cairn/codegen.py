@@ -349,7 +349,7 @@ class CodeGenerator:
             asm.cmp_imm("rax", right.value)
         else:
             self._emit_left_operand(expression.left, expression.right)
-            asm.binary(0x39, "rcx", "rax")
+            asm.cmp_reg_reg("rcx", "rax")
         asm.jcc(condition, target)
 
     def _emit_expression(self, expression: Optional[syntax.Expr]) -> None:
@@ -395,7 +395,7 @@ class CodeGenerator:
         if expression.op in ("/", "%"):
             self._emit_division(expression.op)
         elif expression.op in COMPARISON_CONDITIONS:
-            asm.binary(0x39, "rcx", "rax")
+            asm.cmp_reg_reg("rcx", "rax")
             asm.setcc(COMPARISON_CONDITIONS[expression.op])
         elif expression.op in ("<<", ">>"):
             asm.mov_reg_reg(SCRATCH, "rax")
@@ -449,7 +449,7 @@ class CodeGenerator:
         asm.cmp_imm("rax", -1)
         asm.jcc("nz", no_overflow)
         asm.mov_imm64(SCRATCH, INT64_MIN)
-        asm.binary(0x39, "rcx", SCRATCH)
+        asm.cmp_reg_reg("rcx", SCRATCH)
         asm.jcc("e", DIV_ZERO_LABEL)
         asm.label(no_overflow)
         asm.mov_reg_reg(SCRATCH, "rax")

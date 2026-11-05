@@ -227,8 +227,11 @@ class Parser:
         if token.kind == "symbol" and token.text in UNARY_OPERATORS:
             self._advance()
             operand = self._parse_unary()
-            if (token.text == "-" and isinstance(operand, syntax.IntLiteral)
-                    and operand.value == -INT64_MIN):
+            unwrapped = operand
+            while isinstance(unwrapped, syntax.Parens):
+                unwrapped = unwrapped.inner
+            if (token.text == "-" and isinstance(unwrapped, syntax.IntLiteral)
+                    and unwrapped.value == -INT64_MIN):
                 return syntax.IntLiteral(span=Span.join(token.span, operand.span),
                                          value=INT64_MIN)
             return syntax.Unary(span=Span.join(token.span, operand.span), op=token.text,

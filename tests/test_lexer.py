@@ -66,6 +66,10 @@ class LexerTest(unittest.TestCase):
             tokenize("9" * 5000 + ";")
         self.assertEqual(caught.exception.diagnostics[0].code, "E1003")
 
+    def test_zero_padded_literal_fits_when_value_fits(self) -> None:
+        tokens = [token for token in tokenize("0" * 20 + ";") if token.kind == "int"]
+        self.assertEqual(tokens[0].value, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

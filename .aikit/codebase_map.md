@@ -9,8 +9,8 @@
 - **Total Python Modules**: `41`
 - **Total Classes**: `69`
 - **Total Top-Level Functions**: `116`
-- **Total Class Methods**: `359`
-- **Total Source Lines**: `6016`
+- **Total Class Methods**: `367`
+- **Total Source Lines**: `6136`
 
 ---
 
@@ -26,7 +26,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, a C baseline.*
 
-**Size**: `284` lines (`11784` bytes)
+**Size**: `291` lines (`12139` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, an equivalent C source, and what one iteration is.*
@@ -64,7 +64,7 @@
 ### [`cairn/builder.py`](cairn/builder.py)
 > *Build pipeline: source text to executable bytes.*
 
-**Size**: `68` lines (`2420` bytes)
+**Size**: `81` lines (`2885` bytes)
 
 **Classes:**
 - `class Build` - *One successful build: the parsed program, the linked artifact and the image bytes.*
@@ -81,7 +81,7 @@
 ### [`cairn/capabilities.py`](cairn/capabilities.py)
 > *The machine-readable description of what this compiler accepts and emits.*
 
-**Size**: `105` lines (`5095` bytes)
+**Size**: `105` lines (`5119` bytes)
 
 **Functions:**
 - `def _operators()` - *Operators grouped by precedence tier, loosest first.*
@@ -93,17 +93,17 @@
 ### [`cairn/cli.py`](cairn/cli.py)
 > *Command line: build, check and run Cairn programs.*
 
-**Size**: `374` lines (`17844` bytes)
+**Size**: `412` lines (`20147` bytes)
 
 **Functions:**
 - `def _parser()` - *The whole command surface, declared in one place.*
 - `def _add_optimise_flag(parser)` - *Every command shares one switch for the folding pass, so builds can be compared.*
 - `def _read_source(path, json_mode)` - *The source text, or an explained usage failure (silent under `--json`).*
-- `def _report_failure(error, source, json_mode)` - *Print every diagnostic, as JSON or as positioned text.*
+- `def _report_failure(error, source, json_mode, path)` - *Print every diagnostic, as JSON or as positioned text.*
 - `def _report_unreadable(arguments, path, extra)` - *The `--json` envelope for input that could not be read.*
 - `def _build_command(arguments)` - *`build`: compile a source file to a Windows executable, atomically.*
 - `def _check_command(arguments)` - *`check`: compile in memory and report, writing nothing.*
-- `def _run_envelope(path, *, ok, returncode, timed_out, stdout, stderr, error)` - *One JSON result object for `run`: the exit code and the captured streams.*
+- `def _run_envelope(path, *, ok, returncode, timed_out, stdout, stderr, error, diagnostics)` - *One JSON result object for `run`: the exit code and the captured streams.*
 - `def _run_command(arguments)` - *`run`: compile into a temporary folder, execute, and forward the exit code.*
 - `def _execute(executable, timeout, json_mode)` - *Run the produced executable; return its exit code, timeout flag and streams.*
 - `def _read_executable(path, json_mode)` - *The artifact bytes, or an explained usage failure (silent under `--json`).*
@@ -119,7 +119,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `530` lines (`22471` bytes)
+**Size**: `530` lines (`22468` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -245,7 +245,7 @@
 ### [`cairn/lexer.py`](cairn/lexer.py)
 > *Lexer: source text to a flat token list.*
 
-**Size**: `157` lines (`6286` bytes)
+**Size**: `157` lines (`6401` bytes)
 
 **Classes:**
 - `class Token` - *One lexical unit: its kind, its text, its value when it is an integer, and its span.*
@@ -281,7 +281,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `287` lines (`12198` bytes)
+**Size**: `291` lines (`12380` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -305,6 +305,7 @@
   - Method `.lea_rip(destination, target)` - *`lea r64, [rip+disp32]`, used for read-only data addresses.*
   - Method `.xor_zero(reg)` - *`xor r32, r32`: the zero idiom, which also clears the upper 32 bits.*
   - Method `.binary(opcode, destination, source)` - *A 64-bit `op r/m64, r64` form: add, sub, and, or, xor and cmp share it.*
+  - Method `.cmp_reg_reg(left, right)` - *`cmp r64, r64`: compare `left` against `right` (G-002 named wrapper).*
   - Method `._group1_imm(extension, reg, value)` - *`op r/m64, imm8` (83 /n) or `op r/m64, imm32` (81 /n), sign-extended.*
   - Method `.add_imm(reg, value)` - *`add r64, imm`, used for `x = x + constant` without a register copy.*
   - Method `.sub_imm(reg, value)` - *`sub r64, imm`, used for `x = x - constant` without a register copy.*
@@ -368,7 +369,7 @@
 ### [`cairn/parser.py`](cairn/parser.py)
 > *Parser: recursive descent over the token list.*
 
-**Size**: `322` lines (`13457` bytes)
+**Size**: `325` lines (`13593` bytes)
 
 **Classes:**
 - `class Parser` - *A cursor over one token list; every parse method consumes what it matches.*
@@ -432,7 +433,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `262` lines (`12414` bytes)
+**Size**: `266` lines (`12554` bytes)
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -599,7 +600,7 @@
 ### [`tests/test_cli.py`](tests/test_cli.py)
 > *CLI tests: exit codes, JSON diagnostics, build output and atomic overwrite.*
 
-**Size**: `265` lines (`12176` bytes)
+**Size**: `302` lines (`14027` bytes)
 
 **Classes:**
 - `class CliTest` - *An agent drives the compiler through this surface, so it is tested as a contract.*
@@ -631,6 +632,10 @@
   - Method `.test_json_envelope_for_unreadable_check_input()`
   - Method `.test_json_envelope_for_unreadable_verify_target()`
   - Method `.test_json_envelope_for_unreadable_listing_input()`
+  - Method `.test_check_json_failure_carries_path_and_error()`
+  - Method `.test_run_json_compile_failure_keeps_the_run_envelope()`
+  - Method `.test_verify_json_compile_failure_keeps_kind_and_empty_image()`
+  - Method `.test_listing_json_compile_failure_keeps_empty_listing()`
 
 **Functions:**
 - `def _capture(call)` - *Run a CLI call with both streams redirected; returns their text and the exit code.*
@@ -725,7 +730,7 @@
 ### [`tests/test_lexer.py`](tests/test_lexer.py)
 > *Lexer tests: token shape, spans, comments and the two literal failures.*
 
-**Size**: `71` lines (`3074` bytes)
+**Size**: `75` lines (`3275` bytes)
 
 **Classes:**
 - `class LexerTest` - *The scanner is the first stage an agent's source touches, so its reports must be exact.*
@@ -738,6 +743,7 @@
   - Method `.test_tokenize_reports_eof_at_the_end()`
   - Method `.test_non_ascii_identifier_is_rejected_as_unexpected_character()`
   - Method `.test_long_digit_run_is_E1003_not_ValueError()`
+  - Method `.test_zero_padded_literal_fits_when_value_fits()`
 
 ---
 
@@ -771,7 +777,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `83` lines (`3699` bytes)
+**Size**: `87` lines (`3916` bytes)
 
 **Classes:**
 - `class EncodingTest` - *Each test names one encoding and its expected bytes.*
@@ -789,6 +795,7 @@
   - Method `.test_relative_call_records_a_fixup_at_the_displacement()`
   - Method `.test_label_records_the_current_offset()`
   - Method `.test_duplicate_label_is_a_compiler_bug()`
+  - Method `.test_cmp_reg_reg_matches_the_cmp_encoding()`
 
 ---
 
@@ -832,7 +839,7 @@
 ### [`tests/test_parser.py`](tests/test_parser.py)
 > *Parser tests: shapes, precedence and the grammar's positioned refusals.*
 
-**Size**: `114` lines (`5271` bytes)
+**Size**: `120` lines (`5594` bytes)
 
 **Classes:**
 - `class ParserTest` - *The tree shape decides code shape, so these assertions are about generated code too.*
@@ -850,6 +857,7 @@
   - Method `.test_bare_token_list_is_E2001_not_an_index_error()`
   - Method `.test_break_and_continue_spans_include_the_semicolon()`
   - Method `.test_min_int_is_spellable_as_negated_two_to_the_63()`
+  - Method `.test_parenthesised_min_int_folds_like_the_bare_form()`
   - Method `.test_true_and_false_are_integers()`
 
 **Functions:**

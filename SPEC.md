@@ -39,7 +39,8 @@ symbol       ::= "->" | "==" | "!=" | "<=" | ">=" | "&&" | "||" | "<<" | ">>"
 
 Whitespace separates tokens. Anything else is `E1001`. An integer above
 `9223372036854775808` is `E1003`. `9223372036854775808` itself lexes so that
-unary minus can spell `i64.min`, and is `E1003` anywhere else. `true` is `1`,
+unary minus can spell `i64.min` (bare `-9223372036854775808` or parenthesised
+`-(9223372036854775808)`), and is `E1003` anywhere else. `true` is `1`,
 `false` is `0`.
 
 ## 3. Compilation units
@@ -127,7 +128,7 @@ flips the branch.
 | Overflow | Wraps two's complement |
 | Division by zero | Trap: message on stderr, exit code 3 |
 | Division rounding | Truncates toward zero; `%` keeps the dividend's sign |
-| Right shift | Arithmetic (`>>` keeps the sign); shift counts mask to 63 in folding |
+| Right shift | Arithmetic (`>>` keeps the sign); shift counts mask to 63 in folding and hardware |
 | Uninitialised reads | Impossible: initializers are mandatory and every frame slot is zeroed on entry |
 | Branch never taken | A binding declared inside it reads as `0` |
 | Undeclared read | Rejected before code generation (`E3007`) |
