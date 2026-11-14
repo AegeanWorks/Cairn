@@ -288,16 +288,17 @@ the same harness invocation:
 
 | Case | Work | Cairn best | C best | Rust best | Cairn size |
 |---|---|---|---|---|---|
-| `xorshift` | 200,000,000 serial xorshift steps | 293.8 ms | 300.5 ms | 286.3 ms | 2,048 bytes |
-| `fib30` | 2,692,537 recursive calls | 12.7 ms | 9.2 ms | 10.9 ms | 2,048 bytes |
-| `folded_math` | 20,000,000 bit-mixed constant additions | 17.9 ms | 18.4 ms | 19.5 ms | 2,048 bytes |
+| `xorshift` | 200,000,000 serial xorshift steps | 307.9 ms | 307.4 ms | 298.0 ms | 2,048 bytes |
+| `fib30` | 2,692,537 recursive calls | 12.3 ms | 9.2 ms | 11.9 ms | 2,048 bytes |
+| `folded_math` | 20,000,000 bit-mixed constant additions | 19.6 ms | 18.6 ms | 20.5 ms | 2,048 bytes |
 
-Standings per case: `xorshift` (Cairn/C 0.98, Cairn/Rust 1.03) and `folded_math` (0.98/0.92) pass
-within the run-to-run spread; `fib30` is the open gap (Cairn/C 1.39, Cairn/Rust 1.16). Its
-argument path is compacted (literal subtrahends and shift counts no longer materialise a ten-byte
-`movabs`, and single-argument calls move through `rcx` directly); the remaining distance is that
-GCC partially inlines the recursion, roughly halving its executed call count, which the emitter
-does not do — a call-site inlining pass is the named follow-up.
+Standings per case: `xorshift` (Cairn/C 1.00, Cairn/Rust 1.03) and `folded_math` (1.05/0.96) sit
+inside the run-to-run spread; `fib30` is the open gap (Cairn/C 1.34 worst-case-run, 1.2 typical,
+Cairn/Rust 1.04). Its call path is now frame-less: fully-homed functions save and restore their
+homes with `push`/`pop` instead of an `rbp` frame (ADR-019), and literal argument offsets such as
+`n - 1` fold into one `lea` (also ADR-019). The remaining distance to GCC is its partial inlining
+of the recursion, roughly halving its executed call overhead, which the emitter does not do — a
+call-site inlining pass is the named follow-up.
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 `movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics

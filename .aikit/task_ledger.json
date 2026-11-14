@@ -5,22 +5,18 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1794670256.752452,
+    "updated_at": 1794671135.290147,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "impact_assessment": {
+      "why": "fib30 still pays 9 frame instructions per call plus store-forwarding latency; every slot having a home makes the rbp frame pure overhead.",
+      "benefits": "About 4 fewer instructions and no frame memory traffic per call on all fully-homed functions.",
+      "risks": "contract: emitted bytes change; rsp alignment parity must hold for even slot counts; concurrency: none; dependency: none; state: none",
+      "mitigation": "differential end-to-end suite pins behavior; assembler records push/pop; verify + gates; slots>homes keeps the legacy frame path"
+    }
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-register-homes",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-register-homes' completed successfully.",
-      "status": "completed",
-      "timestamp": 1793304502.9817421,
-      "timestamp_str": "2026-10-29 23:08:22",
-      "agent": "opencode:cairn"
-    },
     {
       "task_id": "reforge:run-1",
       "phase": "reforge run",
@@ -277,6 +273,23 @@
       "timestamp": 1794670256.752452,
       "timestamp_str": "2026-11-14 18:30:56",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-scoreboard-pass",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[4/4] Push-form frames: fully-homed functions save homes via push/pop, no rbp frame",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794671135.290147,
+      "timestamp_str": "2026-11-14 18:45:35",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "fib30 still pays 9 frame instructions per call plus store-forwarding latency; every slot having a home makes the rbp frame pure overhead.",
+        "benefits": "About 4 fewer instructions and no frame memory traffic per call on all fully-homed functions.",
+        "risks": "contract: emitted bytes change; rsp alignment parity must hold for even slot counts; concurrency: none; dependency: none; state: none",
+        "mitigation": "differential end-to-end suite pins behavior; assembler records push/pop; verify + gates; slots>homes keeps the legacy frame path"
+      }
     }
   ]
 }

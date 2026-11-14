@@ -40,6 +40,8 @@ class RecordingAssembler(Assembler):
         self.function = None
         self.loads = []
         self.stores = []
+        self.pushes = []
+        self.pops = []
 
     def label(self, name: str) -> None:
         """Track which function the next frame access belongs to.
@@ -62,6 +64,16 @@ class RecordingAssembler(Assembler):
         """Record a frame store, then emit it."""
         self.stores.append((self.function, offset))
         super().mov_store_rbp(offset, source)
+
+    def push(self, reg: str) -> None:
+        """Record a push, then emit it."""
+        self.pushes.append((self.function, reg))
+        super().push(reg)
+
+    def pop(self, reg: str) -> None:
+        """Record a pop, then emit it."""
+        self.pops.append((self.function, reg))
+        super().pop(reg)
 
     def loads_of(self, function: str):
         """Offsets of frame loads inside one function."""
@@ -93,11 +105,12 @@ class SlotHomeTest(unittest.TestCase):
     def test_used_homes_are_saved_and_restored(self) -> None:
         program, assembler = lower(LOOP)
         main = function_label(program.functions[0].name)
-        save_area = -8 * (program.functions[0].slots + 1)
-        saved = {offset for offset in assembler.stores_of(main) if offset <= save_area}
-        restored = {offset for offset in assembler.loads_of(main) if offset <= save_area}
-        self.assertEqual(len(saved), 2)
-        self.assertEqual(saved, restored)
+        self.assertEqual(program.functions[0].slots, 2)
+        saved = [reg for owner, reg in assembler.pushes if owner == main]
+        restored = [reg for owner, reg in assembler.pops if owner == main]
+        self.assertIn("rbx", saved)
+        self.assertNotIn("rbp", saved)
+        self.assertEqual(restored, list(reversed(saved)))
 
     def test_the_seventh_slot_keeps_the_stack_fallback(self) -> None:
         program, assembler = lower(SEVEN_LOCALS)
@@ -127,7 +140,7 @@ class ArgumentPathTest(unittest.TestCase):
 
     def test_a_literal_subtrahend_uses_the_immediate_form(self) -> None:
         body = body_text(ARGUMENT_IMM, "f")
-        self.assertIn(b"\x48\x83\xe8\x07", body)
+        self.assertIn(b"\x48\x8d\x43\xf9", body)  # lea rax, [rbx-7]
         self.assertNotIn(b"\x48\xb8\x07", body)
 
     def test_a_single_argument_moves_into_rcx_without_the_stack(self) -> None:

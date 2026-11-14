@@ -134,6 +134,29 @@ class CodeGenerator:
         self.epilogue = f"{function_label(function.name)}.epilogue"
         frame = align16((function.slots + len(self.homes)) * 8)
         asm.label(function_label(function.name))
+        if function.slots <= len(HOME_REGISTERS):
+            # Every slot has a home, so no frame (and no rbp) is needed: the homes
+            # save and restore with push/pop, which also drops the store-forwarding
+            # latency a frame store re-load pays on the hot call path.
+            pad = function.slots % 2 == 0
+            for home in self.homes:
+                asm.push(home)
+            if pad:
+                asm.sub_rsp(8)  # realign rsp for the calls the body will make
+            self._clear_frame(function)
+            for index, parameter in enumerate(function.parameters[:MAX_PARAMETERS]):
+                self._store_slot(parameter.slot, ARGUMENT_REGISTERS[index])
+            self.depth = 0
+            self.temporaries = 0
+            self._emit_block(function.body)
+            asm.mov_imm64("rax", 0)
+            asm.label(self.epilogue)
+            for home in reversed(self.homes):
+                asm.pop(home)
+            if pad:
+                asm.add_rsp(8)
+            asm.ret()
+            return
         asm.push("rbp")
         asm.mov_reg_reg("rbp", "rsp")
         if frame:
@@ -238,6 +261,35 @@ class CodeGenerator:
             self.assembler.imul(home, "rax")
         else:
             self.assembler.binary(UPDATE_OPCODES[operator], home, "rax")
+        return True
+
+    def _emit_home_offset(self, destination: str,
+                          expression: Optional[syntax.Expr]) -> bool:
+        """Lower `homed name ± literal` as one `lea`, or return False when the shape differs.
+
+        A load, one wrapping arithmetic step, and the move into place fold into a single
+        instruction with no flag or register side effects; `lea` wraps at 64 bits exactly
+        like the general path would.
+        """
+        if not isinstance(expression, syntax.Binary) or expression.op not in ("+", "-"):
+            return False
+        if isinstance(expression.right, syntax.IntLiteral):
+            target = expression.left
+            value = expression.right.value
+        elif expression.op == "+" and isinstance(expression.left, syntax.IntLiteral):
+            target = expression.right
+            value = expression.left.value
+        else:
+            return False
+        if not isinstance(target, syntax.Name):
+            return False
+        if not -2 ** 31 <= value < 2 ** 31:
+            return False
+        home = self._home(target.slot)
+        if home is None:
+            return False
+        self.assembler.lea_imm(destination, home,
+                               value if expression.op == "+" else -value)
         return True
 
     def _emit_into(self, expression: Optional[syntax.Expr], destination: str) -> None:
@@ -397,6 +449,10 @@ class CodeGenerator:
             return
         asm = self.assembler
         right = expression.right
+        if (expression.op in ("+", "-") and isinstance(right, syntax.IntLiteral)
+                and -IMMEDIATE_MAX - 1 <= right.value <= IMMEDIATE_MAX
+                and self._emit_home_offset("rax", expression)):
+            return
         if isinstance(right, syntax.IntLiteral) and -IMMEDIATE_MAX - 1 <= right.value <= IMMEDIATE_MAX \
                 and expression.op in IMMEDIATE_BINARY_EXTENSIONS:
             self._emit_expression(expression.left)
@@ -523,6 +579,9 @@ class CodeGenerator:
             self.depth -= 8
             return
         if len(expression.arguments) == 1:
+            if self._emit_home_offset(ARGUMENT_REGISTERS[0], expression.arguments[0]):
+                self._emit_call_site(function_label(expression.name))
+                return
             self._emit_expression(expression.arguments[0])
             asm.mov_reg_reg(ARGUMENT_REGISTERS[0], "rax")
             self._emit_call_site(function_label(expression.name))

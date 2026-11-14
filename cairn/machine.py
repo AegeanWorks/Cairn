@@ -111,6 +111,24 @@ class Assembler:
             self.emit(b"\x41")
         self.emit(bytes([0x58 + (code & 7)]))
 
+    def lea_imm(self, destination: str, base: str, offset: int) -> None:
+        """`lea r64, [base+disp]`, computing `base + offset` without touching flags.
+
+        The base must be an addressable register other than `rsp`; `r12` shares rsp's
+        ModRM code, so it takes the SIB form the rsp base would use.
+        """
+        dst, base_code = REGISTERS[destination], REGISTERS[base]
+        assert base_code != REGISTERS["rsp"]
+        wide = -128 <= offset <= 127
+        self.emit(bytes([_rex(True, dst >> 3, 0, base_code >> 3), 0x8D,
+                         *_modrm(1 if wide else 2, dst, base_code)]))
+        if (base_code & 7) == 4:
+            self.emit(b"\x24")  # SIB: no index, base register only
+        if wide:
+            self.emit(bytes([offset & 0xFF]))
+        else:
+            self.emit((offset & 0xFFFFFFFF).to_bytes(4, "little"))
+
     def mov_reg_reg(self, destination: str, source: str) -> None:
         """`mov r64, r64`."""
         dst, src = REGISTERS[destination], REGISTERS[source]

@@ -43,6 +43,18 @@ class EncodingTest(unittest.TestCase):
     def test_arithmetic_shift_uses_cl(self) -> None:
         self.assertEqual(self.code(lambda a: a.shift_cl(7)), b"\x48\xd3\xf8")
 
+    def test_lea_with_small_offset_uses_disp8(self) -> None:
+        self.assertEqual(self.code(lambda a: a.lea_imm("rcx", "rbx", -1)),
+                         b"\x48\x8d\x4b\xff")
+
+    def test_lea_from_r12_takes_the_sib_form(self) -> None:
+        self.assertEqual(self.code(lambda a: a.lea_imm("rax", "r12", 7)),
+                         b"\x49\x8d\x44\x24\x07")
+
+    def test_lea_with_wide_offset_uses_disp32(self) -> None:
+        self.assertEqual(self.code(lambda a: a.lea_imm("rcx", "rbx", 4096)),
+                         b"\x48\x8d\x8b\x00\x10\x00\x00")
+
     def test_shift_by_immediate_needs_no_count_register(self) -> None:
         self.assertEqual(self.code(lambda a: a.shift_imm(4, "rax", 13)), b"\x48\xc1\xe0\x0d")
         self.assertEqual(self.code(lambda a: a.shift_imm(7, "rax", 7)), b"\x48\xc1\xf8\x07")

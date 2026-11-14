@@ -9,8 +9,8 @@
 - **Total Python Modules**: `41`
 - **Total Classes**: `70`
 - **Total Top-Level Functions**: `120`
-- **Total Class Methods**: `384`
-- **Total Source Lines**: `6433`
+- **Total Class Methods**: `391`
+- **Total Source Lines**: `6535`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`41` module(s))
@@ -128,7 +128,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `555` lines (`23863` bytes)
+**Size**: `614` lines (`26599` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -144,6 +144,7 @@
   - Method `._store_slot(slot, source)` - *Write `source` into one slot's register or frame slot.*
   - Method `._emit_value(slot, expression)` - *Assign an expression to a slot, folding `slot = slot op value` in place.*
   - Method `._fold_update(home, slot, expression)` - *Emit `home = home op value` when the expression updates its own slot.*
+  - Method `._emit_home_offset(destination, expression)` - *Lower `homed name ± literal` as one `lea`, or return False when the shape differs.*
   - Method `._emit_into(expression, destination)` - *Lower an expression, using `destination` directly when it is a leaf.*
   - Method `._emit_block(block)` - *Emit every statement of a block in order.*
   - Method `._emit_statement(statement)` - *Lower one statement.*
@@ -290,7 +291,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `303` lines (`13033` bytes)
+**Size**: `321` lines (`13894` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -304,6 +305,7 @@
   - Method `.jcc(condition, target)` - *`jcc rel32` for one of the named conditions.*
   - Method `.push(reg)` - *`push r64`.*
   - Method `.pop(reg)` - *`pop r64`.*
+  - Method `.lea_imm(destination, base, offset)` - *`lea r64, [base+disp]`, computing `base + offset` without touching flags.*
   - Method `.mov_reg_reg(destination, source)` - *`mov r64, r64`.*
   - Method `.mov_imm64(reg, value)` - *`mov r64, imm64`, used for every integer literal.*
   - Method `.mov_imm32(reg, value)` - *`mov r32, imm32`; writes zero-extend into the 64-bit register.*
@@ -668,7 +670,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `146` lines (`5670` bytes)
+**Size**: `159` lines (`6067` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -676,6 +678,8 @@
   - Method `.label(name)` - *Track which function the next frame access belongs to.*
   - Method `.mov_load_rbp(destination, offset)` - *Record a frame load, then emit it.*
   - Method `.mov_store_rbp(offset, source)` - *Record a frame store, then emit it.*
+  - Method `.push(reg)` - *Record a push, then emit it.*
+  - Method `.pop(reg)` - *Record a pop, then emit it.*
   - Method `.loads_of(function)` - *Offsets of frame loads inside one function.*
   - Method `.stores_of(function)` - *Offsets of frame stores inside one function.*
 - `class SlotHomeTest` - *A slot with a home register must not be read from or written to the stack.*
@@ -804,7 +808,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `96` lines (`4474` bytes)
+**Size**: `108` lines (`5039` bytes)
 
 **Classes:**
 - `class EncodingTest` - *Each test names one encoding and its expected bytes.*
@@ -815,6 +819,9 @@
   - Method `.test_frame_slot_beyond_disp8_uses_a_four_byte_displacement()`
   - Method `.test_signed_division_of_r10()`
   - Method `.test_arithmetic_shift_uses_cl()`
+  - Method `.test_lea_with_small_offset_uses_disp8()`
+  - Method `.test_lea_from_r12_takes_the_sib_form()`
+  - Method `.test_lea_with_wide_offset_uses_disp32()`
   - Method `.test_shift_by_immediate_needs_no_count_register()`
   - Method `.test_comparison_result_is_zero_extended_into_rax()`
   - Method `.test_shell_alignment_is_one_instruction()`
