@@ -197,6 +197,10 @@ class Assembler:
         """`cmp r64, imm`, so a comparison with a small literal needs no second register."""
         self._group1_imm(7, reg, value)
 
+    def arith_imm(self, extension: int, reg: str, value: int) -> None:
+        """`op r64, imm` by group-1 extension: add (0), or (1), and (4), sub (5), xor (6)."""
+        self._group1_imm(extension, reg, value)
+
     def imul(self, destination: str, source: str) -> None:
         """`imul r64, r/m64`: two-operand signed multiply."""
         dst, src = REGISTERS[destination], REGISTERS[source]
@@ -231,6 +235,14 @@ class Assembler:
     def shift_cl(self, extension: int) -> None:
         """`shl` (4), shr (5) or sar (7) of rax by cl."""
         self.emit(b"\x48\xD3", bytes([0xC0 | (extension << 3)]))
+
+    def shift_imm(self, extension: int, reg: str, count: int) -> None:
+        """`shl` (4) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip."""
+        if not 0 <= count <= 63:
+            raise ValueError("shift count does not fit in six bits")
+        code = REGISTERS[reg]
+        self.emit(bytes([_rex(True, 0, 0, code >> 3), 0xC1,
+                         0xC0 | (extension << 3) | (code & 7), count & 0xFF]))
 
     def add_imm8(self, reg: str, value: int) -> None:
         """`add r8, imm8`, used to turn a digit into ASCII."""

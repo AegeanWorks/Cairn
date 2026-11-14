@@ -106,5 +106,41 @@ class SlotHomeTest(unittest.TestCase):
         self.assertIn(-56, assembler.loads_of(main))
 
 
+def body_text(source: str, name: str) -> bytes:
+    """The .text bytes of one function's body, sliced from the generated artifact."""
+    program = sema.analyze(parser.parse(source))
+    assembler = Assembler()
+    artifact = CodeGenerator(assembler=assembler).generate(program)
+    start = artifact.text_labels[function_label(name)]
+    ends = sorted(offset for label, offset in artifact.text_labels.items()
+                  if offset > start) + [len(artifact.text)]
+    return artifact.text[start:ends[0]]
+
+
+ARGUMENT_IMM = ("fn f(a: i64) -> i64 { return a - 7; } "
+                "fn main() -> i64 { print(f(3)); return 0; }")
+SHIFT_IMM = "fn g(x: i64) -> i64 { return x >> 7; } fn main() -> i64 { print(g(9)); return 0; }"
+
+
+class ArgumentPathTest(unittest.TestCase):
+    """Arguments and shifts by literals must not pay for registers they do not need."""
+
+    def test_a_literal_subtrahend_uses_the_immediate_form(self) -> None:
+        body = body_text(ARGUMENT_IMM, "f")
+        self.assertIn(b"\x48\x83\xe8\x07", body)
+        self.assertNotIn(b"\x48\xb8\x07", body)
+
+    def test_a_single_argument_moves_into_rcx_without_the_stack(self) -> None:
+        body = body_text(ARGUMENT_IMM, "main")
+        self.assertIn(b"\x48\x89\xc1\xe8", body)
+        self.assertNotIn(b"\x50\x59", body)
+
+    def test_a_shift_by_literal_shifts_in_place(self) -> None:
+        body = body_text(SHIFT_IMM, "g")
+        self.assertIn(b"\x48\xc1\xf8\x07", body)
+        self.assertNotIn(b"\x48\xd3\xf8", body)
+        self.assertNotIn(b"\x48\xb8\x07", body)
+
+
 if __name__ == "__main__":
     unittest.main()

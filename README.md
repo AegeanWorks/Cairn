@@ -288,19 +288,22 @@ the same harness invocation:
 
 | Case | Work | Cairn best | C best | Rust best | Cairn size |
 |---|---|---|---|---|---|
-| `xorshift` | 200,000,000 serial xorshift steps | 308.9 ms | 299.1 ms | 303.2 ms | 2,560 bytes |
-| `fib30` | 2,692,537 recursive calls | 13.7 ms | 9.0 ms | 10.3 ms | 2,048 bytes |
-| `folded_math` | 20,000,000 bit-mixed constant additions | 18.2 ms | 18.1 ms | 19.1 ms | 2,048 bytes |
+| `xorshift` | 200,000,000 serial xorshift steps | 293.8 ms | 300.5 ms | 286.3 ms | 2,048 bytes |
+| `fib30` | 2,692,537 recursive calls | 12.7 ms | 9.2 ms | 10.9 ms | 2,048 bytes |
+| `folded_math` | 20,000,000 bit-mixed constant additions | 17.9 ms | 18.4 ms | 19.5 ms | 2,048 bytes |
 
-Standings per case: `xorshift` and `folded_math` are parity within the run-to-run spread; `fib30`
-is a real loss (about 1.5x against C, 1.25x against Rust) caused by call overhead — argument
-evaluation still materialises tiny literals as ten-byte `movabs` and moves values through
-`push`/`pop`, which the backend has not yet compacted (tracked for the argument-path rewrite).
+Standings per case: `xorshift` (Cairn/C 0.98, Cairn/Rust 1.03) and `folded_math` (0.98/0.92) pass
+within the run-to-run spread; `fib30` is the open gap (Cairn/C 1.39, Cairn/Rust 1.16). Its
+argument path is compacted (literal subtrahends and shift counts no longer materialise a ten-byte
+`movabs`, and single-argument calls move through `rcx` directly); the remaining distance is that
+GCC partially inlines the recursion, roughly halving its executed call count, which the emitter
+does not do — a call-site inlining pass is the named follow-up.
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 `movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics
 rather than codegen. Its replacement, `xorshift`, is a serial state chain no optimizer can fold or
-vectorise; the folding evidence and the retired numbers are in ADR-017.
+vectorise; the folding evidence and the retired numbers are in ADR-017, and the argument-path
+rewrite is in ADR-018.
 
 Run-to-run spread on this machine is about 10 percent, so treat these as an order of magnitude
 rather than three significant figures; the harness prints best, median and worst for that reason.

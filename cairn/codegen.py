@@ -32,6 +32,11 @@ ARITHMETIC_OPCODES = {
     "+": 0x01, "&": 0x21, "|": 0x09, "^": 0x31,
 }
 
+# Group-1 immediate extensions for an arithmetic right operand that is a literal.
+IMMEDIATE_BINARY_EXTENSIONS = {"+": 0, "-": 5, "&": 4, "|": 1, "^": 6}
+# Shift extensions for a literal count: `shl` and `sar`, matching Cairn's `>>` semantics.
+IMMEDIATE_SHIFT_EXTENSIONS = {"<<": 4, ">>": 7}
+
 # Binary operators that can update a destination in place: `slot = slot op value`.
 UPDATE_OPCODES = {"+": 0x01, "-": 0x29, "&": 0x21, "|": 0x09, "^": 0x31}
 COMMUTATIVE_UPDATES = frozenset({"+", "*", "&", "|", "^"})
@@ -391,6 +396,17 @@ class CodeGenerator:
             self._emit_or(expression)
             return
         asm = self.assembler
+        right = expression.right
+        if isinstance(right, syntax.IntLiteral) and -IMMEDIATE_MAX - 1 <= right.value <= IMMEDIATE_MAX \
+                and expression.op in IMMEDIATE_BINARY_EXTENSIONS:
+            self._emit_expression(expression.left)
+            asm.arith_imm(IMMEDIATE_BINARY_EXTENSIONS[expression.op], "rax", right.value)
+            return
+        if isinstance(right, syntax.IntLiteral) and 0 <= right.value <= 63 \
+                and expression.op in IMMEDIATE_SHIFT_EXTENSIONS:
+            self._emit_expression(expression.left)
+            asm.shift_imm(IMMEDIATE_SHIFT_EXTENSIONS[expression.op], "rax", right.value)
+            return
         self._emit_left_operand(expression.left, expression.right)
         if expression.op in ("/", "%"):
             self._emit_division(expression.op)
@@ -492,7 +508,11 @@ class CodeGenerator:
         asm.label(end)
 
     def _emit_call(self, expression: syntax.Call) -> None:
-        """Evaluate arguments left to right, pop them into registers, then call."""
+        """Evaluate arguments left to right, place them in the ABI registers, then call.
+
+        `print` keeps a stack round-trip on purpose: the runtime helper clobbers both `rax` and
+        `rcx`, so the `pop` is what restores the value `print(x)` must return.
+        """
         asm = self.assembler
         if expression.name == "print":
             self._emit_expression(expression.arguments[0])
@@ -501,6 +521,11 @@ class CodeGenerator:
             self._emit_call_site(PRINT_LABEL)
             asm.pop("rax")
             self.depth -= 8
+            return
+        if len(expression.arguments) == 1:
+            self._emit_expression(expression.arguments[0])
+            asm.mov_reg_reg(ARGUMENT_REGISTERS[0], "rax")
+            self._emit_call_site(function_label(expression.name))
             return
         for argument in expression.arguments:
             self._emit_expression(argument)

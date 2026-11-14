@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `41`
-- **Total Classes**: `69`
-- **Total Top-Level Functions**: `119`
-- **Total Class Methods**: `378`
-- **Total Source Lines**: `6351`
+- **Total Classes**: `70`
+- **Total Top-Level Functions**: `120`
+- **Total Class Methods**: `384`
+- **Total Source Lines**: `6433`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`41` module(s))
@@ -128,7 +128,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `530` lines (`22468` bytes)
+**Size**: `555` lines (`23863` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -158,7 +158,7 @@
   - Method `._emit_division(operator)` - *Signed division with an explicit zero-divisor trap, quotient or remainder.*
   - Method `._emit_and(expression)` - *`&&`: the right side is evaluated only when the left side is non-zero.*
   - Method `._emit_or(expression)` - *`||`: the right side is evaluated only when the left side is zero.*
-  - Method `._emit_call(expression)` - *Evaluate arguments left to right, pop them into registers, then call.*
+  - Method `._emit_call(expression)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
   - Method `._emit_call_site(target)` - *A call, padded so rsp is 16-byte aligned as the ABI requires.*
 
 **Functions:**
@@ -290,7 +290,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `291` lines (`12380` bytes)
+**Size**: `303` lines (`13033` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -319,6 +319,7 @@
   - Method `.add_imm(reg, value)` - *`add r64, imm`, used for `x = x + constant` without a register copy.*
   - Method `.sub_imm(reg, value)` - *`sub r64, imm`, used for `x = x - constant` without a register copy.*
   - Method `.cmp_imm(reg, value)` - *`cmp r64, imm`, so a comparison with a small literal needs no second register.*
+  - Method `.arith_imm(extension, reg, value)` - *`op r64, imm` by group-1 extension: add (0), or (1), and (4), sub (5), xor (6).*
   - Method `.imul(destination, source)` - *`imul r64, r/m64`: two-operand signed multiply.*
   - Method `.test(reg)` - *`test r64, r64`, setting flags from a value without changing it.*
   - Method `.setcc(condition)` - *`setcc al` followed by `movzx rax, al`: a comparison result as 0 or 1 in rax.*
@@ -326,6 +327,7 @@
   - Method `.divide(reg, signed)` - *`idiv`/`div r64`; the caller sets rdx and rax.*
   - Method `.unary(extension, reg)` - *`F7 /n` forms: not (2), neg (3).*
   - Method `.shift_cl(extension)` - *`shl` (4), shr (5) or sar (7) of rax by cl.*
+  - Method `.shift_imm(extension, reg, count)` - *`shl` (4) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip.*
   - Method `.add_imm8(reg, value)` - *`add r8, imm8`, used to turn a digit into ASCII.*
   - Method `.store_byte(base, source)` - *`mov [base], r8`.*
   - Method `.store_byte_imm(base, value)` - *`mov byte ptr [base], imm8`.*
@@ -666,7 +668,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `110` lines (`4122` bytes)
+**Size**: `146` lines (`5670` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -680,9 +682,14 @@
   - Method `.test_two_hot_locals_never_touch_their_frame_slots()`
   - Method `.test_used_homes_are_saved_and_restored()`
   - Method `.test_the_seventh_slot_keeps_the_stack_fallback()`
+- `class ArgumentPathTest` - *Arguments and shifts by literals must not pay for registers they do not need.*
+  - Method `.test_a_literal_subtrahend_uses_the_immediate_form()`
+  - Method `.test_a_single_argument_moves_into_rcx_without_the_stack()`
+  - Method `.test_a_shift_by_literal_shifts_in_place()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
+- `def body_text(source, name)` - *The .text bytes of one function's body, sliced from the generated artifact.*
 
 ---
 
@@ -797,7 +804,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `87` lines (`3916` bytes)
+**Size**: `96` lines (`4474` bytes)
 
 **Classes:**
 - `class EncodingTest` - *Each test names one encoding and its expected bytes.*
@@ -808,6 +815,7 @@
   - Method `.test_frame_slot_beyond_disp8_uses_a_four_byte_displacement()`
   - Method `.test_signed_division_of_r10()`
   - Method `.test_arithmetic_shift_uses_cl()`
+  - Method `.test_shift_by_immediate_needs_no_count_register()`
   - Method `.test_comparison_result_is_zero_extended_into_rax()`
   - Method `.test_shell_alignment_is_one_instruction()`
   - Method `.test_register_immediate_add_uses_the_short_form_when_it_fits()`

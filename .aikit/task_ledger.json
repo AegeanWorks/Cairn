@@ -5,44 +5,12 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1794668918.5416636,
+    "updated_at": 1794670256.752452,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-register-homes",
-      "phase": "phase 3",
-      "phase_num": 3,
-      "description": "[2/4-3/4] Implemented register homes: first six slots in rbx/r12-r15/rdi, saved and restored in one epilogue; in-place updates and direct comparison branches; add_imm/sub_imm/cmp_imm encodings; recording-assembler, behaviour, differential and benchmark coverage",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793304496.5022857,
-      "timestamp_str": "2026-10-29 23:08:16",
-      "agent": "opencode:cairn",
-      "handoff": {
-        "state": "132 tests pass, 4/4 gates pass",
-        "next": "record phase 4 and commit",
-        "evidence": "loop_sum 58.9 ms, fib30 14.0 ms, folded_math 17.6 ms at --rounds 9"
-      }
-    },
-    {
-      "task_id": "cairn-register-homes",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[4/4] Verified: 132 tests pass in 0.7s, 4/4 gates pass (test, hygiene, guidelines, secrets), examples run and the differential build modes agree; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793304499.7645364,
-      "timestamp_str": "2026-10-29 23:08:19",
-      "agent": "opencode:cairn",
-      "handoff": {
-        "state": "ready to commit",
-        "next": "commit and push",
-        "evidence": "hello 42, fib 55/5050, verify ok 2048 bytes, loop_sum 58.9 ms, fib30 14.0 ms, folded_math 17.6 ms"
-      }
-    },
     {
       "task_id": "cairn-register-homes",
       "phase": "completed",
@@ -280,6 +248,34 @@
       "status": "in_progress",
       "timestamp": 1794668918.5416636,
       "timestamp_str": "2026-11-14 18:08:38",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-scoreboard-pass",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[3/4] Argument-path rewrite: group1-imm right operands, shift_imm encoding, single-arg call via mov, print without stack round-trip",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794669122.3371353,
+      "timestamp_str": "2026-11-14 18:12:02",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "fib30 loses 1.53/1.25 against C/Rust from per-call overhead visible in listing; xorshift pays the same in three-mov shift dances.",
+        "benefits": "Removes ~5 of 7 instructions per evaluated argument and 3 of 4 per shift; targets fib30 at or under C's per-call cost.",
+        "risks": "contract: emitted bytes change (artifact not ABI-frozen); dependency: none; concurrency: none; state: none",
+        "mitigation": "differential --no-optimize end-to-end test pins behavior; byte tests mirror the ADR-011 encoding tests; verify + full suite gate"
+      }
+    },
+    {
+      "task_id": "cairn-scoreboard-pass",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[3/4] ADR-018 argument-path rewrite landed (imm operands, shift_imm, mov single-arg calls; print push/pop kept as return-value restoration); 222 tests pass, 4/4 gates; standings xorshift 0.98/1.03, folded 0.98/0.92 pass, fib30 1.39/1.16 open needing inlining pass; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794670256.752452,
+      "timestamp_str": "2026-11-14 18:30:56",
       "agent": "mistral:vibe"
     }
   ]

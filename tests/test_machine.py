@@ -43,6 +43,15 @@ class EncodingTest(unittest.TestCase):
     def test_arithmetic_shift_uses_cl(self) -> None:
         self.assertEqual(self.code(lambda a: a.shift_cl(7)), b"\x48\xd3\xf8")
 
+    def test_shift_by_immediate_needs_no_count_register(self) -> None:
+        self.assertEqual(self.code(lambda a: a.shift_imm(4, "rax", 13)), b"\x48\xc1\xe0\x0d")
+        self.assertEqual(self.code(lambda a: a.shift_imm(7, "rax", 7)), b"\x48\xc1\xf8\x07")
+        self.assertEqual(self.code(lambda a: a.shift_imm(4, "r12", 1)), b"\x49\xc1\xe4\x01")
+        with self.assertRaises(ValueError):
+            self.code(lambda a: a.shift_imm(4, "rax", 64))
+        with self.assertRaises(ValueError):
+            self.code(lambda a: a.shift_imm(4, "rax", -1))
+
     def test_comparison_result_is_zero_extended_into_rax(self) -> None:
         self.assertEqual(self.code(lambda a: a.setcc("l")), b"\x0f\x9c\xc0\x48\x0f\xb6\xc0")
 
