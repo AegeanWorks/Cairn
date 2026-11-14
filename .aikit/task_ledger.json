@@ -5,40 +5,12 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1794671135.290147,
+    "updated_at": 1794673342.9263678,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "impact_assessment": {
-      "why": "fib30 still pays 9 frame instructions per call plus store-forwarding latency; every slot having a home makes the rbp frame pure overhead.",
-      "benefits": "About 4 fewer instructions and no frame memory traffic per call on all fully-homed functions.",
-      "risks": "contract: emitted bytes change; rsp alignment parity must hold for even slot counts; concurrency: none; dependency: none; state: none",
-      "mitigation": "differential end-to-end suite pins behavior; assembler records push/pop; verify + gates; slots>homes keeps the legacy frame path"
-    }
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "reforge:run-1",
-      "phase": "reforge run",
-      "phase_num": 3,
-      "description": "run started (start=6, step=3, stop=None)",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793721876.838528,
-      "timestamp_str": "2026-11-03 19:04:36",
-      "agent": "unidentified"
-    },
-    {
-      "task_id": "reforge:run-1",
-      "phase": "reforge stage 1",
-      "phase_num": 3,
-      "description": "Reforge stage 1: window 6, 6 commit(s), 60 file(s) reviewed (unreviewed), 0 finding(s), 0 repaired",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793721889.3324327,
-      "timestamp_str": "2026-11-03 19:04:49",
-      "agent": "unidentified"
-    },
     {
       "task_id": "cairn-audit-unicode",
       "phase": "phase 2",
@@ -290,6 +262,28 @@
         "risks": "contract: emitted bytes change; rsp alignment parity must hold for even slot counts; concurrency: none; dependency: none; state: none",
         "mitigation": "differential end-to-end suite pins behavior; assembler records push/pop; verify + gates; slots>homes keeps the legacy frame path"
       }
+    },
+    {
+      "task_id": "cairn-scoreboard-pass",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794673335.1146634,
+      "timestamp_str": "2026-11-14 19:22:15",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-scoreboard-pass",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[4/4] complete: push-form frames + lea folds shipped (68c9fca); holder experiment reverted as a miscompile (ADR-019)",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794673342.9263678,
+      "timestamp_str": "2026-11-14 19:22:22",
+      "agent": "mistral:vibe"
     }
   ]
 }
