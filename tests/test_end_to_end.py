@@ -51,6 +51,33 @@ fn main() -> i64 {
 }
 """
 
+COUNTDOWN = """
+fn main() -> i64 {
+    var i: i64 = 0;
+    var total: i64 = 0;
+    while i < 7 {
+        total = total + 5;
+        i = i + 1;
+    }
+    print(total);
+    var j: i64 = 10;
+    var seen: i64 = 0;
+    while j < 3 {
+        seen = seen + 1;
+        j = j + 1;
+    }
+    print(seen);
+    var k: i64 = 17;
+    var neg: i64 = 0;
+    while k < 7 {
+        neg = neg + 1;
+        k = k + 1;
+    }
+    print(neg);
+    return 0;
+}
+"""
+
 DIVIDE_BY_ZERO = """
 fn main() -> i64 {
     var zero: i64 = 0;
@@ -129,6 +156,11 @@ class EndToEndTest(unittest.TestCase):
         completed = self.execute(LOOPS)
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "55\n10\n")
+
+    def test_countdown_latches_match_count_up_semantics(self) -> None:
+        completed = self.execute(COUNTDOWN)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "35\n0\n0\n")
 
     def test_division_by_zero_is_a_trap_with_a_message_and_exit_code_3(self) -> None:
         completed = self.execute(DIVIDE_BY_ZERO)

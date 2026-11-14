@@ -113,10 +113,11 @@ class If(Stmt):
 
 @dataclass
 class While(Stmt):
-    """`while cond { ... }`."""
+    """`while cond { ... }`; `countdown` marks a counter loop the optimiser converted."""
 
     condition: Optional[Expr] = None
     body: Optional[Block] = None
+    countdown: bool = False
 
 
 @dataclass

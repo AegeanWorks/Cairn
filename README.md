@@ -270,6 +270,8 @@ Three rewrites then remove the copies those homes would otherwise need:
 | a comparison used as an `if`/`while` condition | `cmp` plus a conditional jump; no `setcc`, `movzx` and second `test` |
 | a comparison against a 32-bit literal | `cmp r64, imm32` instead of materialising the literal in `rcx` |
 
+| a dead-counter `while v < C` loop (ADR-023) | hoisted zero-trip guard, then one `sub` and one conditional jump at the loop's bottom — gcc's countdown latch shape |
+
 These are backend rewrites, not language changes. `--no-optimize` still skips only the folding
 pass; the differential end-to-end test runs both build modes against the same expected output.
 
@@ -298,8 +300,12 @@ Standings per case: `fib30` and `folded_math` are won outright against both base
 net compute over the near-7 ms process-and-printf floor is about 0.6-0.8 ms against C's
 0.9-1.0), and `xorshift` is a measured three-way tie — the three implementations sit within
 about one percent of each other around 300 ms, with the best run flipping between them, which
-is inside every documented spread, so no win is claimed there. `xorshift`'s codegen is a plain
-serial loop over homed slots, and its gap-closing headroom is bounded by the harness floor.
+is inside every documented spread, so no win is claimed there. The tie is now structural, not
+pending: the benchmark's serial chain costs 6 dependent cycles per iteration (one shift and one
+xor per line, each waiting on the previous state), and the loop bookkeeping executes entirely
+inside those latencies, so the countdown latch it now shares with gcc (ADR-023) cannot shave
+cycles — disassembly of all three compilers shows identical two-op dependent chains with
+zero-latency register copies, pinning the case at the ISA latency floor.
 `fib30`'s call path is frame-less (ADR-019), literal argument offsets such as `n - 1` fold into
 one `lea`, a homed name compares against a small literal in place, the delta-inlining pass
 (ADR-021) lowers the first seven recursion levels as pure text with merge values in
@@ -343,10 +349,10 @@ means the language's compiler (`gcc`, `clang` or `cl` for C; `rustc` for Rust) w
 `PATH`, and `--strict` then exits `2` only when no baseline at all can be measured, rather than
 reporting a win it did not measure. `error` means the case's own build or run failed instead of
 producing a time, and `--strict` exits `1`. The goal is measured on the development machine with
-both baselines: as of the tail-return pass (ADR-022), `fib30` and `folded_math` beat both baselines
-outright and `xorshift` measures as a tie — the last case is a 0.2 GHz-iteration serial loop where
-the three implementations sit within about one percent, so beating it outright would mean
-optimising the loop body itself, not the call machinery.
+both baselines: `fib30` and `folded_math` beat both baselines outright, and `xorshift` is a
+structural tie (ADR-023) — a serial loop pinned at the ISA latency floor, where all three
+compilers emit identical dependent chain shapes and the shared countdown latch makes the
+bookkeeping identical too.
 The three cases cover a serial integer loop, recursion and constant arithmetic only.
 
 ## What's Inside

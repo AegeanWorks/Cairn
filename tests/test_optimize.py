@@ -162,5 +162,78 @@ class RewriteTest(unittest.TestCase):
         self.assertLess(len(codegen.generate(folded).text), len(codegen.generate(plain).text))
 
 
+class CountdownLatchTest(unittest.TestCase):
+    """`while v < C` loops whose counter is dead outside the body lower as countdown latches."""
+
+    def test_a_counter_loop_counts_down_instead_of_up(self) -> None:
+        body = optimized_body(
+            "var i: i64 = 0; var total: i64 = 0;"
+            "while i < 6 { total = total + 3; i = i + 1; } print(total);")
+        loops = [s for s in body.statements if isinstance(s, syntax.While)]
+        self.assertEqual(len(loops), 1)
+        loop = loops[0]
+        self.assertTrue(loop.countdown)
+        self.assertEqual(loop.condition.op, ">")
+        self.assertEqual(loop.condition.right.value, 0)
+        init = body.statements[0]
+        self.assertIsInstance(init, syntax.Let)
+        self.assertEqual(init.value.value, 6)
+        self.assertEqual(len(loop.body.statements), 1)
+
+    def test_the_loop_condition_shape_survives_the_rewrite(self) -> None:
+        body = optimized_body(
+            "var i: i64 = 0; var total: i64 = 0;"
+            "while i < 6 { total = total + 3; i = i + 1; } print(total);")
+        loop = body.statements[2]
+        self.assertIsInstance(loop.condition.left, syntax.Name)
+        self.assertEqual(loop.condition.left.slot, body.statements[0].slot)
+
+    def test_a_counter_read_after_the_loop_refuses_the_rewrite(self) -> None:
+        body = optimized_body(
+            "var i: i64 = 0; while i < 6 { print(3); i = i + 1; } print(i);")
+        loop = body.statements[1]
+        self.assertFalse(loop.countdown)
+        self.assertTrue(body.statements[0].mutable)
+        self.assertEqual(body.statements[0].value.value, 0)
+        self.assertEqual(loop.condition.op, "<")
+
+    def test_a_body_that_reads_the_counter_refuses_the_rewrite(self) -> None:
+        body = optimized_body(
+            "var i: i64 = 0; var total: i64 = 0;"
+            "while i < 6 { total = total + i; i = i + 1; } print(total);")
+        loop = body.statements[2]
+        self.assertFalse(loop.countdown)
+        self.assertEqual(loop.condition.op, "<")
+
+    def test_a_parameter_counter_refuses_the_rewrite(self) -> None:
+        program = analyze(parse(
+            "fn main() -> i64 { print(run(0)); return 0; }\n"
+            "fn run(n: i64) -> i64 { var t: i64 = 0;"
+            " while n < 6 { t = t + 1; n = n + 1; } return t; }"))
+        program = optimize.optimize(program)
+        loop = program.functions[1].body.statements[1]
+        self.assertFalse(loop.countdown)
+
+    def test_a_loop_with_break_refuses_the_rewrite(self) -> None:
+        body = optimized_body(
+            "var i: i64 = 0; while i < 6 { break; i = i + 1; } print(1);")
+        loop = body.statements[1]
+        self.assertFalse(loop.countdown)
+
+    def test_a_loop_with_continue_refuses_the_rewrite(self) -> None:
+        body = optimized_body(
+            "var i: i64 = 0; while i < 6 { continue; i = i + 1; } print(1);")
+        loop = body.statements[1]
+        self.assertFalse(loop.countdown)
+
+    def test_a_countdown_loop_latches_with_a_bottom_dec_and_jnz(self) -> None:
+        source = ("fn main() -> i64 { var i: i64 = 0; var t: i64 = 0;"
+                  " while i < 6 { t = t + 3; i = i + 1; } print(t); return 0; }")
+        lowered = codegen.generate(optimize.optimize(analyze(parse(source)))).text
+        self.assertIn(b"\x0f\x85", lowered)     # jnz rel32: the countdown latch
+        self.assertNotIn(b"\x0f\x8d", lowered)  # jge rel32: the count-up guard is gone
+        self.assertNotIn(b"\x49\x83\xc4\x01", lowered)  # add r12,1: the old update fold
+
+
 if __name__ == "__main__":
     unittest.main()

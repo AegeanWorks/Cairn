@@ -425,6 +425,26 @@ class CodeGenerator:
         asm = self.assembler
         start = self._fresh("while.start")
         end = self._fresh("while.end")
+        if statement.countdown:
+            # A countdown loop guards once against zero or negative counts, then latches at
+            # the bottom with one decrement and one taken-backward conditional branch. The
+            # optimiser already deleted the in-body increment, so the latch must be emitted.
+            self._emit_condition(statement.condition, end, when_true=False)
+            asm.label(start)
+            self.break_targets.append(end)
+            self._emit_block(statement.body)
+            self.break_targets.pop()
+            home = self._countdown_home(statement)
+            if home is not None:
+                asm.sub_imm(home, 1)
+            else:
+                counter = self._countdown_slot(statement)
+                self._load_slot(counter)
+                asm.sub_imm("rax", 1)
+                self._store_slot(counter)
+            asm.jcc("nz", start)
+            asm.label(end)
+            return
         asm.label(start)
         self._emit_condition(statement.condition, end, when_true=False)
         self.break_targets.append(end)
@@ -434,6 +454,27 @@ class CodeGenerator:
         self.continue_targets.pop()
         asm.jmp(start)
         asm.label(end)
+
+    def _countdown_slot(self, statement: syntax.While) -> int:
+        """The slot a countdown loop's counter occupies."""
+        condition = statement.condition
+        while isinstance(condition, syntax.Parens):
+            condition = condition.inner
+        left = condition.left
+        while isinstance(left, syntax.Parens):
+            left = left.inner
+        return left.slot
+
+    def _countdown_home(self, statement: syntax.While) -> Optional[str]:
+        """The callee-saved register a countdown loop's counter lives in, or None.
+
+        The latch register must survive every call the body makes, so caller-saved
+        homes and frame slots take the generic scratch-based latch instead.
+        """
+        home = self._home(self._countdown_slot(statement))
+        if home in ("rbx", "r12", "r13", "r14", "r15"):
+            return home
+        return None
 
     def _emit_condition(self, expression: Optional[syntax.Expr], target: str,
                         when_true: bool) -> None:

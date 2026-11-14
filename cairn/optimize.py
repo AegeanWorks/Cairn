@@ -134,9 +134,10 @@ class Optimizer:
     folded: int = field(default=0)
 
     def run(self, program: syntax.Program) -> syntax.Program:
-        """Optimise every function body in the program."""
+        """Optimise every function body, then convert eligible counter loops."""
         for function in program.functions:
             function.body = self._block(function.body)
+        apply_countdown_latches(program)
         return program
 
     def _block(self, block: Optional[syntax.Block]) -> Optional[syntax.Block]:
@@ -257,6 +258,216 @@ def _constant(expression: Optional[syntax.Expr]) -> Optional[int]:
     return None
 
 
+def _peel_parens(expression: Optional[syntax.Expr]) -> Optional[syntax.Expr]:
+    while isinstance(expression, syntax.Parens):
+        expression = expression.inner
+    return expression
+
+
+def _mentions_slot(node, slot: int) -> bool:
+    """Whether a statement or expression reads or writes the variable in `slot`."""
+    if isinstance(node, (list, tuple)):
+        return any(_mentions_slot(item, slot) for item in node)
+    if isinstance(node, (syntax.Let, syntax.Assign)):
+        if node.slot == slot:
+            return True
+        return _mentions_slot(node.value, slot)
+    if isinstance(node, syntax.Name):
+        return node.slot == slot
+    if isinstance(node, syntax.If):
+        return (_mentions_slot(node.condition, slot)
+                or _mentions_slot(node.then_block, slot)
+                or _mentions_slot(node.else_block, slot))
+    if isinstance(node, syntax.While):
+        return _mentions_slot(node.condition, slot) or _mentions_slot(node.body, slot)
+    if isinstance(node, syntax.Block):
+        return any(_mentions_slot(statement, slot) for statement in node.statements)
+    if isinstance(node, syntax.Return):
+        return _mentions_slot(node.value, slot)
+    if isinstance(node, syntax.ExprStmt):
+        return _mentions_slot(node.expression, slot)
+    if isinstance(node, (syntax.Break, syntax.Continue)):
+        return False
+    if isinstance(node, (syntax.Unary,)):
+        return _mentions_slot(node.operand, slot)
+    if isinstance(node, syntax.Binary):
+        return _mentions_slot(node.left, slot) or _mentions_slot(node.right, slot)
+    if isinstance(node, syntax.Parens):
+        return _mentions_slot(node.inner, slot)
+    if isinstance(node, syntax.Call):
+        return any(_mentions_slot(argument, slot) for argument in node.arguments)
+    return False
+
+
+def _contains_break_or_continue(node) -> bool:
+    """Whether a statement tree can leave the loop other than by falling out of its test."""
+    if isinstance(node, (syntax.Break, syntax.Continue)):
+        return True
+    if isinstance(node, (syntax.Let, syntax.Assign)):
+        return False
+    if isinstance(node, syntax.If):
+        return (_contains_break_or_continue(node.then_block)
+                or _contains_break_or_continue(node.else_block))
+    if isinstance(node, syntax.While):
+        return _contains_break_or_continue(node.body)
+    if isinstance(node, syntax.Block):
+        return any(_contains_break_or_continue(statement) for statement in node.statements)
+    return False
+
+
+def _count_reads(node, slot: int) -> int:
+    """How many times a statement tree reads the variable in `slot` (writes are not reads)."""
+    reads = 0
+    if isinstance(node, (syntax.Let, syntax.Assign)):
+        return _count_reads(node.value, slot)
+    if isinstance(node, syntax.Name):
+        return int(node.slot == slot)
+    if isinstance(node, syntax.If):
+        return (_count_reads(node.condition, slot)
+                + _count_reads(node.then_block, slot)
+                + _count_reads(node.else_block, slot))
+    if isinstance(node, syntax.While):
+        return _count_reads(node.condition, slot) + _count_reads(node.body, slot)
+    if isinstance(node, syntax.Block):
+        return sum(_count_reads(statement, slot) for statement in node.statements)
+    if isinstance(node, syntax.Return):
+        return _count_reads(node.value, slot)
+    if isinstance(node, syntax.ExprStmt):
+        return _count_reads(node.expression, slot)
+    if isinstance(node, syntax.Unary):
+        return _count_reads(node.operand, slot)
+    if isinstance(node, syntax.Binary):
+        return _count_reads(node.left, slot) + _count_reads(node.right, slot)
+    if isinstance(node, syntax.Parens):
+        return _count_reads(node.inner, slot)
+    if isinstance(node, syntax.Call):
+        return sum(_count_reads(argument, slot) for argument in node.arguments)
+    return reads
+
+
+def _find_increment(store, slot: int):
+    """Locate the (list, index) of `v = v + 1` inside a statement list, or None."""
+    for index, statement in enumerate(store):
+        if isinstance(statement, syntax.Assign) and statement.slot == slot:
+            value = _peel_parens(statement.value)
+            if (isinstance(value, syntax.Binary) and value.op == "+"
+                    and value.left is not None and value.right is not None
+                    and isinstance(_peel_parens(value.left), syntax.Name)
+                    and _peel_parens(value.left).slot == slot
+                    and isinstance(_peel_parens(value.right), syntax.IntLiteral)
+                    and _peel_parens(value.right).value == 1):
+                return store, index
+        if isinstance(statement, (syntax.If,)):
+            for branch in (statement.then_block, statement.else_block):
+                if branch is not None:
+                    found = _find_increment(branch.statements, slot)
+                    if found is not None:
+                        return found
+        if isinstance(statement, syntax.While):
+            if statement.body is not None:
+                found = _find_increment(statement.body.statements, slot)
+                if found is not None:
+                    return found
+        if isinstance(statement, syntax.Block):
+            found = _find_increment(statement.statements, slot)
+            if found is not None:
+                return found
+    return None
+
+
+def _try_countdown_latch(statement: syntax.While, init, count: int, trailing) -> bool:
+    """Rewrite one `while v < C { ...; v = v + 1; ... }` as `while v > 0`, or refuse."""
+    condition = _peel_parens(statement.condition)
+    if not (isinstance(condition, syntax.Binary) and condition.op == "<"
+            and isinstance(_peel_parens(condition.right), syntax.IntLiteral)):
+        return False
+    counter = _peel_parens(condition.left)
+    if not (isinstance(counter, syntax.Name) and counter.slot >= 0):
+        return False
+    slot = counter.slot
+    body = statement.body
+    if body is None or statement.countdown:
+        return False
+    if _contains_break_or_continue(body):
+        return False
+    if _count_reads(body, slot) != 1:
+        return False
+    increment = _find_increment(body.statements, slot)
+    if increment is None:
+        return False
+    if _mentions_slot(trailing, slot):
+        return False
+    # The counter becomes the remaining iteration count, so its literal
+    # initialiser is rewritten and the in-body increment is deleted.
+    condition.right = syntax.IntLiteral(span=condition.right.span, value=0)
+    condition.op = ">"
+    condition.left = counter
+    statement.countdown = True
+    store, index = increment
+    del store[index]
+    init.value = syntax.IntLiteral(span=init.value.span, value=count)
+    return True
+
+
+def _countdown_block(block: Optional[syntax.Block], trailing, parameters, changed: list) -> None:
+    """Walk one block, converting eligible counter loops; `trailing` guards post-loop reads."""
+    if block is None:
+        return
+    statements = block.statements
+    literal_writes: dict = {}
+    for index, statement in enumerate(statements):
+        rest = statements[index + 1:] + trailing
+        if isinstance(statement, (syntax.Let, syntax.Assign)):
+            literal = _constant(statement.value)
+            if literal is None:
+                literal_writes.pop(statement.slot, None)
+            else:
+                literal_writes[statement.slot] = (statement, literal)
+        elif isinstance(statement, (syntax.If, syntax.Block)):
+            branches = []
+            if isinstance(statement, syntax.If):
+                branches = [b for b in (statement.then_block, statement.else_block)
+                            if b is not None]
+            else:
+                branches = [statement]
+            for branch in branches:
+                _countdown_block(branch, rest, parameters, changed)
+                for slot in list(literal_writes):
+                    if _mentions_slot(branch, slot):
+                        literal_writes.pop(slot)
+        if isinstance(statement, syntax.While):
+            # Nested loops convert first, so their rewrites are visible here.
+            _countdown_block(statement.body, rest, parameters, changed)
+            condition = _peel_parens(statement.condition)
+            if isinstance(condition, syntax.Binary) and condition.op == "<":
+                counter = _peel_parens(condition.left)
+                if (isinstance(counter, syntax.Name)
+                        and counter.slot not in parameters
+                        and counter.slot in literal_writes):
+                    init, initial = literal_writes[counter.slot]
+                    count = wrap(_constant(condition.right) - initial)
+                    if _try_countdown_latch(statement, init, count, rest):
+                        changed.append(statement)
+            for slot in list(literal_writes):
+                if _mentions_slot(statement.body, slot):
+                    literal_writes.pop(slot)
+
+
+def apply_countdown_latches(program: syntax.Program) -> int:
+    """Convert `while v < C` loops with a dead counter into countdown latches.
+
+    The counter becomes a remaining-iteration count: the test flips to `v > 0`, the
+    literal initialiser becomes `C - initial`, and the in-body increment is deleted.
+    Safe only when the counter is never read in the loop body, never read after the
+    loop, not a parameter, and the body has no `break`/`continue`.
+    """
+    changed: list = []
+    for function in program.functions:
+        parameters = {parameter.slot for parameter in function.parameters}
+        _countdown_block(function.body, [], parameters, changed)
+    return len(changed)
+
+
 def _flatten(statements: List[syntax.Stmt]) -> List[syntax.Stmt]:
     """Splice a branch selected by folding into its parent, since Cairn has one flat scope."""
     flattened: List[syntax.Stmt] = []
@@ -277,9 +488,9 @@ def _reachable(statements: List[syntax.Stmt]) -> List[syntax.Stmt]:
 
 
 def optimize(program: syntax.Program) -> syntax.Program:
-    """Run one folding pass over a checked program."""
+    """Run one folding pass over a checked program, then convert counter loops."""
     return Optimizer().run(program)
 
 
-__all__ = ["INT64_MAX", "INT64_MIN", "MASK64", "Optimizer", "fold_constant", "fold_unary",
-           "has_call", "optimize", "truncate_division", "wrap"]
+__all__ = ["INT64_MAX", "INT64_MIN", "MASK64", "Optimizer", "apply_countdown_latches",
+           "fold_constant", "fold_unary", "has_call", "optimize", "truncate_division", "wrap"]

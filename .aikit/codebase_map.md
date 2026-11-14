@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `41`
-- **Total Classes**: `73`
-- **Total Top-Level Functions**: `120`
-- **Total Class Methods**: `420`
-- **Total Source Lines**: `7035`
+- **Total Classes**: `74`
+- **Total Top-Level Functions**: `128`
+- **Total Class Methods**: `431`
+- **Total Source Lines**: `7393`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`41` module(s))
@@ -128,7 +128,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `946` lines (`43824` bytes)
+**Size**: `987` lines (`45635` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -150,6 +150,8 @@
   - Method `._emit_statement(statement, tail)` - *Lower one statement; `tail` only concerns a final `return`.*
   - Method `._emit_if(statement, tail)` - *`if` as a conditional branch and two labelled bodies.*
   - Method `._emit_while(statement)` - *`while` with its own break and continue targets.*
+  - Method `._countdown_slot(statement)` - *The slot a countdown loop's counter occupies.*
+  - Method `._countdown_home(statement)` - *The callee-saved register a countdown loop's counter lives in, or None.*
   - Method `._emit_condition(expression, target, when_true)` - *Jump to `target` when the condition has the requested truth value.*
   - Method `._emit_comparison_branch(expression, target, when_true)` - *Compare two operands and branch, using an immediate form when the right side is small.*
   - Method `._emit_expression(expression)` - *Lower one expression, leaving its value in rax.*
@@ -364,11 +366,11 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `285` lines (`11850` bytes)
+**Size**: `496` lines (`21639` bytes)
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
-  - Method `.run(program)` - *Optimise every function body in the program.*
+  - Method `.run(program)` - *Optimise every function body, then convert eligible counter loops.*
   - Method `._block(block)` - *Optimise each statement; splice merged branches and truncate what cannot run.*
   - Method `._statement(statement)` - *Fold one statement, replacing a constant `if` with the branch it always takes.*
   - Method `._choose_branch(statement)` - *Replace an `if` whose condition is a constant with the branch it always takes.*
@@ -385,9 +387,17 @@
 - `def has_call(expression)` - *Whether evaluating `expression` can run a call, and therefore an effect.*
 - `def _may_trap(expression)` - *Whether evaluating `expression` can trap on `/` or `%`.*
 - `def _constant(expression)` - *The literal value of an expression, or None when it is not a constant.*
+- `def _peel_parens(expression)`
+- `def _mentions_slot(node, slot)` - *Whether a statement or expression reads or writes the variable in `slot`.*
+- `def _contains_break_or_continue(node)` - *Whether a statement tree can leave the loop other than by falling out of its test.*
+- `def _count_reads(node, slot)` - *How many times a statement tree reads the variable in `slot` (writes are not reads).*
+- `def _find_increment(store, slot)` - *Locate the (list, index) of `v = v + 1` inside a statement list, or None.*
+- `def _try_countdown_latch(statement, init, count, trailing)` - *Rewrite one `while v < C { ...; v = v + 1; ... }` as `while v > 0`, or refuse.*
+- `def _countdown_block(block, trailing, parameters, changed)` - *Walk one block, converting eligible counter loops; `trailing` guards post-loop reads.*
+- `def apply_countdown_latches(program)` - *Convert `while v < C` loops with a dead counter into countdown latches.*
 - `def _flatten(statements)` - *Splice a branch selected by folding into its parent, since Cairn has one flat scope.*
 - `def _reachable(statements)` - *Drop statements after one that cannot fall through: `return`, `break`, `continue`.*
-- `def optimize(program)` - *Run one folding pass over a checked program.*
+- `def optimize(program)` - *Run one folding pass over a checked program, then convert counter loops.*
 
 ---
 
@@ -486,7 +496,7 @@
 ### [`cairn/syntax.py`](cairn/syntax.py)
 > *Syntax tree: one dataclass per construct, each carrying its source span.*
 
-**Size**: `177` lines (`3709` bytes)
+**Size**: `178` lines (`3795` bytes)
 
 **Classes:**
 - `class Node` - *Every node carries the span it was parsed from.*
@@ -502,7 +512,7 @@
 - `class Let` - *`let x: i64 = e;` (immutable) or `var x: i64 = e;` (mutable).*
 - `class Assign` - *`x = e;`, valid only for a `var` binding.*
 - `class If` - *`if cond { ... } else { ... }`, where the else block is optional.*
-- `class While` - *`while cond { ... }`.*
+- `class While` - *`while cond { ... }`; `countdown` marks a counter loop the optimiser converted.*
 - `class Return` - *`return e;`; every function returns an i64.*
 - `class Break` - *Leave the innermost loop.*
 - `class Continue` - *Start the next iteration of the innermost loop.*
@@ -731,7 +741,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `251` lines (`9508` bytes)
+**Size**: `283` lines (`10173` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -742,6 +752,7 @@
   - Method `.test_hello_prints_an_expression()`
   - Method `.test_arithmetic_truncates_shifts_and_returns_the_exit_code()`
   - Method `.test_recursion_and_loop_control()`
+  - Method `.test_countdown_latches_match_count_up_semantics()`
   - Method `.test_division_by_zero_is_a_trap_with_a_message_and_exit_code_3()`
   - Method `.test_traps_behave_identically_without_the_folding_pass()`
   - Method `.test_run_forwards_the_programs_own_exit_code()`
@@ -869,7 +880,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `166` lines (`7891` bytes)
+**Size**: `239` lines (`11419` bytes)
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -896,6 +907,15 @@
   - Method `.test_a_call_is_never_removed()`
   - Method `.test_folded_count_reports_what_changed()`
   - Method `.test_constant_heavy_code_generates_fewer_instructions()`
+- `class CountdownLatchTest` - *`while v < C` loops whose counter is dead outside the body lower as countdown latches.*
+  - Method `.test_a_counter_loop_counts_down_instead_of_up()`
+  - Method `.test_the_loop_condition_shape_survives_the_rewrite()`
+  - Method `.test_a_counter_read_after_the_loop_refuses_the_rewrite()`
+  - Method `.test_a_body_that_reads_the_counter_refuses_the_rewrite()`
+  - Method `.test_a_parameter_counter_refuses_the_rewrite()`
+  - Method `.test_a_loop_with_break_refuses_the_rewrite()`
+  - Method `.test_a_loop_with_continue_refuses_the_rewrite()`
+  - Method `.test_a_countdown_loop_latches_with_a_bottom_dec_and_jnz()`
 
 **Functions:**
 - `def folded_value(op, left, right)` - *`fold_constant` for one pair, through the public entry point.*
