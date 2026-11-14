@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `41`
-- **Total Classes**: `71`
+- **Total Classes**: `72`
 - **Total Top-Level Functions**: `120`
-- **Total Class Methods**: `398`
-- **Total Source Lines**: `6645`
+- **Total Class Methods**: `418`
+- **Total Source Lines**: `7004`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`41` module(s))
-- **Not indexed by this map**: cpp (`3` file(s)), rust (`3` file(s))
+- **Not indexed by this map**: cpp (`5` file(s)), rust (`4` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -128,7 +128,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `680` lines (`29807` bytes)
+**Size**: `936` lines (`43029` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -160,8 +160,14 @@
   - Method `._emit_and(expression)` - *`&&`: the right side is evaluated only when the left side is non-zero.*
   - Method `._emit_or(expression)` - *`||`: the right side is evaluated only when the left side is zero.*
   - Method `._emit_call(expression)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
+  - Method `._delta_hold_units(function)` - *The per-level merge slots delta inlining needs, in 8-byte units, or 0 when ineligible.*
+  - Method `._assign_writes_parameter(node, slot)` - *Whether any statement in `node` may rebind or shadow the parameter in `slot`.*
+  - Method `._has_delta_self_call(node, name, slot)` - *Whether `node` contains at least one self-call whose argument carries a constant delta.*
+  - Method `._delta_argument(expression, slot)` - *The constant shift this call's argument adds to the inlined parameter, or None.*
+  - Method `._emit_delta_self_call(expression, delta)` - *Lower a constant-delta self-call as pure text: the copy's parameter is the*
   - Method `._is_inline_candidate(expression)` - *Whether this call may be lowered as an inline copy of the current function.*
   - Method `._emit_inlined_self_call(expression)` - *Lower a self-call as one inline copy: the argument to a shadow home, the body in place.*
+  - Method `._body_may_hold(body)` - *Whether any merge in this body keeps its left value across a right operand that calls.*
   - Method `._emit_call_site(target)` - *A call, padded so rsp is 16-byte aligned as the ABI requires.*
 
 **Functions:**
@@ -293,7 +299,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `321` lines (`13894` bytes)
+**Size**: `343` lines (`15038` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -314,6 +320,10 @@
   - Method `.mov_load_rbp(destination, offset)` - *`mov r64, [rbp+disp]` for a frame slot; disp8 shrinks the encoding where it fits.*
   - Method `.mov_store_rbp(offset, source)` - *`mov [rbp+disp], r64` for a frame slot.*
   - Method `.mov_store_rsp_imm32(offset, value)` - *`mov qword ptr [rsp+disp32], imm32` for outgoing ABI slots.*
+  - Method `.mov_store_rsp(source)` - *`mov [rsp], r64`: a store into the topmost pad slot.*
+  - Method `.mov_load_rsp(destination)` - *`mov r64, [rsp]`: a load from the topmost pad slot.*
+  - Method `.mov_store_rsp_disp(offset, source)` - *`mov [rsp+disp8], r64`: a store into one of the real frame's hold slots.*
+  - Method `.mov_load_rsp_disp(offset, destination)` - *`mov r64, [rsp+disp8]`: a load from one of the real frame's hold slots.*
   - Method `.lea_rbp(destination, offset)` - *`lea r64, [rbp+disp]` for a frame address.*
   - Method `.lea_rip(destination, target)` - *`lea r64, [rip+disp32]`, used for read-only data addresses.*
   - Method `.xor_zero(reg)` - *`xor r32, r32`: the zero idiom, which also clears the upper 32 bits.*
@@ -672,7 +682,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `185` lines (`7188` bytes)
+**Size**: `266` lines (`11104` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -682,14 +692,17 @@
   - Method `.mov_store_rbp(offset, source)` - *Record a frame store, then emit it.*
   - Method `.push(reg)` - *Record a push, then emit it.*
   - Method `.pop(reg)` - *Record a pop, then emit it.*
+  - Method `.mov_store_rsp(source)` - *Record a pad-slot store, then emit it.*
+  - Method `.mov_load_rsp(destination)` - *Record a pad-slot load, then emit it.*
+  - Method `.mov_reg_reg(destination, source)` - *Record hold-register writes, then emit them.*
+  - Method `.pops_of(function)` - *Registers popped inside one function.*
+  - Method `.pushes_of(function)` - *Registers pushed inside one function.*
   - Method `.loads_of(function)` - *Offsets of frame loads inside one function.*
   - Method `.stores_of(function)` - *Offsets of frame stores inside one function.*
 - `class SlotHomeTest` - *A slot with a home register must not be read from or written to the stack.*
   - Method `.test_two_hot_locals_never_touch_their_frame_slots()`
   - Method `.test_used_homes_are_saved_and_restored()`
   - Method `.test_the_seventh_slot_keeps_the_stack_fallback()`
-  - Method `.pops_of(function)` - *Registers popped inside one function.*
-  - Method `.pushes_of(function)` - *Registers pushed inside one function.*
 - `class ArgumentPathTest` - *Arguments and shifts by literals must not pay for registers they do not need.*
   - Method `.test_a_literal_subtrahend_uses_the_immediate_form()`
   - Method `.test_a_single_argument_moves_into_rcx_without_the_stack()`
@@ -697,6 +710,14 @@
 - `class SelfRecursionInliningTest` - *The left operand of a merge may be a self-call lowered in place, not a real call.*
   - Method `.test_a_merge_left_self_call_is_inlined()`
   - Method `.test_a_comparison_with_a_small_literal_skips_the_rax_load()`
+  - Method `.test_a_merge_over_calls_never_takes_the_stack_form()`
+  - Method `.test_a_pad_slot_holds_a_merge_value_in_memory()`
+  - Method `.test_only_the_real_merge_keeps_its_pad_slot()`
+- `class DeltaInliningTest` - *A one-slot recursive function lowers its self-calls as pure text copies.*
+  - Method `.test_delta_copies_never_touch_the_stack()`
+  - Method `.test_a_delta_function_skips_the_shadow_copies()`
+  - Method `.test_delta_labels_bloom_pure_text_copies()`
+  - Method `.test_merges_hold_values_in_level_indexed_frame_slots()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*

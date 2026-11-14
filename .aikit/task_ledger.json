@@ -5,23 +5,12 @@
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "in_progress",
-    "updated_at": 1794677545.274269,
+    "updated_at": 1794687061.6928077,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "reforge:run-1",
-      "phase": "reforge stage 1",
-      "phase_num": 3,
-      "description": "Reforge stage 1: stage 1 host review reviewed; run completed; coverage 119/119",
-      "files_affected": [],
-      "status": "completed",
-      "timestamp": 1793722137.7237957,
-      "timestamp_str": "2026-11-03 19:08:57",
-      "agent": "unidentified"
-    },
     {
       "task_id": "cairn-audit-unicode",
       "phase": "phase 4",
@@ -277,6 +266,18 @@
       "timestamp": 1794677545.274269,
       "timestamp_str": "2026-11-14 20:32:25",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-scoreboard-pass",
+      "phase": "in_progress",
+      "phase_num": 5,
+      "description": "[1/2] Delta inlining for one-slot recursive functions (ADR-021): pure-text copies, level-indexed frame merge slots, depth cap 7. 235 tests + 39 subtests pass; e2e fib(0..25), sum, ack exact. Interleaved floor A/B: fib30 wall 7.2 ms vs C 7.0 / Rust 8.1 (net 1.16 ms vs prev best 1.6). aikit.py check cairn 4/4; README + ADR updated.",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794687061.6928077,
+      "timestamp_str": "2026-11-14 23:11:01",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
     }
   ]
 }

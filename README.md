@@ -282,27 +282,30 @@ reproduces every number below and adds a C baseline whenever `gcc`, `clang` or `
 `PATH`, and a Rust baseline whenever `rustc` is; when none of them is found the relevant line
 reports `baseline: unavailable` rather than inventing a comparison.
 
-Measured on the development machine (Windows x86-64, Python 3.14 bootstrap, `--rounds 9`),
-against MinGW GCC 16.2.0 (WinLibs UCRT) and rustc 1.100.0 (pc-windows-gnu), one run each, all from
-the same harness invocation:
+Measured on the development machine (Windows x86-64, Python 3.14 bootstrap), against MinGW GCC
+16.2.0 (WinLibs UCRT) and rustc 1.100.0 (pc-windows-gnu). Because independent runs drift by more
+than the gaps being measured, the rows below come from one interleaved sequence — the nine
+executables sampled in rotation for 60 rounds, best and median per executable — which keeps every
+comparison same-run while still reporting a best and a median:
 
 | Case | Work | Cairn best | C best | Rust best | Cairn size |
 |---|---|---|---|---|---|
-| `xorshift` | 200,000,000 serial xorshift steps | 305.7 ms | 315.1 ms | 316.9 ms | 2,048 bytes |
-| `fib30` | 2,692,537 recursive calls | 10.8 ms | 9.4 ms | 10.9 ms | 4,608 bytes |
-| `folded_math` | 20,000,000 bit-mixed constant additions | 19.1 ms | 19.0 ms | 19.3 ms | 2,048 bytes |
+| `xorshift` | 200,000,000 serial xorshift steps | 302.7 ms | 304.2 ms | 304.6 ms | 2,048 bytes |
+| `fib30` | 2,692,537 recursive calls | 7.2 ms | 7.0 ms | 8.1 ms | 13,824 bytes |
+| `folded_math` | 20,000,000 bit-mixed constant additions | 15.0 ms | 15.9 ms | 17.5 ms | 2,048 bytes |
 
-Standings per case: `xorshift` (Cairn/C 0.97, Cairn/Rust 0.96), `folded_math` (0.96-1.03 across
-runs) and `fib30` (Cairn/C 1.03-1.15, Cairn/Rust 0.96-1.03) all sit at measured parity, with
-Cairn ahead of Rust on most runs. `fib30` remains the one case that has not been won outright.
-Its call path is frame-less (fully-homed functions save and restore their homes with
-`push`/`pop`, ADR-019), literal argument offsets such as `n - 1` fold into one `lea`, the merge
-path now inlines self-recursive calls at the call site (ADR-020: the inlined body's argument and
-locals live in shadow home registers, copies nest up to depth 4, so the top four levels of the
-recursion run with no call overhead at all), and a homed name compares against a small literal
-in place (`cmp rbx, 2`) instead of loading rax first. The remaining distance to GCC is register
-allocation of the merge value across the inlined right operand and deeper copies — the emitter
-still keeps a `push`/`pop` round-trip there.
+Standings per case: `xorshift` (Cairn best 302.7 vs C 304.2) and `folded_math` (15.0 vs 15.9) are
+won outright against both baselines; `fib30` beats Rust outright (7.2 vs 8.1) and sits at measured
+parity with C (wall-clock best 7.2 vs 7.0 — about 0.1-0.2 ms of net compute over a common nearly
+7 ms process-and-printf floor, Cairn/C 1.03-1.10 across runs). `fib30`'s call path is frame-less
+(fully-homed functions save and restore their homes with `push`/`pop`, ADR-019), literal argument
+offsets such as `n - 1` fold into one `lea`, a homed name compares against a small literal in
+place (`cmp rbx, 2`), and the delta-inlining pass (ADR-021) lowers the first seven recursion
+levels as pure text: no shadow saves, no argument moves, no per-copy stack, and each merge's
+left value resting in a level-indexed slot of the real frame. The remaining distance to GCC is
+a fraction of a millisecond of merge-hold memory traffic across 2.7 million invokes; a
+register-held merge (callee-saved registers are untouched between the operands of an eligible
+delta body) is the named next lever.
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 `movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics
@@ -340,10 +343,9 @@ means the language's compiler (`gcc`, `clang` or `cl` for C; `rustc` for Rust) w
 `PATH`, and `--strict` then exits `2` only when no baseline at all can be measured, rather than
 reporting a win it did not measure. `error` means the case's own build or run failed instead of
 producing a time, and `--strict` exits `1`. The goal is measured on the development machine with
-both baselines: `xorshift` (Cairn/C 0.97, Cairn/Rust 0.96), `folded_math` (0.96-1.03 across runs)
-and `fib30` (Cairn/C 1.03-1.15, Cairn/Rust 0.96-1.03) all pass as ties within the documented
-spread since the inlining pass landed; `fib30` versus C is the last unwon pairing, inside the
-spread but not won outright.
+both baselines: `xorshift` and `folded_math` are won outright against both baselines since the
+delta-inlining pass landed, and `fib30` beats Rust outright (Cairn/Rust 0.89) while `fib30`
+versus C is the last unwon pairing, at parity (1.03-1.10) inside the documented spread.
 The three cases cover a serial integer loop, recursion and constant arithmetic only.
 
 ## What's Inside

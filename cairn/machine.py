@@ -162,6 +162,28 @@ class Assembler:
         self.emit(b"\x48\xC7\x84\x24", offset.to_bytes(4, "little"),
                   (value & 0xFFFFFFFF).to_bytes(4, "little"))
 
+    def mov_store_rsp(self, source: str) -> None:
+        """`mov [rsp], r64`: a store into the topmost pad slot."""
+        src = REGISTERS[source]
+        self.emit(bytes([_rex(True, src >> 3, 0, 0), 0x89, 0x04 | ((src & 7) << 3), 0x24]))
+
+    def mov_load_rsp(self, destination: str) -> None:
+        """`mov r64, [rsp]`: a load from the topmost pad slot."""
+        dst = REGISTERS[destination]
+        self.emit(bytes([_rex(True, dst >> 3, 0, 0), 0x8B, 0x04 | ((dst & 7) << 3), 0x24]))
+
+    def mov_store_rsp_disp(self, offset: int, source: str) -> None:
+        """`mov [rsp+disp8], r64`: a store into one of the real frame's hold slots."""
+        src = REGISTERS[source]
+        self.emit(bytes([_rex(True, src >> 3, 0, 0), 0x89, 0x44 | ((src & 7) << 3), 0x24]),
+                  bytes([offset & 0xFF]))
+
+    def mov_load_rsp_disp(self, offset: int, destination: str) -> None:
+        """`mov r64, [rsp+disp8]`: a load from one of the real frame's hold slots."""
+        dst = REGISTERS[destination]
+        self.emit(bytes([_rex(True, dst >> 3, 0, 0), 0x8B, 0x44 | ((dst & 7) << 3), 0x24]),
+                  bytes([offset & 0xFF]))
+
     def lea_rbp(self, destination: str, offset: int) -> None:
         """`lea r64, [rbp+disp]` for a frame address."""
         dst = REGISTERS[destination]

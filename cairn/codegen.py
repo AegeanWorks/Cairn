@@ -43,7 +43,7 @@ COMMUTATIVE_UPDATES = frozenset({"+", "*", "&", "|", "^"})
 IMMEDIATE_UPDATES = frozenset({"+", "-"})
 IMMEDIATE_MIN = -0x80000000
 IMMEDIATE_MAX = 0x7FFFFFFF
-MAX_INLINE_DEPTH = 4
+MAX_INLINE_DEPTH = 7
 
 # Volatile registers that hold a left operand across a nested expression, innermost last.
 TEMPORARY_REGISTERS = ("r11", "r10")
@@ -99,6 +99,11 @@ class CodeGenerator:
     epilogue: str = ""
     current: Optional[syntax.Function] = None
     inline_depth: int = 0
+    pad_slots: Tuple[bool, ...] = ()
+    holds: Tuple[Optional[str], ...] = ()
+    delta_slot: int = -1
+    delta_value: int = 0
+    hold_units: int = 0
 
     def generate(self, program: syntax.Program) -> Artifact:
         """Emit the entry stub, every function, then the runtime helpers."""
@@ -141,12 +146,37 @@ class CodeGenerator:
             # Every slot has a home, so no frame (and no rbp) is needed: the homes
             # save and restore with push/pop, which also drops the store-forwarding
             # latency a frame store re-load pays on the hot call path.
-            pad = function.slots % 2 == 0
+            hold_units = self._delta_hold_units(function)
+            pad_units = 0 if (len(self.homes) + hold_units) % 2 else 1
+            merging = hold_units == 0 and self._body_may_hold(function.body)
+            pad = hold_units == 0 and (function.slots % 2 == 0 or merging)
+            filler = merging and function.slots % 2 == 1
             self.current = function
             for home in self.homes:
                 asm.push(home)
-            if pad:
-                asm.sub_rsp(8)  # realign rsp for the calls the body will make
+            if hold_units:
+                # Delta inlining keeps every nested merge's left value in one of these
+                # frame slots, level-indexed, so inline copies carry no stack state of
+                # their own. The extra pad unit keeps the unit count odd, i.e. rsp
+                # 16-byte aligned for every call the body and its copies will make.
+                asm.sub_rsp(8 * (hold_units + pad_units))
+                self.pad_slots = ()
+            elif filler:
+                # This register is pushed and popped untouched: it realigns the unit
+                # count while preserving the caller's value; the pad lands on top,
+                # which is where body merges read and write it.
+                asm.push(HOME_REGISTERS[-1])
+                if pad:
+                    asm.sub_rsp(8)
+                self.pad_slots = (pad,)
+            elif pad:
+                asm.sub_rsp(8)
+                self.pad_slots = (True,)
+            else:
+                self.pad_slots = (False,)
+            self.delta_slot = function.parameters[0].slot if hold_units else -1
+            self.delta_value = 0
+            self.hold_units = hold_units
             self._clear_frame(function)
             for index, parameter in enumerate(function.parameters[:MAX_PARAMETERS]):
                 self._store_slot(parameter.slot, ARGUMENT_REGISTERS[index])
@@ -155,17 +185,26 @@ class CodeGenerator:
             self._emit_block(function.body)
             asm.mov_imm64("rax", 0)
             asm.label(self.epilogue)
-            if pad:
+            if hold_units:
+                asm.add_rsp(8 * (hold_units + pad_units))
+            elif pad:
                 asm.add_rsp(8)  # skip the pad slot before the pops read the save area
+            if filler:
+                asm.pop(HOME_REGISTERS[-1])
             for home in reversed(self.homes):
                 asm.pop(home)
             asm.ret()
+            self.pad_slots = ()
+            self.hold_units = 0
+            self.delta_slot = -1
+            self.delta_value = 0
             self.current = None
             return
         asm.push("rbp")
         asm.mov_reg_reg("rbp", "rsp")
         if frame:
             asm.sub_rsp(frame)
+        self.pad_slots = ()
         self._save_homes()
         self._clear_frame(function)
         for index, parameter in enumerate(function.parameters[:MAX_PARAMETERS]):
@@ -211,8 +250,15 @@ class CodeGenerator:
         return None
 
     def _load_slot(self, slot: int, destination: str = "rax") -> None:
-        """Move one slot into `destination` from its register or its frame slot."""
+        """Move one slot into `destination` from its register or its frame slot.
+
+        The inlined parameter is never moved at all during a delta copy: copies see it
+        shifted by the accumulated delta, so reads become one `lea`.
+        """
         home = self._home(slot)
+        if slot == self.delta_slot and self.delta_value and home is not None:
+            self.assembler.lea_imm(destination, home, -self.delta_value)
+            return
         if home is None:
             self.assembler.mov_load_rbp(destination, slot_offset(slot))
         elif home != destination:
@@ -293,8 +339,10 @@ class CodeGenerator:
         home = self._home(target.slot)
         if home is None:
             return False
-        self.assembler.lea_imm(destination, home,
-                               value if expression.op == "+" else -value)
+        value = value if expression.op == "+" else -value
+        if target.slot == self.delta_slot and self.delta_value:
+            value -= self.delta_value
+        self.assembler.lea_imm(destination, home, value)
         return True
 
     def _emit_into(self, expression: Optional[syntax.Expr], destination: str) -> None:
@@ -405,15 +453,25 @@ class CodeGenerator:
         if not when_true:
             condition = INVERTED_CONDITIONS[condition]
         right = expression.right
+        while isinstance(right, syntax.Parens):
+            right = right.inner
         left = expression.left
         while isinstance(left, syntax.Parens):
             left = left.inner
+        if isinstance(right, syntax.IntLiteral) and isinstance(left, syntax.Name) and self._home(left.slot) is not None:
+            if left.slot == self.delta_slot and self.delta_value:
+                # Inside a copy the parameter is shifted, so the compared value moves too.
+                value = right.value + self.delta_value
+                if IMMEDIATE_MIN <= value <= IMMEDIATE_MAX:
+                    asm.cmp_imm(self._home(left.slot), value)
+                    asm.jcc(condition, target)
+                    return
+            elif IMMEDIATE_MIN <= right.value <= IMMEDIATE_MAX:
+                # A homed name compares against the literal in place: no rax load needed.
+                asm.cmp_imm(self._home(left.slot), right.value)
+                asm.jcc(condition, target)
+                return
         if (isinstance(right, syntax.IntLiteral)
-                and IMMEDIATE_MIN <= right.value <= IMMEDIATE_MAX
-                and isinstance(left, syntax.Name) and self._home(left.slot) is not None):
-            # A homed name compares against the literal in place: no rax load needed.
-            asm.cmp_imm(self._home(left.slot), right.value)
-        elif (isinstance(right, syntax.IntLiteral)
                 and IMMEDIATE_MIN <= right.value <= IMMEDIATE_MAX):
             self._emit_into(expression.left, "rax")
             asm.cmp_imm("rax", right.value)
@@ -498,9 +556,11 @@ class CodeGenerator:
     def _emit_left_operand(self, left: Optional[syntax.Expr], right: Optional[syntax.Expr]) -> None:
         """Evaluate `left`, keep it across `right`, and leave it in rcx with right in rax.
 
-        A register is used when one is free and the right operand cannot call; a call would
-        clobber it, so that case keeps the stack form the ABI already tolerates. An inline
-        copy is a call too: its body still makes real calls, which clobber any held register.
+        A temporary register is used when one is free and the right operand cannot call; a
+        call would clobber it. When the right operand does call and the enclosing frame has a
+        pad slot, the slot holds the left value instead of a `push`: no stack shift means no
+        depth change and so no call-site pads inside `right`. The pad slot is private to this
+        frame, and every nested frame's traffic lives below `rsp`, so the span is exclusive.
         """
         asm = self.assembler
         if self.temporaries < len(TEMPORARY_REGISTERS) and not has_call(right):
@@ -514,6 +574,34 @@ class CodeGenerator:
                 self._emit_expression(right)
                 self.temporaries -= 1
                 asm.mov_reg_reg("rcx", temporary)
+            return
+        if self.holds and self.holds[-1] is not None:
+            # Inside a copy whose entry pushed the hold register, the left value rides in
+            # that register across `right`: deeper copies push and pop it before writing,
+            # and real callees keep their merge values in pad slots, so nothing below this
+            # frame writes the register without saving it first.
+            hold = self.holds[-1]
+            self._emit_expression(left)
+            asm.mov_reg_reg(hold, "rax")
+            self._emit_expression(right)
+            asm.mov_reg_reg("rcx", hold)
+            return
+        if self.hold_units > 0:
+            # Every merge of this frame, in its real body or its inline copies, keeps
+            # its left value in a level-indexed slot of the real frame: copies carry no
+            # stack state of their own, so `right` runs with `depth` and alignment
+            # unchanged and its calls need no on-the-spot pads.
+            offset = 8 * self.inline_depth + self.depth
+            self._emit_expression(left)
+            asm.mov_store_rsp_disp(offset, "rax")
+            self._emit_expression(right)
+            asm.mov_load_rsp_disp(offset, "rcx")
+            return
+        if self.pad_slots and self.pad_slots[-1]:
+            self._emit_expression(left)
+            asm.mov_store_rsp("rax")
+            self._emit_expression(right)
+            asm.mov_load_rsp("rcx")
             return
         self._emit_expression(left)
         asm.push("rax")
@@ -592,7 +680,16 @@ class CodeGenerator:
             asm.pop("rax")
             self.depth -= 8
             return
-        if self._is_inline_candidate(expression):
+        if self.delta_slot >= 0 and expression.name == self.current.name:
+            if self.inline_depth < MAX_INLINE_DEPTH:
+                delta = self._delta_argument(expression)
+                if delta is not None:
+                    self._emit_delta_self_call(expression, delta)
+                    return
+            # A delta-eligible function's odd-shaped self-calls stay real calls: the
+            # shadow-copy machinery would retarget the parameter's home register and
+            # break the accumulated-delta reading every pure-text copy relies on.
+        elif self._is_inline_candidate(expression):
             self._emit_inlined_self_call(expression)
             return
         if len(expression.arguments) == 1:
@@ -611,6 +708,118 @@ class CodeGenerator:
             asm.pop(ARGUMENT_REGISTERS[index])
             self.depth -= 8
         self._emit_call_site(function_label(expression.name))
+
+    def _delta_hold_units(self, function: syntax.Function) -> int:
+        """The per-level merge slots delta inlining needs, in 8-byte units, or 0 when ineligible.
+
+        A function qualifies when its whole state is one parameter it never rebinds: its
+        self-calls with constant-delta arguments lower as pure text copies, and their merges
+        keep values in level-indexed slots of this frame instead of any per-copy stack.
+        """
+        if function.slots != 1 or len(function.parameters) != 1:
+            return 0
+        if self._assign_writes_parameter(function.body, function.parameters[0].slot):
+            return 0
+        if not self._has_delta_self_call(function.body, function.name, function.parameters[0].slot):
+            return 0
+        return MAX_INLINE_DEPTH + 1
+
+    def _assign_writes_parameter(self, node, slot: int) -> bool:
+        """Whether any statement in `node` may rebind or shadow the parameter in `slot`."""
+        if isinstance(node, (syntax.Let, syntax.Assign)):
+            return True
+        if isinstance(node, syntax.If):
+            return any(self._assign_writes_parameter(b, slot)
+                       for b in (node.then_block, node.else_block) if b is not None)
+        if isinstance(node, syntax.While):
+            return node.body is not None and self._assign_writes_parameter(node.body, slot)
+        if isinstance(node, syntax.Block):
+            return any(self._assign_writes_parameter(s, slot) for s in node.statements)
+        return False
+
+    def _has_delta_self_call(self, node, name: str, slot: int) -> bool:
+        """Whether `node` contains at least one self-call whose argument carries a constant delta.
+
+        Pure-text copies only pay off when the call sites they replace are the hot ones: a
+        function whose self-recursive arguments never match the shape saves nothing and keeps
+        the legacy form.
+        """
+        if node is None:
+            return False
+        if isinstance(node, syntax.Call):
+            if node.name == name and len(node.arguments) == 1 and self._delta_argument(node, slot) is not None:
+                return True
+            return any(self._has_delta_self_call(a, name, slot) for a in node.arguments)
+        if isinstance(node, (syntax.Let, syntax.Assign)):
+            return self._has_delta_self_call(node.value, name, slot)
+        if isinstance(node, syntax.ExprStmt):
+            return self._has_delta_self_call(node.expression, name, slot)
+        if isinstance(node, syntax.Return):
+            return self._has_delta_self_call(node.value, name, slot)
+        if isinstance(node, syntax.Unary):
+            return self._has_delta_self_call(node.operand, name, slot)
+        if isinstance(node, syntax.Binary):
+            return (self._has_delta_self_call(node.left, name, slot)
+                    or self._has_delta_self_call(node.right, name, slot))
+        if isinstance(node, syntax.Parens):
+            return self._has_delta_self_call(node.inner, name, slot)
+        if isinstance(node, syntax.If):
+            if self._has_delta_self_call(node.condition, name, slot):
+                return True
+            return any(self._has_delta_self_call(b, name, slot)
+                       for b in (node.then_block, node.else_block) if b is not None)
+        if isinstance(node, syntax.While):
+            return (self._has_delta_self_call(node.condition, name, slot)
+                    or self._has_delta_self_call(node.body, name, slot))
+        if isinstance(node, syntax.Block):
+            return any(self._has_delta_self_call(s, name, slot) for s in node.statements)
+        return False
+
+    def _delta_argument(self, expression: syntax.Call, slot: Optional[int] = None) -> Optional[int]:
+        """The constant shift this call's argument adds to the inlined parameter, or None.
+
+        `n`, `n - 1` and `n + 2` qualify; anything the walk cannot tie to the parameter
+        alone does not, and falls back to the register-copy form.
+        """
+        if slot is None:
+            slot = self.delta_slot
+        if slot < 0:
+            return None
+        argument = expression.arguments[0]
+        while isinstance(argument, syntax.Parens):
+            argument = argument.inner
+        if isinstance(argument, syntax.Name) and argument.slot == slot:
+            return 0
+        if (
+            isinstance(argument, syntax.Binary)
+            and argument.op in ("+", "-")
+            and isinstance(argument.left, syntax.Name)
+            and argument.left.slot == slot
+            and isinstance(argument.right, syntax.IntLiteral)
+            and IMMEDIATE_MIN <= argument.right.value <= IMMEDIATE_MAX
+        ):
+            return argument.right.value if argument.op == "+" else -argument.right.value
+        return None
+
+    def _emit_delta_self_call(self, expression: syntax.Call, delta: int) -> None:
+        """Lower a constant-delta self-call as pure text: the copy's parameter is the
+
+        caller's parameter plus `delta`, so no shadow register, frame, or argument move
+        is emitted at all.
+        """
+        asm, saved_epilogue = self.assembler, self.epilogue
+        saved_value, saved_depth = self.delta_value, self.inline_depth
+        self.epilogue = self._fresh(f"{function_label(self.current.name)}.delta")
+        self.inline_depth += 1
+        # The copy's parameter is `local_parent + delta`, and the copy reads its own
+        # parameter as `real - delta_value`, so descending by `delta` grows `delta_value`
+        # by the same amount on the opposite sign.
+        self.delta_value -= delta
+        self._emit_block(self.current.body)
+        asm.label(self.epilogue)
+        self.epilogue = saved_epilogue
+        self.delta_value = saved_value
+        self.inline_depth = saved_depth
 
     def _is_inline_candidate(self, expression: syntax.Call) -> bool:
         """Whether this call may be lowered as an inline copy of the current function.
@@ -639,27 +848,74 @@ class CodeGenerator:
         asm = self.assembler
         saved_homes = self.homes
         saved_epilogue = self.epilogue
+        saved_pads = self.pad_slots
+        saved_holds = self.holds
         shadow = list(HOME_REGISTERS[len(saved_homes):2 * len(saved_homes)])
-        padded = len(shadow) % 2 == 1
+        hold = (HOME_REGISTERS[2 * len(saved_homes)]
+                if 2 * len(saved_homes) < len(HOME_REGISTERS) else None)
+        slots = shadow + ([hold] if hold is not None else [])
+        own_pad = len(slots) % 2 == 1
         self._emit_expression(expression.arguments[0])  # the caller's homes are still live
-        if padded:
-            asm.sub_rsp(8)
-        for register in shadow:
+        for register in slots:
             asm.push(register)
+        if own_pad:
+            # Pushes come first so the pad lands at [rsp]: with no hold register available
+            # (three slots), this copy's merges keep their left values in the pad slot, and
+            # the pad keeps every call inside the copy free of on-the-spot alignment shifts.
+            asm.sub_rsp(8)
         self.homes = tuple(shadow)
+        self.pad_slots = saved_pads + (own_pad,)
+        self.holds = saved_holds + (hold,)
         self.epilogue = self._fresh(f"{function_label(self.current.name)}.inline")
         self.inline_depth += 1
         self._clear_frame(self.current)
         asm.mov_reg_reg(shadow[0], "rax")
         self._emit_block(self.current.body)
         asm.label(self.epilogue)
-        for register in reversed(shadow):
-            asm.pop(register)
-        if padded:
+        if own_pad:
             asm.add_rsp(8)
+        for register in reversed(slots):
+            asm.pop(register)
         self.homes = saved_homes
+        self.pad_slots = saved_pads
+        self.holds = saved_holds
         self.epilogue = saved_epilogue
         self.inline_depth -= 1
+
+    def _body_may_hold(self, body: Optional[syntax.Block]) -> bool:
+        """Whether any merge in this body keeps its left value across a right operand that calls."""
+        def visit(expression: Optional[syntax.Expr]) -> bool:
+            if expression is None:
+                return False
+            if isinstance(expression, syntax.Binary):
+                if expression.op not in ("&&", "||") and has_call(expression.right):
+                    return True
+                return visit(expression.left) or visit(expression.right)
+            if isinstance(expression, syntax.Unary):
+                return visit(expression.operand)
+            if isinstance(expression, syntax.Parens):
+                return visit(expression.inner)
+            if isinstance(expression, syntax.Call):
+                return any(visit(argument) for argument in expression.arguments)
+            return False
+
+        def walk(statement: syntax.Stmt) -> bool:
+            if isinstance(statement, syntax.Block):
+                return any(walk(item) for item in statement.statements)
+            if isinstance(statement, (syntax.Let, syntax.Assign)):
+                return visit(statement.value)
+            if isinstance(statement, syntax.If):
+                return (visit(statement.condition) or walk(statement.then_block)
+                        or walk(statement.else_block))
+            if isinstance(statement, syntax.While):
+                return visit(statement.condition) or walk(statement.body)
+            if isinstance(statement, syntax.Return):
+                return visit(statement.value)
+            if isinstance(statement, syntax.ExprStmt):
+                return visit(statement.expression)
+            return False
+
+        return walk(body)
 
     def _emit_call_site(self, target: str) -> None:
         """A call, padded so rsp is 16-byte aligned as the ABI requires."""
