@@ -279,8 +279,8 @@ Cairn emits direct machine code with no interpreter loop, no bounds checks and n
 integer subset it implements, the generated code is one instruction per operation; the first six
 slots stay in registers, and only the rest are loaded and stored. `benchmarks/run_benchmarks.py`
 reproduces every number below and adds a C baseline whenever `gcc`, `clang` or `cl` is already on
-`PATH`; on a machine with none it reports `C baseline: unavailable` rather than inventing a
-comparison.
+`PATH`, and a Rust baseline whenever `rustc` is; when none of them is found the relevant line
+reports `baseline: unavailable` rather than inventing a comparison.
 
 Measured on the development machine (Windows x86-64, Python 3.14 bootstrap, `--rounds 9`):
 
@@ -299,32 +299,35 @@ rather than three significant figures; the harness prints best, median and worst
 Compile time is about 150-280 ms per case, nearly all of it Python interpreter startup; the
 produced executable is two kilobytes because there is no runtime to link.
 
-What is *not* claimed: that Cairn is faster than C in general. Beating an optimising C compiler
+What is *not* claimed: that Cairn is faster than C or Rust in general. Beating an optimising C compiler
 on arbitrary code is a claim about optimisers and workloads, not about syntax, and this compiler
 has one folding pass and a register fast path, not a modern optimiser. What Cairn does claim
 today is a zero-cost execution model on its subset, sub-second compiles, deterministic output,
 and a total dependency surface of one Python interpreter.
 
-### Goal: faster than C, measured per case
+### Goal: faster than C and Rust, measured per case
 
-The owner's target is that Cairn beats the C twin on every committed benchmark case. That is a
-goal with a scoreboard, not a slogan the README asserts: `run_benchmarks.py` measures both
-languages in the same run and derives one verdict per case.
+The owner's target is that Cairn beats the C twin on every committed benchmark case, and the Rust
+twin as well. That is a goal with a scoreboard, not a slogan the README asserts:
+`run_benchmarks.py` measures every baseline whose compiler is already installed, in the same run,
+and derives one verdict per case per language.
 
 ```bash
-python benchmarks/run_benchmarks.py           # table plus a "Goal: faster than C" line
-python benchmarks/run_benchmarks.py --json    # goal.faster_than_c: true, false or null
-python benchmarks/run_benchmarks.py --strict  # gate: 0 won, 1 slower or errored, 2 no C compiler
+python benchmarks/run_benchmarks.py           # table plus a "Goal: faster than ..." line per baseline
+python benchmarks/run_benchmarks.py --json    # goal.faster_than_c / goal.faster_than_rust: true, false or null
+python benchmarks/run_benchmarks.py --strict  # gate: 0 won, 1 slower or errored, 2 no baseline at all
 ```
 
-A verdict is `faster`, `tie`, `slower`, `unavailable` or `error`. `unavailable` means no `gcc`, `clang` or
-`cl` was found, and `--strict` then exits `2` rather than reporting a win it did not measure. `error`
-means the case's own build or run failed instead of producing a time, and `--strict` exits `1`. The
-goal is now measured: with a MinGW GCC 16.2.0 (WinLibs UCRT) baseline on the development machine,
-Cairn is at parity on `folded_math` (best-time ratio 0.95-1.02, within the run-to-run spread) and
-loses `loop_sum` (by 7-8x — GCC collapses the constant-heavy loop that Cairn executes literally)
-and `fib30` (by about 1.5x). The three cases cover integer loops, recursion and constant arithmetic
-only.
+A verdict is `faster`, `tie`, `slower`, `unavailable` or `error`, one per case per baseline. `unavailable`
+means the language's compiler (`gcc`, `clang` or `cl` for C; `rustc` for Rust) was not found on
+`PATH`, and `--strict` then exits `2` only when no baseline at all can be measured, rather than
+reporting a win it did not measure. `error` means the case's own build or run failed instead of
+producing a time, and `--strict` exits `1`. The goal is now measured for C: with a MinGW GCC 16.2.0
+(WinLibs UCRT) baseline on the development machine, Cairn is at parity on `folded_math` (best-time
+ratio 0.92-1.02, within the run-to-run spread) and loses `loop_sum` (by 7-8x — GCC collapses the
+constant-heavy loop that Cairn executes literally) and `fib30` (by about 1.5x). A `rustc` is not yet
+installed on the development machine, so `faster_than_rust` is currently `unavailable` there. The
+three cases cover integer loops, recursion and constant arithmetic only.
 
 ## What's Inside
 
@@ -363,7 +366,7 @@ cairn/
 │   ├── version.py            <- the one version string
 │   ├── __init__.py           <- package docstring and public exports
 │   └── __main__.py           <- `python -m cairn`
-├── benchmarks/               <- three cases, their C twins, and the harness
+├── benchmarks/               <- three cases, their C and Rust twins, and the harness
 ├── examples/                 <- hello, fibonacci, arithmetic, alloy_probe (Alloy backend probe)
 ├── tests/                    <- lexer, parser, sema, optimiser, codegen, emitter, PE, CLI, harness, capabilities, verifier, values, filetable, end-to-end
 └── assets/                   <- generated brand candidates

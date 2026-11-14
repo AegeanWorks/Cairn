@@ -1,15 +1,17 @@
-"""Benchmark harness: measure Cairn executables and, when one exists, a C baseline.
+"""Benchmark harness: measure Cairn executables and, when one exists, C and Rust baselines.
 
 The harness compiles each case with the compiler in this repository and runs the produced
-executable several times, reporting the best and median wall clock. A C compiler is used only
-when it is already on `PATH`; when none is found the report says so instead of guessing, because
-an invented comparison would be worse than no comparison.
+executable several times, reporting the best and median wall clock. A C or Rust compiler is
+used only when it is already on `PATH`; when none is found the report says so instead of
+guessing, because an invented comparison would be worse than no comparison.
 
 Usage:
   python benchmarks/run_benchmarks.py              # human table
   python benchmarks/run_benchmarks.py --json       # machine-readable report
   python benchmarks/run_benchmarks.py --rounds 7   # more samples per case
-  python benchmarks/run_benchmarks.py --strict     # exit 1 unless Cairn wins every case
+  python benchmarks/run_benchmarks.py --strict     # exit 1 unless Cairn wins every
+                                                   # measured baseline; exit 2 when no
+                                                   # baseline can be measured
 """
 
 import argparse
@@ -39,30 +41,44 @@ C_COMPILERS: Dict[str, List[str]] = {
     "cl": ["cl", "/O2", "/nologo"],
 }
 
+RUST_COMPILERS: Dict[str, List[str]] = {
+    "rustc": ["rustc", "-O", "-o"],
+}
+
 
 @dataclass(frozen=True)
 class Case:
-    """One benchmark: a Cairn source, an equivalent C source, and what one iteration is."""
+    """One benchmark: a Cairn source, equivalent C and Rust sources, and what one iteration is."""
 
     name: str
     cairn: str
     c_source: str
+    rust_source: str
     iterations: int
     unit: str
 
 
 CASES: Tuple[Case, ...] = (
-    Case("loop_sum", "benchmarks/loop_sum.crn", "benchmarks/loop_sum.c", 200_000_000,
-         "iterations"),
-    Case("fib30", "benchmarks/fib30.crn", "benchmarks/fib30.c", 2_692_537, "calls"),
-    Case("folded_math", "benchmarks/folded_math.crn", "benchmarks/folded_math.c", 20_000_000,
-         "iterations"),
+    Case("loop_sum", "benchmarks/loop_sum.crn", "benchmarks/loop_sum.c",
+         "benchmarks/loop_sum.rs", 200_000_000, "iterations"),
+    Case("fib30", "benchmarks/fib30.crn", "benchmarks/fib30.c", "benchmarks/fib30.rs",
+         2_692_537, "calls"),
+    Case("folded_math", "benchmarks/folded_math.crn", "benchmarks/folded_math.c",
+         "benchmarks/folded_math.rs", 20_000_000, "iterations"),
 )
 
 
 def find_c_compiler() -> Optional[str]:
     """The first C compiler already installed, or None when the machine has none."""
     for name in C_COMPILERS:
+        if shutil.which(name):
+            return name
+    return None
+
+
+def find_rust_compiler() -> Optional[str]:
+    """The first Rust compiler already installed, or None when the machine has none."""
+    for name in RUST_COMPILERS:
         if shutil.which(name):
             return name
     return None
@@ -108,6 +124,17 @@ def build_c(compiler: str, source: Path, destination: Path) -> Optional[float]:
     return (time.perf_counter() - started) * 1000.0
 
 
+def build_rust(compiler: str, source: Path, destination: Path) -> Optional[float]:
+    """Compile one Rust case; None when this compiler does not produce an executable."""
+    template = RUST_COMPILERS[compiler]
+    argv = [template[0], template[1], template[2], str(destination), str(source)]
+    started = time.perf_counter()
+    completed = run_command(argv, BUILD_TIMEOUT, cwd=ROOT)
+    if completed.returncode != 0 or not destination.is_file():
+        return None
+    return (time.perf_counter() - started) * 1000.0
+
+
 def measure(executable: Path, rounds: int) -> List[float]:
     """Wall-clock milliseconds for each run of one executable."""
     samples: List[float] = []
@@ -136,10 +163,11 @@ def summarise(samples: List[float], iterations: int) -> Dict[str, float]:
 
 
 def verdict(best_cairn: Optional[float], best_c: Optional[float]) -> str:
-    """The measured standing against C: `faster`, `slower`, `tie` or `unavailable`.
+    """The measured standing against one baseline: `faster`, `slower`, `tie` or `unavailable`.
 
-    A verdict is only ever computed from two measurements taken in the same run. Without a C
-    baseline the answer is `unavailable`, never an assumption.
+    A verdict is only ever computed from two measurements taken in the same run. Without a
+    baseline the answer is `unavailable`, never an assumption. Used unchanged for the C and
+    the Rust baseline.
     """
     if best_cairn is None or best_c is None or best_c <= 0:
         return "unavailable"
@@ -151,13 +179,15 @@ def verdict(best_cairn: Optional[float], best_c: Optional[float]) -> str:
 
 
 def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Path,
-                   optimise: bool = True) -> Dict[str, object]:
-    """Measure one case in Cairn and, when available, in C."""
+                   optimise: bool = True, rust_compiler: Optional[str] = None) -> Dict[str, object]:
+    """Measure one case in Cairn and, when available, in C and in Rust."""
     cairn_source = ROOT / case.cairn
     cairn_exe = folder / f"{case.name}.cairn.exe"
     report: Dict[str, object] = {
         "case": case.name, "unit": case.unit, "iterations": case.iterations,
-        "cairn": None, "c": None, "c_compiler": compiler, "verdict": "unavailable",
+        "cairn": None, "c": None, "rust": None,
+        "c_compiler": compiler, "rust_compiler": rust_compiler,
+        "verdict": "unavailable", "verdict_rust": "unavailable",
         "error": None,
     }
     try:
@@ -170,42 +200,48 @@ def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Pat
     cairn["compile_ms"] = round(compile_ms, 2)
     cairn["image_bytes"] = cairn_exe.stat().st_size
     report["cairn"] = cairn
-    if compiler is None:
-        return report
-    c_exe = folder / f"{case.name}.c.exe"
-    try:
-        c_compile = build_c(compiler, ROOT / case.c_source, c_exe)
-    except (RuntimeError, subprocess.TimeoutExpired, OSError) as failure:
-        report["verdict"] = "error"
-        report["error"] = f"c build failed: {failure}"
-        return report
-    if c_compile is None:
-        report["verdict"] = "error"
-        report["error"] = "c-build-failed"
-        return report
-    try:
-        baseline = summarise(measure(c_exe, rounds), case.iterations)
-    except (RuntimeError, subprocess.TimeoutExpired, OSError) as failure:
-        report["verdict"] = "error"
-        report["error"] = str(failure)
-        return report
     best_cairn = float(cairn["best_ms"])
-    best_c = float(baseline["best_ms"])
-    baseline["compile_ms"] = round(c_compile, 2)
-    baseline["image_bytes"] = c_exe.stat().st_size
-    baseline["ratio_to_c"] = round(best_cairn / best_c, 3) if best_c else 0.0
-    report["c"] = baseline
-    report["verdict"] = verdict(best_cairn, best_c)
+    for language, baseline_compiler, build, source_path, exe_name, verdict_key, ratio_key in (
+            ("c", compiler, build_c, ROOT / case.c_source, f"{case.name}.c.exe",
+             "verdict", "ratio_to_c"),
+            ("rust", rust_compiler, build_rust, ROOT / case.rust_source,
+             f"{case.name}.rust.exe", "verdict_rust", "ratio_to_rust")):
+        if baseline_compiler is None:
+            continue
+        exe = folder / exe_name
+        try:
+            baseline_compile = build(baseline_compiler, source_path, exe)
+        except (RuntimeError, subprocess.TimeoutExpired, OSError) as failure:
+            report[verdict_key] = "error"
+            report["error"] = f"{language} build failed: {failure}"
+            return report
+        if baseline_compile is None:
+            report[verdict_key] = "error"
+            report["error"] = f"{language}-build-failed"
+            return report
+        try:
+            baseline = summarise(measure(exe, rounds), case.iterations)
+        except (RuntimeError, subprocess.TimeoutExpired, OSError) as failure:
+            report[verdict_key] = "error"
+            report["error"] = str(failure)
+            return report
+        best_baseline = float(baseline["best_ms"])
+        baseline["compile_ms"] = round(baseline_compile, 2)
+        baseline["image_bytes"] = exe.stat().st_size
+        baseline[ratio_key] = round(best_cairn / best_baseline, 3) if best_baseline else 0.0
+        report[language] = baseline
+        report[verdict_key] = verdict(best_cairn, best_baseline)
     return report
 
 
 def render(reports: List[Dict[str, object]], compiler: Optional[str],
-           optimise: bool = True) -> str:
+           optimise: bool = True, rust_compiler: Optional[str] = None) -> str:
     """The human table; one line per case and per measured language."""
+    languages = [("cairn", "cairn"), ("c", "c"), ("rust", "rust")]
     lines = ["case        language  best ms  median ms  compile ms  ns/unit  size",
              "----------  --------  -------  ---------  ----------  -------  ----"]
     for report in reports:
-        for language, key in (("cairn", "cairn"), ("c", "c")):
+        for language, key in languages:
             data = report.get(key)
             if not isinstance(data, dict):
                 continue
@@ -218,26 +254,42 @@ def render(reports: List[Dict[str, object]], compiler: Optional[str],
         lines.append("Cairn build: --no-optimize (the folding pass is skipped)")
     lines.append(f"C baseline: {compiler}" if compiler
                  else "C baseline: unavailable (no gcc, clang or cl on PATH)")
+    lines.append(f"Rust baseline: {rust_compiler}" if rust_compiler
+                 else "Rust baseline: unavailable (no rustc on PATH)")
     ratios = [float(data["ratio_to_c"]) for report in reports
               for data in [report.get("c")] if isinstance(data, dict) and data.get("ratio_to_c")]
     if ratios:
         lines.append(f"Cairn/C best-time ratio: {min(ratios):.2f} to {max(ratios):.2f} "
                      f"(1.00 means equal)")
-    verdicts = [str(report.get("verdict")) for report in reports]
+    rust_ratios = [float(data["ratio_to_rust"]) for report in reports
+                   for data in [report.get("rust")]
+                   if isinstance(data, dict) and data.get("ratio_to_rust")]
+    if rust_ratios:
+        lines.append(f"Cairn/Rust best-time ratio: {min(rust_ratios):.2f} to "
+                     f"{max(rust_ratios):.2f} (1.00 means equal)")
+    lines.extend(_goal_lines(reports, "C", compiler, "verdict", "gcc, clang or cl"))
+    lines.extend(_goal_lines(reports, "Rust", rust_compiler, "verdict_rust", "rustc"))
+    return "\n".join(lines)
+
+
+def _goal_lines(reports: List[Dict[str, object]], label: str, compiler: Optional[str],
+                verdict_key: str, install_hint: str) -> List[str]:
+    """The scoreboard line for one baseline, decided only by measurements from this run."""
+    verdicts = [str(report[verdict_key]) if isinstance(report.get(verdict_key), str)
+                else "unavailable" for report in reports]
     if "error" in verdicts:
         errored = [str(report["case"]) for report in reports
-                   if report.get("verdict") == "error"]
-        lines.append(f"Goal: faster than C -> errored on {', '.join(errored)} "
-                     f"(see the report 'error' fields)")
-    elif "unavailable" in verdicts:
-        lines.append("Goal: faster than C -> unavailable (install gcc, clang or cl to measure)")
-    elif all(item in ("faster", "tie") for item in verdicts):
-        lines.append("Goal: faster than C -> measured on every case in this run")
-    else:
-        slower = [str(report["case"]) for report in reports
-                  if report.get("verdict") == "slower"]
-        lines.append(f"Goal: faster than C -> not met on {', '.join(slower)}")
-    return "\n".join(lines)
+                   if report.get(verdict_key) == "error"]
+        return [f"Goal: faster than {label} -> errored on {', '.join(errored)} "
+                f"(see the report 'error' fields)"]
+    if "unavailable" in verdicts:
+        return [f"Goal: faster than {label} -> unavailable "
+                f"(install {install_hint} to measure)"]
+    if all(item in ("faster", "tie") for item in verdicts):
+        return [f"Goal: faster than {label} -> measured on every case in this run"]
+    slower = [str(report["case"]) for report in reports
+              if report.get(verdict_key) == "slower"]
+    return [f"Goal: faster than {label} -> not met on {', '.join(slower)}"]
 
 
 def _number(text: str) -> int:
@@ -252,36 +304,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     """Parse options, run every case and print the report."""
     parser = argparse.ArgumentParser(
         prog="run_benchmarks.py",
-        description="Measure Cairn executables, and a C baseline when a C compiler is present.")
+        description="Measure Cairn executables, and a C or Rust baseline when a "
+                    "compiler for it is present.")
     parser.add_argument("--rounds", type=_number, default=DEFAULT_ROUNDS,
                         help=f"runs per executable (default: {DEFAULT_ROUNDS})")
     parser.add_argument("--json", action="store_true", help="print one JSON report object")
     parser.add_argument("--no-optimize", action="store_true",
                         help="build Cairn without the folding pass, to measure what it buys")
     parser.add_argument("--strict", action="store_true",
-                        help="exit 1 unless Cairn is at least as fast as C on every case; "
-                             "exit 2 when no C compiler can be measured")
+                        help="exit 1 unless Cairn is at least as fast as every measured "
+                             "baseline on every case; exit 2 when no baseline can be measured")
     arguments = parser.parse_args(argv)
     compiler = find_c_compiler()
+    rust_compiler = find_rust_compiler()
     optimise = not arguments.no_optimize
     with tempfile.TemporaryDirectory(prefix="cairn-bench-") as folder:
-        reports = [benchmark_case(case, compiler, arguments.rounds, Path(folder), optimise)
+        reports = [benchmark_case(case, compiler, arguments.rounds, Path(folder), optimise,
+                                  rust_compiler=rust_compiler)
                    for case in CASES]
     verdicts = [str(report.get("verdict")) for report in reports]
-    met = all(item in ("faster", "tie") for item in verdicts)
+    rust_verdicts = [str(report.get("verdict_rust")) for report in reports]
+    met_c = all(item in ("faster", "tie") for item in verdicts)
+    met_rust = all(item in ("faster", "tie") for item in rust_verdicts)
+    met = (met_c if compiler is not None else True) and \
+          (met_rust if rust_compiler is not None else True)
     if arguments.json:
-        print(json.dumps({"compiler": compiler, "rounds": arguments.rounds,
-                          "optimise": optimise,
-                          "goal": {"faster_than_c": met if "unavailable" not in verdicts else None,
-                                   "verdicts": verdicts},
+        print(json.dumps({"compiler": compiler, "rust_compiler": rust_compiler,
+                          "rounds": arguments.rounds, "optimise": optimise,
+                          "goal": {"faster_than_c": met_c
+                                   if "unavailable" not in verdicts else None,
+                                   "verdicts": verdicts,
+                                   "faster_than_rust": met_rust
+                                   if "unavailable" not in rust_verdicts else None,
+                                   "verdicts_rust": rust_verdicts},
                           "cases": reports}, indent=2))
     else:
-        print(render(reports, compiler, optimise))
+        print(render(reports, compiler, optimise, rust_compiler))
     if not arguments.strict:
         return EXIT_OK
-    if "unavailable" in verdicts:
+    if compiler is None and rust_compiler is None:
         return EXIT_NO_BASELINE
-    return EXIT_OK if met else EXIT_SLOWER
+    return EXIT_OK if met and "error" not in verdicts + rust_verdicts else EXIT_SLOWER
 
 
 if __name__ == "__main__":

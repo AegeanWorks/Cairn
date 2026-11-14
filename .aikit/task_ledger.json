@@ -1,63 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-verify-push",
-    "last_phase": "phase 5",
-    "active_phase": 5,
+    "task_id": "cairn-rust-baseline",
+    "last_phase": "in_progress",
+    "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1793905230.5638275,
-    "owner": "kilo:goal",
-    "started_by": "kilo:goal",
+    "updated_at": 1794668072.7907777,
+    "owner": "mistral:vibe",
+    "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-verifiable-core",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[6/6] Implemented and verified the machine-checkable core: codes.py registry, capabilities.py manifest with three new CLI commands, verify.py with ten V codes, listing.py, stdlib-only AST proof; 113 tests pass, 4/4 gates pass; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793264314.2087677,
-      "timestamp_str": "2026-10-29 11:58:34",
-      "agent": "kilo:cairn",
-      "handoff": {
-        "state": "capabilities/verify/listing wired into the CLI and documented",
-        "next": "none, task complete",
-        "open": "none",
-        "evidence": "python aikit.py check cairn -> 4/4, python -m unittest discover -> 113 tests OK"
-      }
-    },
-    {
-      "task_id": "cairn-verifiable-core",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-verifiable-core' completed successfully.",
-      "status": "completed",
-      "timestamp": 1793264319.4714937,
-      "timestamp_str": "2026-10-29 11:58:39",
-      "agent": "kilo:cairn"
-    },
-    {
-      "task_id": "cairn-core-values",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/4] Bind the six core values (No Dependency, AI Compatible, Easily Understandable, Almost Machine Language Like, Verifiable, Error Codes) to executable evidence and a failing guard each",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793264606.6876845,
-      "timestamp_str": "2026-10-29 12:03:26",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "The six core values are stated in prose and repeated by hand; a value with no check can silently stop being true, and an agent has no way to tell which command proves which value.",
-        "benefits": "One record per value with the command that demonstrates it and the test that fails when it breaks; the manifest publishes them, the README renders them, and a test asserts every guard resolves and every evidence names a real subcommand.",
-        "risks": "contract: the value names, keys and order become permanent identifiers; dependency: stdlib only must keep holding; concurrency: none; state: read-only, values.py holds no state.",
-        "mitigation": "Freeze the six values and their order in an ADR, point each guard at an existing test instead of duplicating it, assert guard resolution with ast, and re-run every gate."
-      },
-      "handoff": {
-        "next": "write values.py, publish in capabilities, add README table, add tests/test_values.py, then phase 4"
-      }
-    },
     {
       "task_id": "cairn-core-values",
       "phase": "phase 4",
@@ -281,6 +234,52 @@
       "timestamp": 1793905230.5638275,
       "timestamp_str": "2026-11-05 22:00:30",
       "agent": "kilo:goal"
+    },
+    {
+      "task_id": "cairn-verify-push",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-verify-push' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794667386.9629338,
+      "timestamp_str": "2026-11-14 17:43:06",
+      "agent": "mistral:vibe",
+      "continued_from": "kilo:goal",
+      "delivery": {
+        "roots": [
+          "C:\\Users\\Yunus-Emre\\Desktop\\portable_agent_kit\\projects\\cairn"
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rust-baseline",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/3] Plan Rust baseline: parallel verdict_rust/rust keys, rustc twins, strict semantics",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794667646.3383582,
+      "timestamp_str": "2026-11-14 17:47:26",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "The owner added 'faster than Rust' to the scoreboard goal; the harness only knows a C baseline.",
+        "benefits": "Cairn is measured against a second native toolchain; absence of rustc stays an honest unavailable, never a guess.",
+        "risks": "contract: JSON readers pin existing keys (ADR-015/016); dependency: optional rustc must not break runs without it; concurrency: none; state: none (temp dir per run)",
+        "mitigation": "Existing 'verdict' (vs C) key and 'goal' shape unchanged; Rust arrives as additive keys with tests pinning both"
+      },
+      "plan_digest": "55699a1fffec72cf72170adef43ffbb1c86a8d25956bd750d68e6d2be5b760fe"
+    },
+    {
+      "task_id": "cairn-rust-baseline",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[2/3] Implemented Rust baseline: three .rs twins, rustc detection, parallel verdict_rust/rust keys, goal.faster_than_rust; 216 tests pass, 4/4 gates pass after KB refresh; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794668072.7907777,
+      "timestamp_str": "2026-11-14 17:54:32",
+      "agent": "mistral:vibe"
     }
   ]
 }

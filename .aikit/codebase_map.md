@@ -8,13 +8,13 @@
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `41`
 - **Total Classes**: `69`
-- **Total Top-Level Functions**: `116`
-- **Total Class Methods**: `367`
-- **Total Source Lines**: `6136`
+- **Total Top-Level Functions**: `119`
+- **Total Class Methods**: `376`
+- **Total Source Lines**: `6327`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`41` module(s))
-- **Not indexed by this map**: cpp (`3` file(s))
+- **Not indexed by this map**: cpp (`3` file(s)), rust (`3` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -30,24 +30,27 @@
 ---
 
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
-> *Benchmark harness: measure Cairn executables and, when one exists, a C baseline.*
+> *Benchmark harness: measure Cairn executables and, when one exists, C and Rust baselines.*
 
-**Size**: `291` lines (`12139` bytes)
+**Size**: `354` lines (`15860` bytes)
 
 **Classes:**
-- `class Case` - *One benchmark: a Cairn source, an equivalent C source, and what one iteration is.*
+- `class Case` - *One benchmark: a Cairn source, equivalent C and Rust sources, and what one iteration is.*
 
 **Functions:**
 - `def find_c_compiler()` - *The first C compiler already installed, or None when the machine has none.*
+- `def find_rust_compiler()` - *The first Rust compiler already installed, or None when the machine has none.*
 - `def run_command(argv, timeout, cwd)` - *Run one command with a hard limit, capturing text.*
 - `def cairn_build_command(source, destination, optimise)` - *The exact `cairn build` command for one case, with the folding pass optional.*
 - `def build_cairn(source, destination, optimise)` - *Compile one Cairn case and return the compile time in milliseconds.*
 - `def build_c(compiler, source, destination)` - *Compile one C case; None when this compiler does not produce an executable.*
+- `def build_rust(compiler, source, destination)` - *Compile one Rust case; None when this compiler does not produce an executable.*
 - `def measure(executable, rounds)` - *Wall-clock milliseconds for each run of one executable.*
 - `def summarise(samples, iterations)` - *Best, median and per-unit cost from one set of wall-clock samples.*
-- `def verdict(best_cairn, best_c)` - *The measured standing against C: `faster`, `slower`, `tie` or `unavailable`.*
-- `def benchmark_case(case, compiler, rounds, folder, optimise)` - *Measure one case in Cairn and, when available, in C.*
-- `def render(reports, compiler, optimise)` - *The human table; one line per case and per measured language.*
+- `def verdict(best_cairn, best_c)` - *The measured standing against one baseline: `faster`, `slower`, `tie` or `unavailable`.*
+- `def benchmark_case(case, compiler, rounds, folder, optimise, rust_compiler)` - *Measure one case in Cairn and, when available, in C and in Rust.*
+- `def render(reports, compiler, optimise, rust_compiler)` - *The human table; one line per case and per measured language.*
+- `def _goal_lines(reports, label, compiler, verdict_key, install_hint)` - *The scoreboard line for one baseline, decided only by measurements from this run.*
 - `def _number(text)` - *A positive sample count from the command line.*
 - `def main(argv)` - *Parse options, run every case and print the report.*
 
@@ -552,7 +555,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `115` lines (`5729` bytes)
+**Size**: `243` lines (`13361` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -560,6 +563,15 @@
   - Method `.test_zero_iterations_does_not_divide()`
   - Method `.test_summarise_rejects_empty_samples()`
   - Method `.test_every_case_declares_an_existing_cairn_and_c_source()`
+  - Method `.test_every_case_declares_an_existing_rust_twin()`
+  - Method `.test_rust_report_keys_are_present_on_the_error_path()`
+  - Method `.test_a_measured_rust_baseline_records_verdict_and_ratio()`
+  - Method `.test_render_says_unavailable_when_there_is_no_rust_compiler()`
+  - Method `.test_render_states_the_rust_goal_for_each_outcome()`
+  - Method `.test_strict_exits_2_when_no_baseline_can_be_measured()`
+  - Method `.test_strict_passes_when_the_measured_baseline_is_won()`
+  - Method `.test_strict_fails_when_rust_wins_a_case()`
+  - Method `.test_json_goal_carries_both_baselines()`
   - Method `.test_render_says_unavailable_when_there_is_no_c_compiler()`
   - Method `.test_build_command_skips_folding_only_when_asked()`
   - Method `.test_render_names_an_unoptimised_build()`
