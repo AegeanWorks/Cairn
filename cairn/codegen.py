@@ -43,6 +43,7 @@ COMMUTATIVE_UPDATES = frozenset({"+", "*", "&", "|", "^"})
 IMMEDIATE_UPDATES = frozenset({"+", "-"})
 IMMEDIATE_MIN = -0x80000000
 IMMEDIATE_MAX = 0x7FFFFFFF
+MAX_INLINE_DEPTH = 4
 
 # Volatile registers that hold a left operand across a nested expression, innermost last.
 TEMPORARY_REGISTERS = ("r11", "r10")
@@ -96,6 +97,8 @@ class CodeGenerator:
     homes: Tuple[str, ...] = ()
     save_base: int = 0
     epilogue: str = ""
+    current: Optional[syntax.Function] = None
+    inline_depth: int = 0
 
     def generate(self, program: syntax.Program) -> Artifact:
         """Emit the entry stub, every function, then the runtime helpers."""
@@ -139,6 +142,7 @@ class CodeGenerator:
             # save and restore with push/pop, which also drops the store-forwarding
             # latency a frame store re-load pays on the hot call path.
             pad = function.slots % 2 == 0
+            self.current = function
             for home in self.homes:
                 asm.push(home)
             if pad:
@@ -151,11 +155,12 @@ class CodeGenerator:
             self._emit_block(function.body)
             asm.mov_imm64("rax", 0)
             asm.label(self.epilogue)
+            if pad:
+                asm.add_rsp(8)  # skip the pad slot before the pops read the save area
             for home in reversed(self.homes):
                 asm.pop(home)
-            if pad:
-                asm.add_rsp(8)
             asm.ret()
+            self.current = None
             return
         asm.push("rbp")
         asm.mov_reg_reg("rbp", "rsp")
@@ -400,7 +405,15 @@ class CodeGenerator:
         if not when_true:
             condition = INVERTED_CONDITIONS[condition]
         right = expression.right
+        left = expression.left
+        while isinstance(left, syntax.Parens):
+            left = left.inner
         if (isinstance(right, syntax.IntLiteral)
+                and IMMEDIATE_MIN <= right.value <= IMMEDIATE_MAX
+                and isinstance(left, syntax.Name) and self._home(left.slot) is not None):
+            # A homed name compares against the literal in place: no rax load needed.
+            asm.cmp_imm(self._home(left.slot), right.value)
+        elif (isinstance(right, syntax.IntLiteral)
                 and IMMEDIATE_MIN <= right.value <= IMMEDIATE_MAX):
             self._emit_into(expression.left, "rax")
             asm.cmp_imm("rax", right.value)
@@ -486,7 +499,8 @@ class CodeGenerator:
         """Evaluate `left`, keep it across `right`, and leave it in rcx with right in rax.
 
         A register is used when one is free and the right operand cannot call; a call would
-        clobber it, so that case keeps the stack form the ABI already tolerates.
+        clobber it, so that case keeps the stack form the ABI already tolerates. An inline
+        copy is a call too: its body still makes real calls, which clobber any held register.
         """
         asm = self.assembler
         if self.temporaries < len(TEMPORARY_REGISTERS) and not has_call(right):
@@ -578,6 +592,9 @@ class CodeGenerator:
             asm.pop("rax")
             self.depth -= 8
             return
+        if self._is_inline_candidate(expression):
+            self._emit_inlined_self_call(expression)
+            return
         if len(expression.arguments) == 1:
             if self._emit_home_offset(ARGUMENT_REGISTERS[0], expression.arguments[0]):
                 self._emit_call_site(function_label(expression.name))
@@ -594,6 +611,55 @@ class CodeGenerator:
             asm.pop(ARGUMENT_REGISTERS[index])
             self.depth -= 8
         self._emit_call_site(function_label(expression.name))
+
+    def _is_inline_candidate(self, expression: syntax.Call) -> bool:
+        """Whether this call may be lowered as an inline copy of the current function.
+
+        A copy needs one shadow home register per slot of the current function, disjoint
+        from the homes still in use, so only functions that fit twice in the home set
+        qualify. Frame functions fall back to a real call, and copies nest only up to
+        `MAX_INLINE_DEPTH`, because every extra copy doubles the size of its branch.
+        """
+        if self.current is None or self.inline_depth >= MAX_INLINE_DEPTH:
+            return False
+        if expression.name != self.current.name:
+            return False
+        if len(expression.arguments) != 1 or len(self.current.parameters) != 1:
+            return False
+        return 2 * len(self.homes) <= len(HOME_REGISTERS)
+
+    def _emit_inlined_self_call(self, expression: syntax.Call) -> None:
+        """Lower a self-call as one inline copy: the argument to a shadow home, the body in place.
+
+        The shadow homes are pushed before the copy and popped after, so enclosing frames never
+        observe them; an odd count takes one pad slot (below the save area) to keep rsp 16-byte
+        aligned at every call the copy makes. The copy's own self-calls stay real calls, bounding
+        expansion at the site.
+        """
+        asm = self.assembler
+        saved_homes = self.homes
+        saved_epilogue = self.epilogue
+        shadow = list(HOME_REGISTERS[len(saved_homes):2 * len(saved_homes)])
+        padded = len(shadow) % 2 == 1
+        self._emit_expression(expression.arguments[0])  # the caller's homes are still live
+        if padded:
+            asm.sub_rsp(8)
+        for register in shadow:
+            asm.push(register)
+        self.homes = tuple(shadow)
+        self.epilogue = self._fresh(f"{function_label(self.current.name)}.inline")
+        self.inline_depth += 1
+        self._clear_frame(self.current)
+        asm.mov_reg_reg(shadow[0], "rax")
+        self._emit_block(self.current.body)
+        asm.label(self.epilogue)
+        for register in reversed(shadow):
+            asm.pop(register)
+        if padded:
+            asm.add_rsp(8)
+        self.homes = saved_homes
+        self.epilogue = saved_epilogue
+        self.inline_depth -= 1
 
     def _emit_call_site(self, target: str) -> None:
         """A call, padded so rsp is 16-byte aligned as the ABI requires."""

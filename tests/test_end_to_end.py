@@ -59,6 +59,19 @@ fn main() -> i64 {
 }
 """
 
+EVEN_SLOTS_PAD = """
+fn probe(n: i64) -> i64 {
+    if n < 1 { return 100; }
+    var a: i64 = probe(n - 1);
+    return n + a;
+}
+
+fn main() -> i64 {
+    print(probe(5));
+    return 0;
+}
+"""
+
 CALLS_AROUND_LOCALS = """
 fn bump(x: i64) -> i64 {
     return x + 1;
@@ -190,6 +203,11 @@ class EndToEndTest(unittest.TestCase):
         completed = self.execute(CALLS_AROUND_LOCALS)
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "234\n")
+
+    def test_even_slot_frames_restore_homes_across_calls(self) -> None:
+        completed = self.execute(EVEN_SLOTS_PAD)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "115\n")
 
     def test_forty_locals_use_wide_frame_displacements(self) -> None:
         declarations = "".join(f"    let v{index}: i64 = {index};\n" for index in range(40))

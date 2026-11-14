@@ -119,6 +119,15 @@ class SlotHomeTest(unittest.TestCase):
         self.assertIn(-56, assembler.loads_of(main))
 
 
+    def pops_of(self, function: str):
+        """Registers popped inside one function."""
+        return {reg for owner, reg in self.pops if owner == function}
+
+    def pushes_of(self, function: str):
+        """Registers pushed inside one function."""
+        return {reg for owner, reg in self.pushes if owner == function}
+
+
 def body_text(source: str, name: str) -> bytes:
     """The .text bytes of one function's body, sliced from the generated artifact."""
     program = sema.analyze(parser.parse(source))
@@ -157,3 +166,20 @@ class ArgumentPathTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+FIB_MERGE = ("fn fib(n: i64) -> i64 { if n < 2 { return n; } "
+             "return fib(n - 1) + fib(n - 2); } fn main() -> i64 { print(fib(10)); return 0; }")
+
+
+class SelfRecursionInliningTest(unittest.TestCase):
+    """The left operand of a merge may be a self-call lowered in place, not a real call."""
+
+    def test_a_merge_left_self_call_is_inlined(self) -> None:
+        program = sema.analyze(parser.parse(FIB_MERGE))
+        artifact = CodeGenerator().generate(program)
+        inline_labels = [label for label in artifact.text_labels if ".inline" in label]
+        self.assertTrue(inline_labels)
+
+    def test_a_comparison_with_a_small_literal_skips_the_rax_load(self) -> None:
+        body = body_text(FIB_MERGE, "fib")
+        self.assertIn(b"\x48\x83\xfb\x02", body)  # cmp rbx, 2

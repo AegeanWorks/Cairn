@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `41`
-- **Total Classes**: `70`
+- **Total Classes**: `71`
 - **Total Top-Level Functions**: `120`
-- **Total Class Methods**: `391`
-- **Total Source Lines**: `6535`
+- **Total Class Methods**: `398`
+- **Total Source Lines**: `6645`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`41` module(s))
@@ -128,7 +128,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `614` lines (`26599` bytes)
+**Size**: `680` lines (`29807` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -160,6 +160,8 @@
   - Method `._emit_and(expression)` - *`&&`: the right side is evaluated only when the left side is non-zero.*
   - Method `._emit_or(expression)` - *`||`: the right side is evaluated only when the left side is zero.*
   - Method `._emit_call(expression)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
+  - Method `._is_inline_candidate(expression)` - *Whether this call may be lowered as an inline copy of the current function.*
+  - Method `._emit_inlined_self_call(expression)` - *Lower a self-call as one inline copy: the argument to a shadow home, the body in place.*
   - Method `._emit_call_site(target)` - *A call, padded so rsp is 16-byte aligned as the ABI requires.*
 
 **Functions:**
@@ -670,7 +672,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `159` lines (`6067` bytes)
+**Size**: `185` lines (`7188` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -686,10 +688,15 @@
   - Method `.test_two_hot_locals_never_touch_their_frame_slots()`
   - Method `.test_used_homes_are_saved_and_restored()`
   - Method `.test_the_seventh_slot_keeps_the_stack_fallback()`
+  - Method `.pops_of(function)` - *Registers popped inside one function.*
+  - Method `.pushes_of(function)` - *Registers pushed inside one function.*
 - `class ArgumentPathTest` - *Arguments and shifts by literals must not pay for registers they do not need.*
   - Method `.test_a_literal_subtrahend_uses_the_immediate_form()`
   - Method `.test_a_single_argument_moves_into_rcx_without_the_stack()`
   - Method `.test_a_shift_by_literal_shifts_in_place()`
+- `class SelfRecursionInliningTest` - *The left operand of a merge may be a self-call lowered in place, not a real call.*
+  - Method `.test_a_merge_left_self_call_is_inlined()`
+  - Method `.test_a_comparison_with_a_small_literal_skips_the_rax_load()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
@@ -700,7 +707,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `233` lines (`9095` bytes)
+**Size**: `251` lines (`9508` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -722,6 +729,7 @@
   - Method `.test_four_argument_call_uses_every_argument_register()`
   - Method `.test_print_inside_an_argument_list_evaluates_left_to_right()`
   - Method `.test_calls_preserve_locals_held_in_callee_saved_registers()`
+  - Method `.test_even_slot_frames_restore_homes_across_calls()`
   - Method `.test_forty_locals_use_wide_frame_displacements()`
   - Method `.test_a_binding_from_a_branch_that_never_ran_reads_as_zero()`
   - Method `.test_optimised_and_unoptimised_builds_behave_identically()`

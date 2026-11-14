@@ -3,32 +3,14 @@
   "active_task": {
     "task_id": "cairn-scoreboard-pass",
     "last_phase": "in_progress",
-    "active_phase": 4,
+    "active_phase": 5,
     "status": "in_progress",
-    "updated_at": 1794673342.9263678,
+    "updated_at": 1794677545.274269,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-audit-unicode",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/3] Audit wave covering all 6 commits: enforce ASCII-only lexer to match documented contract",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793722020.6281242,
-      "timestamp_str": "2026-11-03 19:07:00",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "Lexer accepts Unicode identifiers and digits via isalpha/isalnum/isdigit, contradicting ASCII-only contract and capabilities limits",
-        "benefits": "Restores documented ASCII-only surface, keeps E1001 as single unexpected-character path, prevents non-ASCII names slipping into slots and listings",
-        "risks": "contract: lexer tightens to reject previously accepted names, no new code; dependency: stdlib only; concurrency: none; state: no persisted format change",
-        "mitigation": "Failing-first lexer test for non-ASCII, restrict digit/identifier scans to ASCII, re-run full unittest plus aikit check, keep E1001 code unchanged"
-      },
-      "plan_digest": "b6d3782e74e6d3c570066c10acfe20cfe69a3d27d896710794b095b14cc91edd"
-    },
     {
       "task_id": "reforge:run-1",
       "phase": "reforge stage 1",
@@ -283,6 +265,17 @@
       "status": "in_progress",
       "timestamp": 1794673342.9263678,
       "timestamp_str": "2026-11-14 19:22:22",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-scoreboard-pass",
+      "phase": "in_progress",
+      "phase_num": 5,
+      "description": "pad/pop miscompile fixed with e2e regression test; self-recursive inlining (shadow-home copies, depth cap 4) and cmp-homed-imm fold shipped; fib30 at Cairn/C 1.03-1.15, faster than Rust on all cases",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794677545.274269,
+      "timestamp_str": "2026-11-14 20:32:25",
       "agent": "mistral:vibe"
     }
   ]
