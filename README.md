@@ -320,8 +320,11 @@ python benchmarks/run_benchmarks.py --strict  # gate: 0 won, 1 slower or errored
 A verdict is `faster`, `tie`, `slower`, `unavailable` or `error`. `unavailable` means no `gcc`, `clang` or
 `cl` was found, and `--strict` then exits `2` rather than reporting a win it did not measure. `error`
 means the case's own build or run failed instead of producing a time, and `--strict` exits `1`. The
-development machine has no C compiler, so the goal is currently unmeasured there, and the three
-cases cover integer loops, recursion and constant arithmetic only.
+goal is now measured: with a MinGW GCC 16.2.0 (WinLibs UCRT) baseline on the development machine,
+Cairn is at parity on `folded_math` (best-time ratio 0.95-1.02, within the run-to-run spread) and
+loses `loop_sum` (by 7-8x — GCC collapses the constant-heavy loop that Cairn executes literally)
+and `fib30` (by about 1.5x). The three cases cover integer loops, recursion and constant arithmetic
+only.
 
 ## What's Inside
 
