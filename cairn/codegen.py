@@ -182,8 +182,10 @@ class CodeGenerator:
                 self._store_slot(parameter.slot, ARGUMENT_REGISTERS[index])
             self.depth = 0
             self.temporaries = 0
-            self._emit_block(function.body)
+            # The implicit-return-zero runs once at entry: explicit returns overwrite it,
+            # and a final `return` can fall through into the epilogue label ungated.
             asm.mov_imm64("rax", 0)
+            self._emit_block(function.body, tail=True)
             asm.label(self.epilogue)
             if hold_units:
                 asm.add_rsp(8 * (hold_units + pad_units))
@@ -211,8 +213,8 @@ class CodeGenerator:
             self._store_slot(parameter.slot, ARGUMENT_REGISTERS[index])
         self.depth = 0
         self.temporaries = 0
-        self._emit_block(function.body)
         asm.mov_imm64("rax", 0)
+        self._emit_block(function.body, tail=True)
         asm.label(self.epilogue)
         self._restore_homes()
         asm.leave_ret()
@@ -363,27 +365,35 @@ class CodeGenerator:
             self._emit_expression(expression)
             self.assembler.mov_reg_reg(destination, "rax")
 
-    def _emit_block(self, block: Optional[syntax.Block]) -> None:
-        """Emit every statement of a block in order."""
+    def _emit_block(self, block: Optional[syntax.Block], tail: bool = False) -> None:
+        """Emit every statement of a block in order.
+
+        `tail` marks a block whose end runs straight into the function's epilogue label,
+        which lets the last `return` fall through instead of jumping to it.
+        """
         if block is None:
             return
-        for statement in block.statements:
-            self._emit_statement(statement)
+        for index, statement in enumerate(block.statements):
+            # Only the block's last statement falls through into its parent's tail
+            # position; everything before it must still jump out of the block.
+            last = tail and index == len(block.statements) - 1
+            self._emit_statement(statement, last)
 
-    def _emit_statement(self, statement: syntax.Stmt) -> None:
-        """Lower one statement."""
+    def _emit_statement(self, statement: syntax.Stmt, tail: bool = False) -> None:
+        """Lower one statement; `tail` only concerns a final `return`."""
         asm = self.assembler
         if isinstance(statement, syntax.Let):
             self._emit_value(statement.slot, statement.value)
         elif isinstance(statement, syntax.Assign):
             self._emit_value(statement.slot, statement.value)
         elif isinstance(statement, syntax.If):
-            self._emit_if(statement)
+            self._emit_if(statement, tail)
         elif isinstance(statement, syntax.While):
             self._emit_while(statement)
         elif isinstance(statement, syntax.Return):
             self._emit_expression(statement.value)
-            asm.jmp(self.epilogue)
+            if not tail:
+                asm.jmp(self.epilogue)
         elif isinstance(statement, syntax.Break):
             if self.break_targets:
                 asm.jmp(self.break_targets[-1])
@@ -391,21 +401,21 @@ class CodeGenerator:
             if self.continue_targets:
                 asm.jmp(self.continue_targets[-1])
         elif isinstance(statement, syntax.Block):
-            self._emit_block(statement)
+            self._emit_block(statement, tail)
         elif isinstance(statement, syntax.ExprStmt):
             self._emit_expression(statement.expression)
 
-    def _emit_if(self, statement: syntax.If) -> None:
+    def _emit_if(self, statement: syntax.If, tail: bool = False) -> None:
         """`if` as a conditional branch and two labelled bodies."""
         asm = self.assembler
         otherwise = self._fresh("if.else")
         end = self._fresh("if.end")
         self._emit_condition(statement.condition, otherwise, when_true=False)
-        self._emit_block(statement.then_block)
+        self._emit_block(statement.then_block, tail)
         if statement.else_block is not None:
             asm.jmp(end)
             asm.label(otherwise)
-            self._emit_block(statement.else_block)
+            self._emit_block(statement.else_block, tail)
             asm.label(end)
         else:
             asm.label(otherwise)
@@ -815,7 +825,7 @@ class CodeGenerator:
         # parameter as `real - delta_value`, so descending by `delta` grows `delta_value`
         # by the same amount on the opposite sign.
         self.delta_value -= delta
-        self._emit_block(self.current.body)
+        self._emit_block(self.current.body, tail=True)
         asm.label(self.epilogue)
         self.epilogue = saved_epilogue
         self.delta_value = saved_value
@@ -870,7 +880,7 @@ class CodeGenerator:
         self.inline_depth += 1
         self._clear_frame(self.current)
         asm.mov_reg_reg(shadow[0], "rax")
-        self._emit_block(self.current.body)
+        self._emit_block(self.current.body, tail=True)
         asm.label(self.epilogue)
         if own_pad:
             asm.add_rsp(8)

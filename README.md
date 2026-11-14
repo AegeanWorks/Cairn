@@ -290,22 +290,22 @@ comparison same-run while still reporting a best and a median:
 
 | Case | Work | Cairn best | C best | Rust best | Cairn size |
 |---|---|---|---|---|---|
-| `xorshift` | 200,000,000 serial xorshift steps | 302.7 ms | 304.2 ms | 304.6 ms | 2,048 bytes |
-| `fib30` | 2,692,537 recursive calls | 7.2 ms | 7.0 ms | 8.1 ms | 13,824 bytes |
-| `folded_math` | 20,000,000 bit-mixed constant additions | 15.0 ms | 15.9 ms | 17.5 ms | 2,048 bytes |
+| `xorshift` | 200,000,000 serial xorshift steps | 301.0 ms | 302.7 ms | 295.4 ms | 2,048 bytes |
+| `fib30` | 2,692,537 recursive calls | 6.4 ms | 7.1 ms | 8.6 ms | 12,800 bytes |
+| `folded_math` | 20,000,000 bit-mixed constant additions | 15.3 ms | 16.1 ms | 17.3 ms | 2,048 bytes |
 
-Standings per case: `xorshift` (Cairn best 302.7 vs C 304.2) and `folded_math` (15.0 vs 15.9) are
-won outright against both baselines; `fib30` beats Rust outright (7.2 vs 8.1) and sits at measured
-parity with C (wall-clock best 7.2 vs 7.0 — about 0.1-0.2 ms of net compute over a common nearly
-7 ms process-and-printf floor, Cairn/C 1.03-1.10 across runs). `fib30`'s call path is frame-less
-(fully-homed functions save and restore their homes with `push`/`pop`, ADR-019), literal argument
-offsets such as `n - 1` fold into one `lea`, a homed name compares against a small literal in
-place (`cmp rbx, 2`), and the delta-inlining pass (ADR-021) lowers the first seven recursion
-levels as pure text: no shadow saves, no argument moves, no per-copy stack, and each merge's
-left value resting in a level-indexed slot of the real frame. The remaining distance to GCC is
-a fraction of a millisecond of merge-hold memory traffic across 2.7 million invokes; a
-register-held merge (callee-saved registers are untouched between the operands of an eligible
-delta body) is the named next lever.
+Standings per case: `fib30` and `folded_math` are won outright against both baselines (fib30
+net compute over the near-7 ms process-and-printf floor is about 0.6-0.8 ms against C's
+0.9-1.0), and `xorshift` is a measured three-way tie — the three implementations sit within
+about one percent of each other around 300 ms, with the best run flipping between them, which
+is inside every documented spread, so no win is claimed there. `xorshift`'s codegen is a plain
+serial loop over homed slots, and its gap-closing headroom is bounded by the harness floor.
+`fib30`'s call path is frame-less (ADR-019), literal argument offsets such as `n - 1` fold into
+one `lea`, a homed name compares against a small literal in place, the delta-inlining pass
+(ADR-021) lowers the first seven recursion levels as pure text with merge values in
+level-indexed slots of the real frame, and the tail-return pass (ADR-022) lets every final
+`return` fall through instead of jumping — one instruction less per merge on the recursion's
+dependency chain.
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 `movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics
@@ -343,9 +343,10 @@ means the language's compiler (`gcc`, `clang` or `cl` for C; `rustc` for Rust) w
 `PATH`, and `--strict` then exits `2` only when no baseline at all can be measured, rather than
 reporting a win it did not measure. `error` means the case's own build or run failed instead of
 producing a time, and `--strict` exits `1`. The goal is measured on the development machine with
-both baselines: `xorshift` and `folded_math` are won outright against both baselines since the
-delta-inlining pass landed, and `fib30` beats Rust outright (Cairn/Rust 0.89) while `fib30`
-versus C is the last unwon pairing, at parity (1.03-1.10) inside the documented spread.
+both baselines: as of the tail-return pass (ADR-022), `fib30` and `folded_math` beat both baselines
+outright and `xorshift` measures as a tie — the last case is a 0.2 GHz-iteration serial loop where
+the three implementations sit within about one percent, so beating it outright would mean
+optimising the loop body itself, not the call machinery.
 The three cases cover a serial integer loop, recursion and constant arithmetic only.
 
 ## What's Inside

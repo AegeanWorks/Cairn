@@ -264,3 +264,24 @@ class DeltaInliningTest(unittest.TestCase):
         self.assertIn(b"\x48\x89\x44\x24\x00", code)  # mov [rsp], rax
         self.assertIn(b"\x48\x8b\x4c\x24\x00", code)  # mov rcx, [rsp]
         self.assertIn(b"\x48\x89\x44\x24\x08", code)  # the next level's slot
+
+
+TAIL_SWING = ("fn f(c: i64) -> i64 { if c > 0 { return 7; } return 9; } "
+              "fn main() -> i64 { print(f(5)); return 0; }")
+
+
+class TailReturnElisionTest(unittest.TestCase):
+    """A `return` in tail position falls through into the epilogue label instead of jumping.
+
+    The implicit return zero runs at entry, so the body's own final return can reach the
+    epilogue without an instruction; every other return must still jump.
+    """
+
+    def test_a_tail_return_emits_no_jmp(self) -> None:
+        body = body_text(TAIL_SWING, "main")
+        self.assertNotIn(b"\xe9", body)  # `return 0` falls straight into the epilogue
+
+    def test_a_non_tail_return_still_jumps_to_the_epilogue(self) -> None:
+        body = body_text(TAIL_SWING, "f")
+        # `return 7` sits inside an if the merge Rewrite follows; only `return 9` is a tail.
+        self.assertEqual(body.count(b"\xe9"), 1)

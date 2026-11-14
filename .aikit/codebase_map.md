@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `41`
-- **Total Classes**: `72`
+- **Total Classes**: `73`
 - **Total Top-Level Functions**: `120`
-- **Total Class Methods**: `418`
-- **Total Source Lines**: `7004`
+- **Total Class Methods**: `420`
+- **Total Source Lines**: `7035`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`41` module(s))
@@ -128,7 +128,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `936` lines (`43029` bytes)
+**Size**: `946` lines (`43824` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -146,9 +146,9 @@
   - Method `._fold_update(home, slot, expression)` - *Emit `home = home op value` when the expression updates its own slot.*
   - Method `._emit_home_offset(destination, expression)` - *Lower `homed name ± literal` as one `lea`, or return False when the shape differs.*
   - Method `._emit_into(expression, destination)` - *Lower an expression, using `destination` directly when it is a leaf.*
-  - Method `._emit_block(block)` - *Emit every statement of a block in order.*
-  - Method `._emit_statement(statement)` - *Lower one statement.*
-  - Method `._emit_if(statement)` - *`if` as a conditional branch and two labelled bodies.*
+  - Method `._emit_block(block, tail)` - *Emit every statement of a block in order.*
+  - Method `._emit_statement(statement, tail)` - *Lower one statement; `tail` only concerns a final `return`.*
+  - Method `._emit_if(statement, tail)` - *`if` as a conditional branch and two labelled bodies.*
   - Method `._emit_while(statement)` - *`while` with its own break and continue targets.*
   - Method `._emit_condition(expression, target, when_true)` - *Jump to `target` when the condition has the requested truth value.*
   - Method `._emit_comparison_branch(expression, target, when_true)` - *Compare two operands and branch, using an immediate form when the right side is small.*
@@ -682,7 +682,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `266` lines (`11104` bytes)
+**Size**: `287` lines (`12002` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -718,6 +718,9 @@
   - Method `.test_a_delta_function_skips_the_shadow_copies()`
   - Method `.test_delta_labels_bloom_pure_text_copies()`
   - Method `.test_merges_hold_values_in_level_indexed_frame_slots()`
+- `class TailReturnElisionTest` - *A `return` in tail position falls through into the epilogue label instead of jumping.*
+  - Method `.test_a_tail_return_emits_no_jmp()`
+  - Method `.test_a_non_tail_return_still_jumps_to_the_epilogue()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*

@@ -5,28 +5,12 @@
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "in_progress",
-    "updated_at": 1794687061.6928077,
+    "updated_at": 1794690532.5529907,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-audit-unicode",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[3/3] Verified: 133 tests pass, 4/4 gates pass; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793722168.7684612,
-      "timestamp_str": "2026-11-03 19:09:28",
-      "agent": "kilo:cairn",
-      "handoff": {
-        "state": "ASCII-only lexer enforced with failing-first test",
-        "next": "commit without push",
-        "evidence": "python -m unittest discover 133 OK, python aikit.py check cairn 4/4"
-      }
-    },
     {
       "task_id": "cairn-audit-unicode",
       "phase": "completed",
@@ -276,6 +260,18 @@
       "status": "in_progress",
       "timestamp": 1794687061.6928077,
       "timestamp_str": "2026-11-14 23:11:01",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-scoreboard-pass",
+      "phase": "in_progress",
+      "phase_num": 5,
+      "description": "[2/2] Tail-return elision (ADR-022): implicit return zero moved to entry; last return of a tail block falls through. fib30 won outright vs C and Rust (net 0.61-0.84 vs C 0.99-1.12, Rust 2.4+), reproduced in two 150-round interleaved runs; xorshift = three-way tie. 237 tests + 39 subtests pass; objdump-caught miscompile of overeager elision fixed. checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794690532.5529907,
+      "timestamp_str": "2026-11-15 00:08:52",
       "agent": "mistral:vibe",
       "checklists": "passed"
     }
