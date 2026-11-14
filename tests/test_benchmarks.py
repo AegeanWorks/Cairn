@@ -165,6 +165,31 @@ class SummaryTest(unittest.TestCase):
         self.assertIn("C baseline: unavailable", text)
         self.assertIn("cairn", text)
 
+    def test_the_loop_case_is_a_serial_xorshift_workload(self) -> None:
+        """The integer-loop case must be optimizer-resistant, so neither side may fold it."""
+        entry = run_benchmarks.CASES[0]
+        self.assertEqual(entry.name, "xorshift")
+        for text in [(run_benchmarks.ROOT / entry.cairn).read_text(),
+                     (run_benchmarks.ROOT / entry.c_source).read_text(),
+                     (run_benchmarks.ROOT / entry.rust_source).read_text()]:
+            self.assertIn("^", text)
+            self.assertIn(">>", text)
+            self.assertNotIn("gcc", text)
+
+    def test_a_errored_case_names_the_case_dynamically(self) -> None:
+        folder = Path(tempfile.mkdtemp(prefix="cairn-bench-test-"))
+        self.addCleanup(lambda: [child.unlink(missing_ok=True) for child in
+                                 sorted(folder.rglob("*"), reverse=True)] +
+                        [folder.rmdir()])
+        with mock.patch.object(run_benchmarks, "measure",
+                               side_effect=RuntimeError("boom")):
+            report = run_benchmarks.benchmark_case(run_benchmarks.CASES[0], None, 1,
+                                                  folder)
+        self.assertEqual(report["verdict"], "error")
+        self.assertIn("boom", str(report["error"]))
+        self.assertIn(f"errored on {run_benchmarks.CASES[0].name}",
+                      run_benchmarks.render([report], None))
+
     def test_build_command_skips_folding_only_when_asked(self) -> None:
         source, destination = run_benchmarks.ROOT / "x.crn", run_benchmarks.ROOT / "x.exe"
         self.assertNotIn("--no-optimize",
@@ -228,7 +253,6 @@ class VerdictTest(unittest.TestCase):
                                                   folder)
         self.assertEqual(report["verdict"], "error")
         self.assertIn("boom", str(report["error"]))
-        self.assertIn("errored on loop_sum", run_benchmarks.render([report], None))
 
 
 class CompilerProbeTest(unittest.TestCase):

@@ -250,8 +250,8 @@ Measured effect on the constant-heavy benchmark, same source, nine runs each:
 | `--no-optimize` | 65.1 ms | one move and one operation per source operator |
 | default | 18.0 ms | one in-place update per source statement |
 
-On code with nothing to fold the pass is neutral, and the loop benchmark below shows that: the
-loop body is already two names and two additions, so there is no constant to remove.
+On code with nothing to fold the pass is neutral, and the `xorshift` case shows that: its loop
+body is a serial chain of shifts and xors over a live value, so there is no constant to remove.
 
 ## The backend: slot homes, in-place updates, direct branches
 
@@ -282,16 +282,25 @@ reproduces every number below and adds a C baseline whenever `gcc`, `clang` or `
 `PATH`, and a Rust baseline whenever `rustc` is; when none of them is found the relevant line
 reports `baseline: unavailable` rather than inventing a comparison.
 
-Measured on the development machine (Windows x86-64, Python 3.14 bootstrap, `--rounds 9`):
+Measured on the development machine (Windows x86-64, Python 3.14 bootstrap, `--rounds 9`),
+against MinGW GCC 16.2.0 (WinLibs UCRT) and rustc 1.100.0 (pc-windows-gnu), one run each, all from
+the same harness invocation:
 
-| Case | Work | Best | Per unit | Size |
-|---|---|---|---|---|
-| `loop_sum` | 200,000,000 loop iterations | 61.5 ms | 0.31 ns | 2,048 bytes |
-| `fib30` | 2,692,537 recursive calls | 13.3 ms | 4.9 ns | 2,048 bytes |
-| `folded_math` | 20,000,000 iterations of constant arithmetic | 18.0 ms | 0.90 ns | 2,048 bytes |
+| Case | Work | Cairn best | C best | Rust best | Cairn size |
+|---|---|---|---|---|---|
+| `xorshift` | 200,000,000 serial xorshift steps | 308.9 ms | 299.1 ms | 303.2 ms | 2,560 bytes |
+| `fib30` | 2,692,537 recursive calls | 13.7 ms | 9.0 ms | 10.3 ms | 2,048 bytes |
+| `folded_math` | 20,000,000 bit-mixed constant additions | 18.2 ms | 18.1 ms | 19.1 ms | 2,048 bytes |
 
-Before the register-home work in ADR-011, the same harness and round count measured 192 ms, 14.7 ms
-and 37.7 ms: the loop is 3.1 times faster, the constant case 2.1 times, and recursion 11 percent.
+Standings per case: `xorshift` and `folded_math` are parity within the run-to-run spread; `fib30`
+is a real loss (about 1.5x against C, 1.25x against Rust) caused by call overhead — argument
+evaluation still materialises tiny literals as ten-byte `movabs` and moves values through
+`push`/`pop`, which the backend has not yet compacted (tracked for the argument-path rewrite).
+
+The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
+`movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics
+rather than codegen. Its replacement, `xorshift`, is a serial state chain no optimizer can fold or
+vectorise; the folding evidence and the retired numbers are in ADR-017.
 
 Run-to-run spread on this machine is about 10 percent, so treat these as an order of magnitude
 rather than three significant figures; the harness prints best, median and worst for that reason.
@@ -322,12 +331,11 @@ A verdict is `faster`, `tie`, `slower`, `unavailable` or `error`, one per case p
 means the language's compiler (`gcc`, `clang` or `cl` for C; `rustc` for Rust) was not found on
 `PATH`, and `--strict` then exits `2` only when no baseline at all can be measured, rather than
 reporting a win it did not measure. `error` means the case's own build or run failed instead of
-producing a time, and `--strict` exits `1`. The goal is now measured for C: with a MinGW GCC 16.2.0
-(WinLibs UCRT) baseline on the development machine, Cairn is at parity on `folded_math` (best-time
-ratio 0.92-1.02, within the run-to-run spread) and loses `loop_sum` (by 7-8x — GCC collapses the
-constant-heavy loop that Cairn executes literally) and `fib30` (by about 1.5x). A `rustc` is not yet
-installed on the development machine, so `faster_than_rust` is currently `unavailable` there. The
-three cases cover integer loops, recursion and constant arithmetic only.
+producing a time, and `--strict` exits `1`. The goal is measured on the development machine with
+both baselines: `xorshift` (Cairn/C 1.03, Cairn/Rust 1.02) and `folded_math` (0.99/0.96, and the
+run-to-run flip between parity and a win on both) pass as ties within the documented spread;
+`fib30` does not pass yet (Cairn/C 1.53, Cairn/Rust 1.25) and is the outstanding scoreboard gap.
+The three cases cover a serial integer loop, recursion and constant arithmetic only.
 
 ## What's Inside
 

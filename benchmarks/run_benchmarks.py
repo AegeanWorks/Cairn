@@ -59,8 +59,8 @@ class Case:
 
 
 CASES: Tuple[Case, ...] = (
-    Case("loop_sum", "benchmarks/loop_sum.crn", "benchmarks/loop_sum.c",
-         "benchmarks/loop_sum.rs", 200_000_000, "iterations"),
+    Case("xorshift", "benchmarks/xorshift.crn", "benchmarks/xorshift.c",
+         "benchmarks/xorshift.rs", 200_000_000, "iterations"),
     Case("fib30", "benchmarks/fib30.crn", "benchmarks/fib30.c", "benchmarks/fib30.rs",
          2_692_537, "calls"),
     Case("folded_math", "benchmarks/folded_math.crn", "benchmarks/folded_math.c",

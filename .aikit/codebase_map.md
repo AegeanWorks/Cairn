@@ -9,8 +9,8 @@
 - **Total Python Modules**: `41`
 - **Total Classes**: `69`
 - **Total Top-Level Functions**: `119`
-- **Total Class Methods**: `376`
-- **Total Source Lines**: `6327`
+- **Total Class Methods**: `378`
+- **Total Source Lines**: `6351`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`41` module(s))
@@ -555,7 +555,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `243` lines (`13361` bytes)
+**Size**: `267` lines (`14704` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -573,6 +573,8 @@
   - Method `.test_strict_fails_when_rust_wins_a_case()`
   - Method `.test_json_goal_carries_both_baselines()`
   - Method `.test_render_says_unavailable_when_there_is_no_c_compiler()`
+  - Method `.test_the_loop_case_is_a_serial_xorshift_workload()` - *The integer-loop case must be optimizer-resistant, so neither side may fold it.*
+  - Method `.test_a_errored_case_names_the_case_dynamically()`
   - Method `.test_build_command_skips_folding_only_when_asked()`
   - Method `.test_render_names_an_unoptimised_build()`
 - `class VerdictTest` - *The `faster than C` goal is decided by measurements, never assumed.*
