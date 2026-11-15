@@ -19,7 +19,8 @@ from cairn import syntax
 from cairn.image import ENTRY_LABEL, Artifact, ReadOnlyData, iat_label
 from cairn.machine import ARGUMENT_REGISTERS, Assembler
 from cairn.optimize import INT64_MIN, has_call, _contains_break_or_continue
-from cairn.runtime import DIV_ZERO_LABEL, PRINT_LABEL, emit_runtime
+from cairn.runtime import (DIV_ZERO_LABEL, PRINT_CHAR_LABEL, PRINT_HEX_LABEL, PRINT_LABEL,
+                           emit_runtime)
 from cairn.sema import MAX_PARAMETERS
 
 COMPARISON_CONDITIONS = {
@@ -1840,7 +1841,8 @@ class CodeGenerator:
         """Evaluate arguments left to right, place them in the ABI registers, then call.
 
         `print` keeps a stack round-trip on purpose: the runtime helper clobbers both `rax` and
-        `rcx`, so the `pop` is what restores the value `print(x)` must return.
+        `rcx`, so the `pop` is what restores the value `print(x)` must return. The byte and hex
+        printers share that shape, which is what makes them return their argument as a value.
         """
         asm = self.assembler
         if expression.name == "print":
@@ -1848,6 +1850,22 @@ class CodeGenerator:
             asm.push("rax")
             self.depth += 8
             self._emit_call_site(PRINT_LABEL)
+            asm.pop("rax")
+            self.depth -= 8
+            return
+        if expression.name == "print_char":
+            self._emit_expression(expression.arguments[0])
+            asm.push("rax")
+            self.depth += 8
+            self._emit_call_site(PRINT_CHAR_LABEL)
+            asm.pop("rax")
+            self.depth -= 8
+            return
+        if expression.name == "print_hex":
+            self._emit_expression(expression.arguments[0])
+            asm.push("rax")
+            self.depth += 8
+            self._emit_call_site(PRINT_HEX_LABEL)
             asm.pop("rax")
             self.depth -= 8
             return

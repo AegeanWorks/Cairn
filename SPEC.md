@@ -68,7 +68,7 @@ fn name(a: i64, b: i64) -> i64 { block }
 - The keyword is always `fn`.
 - Every function declares `-> i64` and every path through its body ends in `return expr;`, else `E3009`.
 - At most four parameters (`E3010`); parameters are mutable slots.
-- Redefining the builtin `print` is `E3012`. Duplicating a function is `E3001`.
+- Redefining any builtin (`print`, `print_char`, `print_hex`) is `E3012`. Duplicating a function is `E3001`.
 - `fn main() -> i64` with no parameters is the entry point (`E3011` when missing or ill-formed). Its return value is the process exit code.
 
 ### 5.2 Bindings
@@ -81,7 +81,7 @@ var y: i64 = expr;
 - Every binding names its type (`i64`), has an initializer, and gets one frame slot.
 - `let` cannot be assigned after init (`E3005`). `var` can.
 - A name already declared in the function cannot be redeclared (`E3006`), including parameters. There is no shadowing.
-- Reading an undeclared name is `E3007`. Using `print` as a value is `E3012`.
+- Reading an undeclared name is `E3007`. Using a builtin as a value is `E3012`.
 
 ## 6. Expressions and statements
 
@@ -103,7 +103,7 @@ name(arg, ...)
 print(x)
 ```
 
-- A call names a declared `fn` or the builtin `print`.
+- A call names a declared `fn` or one of the builtins (`print`, `print_char`, `print_hex`).
 - Arity must match exactly (`E3004`); unknown callees are `E3003`.
 - Statement position accepts only an assignment or a call; any other bare expression is `E2004`. Only a name is assignable (`E2003`).
 
@@ -138,6 +138,8 @@ code generation never sees a `for`.
 | Overflow | Wraps two's complement |
 | Division by zero | Trap: message on stderr, exit code 3 |
 | Division rounding | Truncates toward zero; `%` keeps the dividend's sign |
+| `print_char(c)` | Writes the low byte of `c` (`c & 0xFF`), no newline; returns `c` |
+| `print_hex(x)` | Writes `x` as lowercase hex of its unsigned 64-bit value, no leading zeros, `0` for zero, no newline; returns `x` |
 | Right shift | Arithmetic (`>>` keeps the sign); shift counts mask to 63 in folding and hardware |
 | Uninitialised reads | Impossible: initializers are mandatory and every frame slot is zeroed on entry |
 | Branch never taken | A binding declared inside it reads as `0` |
@@ -165,7 +167,8 @@ prints one. (Divergence from Alloy SPEC §§9–10, recorded deliberately.)
 
 - Types: `i64`. Literals: decimal integer; `true`/`false`.
 - Statements: `let`, `var`, assignment, `if`/`else`, `while`, `for` (counted range), `return`, `break`, `continue`, block.
-- Builtin: `print(x: i64) -> i64`.
+- Builtins: `print(x: i64) -> i64` (decimal plus newline), `print_char(c: i64) -> i64`
+  (single byte, no newline), `print_hex(x: i64) -> i64` (lowercase hex, no newline).
 - Comments: `//` to end of line.
 - Limits: 4 parameters; `i64` range `-9223372036854775808..9223372036854775807`; ASCII identifiers, no shadowing.
 - (Divergence from Alloy SPEC §§4, 6, 10: no strings, pointers, classes, interfaces, `Result`, `match`, closures, or IO interfaces. `print(i64)` replaces `Writer`/`write_str`.)

@@ -91,7 +91,9 @@ fn main() -> i64 {
   the loop variable is scoped to the loop and `continue` still steps it), `return`, `break`,
   `continue`.
 - **Operators**, C precedence: `|| && | ^ & == != < <= > >= << >> + - * / %`, unary `- ! ~`.
-- **Builtin**: `print(x)` writes the decimal form and a newline, and returns `x`.
+- **Builtins**: `print(x)` writes the decimal form and a newline, and returns `x`;
+  `print_char(c)` writes the low byte of `c` (no newline), `print_hex(x)` writes `x` in
+  lowercase hex with no leading zeros (no newline); both return their argument.
 - **Comments**: `//` to the end of the line.
 
 Defined semantics a C programmer would have to look up:
@@ -402,6 +404,11 @@ to the language ships with its own tests — exercising the new surface directly
 cases, misuses reported as diagnostics) — committed in the same change, never covered only by
 incidental passes of existing tests.
 
+A third project rule (recorded as a guideline from the user): every function or construct added
+to the language ships with its own benchmark case — a program that exercises the new surface in
+a hot loop, with C, C++ and Rust twins — added in the same change, so the cost of the new
+feature is measured against the baselines from day one instead of discovered later.
+
 Compile time is about 150-280 ms per case, nearly all of it Python interpreter startup; the
 produced executable is two kilobytes because there is no runtime to link.
 
@@ -462,7 +469,7 @@ cairn/
 │   ├── optimize.py           <- folding, neutral operands, dead branches
 │   ├── codegen.py            <- syntax tree to x86-64
 │   ├── machine.py            <- x86-64 encodings and label fixups
-│   ├── runtime.py            <- print and divide-by-zero helpers as machine code
+│   ├── runtime.py            <- print, print_char, print_hex and divide-by-zero helpers as machine code
 │   ├── filetable.py          <- qwenFS toy table plus additive emitter (never in default build)
 │   ├── pe.py                 <- PE32+ writer and fixup resolution
 │   ├── builder.py            <- the stages and the atomic file write

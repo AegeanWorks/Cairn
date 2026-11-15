@@ -98,6 +98,8 @@ CASES: Tuple[Case, ...] = (
          "benchmarks/mandelbrot.rs", "benchmarks/mandelbrot.cpp", 2_073_600, "pixels"),
     Case("splitmix", "benchmarks/splitmix.crn", "benchmarks/splitmix.c",
          "benchmarks/splitmix.rs", "benchmarks/splitmix.cpp", 100_000_000, "mixes"),
+    Case("hex_io", "benchmarks/hex_io.crn", "benchmarks/hex_io.c",
+         "benchmarks/hex_io.rs", "benchmarks/hex_io.cpp", 400_000, "values"),
 )
 
 

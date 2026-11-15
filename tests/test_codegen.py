@@ -763,6 +763,32 @@ def region_bytes(source: str, name: str) -> bytes:
     return artifact.text[start:later[0] if later else len(artifact.text)]
 
 
+class BuiltinPrintHelpersTest(unittest.TestCase):
+    """print_char and print_hex dispatch to their own runtime helpers.
+
+    Both keep print's stack round-trip: the helper clobbers rax and rcx, and the pop is what
+    makes the call expression return its argument.
+    """
+
+    def test_the_helpers_are_emitted_into_every_executable(self) -> None:
+        program = sema.analyze(parser.parse("fn main() -> i64 { return 0; }"))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertIn("cairn.runtime.print_char", artifact.text_labels)
+        self.assertIn("cairn.runtime.print_hex", artifact.text_labels)
+
+    def test_print_char_calls_its_helper_with_the_stack_round_trip(self) -> None:
+        program = sema.analyze(parser.parse("fn main() -> i64 { print_char(65); return 0; }"))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        targets = {label for _, label in artifact.fixups}
+        self.assertIn("cairn.runtime.print_char", targets)
+
+    def test_print_hex_calls_its_helper(self) -> None:
+        program = sema.analyze(parser.parse("fn main() -> i64 { print_hex(255); return 0; }"))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        targets = {label for _, label in artifact.fixups}
+        self.assertIn("cairn.runtime.print_hex", targets)
+
+
 class PairDeltaInliningTest(unittest.TestCase):
     """A two-parameter all-return-tree recursion inlines as pure text copies.
 

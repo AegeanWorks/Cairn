@@ -12,7 +12,7 @@ from cairn import syntax
 from cairn.diagnostics import Diagnostic, DiagnosticError
 from cairn.optimize import INT64_MAX
 
-BUILTINS = {"print": 1}
+BUILTINS = {"print": 1, "print_char": 1, "print_hex": 1}
 MAX_PARAMETERS = 4
 
 

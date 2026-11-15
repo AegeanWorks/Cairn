@@ -364,6 +364,41 @@ fn main() -> i64 {
                          ["-5", "4", "-9223372036854775808", "1", "3", "0", "4", "0"])
 
 
+    def test_print_char_writes_single_bytes_without_a_newline(self) -> None:
+        source = "fn main() -> i64 { print_char(72); print_char(105); print_char(10); return 0; }"
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "Hi\n")
+
+    def test_print_char_used_as_a_value_returns_its_argument(self) -> None:
+        completed = self.execute("fn main() -> i64 { print(print_char(65) + 1); return 0; }")
+        self.assertEqual(completed.stdout, "A66\n")
+
+    def test_print_char_wraps_to_the_low_byte(self) -> None:
+        completed = self.execute("fn main() -> i64 { print_char(321); return 0; }")
+        self.assertEqual(completed.stdout, "A")
+
+    def test_print_hex_prints_lowercase_hex_without_leading_zeros(self) -> None:
+        source = ("fn main() -> i64 { print_hex(255); print_char(32); print_hex(0);"
+                  " print_char(32); print_hex(43981); print_char(10); return 0; }")
+        completed = self.execute(source)
+        self.assertEqual(completed.stdout, "ff 0 abcd\n")
+
+    def test_print_hex_wraps_to_the_unsigned_sixty_four_bit_value(self) -> None:
+        completed = self.execute("fn main() -> i64 { print_hex(-1); print_char(10); return 0; }")
+        self.assertEqual(completed.stdout, "ffffffffffffffff\n")
+
+    def test_print_hex_used_as_a_value_returns_its_argument(self) -> None:
+        completed = self.execute("fn main() -> i64 { print_hex(15); print(print_hex(15));"
+                                 " print_char(10); return 0; }")
+        self.assertEqual(completed.stdout, "ff15\n\n")
+
+    def test_print_builtins_compose_in_one_program(self) -> None:
+        source = ("fn main() -> i64 { for i in 0..3 { print_char(48 + i); print_hex(i * 43981);"
+                  " print_char(32); } print(7); return 0; }")
+        completed = self.execute(source)
+        self.assertEqual(completed.stdout, "00 1abcd 21579a 7\n")
+
 class FusedCollatzLoopTest(EndToEndTest):
     """The fused odd-pair loop counts every reference step exactly, on every path.
 
