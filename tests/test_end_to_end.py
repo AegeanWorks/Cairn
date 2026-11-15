@@ -406,11 +406,11 @@ class PairInlineAckermannTest(EndToEndTest):
 
 
 class TwinParityTest(unittest.TestCase):
-    """Every benchmark triple compiles to three programs that print the same total.
+    """Every benchmark quadruple compiles to programs that print the same total.
 
     A scoreboard number earned against a twin that computes something else would be a
-    lie, so the harness's own builders compile the Cairn source and its C and Rust twins
-    and the three executables must agree byte for byte on stdout. Baselines without an
+    lie, so the harness's own builders compile the Cairn source and its C, C++ and Rust
+    twins and the executables must agree byte for byte on stdout. Baselines without an
     installed compiler are skipped, never assumed.
     """
 
@@ -420,6 +420,7 @@ class TwinParityTest(unittest.TestCase):
         cls.harness = run_benchmarks
         cls.c_compiler = run_benchmarks.find_c_compiler()
         cls.rust_compiler = run_benchmarks.find_rust_compiler()
+        cls.cpp_compiler = run_benchmarks.find_cpp_compiler()
 
     def setUp(self) -> None:
         self.folder = Path(tempfile.mkdtemp(prefix="cairn-parity-"))
@@ -443,6 +444,13 @@ class TwinParityTest(unittest.TestCase):
             c_out = self.harness.run_command([str(c_exe)], 300)
             self.assertEqual(c_out.returncode, 0, case.name)
             self.assertEqual(c_out.stdout, expected, f"{case.name}: C twin diverges")
+        if self.cpp_compiler:
+            cpp_exe = self.folder / f"{case.name}.cpp.exe"
+            self.harness.build_cpp(self.cpp_compiler,
+                                   self.harness.ROOT / case.cpp_source, cpp_exe)
+            cpp_out = self.harness.run_command([str(cpp_exe)], 300)
+            self.assertEqual(cpp_out.returncode, 0, case.name)
+            self.assertEqual(cpp_out.stdout, expected, f"{case.name}: C++ twin diverges")
         if self.rust_compiler:
             rust_exe = self.folder / f"{case.name}.rust.exe"
             self.harness.build_rust(self.rust_compiler,

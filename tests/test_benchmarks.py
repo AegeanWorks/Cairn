@@ -39,6 +39,75 @@ class SummaryTest(unittest.TestCase):
             self.assertTrue((run_benchmarks.ROOT / case.rust_source).is_file(),
                             case.rust_source)
 
+    def test_every_case_declares_an_existing_cpp_twin(self) -> None:
+        for case in run_benchmarks.CASES:
+            self.assertTrue(case.cpp_source.endswith(".cpp"), case.cpp_source)
+            self.assertTrue((run_benchmarks.ROOT / case.cpp_source).is_file(),
+                            case.cpp_source)
+
+    def test_cpp_report_keys_are_present_on_the_error_path(self) -> None:
+        folder = Path(tempfile.mkdtemp(prefix="cairn-bench-test-"))
+        self.addCleanup(lambda: [child.unlink(missing_ok=True) for child in
+                                 sorted(folder.rglob("*"), reverse=True)] +
+                        [folder.rmdir()])
+        with mock.patch.object(run_benchmarks, "measure",
+                               side_effect=RuntimeError("boom")):
+            report = run_benchmarks.benchmark_case(run_benchmarks.CASES[0], None, 1,
+                                                  folder)
+        self.assertIn("cpp", report)
+        self.assertIn("cpp_compiler", report)
+        self.assertIn("verdict_cpp", report)
+        self.assertEqual(report["cpp_compiler"], None)
+        self.assertEqual(report["verdict_cpp"], "unavailable")
+
+    def test_a_measured_cpp_baseline_records_verdict_and_ratio(self) -> None:
+        folder = Path(tempfile.mkdtemp(prefix="cairn-bench-test-"))
+        self.addCleanup(lambda: [child.unlink(missing_ok=True) for child in
+                                 sorted(folder.rglob("*"), reverse=True)] +
+                        [folder.rmdir()])
+
+        def fake_run(argv, timeout, cwd=None):
+            for index, item in enumerate(argv):
+                if item == "-o" and index + 1 < len(argv):
+                    Path(argv[index + 1]).write_bytes(b"placeholder")
+            return mock.Mock(returncode=0, stderr="")
+
+        case = run_benchmarks.CASES[0]
+        with mock.patch.object(run_benchmarks, "run_command", side_effect=fake_run), \
+                mock.patch.object(run_benchmarks, "measure",
+                                  side_effect=[[1.0, 2.0], [2.0, 3.0], [2.0, 3.0]]):
+            report = run_benchmarks.benchmark_case(case, "gcc", 2, folder,
+                                                   rust_compiler=None,
+                                                   cpp_compiler="g++")
+        self.assertEqual(report["cpp_compiler"], "g++")
+        self.assertEqual(report["verdict_cpp"], "faster")
+        self.assertEqual(report["cpp"]["ratio_to_cpp"], 0.5)
+        self.assertIn("cpp", run_benchmarks.render([report], "gcc"))
+
+    def test_render_says_unavailable_when_there_is_no_cpp_compiler(self) -> None:
+        report = {"case": "x", "unit": "iterations", "iterations": 10,
+                  "cairn": run_benchmarks.summarise([1.0], 10), "c": None}
+        text = run_benchmarks.render([report], None)
+        self.assertIn("C++ baseline: unavailable", text)
+        self.assertIn("no g++, clang++ or cl", text)
+        self.assertIn("Goal: faster than C++ -> unavailable", text)
+
+    def test_render_states_the_cpp_goal_for_each_outcome(self) -> None:
+        def report(verdict_text: str) -> dict:
+            return {"case": "x", "unit": "iterations", "iterations": 10,
+                    "cairn": run_benchmarks.summarise([2.0], 10),
+                    "c": {**run_benchmarks.summarise([1.0], 10), "ratio_to_c": 2.0},
+                    "verdict": "faster",
+                    "cpp": None if verdict_text == "unavailable" else
+                    {**run_benchmarks.summarise([4.0], 10), "ratio_to_cpp": 0.5},
+                    "verdict_cpp": verdict_text}
+
+        self.assertIn("unavailable", run_benchmarks.render([report("unavailable")], None))
+        self.assertIn("measured on every case",
+                      run_benchmarks.render([report("faster")], "gcc", cpp_compiler="g++"))
+        self.assertIn("not met on x",
+                      run_benchmarks.render([report("slower")], "gcc", cpp_compiler="g++"))
+
     def test_rust_report_keys_are_present_on_the_error_path(self) -> None:
         folder = Path(tempfile.mkdtemp(prefix="cairn-bench-test-"))
         self.addCleanup(lambda: [child.unlink(missing_ok=True) for child in
@@ -107,7 +176,8 @@ class SummaryTest(unittest.TestCase):
 
     def test_strict_exits_2_when_no_baseline_can_be_measured(self) -> None:
         with mock.patch.object(run_benchmarks, "find_c_compiler", return_value=None), \
-                mock.patch.object(run_benchmarks, "find_rust_compiler", return_value=None):
+                mock.patch.object(run_benchmarks, "find_rust_compiler", return_value=None), \
+                mock.patch.object(run_benchmarks, "find_cpp_compiler", return_value=None):
             self.assertEqual(run_benchmarks.main(["--strict"]), 2)
 
     def test_strict_passes_when_the_measured_baseline_is_won(self) -> None:
@@ -116,9 +186,11 @@ class SummaryTest(unittest.TestCase):
                   "c": {**run_benchmarks.summarise([2.0], 10), "ratio_to_c": 0.5},
                   "verdict": "faster",
                   "rust": None, "rust_compiler": None, "verdict_rust": "unavailable",
+                  "cpp": None, "cpp_compiler": None, "verdict_cpp": "unavailable",
                   "error": None}
         with mock.patch.object(run_benchmarks, "find_c_compiler", return_value="gcc"), \
                 mock.patch.object(run_benchmarks, "find_rust_compiler", return_value=None), \
+                mock.patch.object(run_benchmarks, "find_cpp_compiler", return_value=None), \
                 mock.patch.object(run_benchmarks, "benchmark_case", return_value=report), \
                 mock.patch.object(run_benchmarks, "CASES", (object(),)):
             self.assertEqual(run_benchmarks.main(["--strict"]), 0)
@@ -130,9 +202,27 @@ class SummaryTest(unittest.TestCase):
                   "verdict": "faster",
                   "rust": {**run_benchmarks.summarise([0.5], 10), "ratio_to_rust": 2.0},
                   "rust_compiler": "rustc", "verdict_rust": "slower",
+                  "cpp": None, "cpp_compiler": None, "verdict_cpp": "unavailable",
                   "error": None}
         with mock.patch.object(run_benchmarks, "find_c_compiler", return_value="gcc"), \
                 mock.patch.object(run_benchmarks, "find_rust_compiler", return_value="rustc"), \
+                mock.patch.object(run_benchmarks, "find_cpp_compiler", return_value=None), \
+                mock.patch.object(run_benchmarks, "benchmark_case", return_value=report), \
+                mock.patch.object(run_benchmarks, "CASES", (object(),)):
+            self.assertEqual(run_benchmarks.main(["--strict"]), 1)
+
+    def test_strict_fails_when_cpp_wins_a_case(self) -> None:
+        report = {"case": "x", "unit": "iterations", "iterations": 10,
+                  "cairn": run_benchmarks.summarise([1.0], 10),
+                  "c": {**run_benchmarks.summarise([2.0], 10), "ratio_to_c": 0.5},
+                  "verdict": "faster",
+                  "rust": None, "rust_compiler": None, "verdict_rust": "unavailable",
+                  "cpp": {**run_benchmarks.summarise([0.5], 10), "ratio_to_cpp": 2.0},
+                  "cpp_compiler": "g++", "verdict_cpp": "slower",
+                  "error": None}
+        with mock.patch.object(run_benchmarks, "find_c_compiler", return_value="gcc"), \
+                mock.patch.object(run_benchmarks, "find_rust_compiler", return_value=None), \
+                mock.patch.object(run_benchmarks, "find_cpp_compiler", return_value="g++"), \
                 mock.patch.object(run_benchmarks, "benchmark_case", return_value=report), \
                 mock.patch.object(run_benchmarks, "CASES", (object(),)):
             self.assertEqual(run_benchmarks.main(["--strict"]), 1)
@@ -144,10 +234,12 @@ class SummaryTest(unittest.TestCase):
                   "verdict": "faster",
                   "rust": {**run_benchmarks.summarise([0.5], 10), "ratio_to_rust": 2.0},
                   "rust_compiler": "rustc", "verdict_rust": "slower",
+                  "cpp": None, "cpp_compiler": None, "verdict_cpp": "unavailable",
                   "error": None}
         stdout = io.StringIO()
         with mock.patch.object(run_benchmarks, "find_c_compiler", return_value="gcc"), \
                 mock.patch.object(run_benchmarks, "find_rust_compiler", return_value="rustc"), \
+                mock.patch.object(run_benchmarks, "find_cpp_compiler", return_value=None), \
                 mock.patch.object(run_benchmarks, "benchmark_case", return_value=report), \
                 mock.patch.object(run_benchmarks, "CASES", (object(),)), \
                 contextlib.redirect_stdout(stdout):
@@ -155,8 +247,32 @@ class SummaryTest(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["goal"]["faster_than_c"], True)
         self.assertEqual(payload["goal"]["faster_than_rust"], False)
+        self.assertIsNone(payload["goal"]["faster_than_cpp"])
         self.assertEqual(payload["compiler"], "gcc")
         self.assertEqual(payload["rust_compiler"], "rustc")
+        self.assertEqual(payload["cpp_compiler"], None)
+
+    def test_json_goal_reports_the_cpp_baseline_when_measured(self) -> None:
+        report = {"case": "x", "unit": "iterations", "iterations": 10,
+                  "cairn": run_benchmarks.summarise([1.0], 10),
+                  "c": {**run_benchmarks.summarise([2.0], 10), "ratio_to_c": 0.5},
+                  "verdict": "faster",
+                  "rust": None, "rust_compiler": None, "verdict_rust": "unavailable",
+                  "cpp": {**run_benchmarks.summarise([2.0], 10), "ratio_to_cpp": 0.5},
+                  "cpp_compiler": "g++", "verdict_cpp": "faster",
+                  "error": None}
+        stdout = io.StringIO()
+        with mock.patch.object(run_benchmarks, "find_c_compiler", return_value="gcc"), \
+                mock.patch.object(run_benchmarks, "find_rust_compiler", return_value=None), \
+                mock.patch.object(run_benchmarks, "find_cpp_compiler", return_value="g++"), \
+                mock.patch.object(run_benchmarks, "benchmark_case", return_value=report), \
+                mock.patch.object(run_benchmarks, "CASES", (object(),)), \
+                contextlib.redirect_stdout(stdout):
+            self.assertEqual(run_benchmarks.main(["--json"]), 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["goal"]["faster_than_cpp"], True)
+        self.assertEqual(payload["goal"]["verdicts_cpp"], ["faster"])
+        self.assertEqual(payload["cpp_compiler"], "g++")
 
     def test_render_says_unavailable_when_there_is_no_c_compiler(self) -> None:
         report = {"case": "x", "unit": "iterations", "iterations": 10,
@@ -261,6 +377,10 @@ class CompilerProbeTest(unittest.TestCase):
     def test_detected_compiler_is_one_of_the_known_families(self) -> None:
         compiler = run_benchmarks.find_c_compiler()
         self.assertIn(compiler, [None, *run_benchmarks.C_COMPILERS])
+
+    def test_detected_cpp_compiler_is_one_of_the_known_families(self) -> None:
+        compiler = run_benchmarks.find_cpp_compiler()
+        self.assertIn(compiler, [None, *run_benchmarks.CPP_COMPILERS])
 
 
 class RegistryShapeTest(unittest.TestCase):

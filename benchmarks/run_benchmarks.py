@@ -53,44 +53,51 @@ RUST_COMPILERS: Dict[str, List[str]] = {
     "rustc": ["rustc", "-O", "-o"],
 }
 
+CPP_COMPILERS: Dict[str, List[str]] = {
+    "g++": ["g++", "-O2", "-o"],
+    "clang++": ["clang++", "-O2", "-o"],
+    "cl": ["cl", "/O2", "/nologo", "/EHsc"],
+}
+
 
 @dataclass(frozen=True)
 class Case:
-    """One benchmark: a Cairn source, equivalent C and Rust sources, and what one iteration is."""
+    """One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit."""
 
     name: str
     cairn: str
     c_source: str
     rust_source: str
-    iterations: int
-    unit: str
+    cpp_source: str = ""
+    iterations: int = 0
+    unit: str = ""
 
 
 CASES: Tuple[Case, ...] = (
     Case("xorshift", "benchmarks/xorshift.crn", "benchmarks/xorshift.c",
-         "benchmarks/xorshift.rs", 200_000_000, "iterations"),
-    Case("fib30", "benchmarks/fib30.crn", "benchmarks/fib30.c", "benchmarks/fib30.rs",
+         "benchmarks/xorshift.rs", "benchmarks/xorshift.cpp", 200_000_000, "iterations"),
+    Case("fib30", "benchmarks/fib30.crn", "benchmarks/fib30.c", "benchmarks/fib30.rs", "benchmarks/fib30.cpp",
          2_692_537, "calls"),
     Case("folded_math", "benchmarks/folded_math.crn", "benchmarks/folded_math.c",
-         "benchmarks/folded_math.rs", 20_000_000, "iterations"),
+         "benchmarks/folded_math.rs", "benchmarks/folded_math.cpp", 20_000_000, "iterations"),
     Case("collatz", "benchmarks/collatz.crn", "benchmarks/collatz.c",
-         "benchmarks/collatz.rs", 1_000_000, "probes"),
+         "benchmarks/collatz.rs", "benchmarks/collatz.cpp", 1_000_000, "probes"),
     Case("ackermann", "benchmarks/ackermann.crn", "benchmarks/ackermann.c",
-         "benchmarks/ackermann.rs", 1, "calls"),
+         "benchmarks/ackermann.rs", "benchmarks/ackermann.cpp", 1, "calls"),
     Case("nqueens", "benchmarks/nqueens.crn", "benchmarks/nqueens.c",
-         "benchmarks/nqueens.rs", 1, "solutions"),
+         "benchmarks/nqueens.rs", "benchmarks/nqueens.cpp", 1, "solutions"),
     Case("binary_gcd", "benchmarks/binary_gcd.crn", "benchmarks/binary_gcd.c",
-         "benchmarks/binary_gcd.rs", 1_000_000, "pairs"),
+         "benchmarks/binary_gcd.rs", "benchmarks/binary_gcd.cpp", 1_000_000, "pairs"),
     Case("call_chain", "benchmarks/call_chain.crn", "benchmarks/call_chain.c",
-         "benchmarks/call_chain.rs", 20_000_000, "calls"),
+         "benchmarks/call_chain.rs", "benchmarks/call_chain.cpp", 20_000_000, "calls"),
     Case("tak", "benchmarks/tak.crn", "benchmarks/tak.c",
-         "benchmarks/tak.rs", 63_609, "calls"),
+         "benchmarks/tak.rs", "benchmarks/tak.cpp", 63_609, "calls"),
     Case("primes", "benchmarks/primes.crn", "benchmarks/primes.c",
-         "benchmarks/primes.rs", 300_000, "candidates"),
+         "benchmarks/primes.rs", "benchmarks/primes.cpp", 300_000, "candidates"),
     Case("mandelbrot", "benchmarks/mandelbrot.crn", "benchmarks/mandelbrot.c",
-         "benchmarks/mandelbrot.rs", 2_073_600, "pixels"),
+         "benchmarks/mandelbrot.rs", "benchmarks/mandelbrot.cpp", 2_073_600, "pixels"),
     Case("splitmix", "benchmarks/splitmix.crn", "benchmarks/splitmix.c",
-         "benchmarks/splitmix.rs", 100_000_000, "mixes"),
+         "benchmarks/splitmix.rs", "benchmarks/splitmix.cpp", 100_000_000, "mixes"),
 )
 
 
@@ -105,6 +112,14 @@ def find_c_compiler() -> Optional[str]:
 def find_rust_compiler() -> Optional[str]:
     """The first Rust compiler already installed, or None when the machine has none."""
     for name in RUST_COMPILERS:
+        if shutil.which(name):
+            return name
+    return None
+
+
+def find_cpp_compiler() -> Optional[str]:
+    """The first C++ compiler already installed, or None when the machine has none."""
+    for name in CPP_COMPILERS:
         if shutil.which(name):
             return name
     return None
@@ -154,6 +169,21 @@ def build_rust(compiler: str, source: Path, destination: Path) -> Optional[float
     """Compile one Rust case; None when this compiler does not produce an executable."""
     template = RUST_COMPILERS[compiler]
     argv = [template[0], template[1], template[2], str(destination), str(source)]
+    started = time.perf_counter()
+    completed = run_command(argv, BUILD_TIMEOUT, cwd=ROOT)
+    if completed.returncode != 0 or not destination.is_file():
+        return None
+    return (time.perf_counter() - started) * 1000.0
+
+
+def build_cpp(compiler: str, source: Path, destination: Path) -> Optional[float]:
+    """Compile one C++ case; None when this compiler does not produce an executable."""
+    template = CPP_COMPILERS[compiler]
+    if compiler == "cl":
+        argv = [template[0], template[1], template[2], template[3], f"/Fe:{destination}",
+                str(source)]
+    else:
+        argv = [template[0], template[1], template[2], str(destination), str(source)]
     started = time.perf_counter()
     completed = run_command(argv, BUILD_TIMEOUT, cwd=ROOT)
     if completed.returncode != 0 or not destination.is_file():
@@ -257,7 +287,8 @@ def latest_history_record(path: Path) -> Optional[Dict[str, object]]:
 
 
 def record_from_reports(reports: List[Dict[str, object]], compiler: Optional[str],
-                        rust_compiler: Optional[str], rounds: int, optimise: bool) -> Dict[str, object]:
+                        rust_compiler: Optional[str], rounds: int, optimise: bool,
+                        cpp_compiler: Optional[str] = None) -> Dict[str, object]:
     """One history record: the commit this run measured and each best time by language."""
     def bests(key: str) -> Dict[str, float]:
         table: Dict[str, float] = {}
@@ -274,7 +305,9 @@ def record_from_reports(reports: List[Dict[str, object]], compiler: Optional[str
         commit = git.stdout.strip() or None
     return {"timestamp": round(time.time(), 3), "commit": commit, "rounds": rounds,
             "optimise": optimise, "c_compiler": compiler, "rust_compiler": rust_compiler,
-            "cairn": bests("cairn"), "c": bests("c"), "rust": bests("rust")}
+            "cpp_compiler": cpp_compiler,
+            "cairn": bests("cairn"), "c": bests("c"), "cpp": bests("cpp"),
+            "rust": bests("rust")}
 
 
 def save_record(path: Path, record: Dict[str, object]) -> None:
@@ -285,16 +318,18 @@ def save_record(path: Path, record: Dict[str, object]) -> None:
 
 
 def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Path,
-                   optimise: bool = True, rust_compiler: Optional[str] = None) -> Dict[str, object]:
-    """Measure one case in Cairn and, when available, in C and in Rust."""
+                   optimise: bool = True, rust_compiler: Optional[str] = None,
+                   cpp_compiler: Optional[str] = None) -> Dict[str, object]:
+    """Measure one case in Cairn and, when available, in C, C++ and Rust."""
     cairn_source = ROOT / case.cairn
     cairn_exe = folder / f"{case.name}.cairn.exe"
     report: Dict[str, object] = {
         "case": case.name, "unit": case.unit, "iterations": case.iterations,
-        "cairn": None, "c": None, "rust": None,
+        "cairn": None, "c": None, "cpp": None, "rust": None,
         "c_compiler": compiler, "rust_compiler": rust_compiler,
+        "cpp_compiler": cpp_compiler,
         "verdict": "unavailable", "verdict_rust": "unavailable",
-        "error": None,
+        "verdict_cpp": "unavailable", "error": None,
     }
     try:
         compile_ms = build_cairn(cairn_source, cairn_exe, optimise)
@@ -307,13 +342,16 @@ def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Pat
     cairn["image_bytes"] = cairn_exe.stat().st_size
     report["cairn"] = cairn
     best_cairn = float(cairn["best_ms"])
-    for language, baseline_compiler, build, source_path, exe_name, verdict_key, ratio_key in (
-            ("c", compiler, build_c, ROOT / case.c_source, f"{case.name}.c.exe",
+    for language, baseline_compiler, build, source_rel, exe_name, verdict_key, ratio_key in (
+            ("c", compiler, build_c, case.c_source, f"{case.name}.c.exe",
              "verdict", "ratio_to_c"),
-            ("rust", rust_compiler, build_rust, ROOT / case.rust_source,
+            ("cpp", cpp_compiler, build_cpp, case.cpp_source,
+             f"{case.name}.cpp.exe", "verdict_cpp", "ratio_to_cpp"),
+            ("rust", rust_compiler, build_rust, case.rust_source,
              f"{case.name}.rust.exe", "verdict_rust", "ratio_to_rust")):
-        if baseline_compiler is None:
+        if baseline_compiler is None or not source_rel:
             continue
+        source_path = ROOT / source_rel
         exe = folder / exe_name
         try:
             baseline_compile = build(baseline_compiler, source_path, exe)
@@ -341,9 +379,10 @@ def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Pat
 
 
 def render(reports: List[Dict[str, object]], compiler: Optional[str],
-           optimise: bool = True, rust_compiler: Optional[str] = None) -> str:
+           optimise: bool = True, rust_compiler: Optional[str] = None,
+           cpp_compiler: Optional[str] = None) -> str:
     """The human table; one line per case and per measured language."""
-    languages = [("cairn", "cairn"), ("c", "c"), ("rust", "rust")]
+    languages = [("cairn", "cairn"), ("c", "c"), ("cpp", "cpp"), ("rust", "rust")]
     lines = ["case        language  best ms  median ms  compile ms  ns/unit  size",
              "----------  --------  -------  ---------  ----------  -------  ----"]
     for report in reports:
@@ -362,11 +401,19 @@ def render(reports: List[Dict[str, object]], compiler: Optional[str],
                  else "C baseline: unavailable (no gcc, clang or cl on PATH)")
     lines.append(f"Rust baseline: {rust_compiler}" if rust_compiler
                  else "Rust baseline: unavailable (no rustc on PATH)")
+    lines.append(f"C++ baseline: {cpp_compiler}" if cpp_compiler
+                 else "C++ baseline: unavailable (no g++, clang++ or cl on PATH)")
     ratios = [float(data["ratio_to_c"]) for report in reports
               for data in [report.get("c")] if isinstance(data, dict) and data.get("ratio_to_c")]
     if ratios:
         lines.append(f"Cairn/C best-time ratio: {min(ratios):.2f} to {max(ratios):.2f} "
                      f"(1.00 means equal)")
+    cpp_ratios = [float(data["ratio_to_cpp"]) for report in reports
+                  for data in [report.get("cpp")]
+                  if isinstance(data, dict) and data.get("ratio_to_cpp")]
+    if cpp_ratios:
+        lines.append(f"Cairn/C++ best-time ratio: {min(cpp_ratios):.2f} to "
+                     f"{max(cpp_ratios):.2f} (1.00 means equal)")
     rust_ratios = [float(data["ratio_to_rust"]) for report in reports
                    for data in [report.get("rust")]
                    if isinstance(data, dict) and data.get("ratio_to_rust")]
@@ -374,6 +421,8 @@ def render(reports: List[Dict[str, object]], compiler: Optional[str],
         lines.append(f"Cairn/Rust best-time ratio: {min(rust_ratios):.2f} to "
                      f"{max(rust_ratios):.2f} (1.00 means equal)")
     lines.extend(_goal_lines(reports, "C", compiler, "verdict", "gcc, clang or cl"))
+    lines.extend(_goal_lines(reports, "C++", cpp_compiler, "verdict_cpp",
+                             "g++, clang++ or cl"))
     lines.extend(_goal_lines(reports, "Rust", rust_compiler, "verdict_rust", "rustc"))
     return "\n".join(lines)
 
@@ -410,8 +459,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     """Parse options, run every case and print the report."""
     parser = argparse.ArgumentParser(
         prog="run_benchmarks.py",
-        description="Measure Cairn executables, and a C or Rust baseline when a "
-                    "compiler for it is present.")
+        description="Measure Cairn executables, and C, C++ or Rust baselines when a "
+                    "compiler for them is present.")
     parser.add_argument("--rounds", type=_number, default=DEFAULT_ROUNDS,
                         help=f"runs per executable (default: {DEFAULT_ROUNDS})")
     parser.add_argument("--json", action="store_true", help="print one JSON report object")
@@ -429,33 +478,41 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     arguments = parser.parse_args(argv)
     compiler = find_c_compiler()
     rust_compiler = find_rust_compiler()
+    cpp_compiler = find_cpp_compiler()
     optimise = not arguments.no_optimize
     with tempfile.TemporaryDirectory(prefix="cairn-bench-") as folder:
         reports = [benchmark_case(case, compiler, arguments.rounds, Path(folder), optimise,
-                                  rust_compiler=rust_compiler)
+                                  rust_compiler=rust_compiler, cpp_compiler=cpp_compiler)
                    for case in CASES]
     verdicts = [str(report.get("verdict")) for report in reports]
     rust_verdicts = [str(report.get("verdict_rust")) for report in reports]
+    cpp_verdicts = [str(report.get("verdict_cpp")) for report in reports]
     met_c = all(item in ("faster", "tie") for item in verdicts)
     met_rust = all(item in ("faster", "tie") for item in rust_verdicts)
+    met_cpp = all(item in ("faster", "tie") for item in cpp_verdicts)
     met = (met_c if compiler is not None else True) and \
-          (met_rust if rust_compiler is not None else True)
+          (met_rust if rust_compiler is not None else True) and \
+          (met_cpp if cpp_compiler is not None else True)
     if arguments.json:
         print(json.dumps({"compiler": compiler, "rust_compiler": rust_compiler,
+                          "cpp_compiler": cpp_compiler,
                           "rounds": arguments.rounds, "optimise": optimise,
                           "goal": {"faster_than_c": met_c
                                    if "unavailable" not in verdicts else None,
                                    "verdicts": verdicts,
                                    "faster_than_rust": met_rust
                                    if "unavailable" not in rust_verdicts else None,
-                                   "verdicts_rust": rust_verdicts},
+                                   "verdicts_rust": rust_verdicts,
+                                   "faster_than_cpp": met_cpp
+                                   if "unavailable" not in cpp_verdicts else None,
+                                   "verdicts_cpp": cpp_verdicts},
                           "cases": reports}, indent=2))
     else:
-        print(render(reports, compiler, optimise, rust_compiler))
+        print(render(reports, compiler, optimise, rust_compiler, cpp_compiler))
     previous = latest_history_record(HISTORY) if arguments.compare else None
     if arguments.save:
         save_record(HISTORY, record_from_reports(reports, compiler, rust_compiler,
-                                                 arguments.rounds, optimise))
+                                                 arguments.rounds, optimise, cpp_compiler))
         print(f"[SAVED] {HISTORY.relative_to(ROOT)}")
     if arguments.compare:
         if previous is None:
@@ -463,7 +520,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             lines, regressed = compare_runs(
                 record_from_reports(reports, compiler, rust_compiler,
-                                    arguments.rounds, optimise), previous,
+                                    arguments.rounds, optimise, cpp_compiler), previous,
                 noise=NOISE_BAND)
             print("Compare against the newest saved run"
                   + (f" (commit {previous.get('commit')})"
@@ -474,9 +531,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 return EXIT_SLOWER
     if not arguments.strict:
         return EXIT_OK
-    if compiler is None and rust_compiler is None:
+    if compiler is None and rust_compiler is None and cpp_compiler is None:
         return EXIT_NO_BASELINE
-    return EXIT_OK if met and "error" not in verdicts + rust_verdicts else EXIT_SLOWER
+    return EXIT_OK if met and "error" not in verdicts + rust_verdicts + cpp_verdicts \
+        else EXIT_SLOWER
 
 
 if __name__ == "__main__":

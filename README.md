@@ -280,34 +280,37 @@ pass; the differential end-to-end test runs both build modes against the same ex
 Cairn emits direct machine code with no interpreter loop, no bounds checks and no GC. On the
 integer subset it implements, the generated code is one instruction per operation; the first six
 slots stay in registers, and only the rest are loaded and stored. `benchmarks/run_benchmarks.py`
-reproduces every number below and adds a C baseline whenever `gcc`, `clang` or `cl` is already on
-`PATH`, and a Rust baseline whenever `rustc` is; when none of them is found the relevant line
-reports `baseline: unavailable` rather than inventing a comparison.
+reproduces every number below and adds baseline columns whenever a compiler for them is already
+on `PATH`: a C baseline for `gcc`, `clang` or `cl`, a C++ baseline for `g++`, `clang++` or `cl`
+(compiling the same .c benchmark sources as C++), and a Rust baseline when `rustc` is; when
+none is found the relevant line reports `baseline: unavailable` rather than inventing a
+comparison.
 
 Measured on the development machine (Windows x86-64, Python 3.14 bootstrap), against MinGW GCC
-16.2.0 (WinLibs UCRT) and rustc 1.100.0 (pc-windows-gnu). Because independent runs drift by more
-than the gaps being measured, the rows below come from one interleaved sequence — the nine
-executables sampled in rotation for 60 rounds, best and median per executable — which keeps every
-comparison same-run while still reporting a best and a median:
+16.2.0 (WinLibs UCRT), MinGW G++ 16.2.0 (same WinLibs toolchain, `-O2`) and rustc 1.100.0
+(pc-windows-gnu). Because independent runs drift by more than the
+gaps being measured, each row shows the best times across that session's saved
+`--save --compare` gate runs, which keeps every comparison same-revision while still reporting
+a spread:
 
-| Case | Work | Cairn best | C best | Rust best | Cairn size |
-|---|---|---|---|---|---|
-| `xorshift` | 200,000,000 serial xorshift steps | 301.7 ms | 302.7 ms | 295.4 ms | 2,048 bytes |
-| `fib30` | 2,692,537 recursive calls | 6.4 ms | 7.1 ms | 8.6 ms | 12,800 bytes |
-| `folded_math` | 20,000,000 bit-mixed constant additions | 15.3 ms | 16.1 ms | 17.3 ms | 2,048 bytes |
-| `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-108 ms | 155-172 ms | 145-148 ms | 2,560 bytes |
-| `ackermann` | `A(3,9)`, about 25 million calls | 9.9 ms | 14.1 ms | 17.7 ms | 3,072 bytes |
-| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 27.5 ms | 23.5 ms | 20.9 ms | 2,560 bytes |
-| `binary_gcd` | 1,000,000 Stein-GCD pairs | 179-195 ms | 165-178 ms | 139-155 ms | 3,072 bytes |
-| `call_chain` | 20,000,000 three-argument hot-path calls | 45-48 ms | 36-39 ms | 74-77 ms | 2,560 bytes |
-| `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 7.5 ms | 8.4-9.1 ms | 9.6-9.9 ms | 2,048 bytes |
-| `primes` | trial division over 2..300000 | 25.0-26.2 ms | 24.5-25.3 ms | 19.1-19.9 ms | 2,560 bytes |
-| `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.5-13.8 ms | 10.8-11.1 ms | 11.9-12.7 ms | 2,560 bytes |
-| `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 166-170 ms | 98.7-101.2 ms | 113.8-117.9 ms | 2,560 bytes |
+| Case | Work | Cairn best | C best | C++ best | Rust best | Cairn size |
+|---|---|---|---|---|---|---|
+| `xorshift` | 200,000,000 serial xorshift steps | 292-306 ms | 283-306 ms | 287-300 ms | 292-308 ms | 2,048 bytes |
+| `fib30` | 2,692,537 recursive calls | 9.6-11.9 ms | 8.7-11.8 ms | 8.7-10.7 ms | 10.6-13.1 ms | 12,800 bytes |
+| `folded_math` | 20,000,000 bit-mixed constant additions | 18.4-20.4 ms | 18.0-22.0 ms | 18.3-22.1 ms | 19.2-23.1 ms | 2,048 bytes |
+| `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-106 ms | 158-164 ms | 160-164 ms | 140-150 ms | 2,560 bytes |
+| `ackermann` | `A(3,9)`, about 25 million calls | 10.2-13.9 ms | 15.2-19.4 ms | 15.4-18.0 ms | 18.4-64.5 ms | 3,072 bytes |
+| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 24.9-26.7 ms | 22.1-25.1 ms | 22.8-24.9 ms | 18.4-20.4 ms | 2,560 bytes |
+| `binary_gcd` | 1,000,000 Stein-GCD pairs | 182-190 ms | 170-180 ms | 173-181 ms | 148-154 ms | 2,560 bytes |
+| `call_chain` | 20,000,000 three-argument hot-path calls | 45-48 ms | 33-37 ms | 34-37 ms | 74-79 ms | 2,560 bytes |
+| `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 7.8-9.7 ms | 7.7-10.7 ms | 7.7-10.9 ms | 8.6-10.8 ms | 2,048 bytes |
+| `primes` | trial division over 2..300000 | 25.1-27.2 ms | 24.5-27.3 ms | 24.1-26.3 ms | 18.9-23.2 ms | 2,560 bytes |
+| `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.1-16.1 ms | 11.1-13.3 ms | 10.9-13.4 ms | 12.0-14.4 ms | 2,560 bytes |
+| `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 94.3-96.7 ms | 92.5-101.5 ms | 96.4-102.9 ms | 105.9-113.5 ms | 2,560 bytes |
 
-Standings per case: `fib30`, `folded_math` and `collatz` are won outright against both baselines (fib30
-net compute over the near-7 ms process-and-printf floor is about 0.6-0.8 ms against C's
-0.9-1.0), and `xorshift` is a measured three-way tie — the three implementations sit within
+Standings per case (Cairn vs the fastest baseline on that case): `collatz`, `ackermann`, `tak`,
+`folded_math` and `splitmix` are won outright against all three baselines; `fib30` sits inside
+C/C++'s spread; `xorshift` is a measured tie — the implementations sit within
 about one percent of each other around 300 ms, with the best run flipping between them, which
 is inside every documented spread, so no win is claimed there. The tie is now structural, not
 pending: the benchmark's serial chain costs 6 dependent cycles per iteration (one shift and one
@@ -328,10 +331,11 @@ reference step, one taken branch, zero mispredicts, where both baselines branch 
 test. `ackermann` is the two-argument pair win (ADR-025): pure arguments bind straight into the
 argument registers with no stack traffic, the two-parameter recursion shape lowers as pure-text
 body copies, and the delta-0 `ack(m, n - 1)` chain site collapses into a counted loop
-(`R(j) = f**(j+1)(1)`) whose body is a single shifted copy — 9.9 ms against C's 14.1 ms and
-Rust's 17.7 ms, with the image at 3,072 bytes. Every committed case now measures at or ahead of
-both baselines on best time; `xorshift` remains the recorded structural tie at the ISA latency
-floor, and `folded_math`'s margin is inside run-to-run spread in some sessions.
+(`R(j) = f**(j+1)(1)`) whose body is a single shifted copy — 10.2-13.9 ms against C's 15.2-19.4 ms,
+C++'s 15.4-18.0 ms and Rust's 55.9-64.5 ms, with the image at 3,072 bytes. `xorshift` remains the
+recorded structural tie at the ISA latency floor, and `folded_math`'s margin is inside run-to-run
+spread in some sessions; `nqueens`, `binary_gcd`, `call_chain`, `primes` and `mandelbrot` remain
+the recorded losses, with the mechanisms in the ADR register.
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 `movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics
@@ -349,8 +353,15 @@ non-pure operands on the hot path — ADR-027's foreign-function inlining, flag-
 direct-into-register compute fell 95.9 → 45-48 ms: Rust's 70.9-76.5 is beaten outright at about
 0.62x, C's 36-39 ms is the last recorded closure target). A twin-parity gate
 (`tests/test_end_to_end.py::TwinParityTest`) compiles every
-case's Cairn, C and Rust sources and hard-fails unless all three print the identical total, so a
+case's Cairn, C, C++ and Rust sources and hard-fails unless all four print the identical total, so a
 standing can never be earned against a twin that computes something else.
+
+A C++ baseline joined the scoreboard (ADR-033): `g++ 16.2 -O2` compiles the same C sources as
+C++, so the comparison re-uses the verified C twins with C++ name mangling and the C++
+overload-resolution rules added — no benchmark semantics change. The first standings show
+the C++ column within one percent of the C column everywhere, which is expected for the same
+sources under `-O2`; the win/loss list above is therefore unchanged by C++'s arrival, and the
+board now reports the gap to all three compilers on every run.
 
 Four later cases widen the measured surface again (ADR-030): `tak` (three-argument
 data-dependent recursion — won outright against both baselines, 7.5 ms vs C 8.4-9.1 and Rust
