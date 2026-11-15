@@ -1,75 +1,18 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-xorshift-win",
-    "last_phase": "in_progress",
+    "task_id": "cairn-bench-suite-2",
+    "last_phase": "delivery",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1794692796.7235346,
+    "updated_at": 1794741339.4365838,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": [],
-    "completed_at": 1794692874.405133,
-    "completed_head": "4c02490b917964134e6d5319ad895a6d92cd1e1a"
+    "completed_at": 1794741456.3307998,
+    "completed_head": "d6bb74830aaabc15ee9e2c7aef3a3d48376d5c69"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-verify-push",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] Verify 12 unpushed commits plus fix pass: 207 tests green, 4/4 gates pass; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793905176.6279614,
-      "timestamp_str": "2026-11-05 21:59:36",
-      "agent": "kilo:goal"
-    },
-    {
-      "task_id": "cairn-verify-push",
-      "phase": "phase 5",
-      "phase_num": 5,
-      "description": "Task 'cairn-verify-push' completed successfully.",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1793905230.5638275,
-      "timestamp_str": "2026-11-05 22:00:30",
-      "agent": "kilo:goal"
-    },
-    {
-      "task_id": "cairn-verify-push",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-verify-push' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794667386.9629338,
-      "timestamp_str": "2026-11-14 17:43:06",
-      "agent": "mistral:vibe",
-      "continued_from": "kilo:goal",
-      "delivery": {
-        "roots": [
-          "C:\\Users\\Yunus-Emre\\Desktop\\portable_agent_kit\\projects\\cairn"
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-rust-baseline",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/3] Plan Rust baseline: parallel verdict_rust/rust keys, rustc twins, strict semantics",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794667646.3383582,
-      "timestamp_str": "2026-11-14 17:47:26",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "The owner added 'faster than Rust' to the scoreboard goal; the harness only knows a C baseline.",
-        "benefits": "Cairn is measured against a second native toolchain; absence of rustc stays an honest unavailable, never a guess.",
-        "risks": "contract: JSON readers pin existing keys (ADR-015/016); dependency: optional rustc must not break runs without it; concurrency: none; state: none (temp dir per run)",
-        "mitigation": "Existing 'verdict' (vs C) key and 'goal' shape unchanged; Rust arrives as additive keys with tests pinning both"
-      },
-      "plan_digest": "55699a1fffec72cf72170adef43ffbb1c86a8d25956bd750d68e6d2be5b760fe"
-    },
     {
       "task_id": "cairn-rust-baseline",
       "phase": "in_progress",
@@ -283,6 +226,65 @@
       "status": "completed",
       "timestamp": 1794692874.4235063,
       "timestamp_str": "2026-11-15 00:47:54",
+      "agent": "mistral:vibe",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-bench-suite-2",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/3] Add collatz and ackermann twins, wire into the harness, measure",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794733691.8780391,
+      "timestamp_str": "2026-11-15 12:08:11",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "The goal demands beating C and Rust on every committed benchmark case, but three cases cover only call, arithmetic and serial-chain paths; branchy division and two-argument recursion are unmeasured",
+        "benefits": "New collatz (branch+mod) and ackermann (two-arg deep recursion) cases widen coverage; any measured gap becomes a general codegen win with failing-first tests",
+        "risks": "contract: benchmark twins must print identical values or the case is invalid; dependency: harness registry only; concurrency: none; state: README table and goal verdicts change shape but keep schema",
+        "mitigation": "Twins verified against each other before timing, failing-first tests for every compiler change, fresh interleaved runs, honest tie reporting"
+      },
+      "checklists": "passed",
+      "plan_digest": "e1f018c28e671e58a2306fb8c7bfebb7d2bd5ebf3be6cfd27f1cbbd70f58d514"
+    },
+    {
+      "task_id": "cairn-bench-suite-2",
+      "phase": "implementation",
+      "phase_num": 2,
+      "description": "[2/3] Collatz branchless odd-pair win: cmov/adc emitters + fusion pass, 0.63-0.74 against C and Rust",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794741328.9403915,
+      "timestamp_str": "2026-11-15 14:15:28",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-bench-suite-2",
+      "phase": "delivery",
+      "phase_num": 4,
+      "description": "[3/3] Docs, knowledge base and checkpoints done; benchmark suite committed with collatz won and ackermann as the open case",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794741339.4365838,
+      "timestamp_str": "2026-11-15 14:15:39",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-bench-suite-2",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-bench-suite-2' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794741456.351561,
+      "timestamp_str": "2026-11-15 14:17:36",
       "agent": "mistral:vibe",
       "delivery": {
         "roots": [
