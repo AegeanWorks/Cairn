@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `41`
-- **Total Classes**: `79`
-- **Total Top-Level Functions**: `137`
-- **Total Class Methods**: `473`
-- **Total Source Lines**: `8413`
+- **Total Classes**: `82`
+- **Total Top-Level Functions**: `138`
+- **Total Class Methods**: `496`
+- **Total Source Lines**: `8881`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`41` module(s))
@@ -128,7 +128,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `1466` lines (`70431` bytes)
+**Size**: `1768` lines (`86689` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -170,11 +170,22 @@
   - Method `._emit_and(expression)` - *`&&`: the right side is evaluated only when the left side is non-zero.*
   - Method `._emit_or(expression)` - *`||`: the right side is evaluated only when the left side is zero.*
   - Method `._emit_call(expression)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
+  - Method `._is_pure_argument(expression)` - *Whether an argument can bind straight into its ABI register.*
+  - Method `._emit_pure_arguments(arguments)` - *Bind call arguments straight into their registers, or return False.*
   - Method `._delta_hold_units(function)` - *The per-level merge slots delta inlining needs, in 8-byte units, or 0 when ineligible.*
   - Method `._assign_writes_parameter(node, slot)` - *Whether any statement in `node` may rebind or shadow the parameter in `slot`.*
   - Method `._has_delta_self_call(node, name, slot)` - *Whether `node` contains at least one self-call whose argument carries a constant delta.*
   - Method `._delta_argument(expression, slot)` - *The constant shift this call's argument adds to the inlined parameter, or None.*
   - Method `._emit_delta_self_call(expression, delta)` - *Lower a constant-delta self-call as pure text: the copy's parameter is the*
+  - Method `._pair_inline_shape(function)` - *Whether the function fits the two-parameter pure-text inlining shape.*
+  - Method `._has_value_zero_guard(node, slot)` - *Whether the body tests the second parameter against zero ahead of the tail.*
+  - Method `._is_zero_test(condition, slot)` - *Whether the condition compares the slot-holding name against literal zero.*
+  - Method `._is_chain_step(argument)` - *Whether the argument is `param1 - 1`: the exact one-step chain the loop replaces.*
+  - Method `._emit_chain_loop(expression)` - *Lower the one-step delta-0 chain as an iterated loop: `R(j) = f**(j+1)(1)`.*
+  - Method `._is_pair_body(node, function, depth)` - *Whether every path through `node` ends in an explicit pair-shaped `return`.*
+  - Method `._is_pair_return(expression, function, depth)` - *Whether a `return` value fits the pair copies: no self-call, or one that*
+  - Method `._is_pair_call(call, function, depth)` - *Whether one self-call matches the pair shape: first argument a constant shift*
+  - Method `._emit_pair_self_call(expression, delta)` - *Lower a two-parameter shape self-call as pure text, binding the value first.*
   - Method `._is_inline_candidate(expression)` - *Whether this call may be lowered as an inline copy of the current function.*
   - Method `._emit_inlined_self_call(expression)` - *Lower a self-call as one inline copy: the argument to a shadow home, the body in place.*
   - Method `._body_may_hold(body)` - *Whether any merge in this body keeps its left value across a right operand that calls.*
@@ -713,7 +724,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `481` lines (`22400` bytes)
+**Size**: `608` lines (`28824` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -778,18 +789,31 @@
 - `class TailReturnElisionTest` - *A `return` in tail position falls through into the epilogue label instead of jumping.*
   - Method `.test_a_tail_return_emits_no_jmp()`
   - Method `.test_a_non_tail_return_still_jumps_to_the_epilogue()`
+- `class MultiArgumentCallTest` - *Pure arguments bind straight into their ABI registers, without the stack round-trip.*
+  - Method `.test_both_pure_arguments_bind_without_the_stack()`
+  - Method `.test_literal_arguments_bind_without_the_stack_from_main()`
+- `class PairDeltaInliningTest` - *A two-parameter all-return-tree recursion inlines as pure text copies.*
+  - Method `._pair_labels(source, name)`
+  - Method `.test_pair_copies_carry_no_stack_state()`
+  - Method `.test_the_n_chain_lowers_as_an_iterated_loop()`
+  - Method `.test_the_value_register_rebinds_for_literal_copies()`
+  - Method `.test_a_shifted_m_compare_reads_the_delta_form()`
+  - Method `.test_a_parameter_rebind_stays_on_the_real_call_path()`
+  - Method `.test_a_loop_in_the_body_stays_on_the_real_call_path()`
+  - Method `.test_an_other_shaped_second_argument_stays_on_the_real_call_path()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
 - `def body_text(source, name)` - *The .text bytes of one function's body, sliced from the generated artifact.*
 - `def region_text(source, name)` - *One function and its internal labels, stopping at the runtime helpers.*
+- `def region_bytes(source, name)` - *The .text bytes of one function's body, its inline copies included.*
 
 ---
 
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `370` lines (`13702` bytes)
+**Size**: `409` lines (`15279` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -824,6 +848,9 @@
   - Method `.test_a_five_k_pair_counts_the_same_way()`
   - Method `.test_a_refused_pair_keeps_the_generic_shrink_chain()`
   - Method `.test_the_swapped_parity_test_counts_identically()`
+- `class PairInlineAckermannTest` - *The two-parameter pair inlining answers Ackermann probes exactly.*
+  - Method `.test_ackermann_probes_match_the_known_values()`
+  - Method `.test_deep_recursion_meets_the_depth_cap_and_still_answers()`
 
 ---
 

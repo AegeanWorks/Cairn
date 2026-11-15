@@ -190,7 +190,7 @@ class ArgumentPathTest(unittest.TestCase):
 
     def test_a_single_argument_moves_into_rcx_without_the_stack(self) -> None:
         body = body_text(ARGUMENT_IMM, "main")
-        self.assertIn(b"\x48\x89\xc1\xe8", body)
+        self.assertIn(b"\x48\xb9\x03", body)  # the literal binds straight into rcx
         self.assertNotIn(b"\x50\x59", body)
 
     def test_a_shift_by_literal_shifts_in_place(self) -> None:
@@ -479,3 +479,130 @@ class TailReturnElisionTest(unittest.TestCase):
         body = body_text(TAIL_SWING, "f")
         # `return 7` sits inside an if the merge Rewrite follows; only `return 9` is a tail.
         self.assertEqual(body.count(b"\xe9"), 1)
+
+
+TWO_ARG_CALL = ("fn g(a: i64, b: i64) -> i64 { return a + b; } "
+                "fn f(c: i64, d: i64) -> i64 { return g(c - 1, d); } "
+                "fn main() -> i64 { print(f(3, 4)); return 0; }")
+
+
+class MultiArgumentCallTest(unittest.TestCase):
+    """Pure arguments bind straight into their ABI registers, without the stack round-trip.
+
+    The generic two-argument path pushed and popped each argument; a push/pop pair costs
+    more uops than the direct move it replaces, and every multi-argument call site paid
+    for both. Only leaf-ish arguments (names, literals, name +/- literal) may rebind
+    directly: they cannot call or trap, so rebinding them out of source order is
+    unobservable.
+    """
+
+    def test_both_pure_arguments_bind_without_the_stack(self) -> None:
+        body = body_text(TWO_ARG_CALL, "f")
+        self.assertIn(b"\x4c\x89\xe2", body)  # mov rdx, r12
+        self.assertIn(b"\x48\x8d\x4b\xff", body)  # lea rcx, [rbx-1]
+        self.assertNotIn(b"\x50", body)  # no push: f's only pushes are prologue home saves
+        self.assertNotIn(b"\x59", body)
+        self.assertNotIn(b"\x48\xb8\x01", body)  # no 10-byte movabs for a small literal
+
+    def test_literal_arguments_bind_without_the_stack_from_main(self) -> None:
+        body = body_text(TWO_ARG_CALL, "main")
+        # f(3, 4) from main: rdx binds first, rcx second, no stack traffic in between.
+        rdx_then_rcx = b"\x48\xba\x04\x00\x00\x00\x00\x00\x00\x00\x48\xb9\x03"
+        self.assertIn(rdx_then_rcx, body)
+
+
+ACKERMANN_SHAPE = (
+    "fn ack(m: i64, n: i64) -> i64 { "
+    "if m == 0 { return n + 1; } "
+    "if n == 0 { return ack(m - 1, 1); } "
+    "return ack(m - 1, ack(m, n - 1)); } "
+    "fn main() -> i64 { print(ack(2, 3)); return 0; }"
+)
+
+
+def region_bytes(source: str, name: str) -> bytes:
+    """The .text bytes of one function's body, its inline copies included.
+
+    The label-slicing helper above stops at the next label of any kind; a pair-inlined
+    body is littered with its own copy labels, so this slice runs to the first label
+    outside the function's own namespace.
+    """
+    program = sema.analyze(parser.parse(source))
+    assembler = Assembler()
+    artifact = CodeGenerator(assembler=assembler).generate(program)
+    start = artifact.text_labels[function_label(name)]
+    later = sorted(offset for label, offset in artifact.text_labels.items()
+                   if offset > start and label.startswith("fn.")
+                   and label.count(".") == 1)
+    return artifact.text[start:later[0] if later else len(artifact.text)]
+
+
+class PairDeltaInliningTest(unittest.TestCase):
+    """A two-parameter all-return-tree recursion inlines as pure text copies.
+
+    The Ackermann shape: the first parameter only ever shifts by a constant and is read
+    through the delta machinery; the second is carried in its own home register and
+    rebinds at every copy's entry. A copy must carry no stack state of its own, and the
+    shapes the emitter refuses keep their real calls.
+    """
+
+    def _pair_labels(self, source: str, name: str) -> int:
+        program, assembler = lower(source)
+        prefix = f"{function_label(program.functions[0].name)}.pair"
+        return sum(1 for label in assembler.labels if label.startswith(prefix))
+
+    def test_pair_copies_carry_no_stack_state(self) -> None:
+        program, assembler = lower(ACKERMANN_SHAPE)
+        ack = function_label(program.functions[0].name)
+        # The prologue saves both homes plus the chain counter r13; no argument pushes,
+        # no rbp frame loads, no merge stores.
+        self.assertEqual(assembler.pushes_of(ack), {"rbx", "r12", "r13"})
+        self.assertEqual(assembler.pops_of(ack), {"rbx", "r12", "r13"})
+        self.assertEqual(assembler.loads_of(ack), set())
+        self.assertEqual(assembler.stores_of(ack), set())
+
+    def test_the_n_chain_lowers_as_an_iterated_loop(self) -> None:
+        body = region_bytes(ACKERMANN_SHAPE, "ack")
+        # R(j) = f**(j+1)(1): the chain site becomes a counted loop - the counter takes
+        # the enclosing value (mov r13, r12), the value register seeds at 1, and the
+        # body is one m-shifted copy per iteration.
+        self.assertIn(b"\x4d\x89\xe5", body)       # mov r13, r12
+        self.assertIn(b"\x49\x83\xfd\x00", body)   # cmp r13, 0
+        self.assertIn(b"\x49\xbc\x01", body)       # mov r12, 1 (the seed)
+        # The loop replaces the 3**depth text-copy explosion: a 6-deep expansion used
+        # to litter thousands of pair labels; the looped form stays linear.
+        self.assertLessEqual(self._pair_labels(ACKERMANN_SHAPE, "ack"), 40)
+
+    def test_the_value_register_rebinds_for_literal_copies(self) -> None:
+        body = region_bytes(ACKERMANN_SHAPE, "ack")
+        self.assertIn(b"\x49\xbc\x01", body)     # mov r12, 1: the n == 0 copy's literal bind
+        self.assertIn(b"\x49\x89\xc4", body)     # mov r12, rax: a nested copy's result bind
+
+    def test_a_shifted_m_compare_reads_the_delta_form(self) -> None:
+        body = region_bytes(ACKERMANN_SHAPE, "ack")
+        # Inside the outer copies the shifted condition folds into the compare:
+        # `m - depth == 0` lowers as `cmp rbx, depth` - distinct literals down the copy
+        # chain, and no redundant `lea rax, [rbx-1]` ahead of a test.
+        self.assertIn(b"\x48\x83\xfb\x01", body)  # cmp rbx, 1
+        self.assertIn(b"\x48\x83\xfb\x03", body)  # cmp rbx, 3
+        self.assertNotIn(b"\x48\x8d\x43\xff", body)  # no unshifted lea rax, [rbx-1]
+
+    def test_a_parameter_rebind_stays_on_the_real_call_path(self) -> None:
+        source = ACKERMANN_SHAPE.replace(
+            "if n == 0 { return ack(m - 1, 1); }",
+            "if n == 0 { n = n - 1; return ack(m - 1, 1); }")
+        self.assertEqual(self._pair_labels(source, "ack"), 0)
+
+    def test_a_loop_in_the_body_stays_on_the_real_call_path(self) -> None:
+        source = ACKERMANN_SHAPE.replace(
+            "if m == 0 { return n + 1; }",
+            "while m < 0 { return ack(m, n); } if m == 0 { return n + 1; }")
+        self.assertEqual(self._pair_labels(source, "ack"), 0)
+
+    def test_an_other_shaped_second_argument_stays_on_the_real_call_path(self) -> None:
+        source = ACKERMANN_SHAPE.replace(
+            "return ack(m - 1, ack(m, n - 1));",
+            "return ack(m - 1, n * 2);")
+        self.assertEqual(self._pair_labels(source, "ack"), 0)
+
+

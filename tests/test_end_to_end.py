@@ -366,5 +366,44 @@ class FusedCollatzLoopTest(EndToEndTest):
         self.assertEqual(completed.stdout, "7\n")  # 3 -> 5, 8, 4, 2, 1
 
 
+class PairInlineAckermannTest(EndToEndTest):
+    """The two-parameter pair inlining answers Ackermann probes exactly.
+
+    Known values pin the lowering: copies run the same arithmetic as the real calls
+    they replace, including the n == 0 mid-chain reintroduction of a literal second
+    argument and the depth-capped fall back to real calls.
+    """
+
+    ACK = ("fn ack(m: i64, n: i64) -> i64 {"
+           " if m == 0 { return n + 1; }"
+           " if n == 0 { return ack(m - 1, 1); }"
+           " return ack(m - 1, ack(m, n - 1)); }")
+
+    ACK_PROBES = [
+        ("0, 1", "2"),
+        ("1, 4", "6"),
+        ("2, 3", "9"),
+        ("2, 5", "13"),
+        ("3, 3", "61"),
+        ("3, 5", "253"),
+    ]
+
+    def test_ackermann_probes_match_the_known_values(self) -> None:
+        for arguments, expected in self.ACK_PROBES:
+            source = (self.ACK + f" fn main() -> i64 {{ print(ack({arguments}));"
+                      " return 0; }")
+            completed = self.execute(source)
+            self.assertEqual(completed.returncode, 0, arguments)
+            self.assertEqual(completed.stdout, expected + "\n", arguments)
+
+    def test_deep_recursion_meets_the_depth_cap_and_still_answers(self) -> None:
+        # A(3, 9) nests far beyond the inline depth cap: the copies must hand off to
+        # real calls and land the exact value.
+        source = self.ACK + " fn main() -> i64 { print(ack(3, 9)); return 0; }"
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "4093\n")
+
+
 if __name__ == "__main__":
     unittest.main()

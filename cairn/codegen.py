@@ -44,6 +44,9 @@ IMMEDIATE_UPDATES = frozenset({"+", "-"})
 IMMEDIATE_MIN = -0x80000000
 IMMEDIATE_MAX = 0x7FFFFFFF
 MAX_INLINE_DEPTH = 7
+# A pair copy branches two ways per level (its own n-argument chain and the m-shifted
+# descent), so pure-text copies grow like 2**depth; the cap keeps the emission bounded.
+MAX_PAIR_INLINE_DEPTH = 6
 
 # Volatile registers that hold a left operand across a nested expression, innermost last.
 TEMPORARY_REGISTERS = ("r11", "r10")
@@ -123,6 +126,7 @@ class CodeGenerator:
     holds: Tuple[Optional[str], ...] = ()
     delta_slot: int = -1
     delta_value: int = 0
+    value_slot: int = -1
     hold_units: int = 0
     nonnegative_slots: set = field(default_factory=set)
 
@@ -168,6 +172,7 @@ class CodeGenerator:
             # save and restore with push/pop, which also drops the store-forwarding
             # latency a frame store re-load pays on the hot call path.
             hold_units = self._delta_hold_units(function)
+            pair_mode = hold_units == 0 and self._pair_inline_shape(function)
             pad_units = 0 if (len(self.homes) + hold_units) % 2 else 1
             merging = hold_units == 0 and self._body_may_hold(function.body)
             pad = hold_units == 0 and (function.slots % 2 == 0 or merging)
@@ -175,6 +180,10 @@ class CodeGenerator:
             self.current = function
             for home in self.homes:
                 asm.push(home)
+            if pair_mode:
+                # The chain counter's save slot: copies rebind r13 freely, and every
+                # call inside the copies preserves it (callee-saved ABI register).
+                asm.push("r13")
             if hold_units:
                 # Delta inlining keeps every nested merge's left value in one of these
                 # frame slots, level-indexed, so inline copies carry no stack state of
@@ -195,8 +204,10 @@ class CodeGenerator:
                 self.pad_slots = (True,)
             else:
                 self.pad_slots = (False,)
-            self.delta_slot = function.parameters[0].slot if hold_units else -1
+            self.delta_slot = function.parameters[0].slot if (hold_units or pair_mode) else -1
+            self.value_slot = function.parameters[1].slot if pair_mode else -1
             self.delta_value = 0
+            self.chain_loop_depth = 0
             self.hold_units = hold_units
             self._clear_frame(function)
             for index, parameter in enumerate(function.parameters[:MAX_PARAMETERS]):
@@ -214,6 +225,8 @@ class CodeGenerator:
                 asm.add_rsp(8)  # skip the pad slot before the pops read the save area
             if filler:
                 asm.pop(HOME_REGISTERS[-1])
+            if pair_mode:
+                asm.pop("r13")
             for home in reversed(self.homes):
                 asm.pop(home)
             asm.ret()
@@ -221,6 +234,7 @@ class CodeGenerator:
             self.hold_units = 0
             self.delta_slot = -1
             self.delta_value = 0
+            self.value_slot = -1
             self.current = None
             return
         asm.push("rbp")
@@ -467,12 +481,14 @@ class CodeGenerator:
         """
         if destination == "rax":
             self._emit_expression(expression)
+        elif isinstance(expression, syntax.Parens):
+            self._emit_into(expression.inner, destination)
+        elif self._emit_home_offset(destination, expression):
+            pass
         elif isinstance(expression, syntax.IntLiteral):
             self.assembler.mov_imm64(destination, expression.value)
         elif isinstance(expression, syntax.Name):
             self._load_slot(expression.slot, destination)
-        elif isinstance(expression, syntax.Parens):
-            self._emit_into(expression.inner, destination)
         else:
             self._emit_expression(expression)
             self.assembler.mov_reg_reg(destination, "rax")
@@ -1211,10 +1227,26 @@ class CodeGenerator:
             self.depth -= 8
             return
         if self.delta_slot >= 0 and expression.name == self.current.name:
-            if self.inline_depth < MAX_INLINE_DEPTH:
+            if (len(expression.arguments) == 1
+                    and self.inline_depth < MAX_INLINE_DEPTH):
                 delta = self._delta_argument(expression)
                 if delta is not None:
                     self._emit_delta_self_call(expression, delta)
+                    return
+            second = expression.arguments[1] if len(expression.arguments) == 2 else None
+            while isinstance(second, syntax.Parens):
+                second = second.inner
+            if (len(expression.arguments) == 2
+                    and self.value_slot >= 0
+                    and self.inline_depth < MAX_PAIR_INLINE_DEPTH
+                    and not isinstance(second, (syntax.IntLiteral, syntax.Call))):
+                # A literal-valued self-call stays a real call at every depth: its copy
+                # is the one shape every enclosing copy's n == 0 branch repeats, and
+                # text-copying it 2**depth times is what bloated the instrumented
+                # builds. The real call pays two direct binds and no stack state.
+                delta = self._delta_argument(expression)
+                if delta is not None:
+                    self._emit_pair_self_call(expression, delta)
                     return
             # A delta-eligible function's odd-shaped self-calls stay real calls: the
             # shadow-copy machinery would retarget the parameter's home register and
@@ -1223,11 +1255,10 @@ class CodeGenerator:
             self._emit_inlined_self_call(expression)
             return
         if len(expression.arguments) == 1:
-            if self._emit_home_offset(ARGUMENT_REGISTERS[0], expression.arguments[0]):
-                self._emit_call_site(function_label(expression.name))
-                return
-            self._emit_expression(expression.arguments[0])
-            asm.mov_reg_reg(ARGUMENT_REGISTERS[0], "rax")
+            self._emit_into(expression.arguments[0], ARGUMENT_REGISTERS[0])
+            self._emit_call_site(function_label(expression.name))
+            return
+        if self._emit_pure_arguments(expression.arguments):
             self._emit_call_site(function_label(expression.name))
             return
         for argument in expression.arguments:
@@ -1238,6 +1269,52 @@ class CodeGenerator:
             asm.pop(ARGUMENT_REGISTERS[index])
             self.depth -= 8
         self._emit_call_site(function_label(expression.name))
+
+    def _is_pure_argument(self, expression: Optional[syntax.Expr]) -> bool:
+        """Whether an argument can bind straight into its ABI register.
+
+        Names, literals, `name +/- literal` off a home, and their parenthesized forms
+        cannot call or trap, so binding them out of source order is unobservable and
+        none of their lowerings clobbers another argument register.
+        """
+        argument = expression
+        while isinstance(argument, syntax.Parens):
+            argument = argument.inner
+        if isinstance(argument, (syntax.IntLiteral, syntax.Name)):
+            return True
+        if isinstance(argument, syntax.Binary) and argument.op in ("+", "-"):
+            target = None
+            value = None
+            if isinstance(argument.right, syntax.IntLiteral):
+                target, value = argument.left, argument.right.value
+            elif argument.op == "+" and isinstance(argument.left, syntax.IntLiteral):
+                target, value = argument.right, argument.left.value
+            return (
+                isinstance(target, syntax.Name)
+                and -2 ** 31 <= value < 2 ** 31
+                and self._home(target.slot) is not None
+            )
+        return False
+
+    def _emit_pure_arguments(self, arguments: list) -> bool:
+        """Bind call arguments straight into their registers, or return False.
+
+        The generic path pays a push and a pop per argument plus the round-trip
+        through rax; every multi-argument call with pure arguments drops both. When
+        only the first argument is pure (the Ackermann shape `f(m - 1, f(m, n - 1))`),
+        it still binds directly after the second argument evaluates, saving one pair.
+        """
+        registers = ARGUMENT_REGISTERS[:len(arguments)]
+        if all(self._is_pure_argument(argument) for argument in arguments):
+            for register, argument in zip(reversed(registers), reversed(arguments)):
+                self._emit_into(argument, register)
+            return True
+        if len(arguments) == 2 and self._is_pure_argument(arguments[0]):
+            self._emit_expression(arguments[1])
+            self.assembler.mov_reg_reg(registers[1], "rax")
+            self._emit_into(arguments[0], registers[0])
+            return True
+        return False
 
     def _delta_hold_units(self, function: syntax.Function) -> int:
         """The per-level merge slots delta inlining needs, in 8-byte units, or 0 when ineligible.
@@ -1350,6 +1427,231 @@ class CodeGenerator:
         self.epilogue = saved_epilogue
         self.delta_value = saved_value
         self.inline_depth = saved_depth
+
+    def _pair_inline_shape(self, function: syntax.Function) -> bool:
+        """Whether the function fits the two-parameter pure-text inlining shape.
+
+        The Ackermann lives here: exactly the two parameters (no other slot), a body
+        whose every path ends in an explicit `return` (no binding statement, no loop,
+        no call inside any condition), every self-call's first argument shifted by a
+        constant off the first parameter, and a second argument that is a literal, the
+        second parameter (optionally shifted), or another same-shaped self-call. Copies
+        then read the first parameter through the delta machinery and carry the second
+        in its home register, rebinding it at entry; `MAX_PAIR_INLINE_DEPTH` bounds the
+        2**depth growth of the pure-text copies.
+        """
+        if function.slots != 2 or len(function.parameters) != 2:
+            return False
+        if not self._has_value_zero_guard(function.body, function.parameters[1].slot):
+            return False
+        return self._is_pair_body(function.body, function, 0)
+
+    def _has_value_zero_guard(self, node, slot: int) -> bool:
+        """Whether the body tests the second parameter against zero ahead of the tail.
+
+        The chain loop's counter starts at the second parameter's live value, which is
+        exact only when a `n == 0` guard governs the tail: it is what makes the loop
+        count and the recursion's unwinding agree, rung by rung.
+        """
+        if not isinstance(node, syntax.Block):
+            return False
+        return any(
+            isinstance(statement, syntax.If) and self._is_zero_test(statement.condition, slot)
+            for statement in node.statements[:-1])
+
+    def _is_zero_test(self, condition, slot: int) -> bool:
+        """Whether the condition compares the slot-holding name against literal zero."""
+        while isinstance(condition, syntax.Parens):
+            condition = condition.inner
+        if isinstance(condition, syntax.Binary) and condition.op == "==":
+            names = [side for side in (condition.left, condition.right)
+                     if isinstance(side, syntax.Name)]
+            zeros = [side for side in (condition.left, condition.right)
+                     if isinstance(side, syntax.IntLiteral) and side.value == 0]
+            return (len(names) == 1 and len(zeros) == 1
+                    and names[0].slot == slot)
+        return False
+
+    def _is_chain_step(self, argument) -> bool:
+        """Whether the argument is `param1 - 1`: the exact one-step chain the loop replaces."""
+        return (isinstance(argument, syntax.Binary) and argument.op == "-"
+                and isinstance(argument.right, syntax.IntLiteral)
+                and argument.right.value == 1
+                and isinstance(argument.left, syntax.Name)
+                and argument.left.slot == self.value_slot)
+
+    def _emit_chain_loop(self, expression: syntax.Call) -> None:
+        """Lower the one-step delta-0 chain as an iterated loop: `R(j) = f**(j+1)(1)`.
+
+        The enclosing conditions proved m != 0, and the shape's `n == 0` guard governs
+        the tail, so the site's own copy body collapses to its tail unfolding: the seed
+        value of 1 IS the chain's base case (the n == 0 exit returns ack(m - 1, 1),
+        which the first iteration applies), and f(v) = ack(m - 1, v) is exactly one
+        m-shifted pair copy whose second parameter needs no rebinding. The counter
+        rides r13 - callee-saved, unused by the two-home frame - so the loop body and
+        its real calls cannot disturb it. A negative starting value never terminates
+        the reference recursion either; the loop wraps after 2**64 counts instead of
+        overflowing the stack, which the ADR records as the one divergence.
+        """
+        asm = self.assembler
+        value_home = self._home(self.value_slot)
+        top = self._fresh("pair.loop")
+        exit_label = self._fresh("pair.exit")
+        # A loop whose body copy runs another chain site rebinds r13, so any
+        # enclosing loop's counter parks on the stack for the body's duration.
+        nested = self.chain_loop_depth > 0
+        if nested:
+            asm.push("r13")
+        self.chain_loop_depth += 1
+        asm.mov_reg_reg("r13", value_home)       # k := n: the count the chain runs
+        asm.mov_imm64(value_home, 1)             # v := 1: the chain's own base case
+        asm.label(top)
+        asm.cmp_imm("r13", 0)
+        asm.jcc("e", exit_label)
+        # One application f(v): the m-shifted copy reads the value register as it is.
+        # The synthetic call borrows the site's spans; nothing re-parses source text.
+        span = expression.span
+        self._emit_pair_self_call(syntax.Call(
+            span=span,
+            name=self.current.name,
+            arguments=[syntax.Binary(span=span, op="-",
+                                     left=syntax.Name(span=span, slot=self.delta_slot),
+                                     right=syntax.IntLiteral(span=span, value=1)),
+                       syntax.Name(span=span, slot=self.value_slot)]), -1)
+        asm.mov_reg_reg(value_home, "rax")       # v := f(v)
+        asm.sub_imm("r13", 1)
+        asm.jcc("nz", top)
+        asm.label(exit_label)
+        asm.mov_reg_reg("rax", value_home)       # the site's result
+        self.chain_loop_depth -= 1
+        if nested:
+            asm.pop("r13")
+
+    def _is_pair_body(self, node, function: syntax.Function, depth: int) -> bool:
+        """Whether every path through `node` ends in an explicit pair-shaped `return`."""
+        if node is None:
+            return False
+        if isinstance(node, syntax.Return):
+            return self._is_pair_return(node.value, function, depth)
+        if isinstance(node, (syntax.Let, syntax.Assign, syntax.While, syntax.Break,
+                             syntax.Continue, syntax.ExprStmt)):
+            return False
+        if isinstance(node, syntax.If):
+            if node.then_block is None or node.else_block is None:
+                return False
+            if has_call(node.condition):
+                return False
+            return (self._is_pair_body(node.then_block, function, depth)
+                    and self._is_pair_body(node.else_block, function, depth))
+        if isinstance(node, syntax.Block):
+            statements = node.statements
+            if not statements or not isinstance(statements[-1], syntax.Return):
+                return False
+            for statement in statements[:-1]:
+                # A fall-through path runs no copy yet, so the value register it reads
+                # is still the caller's; a taken path must leave through an epilogue.
+                if not isinstance(statement, syntax.If) or has_call(statement.condition):
+                    return False
+                if statement.then_block is not None and not self._is_pair_body(
+                        statement.then_block, function, depth):
+                    return False
+                if statement.else_block is not None and not self._is_pair_body(
+                        statement.else_block, function, depth):
+                    return False
+            return self._is_pair_return(statements[-1].value, function, depth)
+        return False
+
+    def _is_pair_return(self, expression, function: syntax.Function, depth: int) -> bool:
+        """Whether a `return` value fits the pair copies: no self-call, or one that
+        matches the two-parameter shape (possibly nesting in its second argument)."""
+        while isinstance(expression, syntax.Parens):
+            expression = expression.inner
+        if not has_call(expression):
+            return True
+        if isinstance(expression, syntax.Call) and expression.name == function.name:
+            return self._is_pair_call(expression, function, depth)
+        return False
+
+    def _is_pair_call(self, call: syntax.Call, function: syntax.Function,
+                      depth: int) -> bool:
+        """Whether one self-call matches the pair shape: first argument a constant shift
+        of the first parameter, second a bindable value or a nested same-shaped call."""
+        if len(call.arguments) != 2:
+            return False
+        first, second = call.arguments[0], call.arguments[1]
+        if self._delta_argument(call, function.parameters[0].slot) is None:
+            return False
+        while isinstance(second, syntax.Parens):
+            second = second.inner
+        if isinstance(second, syntax.IntLiteral):
+            return True
+        if isinstance(second, syntax.Name) and second.slot == function.parameters[1].slot:
+            return True
+        if (isinstance(second, syntax.Binary) and second.op in ("+", "-")):
+            target, value = None, None
+            if isinstance(second.right, syntax.IntLiteral):
+                target, value = second.left, second.right.value
+            elif second.op == "+" and isinstance(second.left, syntax.IntLiteral):
+                target, value = second.right, second.left.value
+            if (isinstance(target, syntax.Name)
+                    and target.slot == function.parameters[1].slot
+                    and -2 ** 31 <= value < 2 ** 31):
+                return True
+        if (depth < MAX_PAIR_INLINE_DEPTH
+                and isinstance(second, syntax.Call)
+                and second.name == function.name
+                and self._is_pair_call(second, function, depth + 1)):
+            return True
+        return False
+
+    def _emit_pair_self_call(self, expression: syntax.Call, delta: int) -> None:
+        """Lower a two-parameter shape self-call as pure text, binding the value first.
+
+        The copy's first parameter reads through the accumulated delta exactly like a
+        delta copy; its second parameter lives in one home register that the copy
+        rebinds at entry - a literal, a shift of the enclosing value, or the second
+        argument's result (a nested copy, or below the depth cap a real call). Reads of
+        the second parameter never sit on a path that survives a rebind: the shape
+        checks in `_pair_inline_shape` keep every desced copy's enclosing text past its
+        binding free of further reads of the register.
+        """
+        asm = self.assembler
+        saved_epilogue = self.epilogue
+        saved_delta, saved_depth = self.delta_value, self.inline_depth
+        saved_facts = set(self.nonnegative_slots)
+        value_home = self._home(self.value_slot)
+        argument = expression.arguments[1]
+        while isinstance(argument, syntax.Parens):
+            argument = argument.inner
+        if self._is_chain_step(argument):
+            # The delta-0 chain is a counted iteration, not another text copy: with
+            # delta 0 the copy body its loop re-runs is the same text at the same
+            # shift, so copying it again would only multiply code (and time).
+            self._emit_chain_loop(expression)
+            return
+        if isinstance(argument, syntax.Call):
+            # The nested copy - or, past the depth cap, the real call - lands its
+            # result in rax; the copy's second parameter binds it.
+            self._emit_expression(argument)
+            asm.mov_reg_reg(value_home, "rax")
+        elif isinstance(argument, syntax.IntLiteral):
+            asm.mov_imm64(value_home, argument.value)
+        elif isinstance(argument, syntax.Binary):
+            value = argument.right.value if argument.op == "+" else -argument.right.value
+            if isinstance(argument.left, syntax.IntLiteral):
+                value = argument.left.value
+            asm.lea_imm(value_home, value_home, value)
+        # A bare second parameter binds nothing: the register already holds the value.
+        self.nonnegative_slots.discard(self.value_slot)
+        self.delta_value -= delta
+        self.inline_depth += 1
+        self.epilogue = self._fresh(f"{function_label(self.current.name)}.pair")
+        self._emit_block(self.current.body, tail=True)
+        asm.label(self.epilogue)
+        self.epilogue = saved_epilogue
+        self.delta_value = saved_delta
+        self.inline_depth = saved_depth
+        self.nonnegative_slots = saved_facts
 
     def _is_inline_candidate(self, expression: syntax.Call) -> bool:
         """Whether this call may be lowered as an inline copy of the current function.

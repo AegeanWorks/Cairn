@@ -296,7 +296,7 @@ comparison same-run while still reporting a best and a median:
 | `fib30` | 2,692,537 recursive calls | 6.4 ms | 7.1 ms | 8.6 ms | 12,800 bytes |
 | `folded_math` | 20,000,000 bit-mixed constant additions | 15.3 ms | 16.1 ms | 17.3 ms | 2,048 bytes |
 | `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-108 ms | 155-172 ms | 145-148 ms | 2,560 bytes |
-| `ackermann` | `A(3,9)`, about 25 million calls | 44-65 ms | 16-19 ms | 53-54 ms | 2,560 bytes |
+| `ackermann` | `A(3,9)`, about 25 million calls | 9.9 ms | 14.1 ms | 17.7 ms | 3,072 bytes |
 
 Standings per case: `fib30`, `folded_math` and `collatz` are won outright against both baselines (fib30
 net compute over the near-7 ms process-and-printf floor is about 0.6-0.8 ms against C's
@@ -318,9 +318,13 @@ dependency chain.
 carries the parity bit in CF), the odd value is one scaled `lea` of the halved slot, a `cmov`
 replaces the parity branch, and one `adc` pays the pair's steps — three instructions per
 reference step, one taken branch, zero mispredicts, where both baselines branch on the parity
-test. `ackermann` is the open case: deep two-argument recursion pays the full call path at
-2.7-3.8x C's dedicated frame, which no inlining story covers yet — it beats Rust in most runs,
-and it is the next recorded target.
+test. `ackermann` is the two-argument pair win (ADR-025): pure arguments bind straight into the
+argument registers with no stack traffic, the two-parameter recursion shape lowers as pure-text
+body copies, and the delta-0 `ack(m, n - 1)` chain site collapses into a counted loop
+(`R(j) = f**(j+1)(1)`) whose body is a single shifted copy — 9.9 ms against C's 14.1 ms and
+Rust's 17.7 ms, with the image at 3,072 bytes. Every committed case now measures at or ahead of
+both baselines on best time; `xorshift` remains the recorded structural tie at the ISA latency
+floor, and `folded_math`'s margin is inside run-to-run spread in some sessions.
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 `movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics
