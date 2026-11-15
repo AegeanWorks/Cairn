@@ -1,0 +1,37 @@
+// Binary GCD (Stein's algorithm) over one million generated pairs: subtraction and shift
+// loops with a swap, no division. Twin of binary_gcd.c and binary_gcd.rs; all three print
+// the identical total.
+fn bgcd(a: i64, b: i64) -> i64 {
+    if a == 0 { return b; }
+    if b == 0 { return a; }
+    var k: i64 = 0;
+    while (a & 1) == 0 && (b & 1) == 0 {
+        a = a >> 1;
+        b = b >> 1;
+        k = k + 1;
+    }
+    while (a & 1) == 0 { a = a >> 1; }
+    while (b & 1) == 0 { b = b >> 1; }
+    while b != 0 {
+        if a > b {
+            var t: i64 = a; a = b; b = t;
+        }
+        b = b - a;
+        if b == 0 { break; }
+        while (b & 1) == 0 { b = b >> 1; }
+    }
+    return a << k;
+}
+fn main() -> i64 {
+    var i: i64 = 1;
+    var total: i64 = 0;
+    while i <= 1000000 {
+        var a: i64 = (i * 48271) % 2147483647;
+        var b: i64 = ((i * 1103515245) % 2147483647) >> 8;
+        if b == 0 { b = 3; }
+        total = total + bgcd(a, b + 1);
+        i = i + 1;
+    }
+    print(total);
+    return 0;
+}

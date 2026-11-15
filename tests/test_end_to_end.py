@@ -405,5 +405,76 @@ class PairInlineAckermannTest(EndToEndTest):
         self.assertEqual(completed.stdout, "4093\n")
 
 
+class TwinParityTest(unittest.TestCase):
+    """Every benchmark triple compiles to three programs that print the same total.
+
+    A scoreboard number earned against a twin that computes something else would be a
+    lie, so the harness's own builders compile the Cairn source and its C and Rust twins
+    and the three executables must agree byte for byte on stdout. Baselines without an
+    installed compiler are skipped, never assumed.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        from benchmarks import run_benchmarks
+        cls.harness = run_benchmarks
+        cls.c_compiler = run_benchmarks.find_c_compiler()
+        cls.rust_compiler = run_benchmarks.find_rust_compiler()
+
+    def setUp(self) -> None:
+        self.folder = Path(tempfile.mkdtemp(prefix="cairn-parity-"))
+        self.addCleanup(self._cleanup)
+
+    def _cleanup(self) -> None:
+        for child in sorted(self.folder.rglob("*"), reverse=True):
+            child.unlink(missing_ok=True)
+        self.folder.rmdir()
+
+    def _assert_par(self, case) -> None:
+        cairn_exe = self.folder / f"{case.name}.cairn.exe"
+        self.harness.build_cairn(self.harness.ROOT / case.cairn, cairn_exe)
+        cairn_out = self.harness.run_command([str(cairn_exe)], 300)
+        self.assertEqual(cairn_out.returncode, 0, case.name)
+        expected = cairn_out.stdout
+        self.assertTrue(expected.strip(), case.name)
+        if self.c_compiler:
+            c_exe = self.folder / f"{case.name}.c.exe"
+            self.harness.build_c(self.c_compiler, self.harness.ROOT / case.c_source, c_exe)
+            c_out = self.harness.run_command([str(c_exe)], 300)
+            self.assertEqual(c_out.returncode, 0, case.name)
+            self.assertEqual(c_out.stdout, expected, f"{case.name}: C twin diverges")
+        if self.rust_compiler:
+            rust_exe = self.folder / f"{case.name}.rust.exe"
+            self.harness.build_rust(self.rust_compiler,
+                                    self.harness.ROOT / case.rust_source, rust_exe)
+            rust_out = self.harness.run_command([str(rust_exe)], 300)
+            self.assertEqual(rust_out.returncode, 0, case.name)
+            self.assertEqual(rust_out.stdout, expected, f"{case.name}: Rust twin diverges")
+
+    def test_xorshift_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[0])
+
+    def test_fib30_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[1])
+
+    def test_folded_math_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[2])
+
+    def test_collatz_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[3])
+
+    def test_ackermann_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[4])
+
+    def test_nqueens_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[5])
+
+    def test_binary_gcd_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[6])
+
+    def test_call_chain_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[7])
+
+
 if __name__ == "__main__":
     unittest.main()

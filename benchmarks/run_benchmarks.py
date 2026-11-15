@@ -69,6 +69,12 @@ CASES: Tuple[Case, ...] = (
          "benchmarks/collatz.rs", 1_000_000, "probes"),
     Case("ackermann", "benchmarks/ackermann.crn", "benchmarks/ackermann.c",
          "benchmarks/ackermann.rs", 1, "calls"),
+    Case("nqueens", "benchmarks/nqueens.crn", "benchmarks/nqueens.c",
+         "benchmarks/nqueens.rs", 1, "solutions"),
+    Case("binary_gcd", "benchmarks/binary_gcd.crn", "benchmarks/binary_gcd.c",
+         "benchmarks/binary_gcd.rs", 1_000_000, "pairs"),
+    Case("call_chain", "benchmarks/call_chain.crn", "benchmarks/call_chain.c",
+         "benchmarks/call_chain.rs", 20_000_000, "calls"),
 )
 
 

@@ -263,5 +263,19 @@ class CompilerProbeTest(unittest.TestCase):
         self.assertIn(compiler, [None, *run_benchmarks.C_COMPILERS])
 
 
+class RegistryShapeTest(unittest.TestCase):
+    """The measured set: which cases the scoreboard commits to, by name and unit."""
+
+    def test_the_registry_names_every_commitment(self) -> None:
+        names = [case.name for case in run_benchmarks.CASES]
+        self.assertEqual(names, ["xorshift", "fib30", "folded_math", "collatz",
+                                 "ackermann", "nqueens", "binary_gcd", "call_chain"])
+
+    def test_each_case_declares_a_unit_and_a_positive_iteration_count(self) -> None:
+        for case in run_benchmarks.CASES:
+            self.assertTrue(case.unit, case.name)
+            self.assertGreater(case.iterations, 0, case.name)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -297,6 +297,9 @@ comparison same-run while still reporting a best and a median:
 | `folded_math` | 20,000,000 bit-mixed constant additions | 15.3 ms | 16.1 ms | 17.3 ms | 2,048 bytes |
 | `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-108 ms | 155-172 ms | 145-148 ms | 2,560 bytes |
 | `ackermann` | `A(3,9)`, about 25 million calls | 9.9 ms | 14.1 ms | 17.7 ms | 3,072 bytes |
+| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 27.5 ms | 23.5 ms | 20.9 ms | 2,560 bytes |
+| `binary_gcd` | 1,000,000 Stein-GCD pairs | 190.2 ms | 169.9 ms | 141.8 ms | 3,072 bytes |
+| `call_chain` | 20,000,000 three-argument hot-path calls | 95.9 ms | 35.5 ms | 70.9 ms | 2,560 bytes |
 
 Standings per case: `fib30`, `folded_math` and `collatz` are won outright against both baselines (fib30
 net compute over the near-7 ms process-and-printf floor is about 0.6-0.8 ms against C's
@@ -331,6 +334,15 @@ The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 rather than codegen. Its replacement, `xorshift`, is a serial state chain no optimizer can fold or
 vectorise; the folding evidence and the retired numbers are in ADR-017, and the argument-path
 rewrite is in ADR-018.
+
+Three later cases widen the measured surface (ADR-026), each landed behind at least one
+baseline and recorded as a target, `collatz`-style: `nqueens` (bitmask backtracking, many live
+locals per frame — 1.17x C, 1.31x Rust), `binary_gcd` (subtraction and shift loops with a
+swap — 1.12x C, 1.34x Rust) and `call_chain` (three-argument calls with non-pure operands on the
+hot path — 2.7x C, 1.35x Rust, the scoreboard's worst pairing since ADR-018's argument work
+began there). A twin-parity gate (`tests/test_end_to_end.py::TwinParityTest`) compiles every
+case's Cairn, C and Rust sources and hard-fails unless all three print the identical total, so a
+standing can never be earned against a twin that computes something else.
 
 Run-to-run spread on this machine is about 10 percent, so treat these as an order of magnitude
 rather than three significant figures; the harness prints best, median and worst for that reason.

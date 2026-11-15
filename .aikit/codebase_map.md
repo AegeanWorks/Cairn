@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `41`
-- **Total Classes**: `82`
+- **Total Classes**: `84`
 - **Total Top-Level Functions**: `138`
-- **Total Class Methods**: `496`
-- **Total Source Lines**: `8881`
+- **Total Class Methods**: `510`
+- **Total Source Lines**: `8972`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`41` module(s))
-- **Not indexed by this map**: cpp (`5` file(s)), rust (`5` file(s))
+- **Not indexed by this map**: cpp (`8` file(s)), rust (`8` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -32,7 +32,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C and Rust baselines.*
 
-**Size**: `358` lines (`16111` bytes)
+**Size**: `364` lines (`16507` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C and Rust sources, and what one iteration is.*
@@ -613,7 +613,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `267` lines (`14704` bytes)
+**Size**: `281` lines (`15367` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -644,6 +644,9 @@
   - Method `.test_errored_case_is_reported_not_raised()`
 - `class CompilerProbeTest` - *Compiler detection must return a name the harness knows, or nothing at all.*
   - Method `.test_detected_compiler_is_one_of_the_known_families()`
+- `class RegistryShapeTest` - *The measured set: which cases the scoreboard commits to, by name and unit.*
+  - Method `.test_the_registry_names_every_commitment()`
+  - Method `.test_each_case_declares_a_unit_and_a_positive_iteration_count()`
 
 ---
 
@@ -813,7 +816,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `409` lines (`15279` bytes)
+**Size**: `480` lines (`18438` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -851,6 +854,19 @@
 - `class PairInlineAckermannTest` - *The two-parameter pair inlining answers Ackermann probes exactly.*
   - Method `.test_ackermann_probes_match_the_known_values()`
   - Method `.test_deep_recursion_meets_the_depth_cap_and_still_answers()`
+- `class TwinParityTest` - *Every benchmark triple compiles to three programs that print the same total.*
+  - Method `.setUpClass()`
+  - Method `.setUp()`
+  - Method `._cleanup()`
+  - Method `._assert_par(case)`
+  - Method `.test_xorshift_twins_print_the_same_total()`
+  - Method `.test_fib30_twins_print_the_same_total()`
+  - Method `.test_folded_math_twins_print_the_same_total()`
+  - Method `.test_collatz_twins_print_the_same_total()`
+  - Method `.test_ackermann_twins_print_the_same_total()`
+  - Method `.test_nqueens_twins_print_the_same_total()`
+  - Method `.test_binary_gcd_twins_print_the_same_total()`
+  - Method `.test_call_chain_twins_print_the_same_total()`
 
 ---
 
