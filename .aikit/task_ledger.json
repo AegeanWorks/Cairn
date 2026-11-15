@@ -3,25 +3,16 @@
   "active_task": {
     "task_id": "cairn-ackermann-win",
     "last_phase": "4",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794749389.791354,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794749417.0155654,
+    "completed_head": "4989981a6409be084ade67fdd08e37123c143778"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-scoreboard-pass",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[3/4] ADR-018 argument-path rewrite landed (imm operands, shift_imm, mov single-arg calls; print push/pop kept as return-value restoration); 222 tests pass, 4/4 gates; standings xorshift 0.98/1.03, folded 0.98/0.92 pass, fib30 1.39/1.16 open needing inlining pass; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794670256.752452,
-      "timestamp_str": "2026-11-14 18:30:56",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-scoreboard-pass",
       "phase": "in_progress",
@@ -281,6 +272,22 @@
       "timestamp_str": "2026-11-15 16:29:49",
       "agent": "mistral:vibe",
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-ackermann-win",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-ackermann-win' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794749417.036809,
+      "timestamp_str": "2026-11-15 16:30:17",
+      "agent": "mistral:vibe",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
