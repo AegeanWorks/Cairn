@@ -314,6 +314,16 @@ class Assembler:
         self.emit(bytes([_rex(True, dst >> 3, 0, src >> 3), 0x0F, 0xAF,
                          *_modrm(3, dst, src)]))
 
+    def imul_high(self, reg: str) -> None:
+        """One-operand `imul r64`: the signed 128-bit `rdx:rax = rax * reg`.
+
+        The high half is what a magic-multiply division reads; no 128-bit product of
+        two int64 values can overflow the 128-bit container, so this never faults.
+        """
+        code = REGISTERS[reg]
+        self.emit(bytes([_rex(True, 0, 0, code >> 3), 0xF7,
+                         0xC0 | (0x5 << 3) | (code & 7)]))
+
     def test(self, reg: str) -> None:
         """`test r64, r64`, setting flags from a value without changing it."""
         code = REGISTERS[reg]

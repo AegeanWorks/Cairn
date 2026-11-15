@@ -6,14 +6,14 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `41`
-- **Total Classes**: `84`
-- **Total Top-Level Functions**: `138`
-- **Total Class Methods**: `510`
-- **Total Source Lines**: `8972`
+- **Total Python Modules**: `42`
+- **Total Classes**: `89`
+- **Total Top-Level Functions**: `143`
+- **Total Class Methods**: `559`
+- **Total Source Lines**: `10058`
 
 ## 🧭 Map Coverage
-- **Indexed**: python (`41` module(s))
+- **Indexed**: python (`42` module(s))
 - **Not indexed by this map**: cpp (`8` file(s)), rust (`8` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
@@ -128,7 +128,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `1768` lines (`86689` bytes)
+**Size**: `2373` lines (`117975` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -147,9 +147,15 @@
   - Method `._fold_update(home, slot, expression)` - *Emit `home = home op value` when the expression updates its own slot.*
   - Method `._emit_home_offset(destination, expression)` - *Lower `homed name ± literal` as one `lea`, or return False when the shape differs.*
   - Method `._emit_into(expression, destination)` - *Lower an expression, using `destination` directly when it is a leaf.*
+  - Method `._emit_binary_into(expression, destination)` - *Lower a call-free, trap-free binary expression with its result in `destination`.*
+  - Method `._emit_left_into(expression, destination)` - *Compute the left operand with its value in `destination`, or refuse.*
+  - Method `._computes_in_rax_only(expression, destination)` - *Whether a right operand's lowering touches rax alone.*
+  - Method `._stripped(expression)` - *The expression without its wrapping parentheses.*
+  - Method `._emit_scaled_product(expression, destination)` - *Lower `name * 3|5|9` as one scaled `lea` into `destination`, or refuse.*
   - Method `._emit_block(block, tail)` - *Emit every statement of a block in order.*
   - Method `._emit_statement(statement, tail)` - *Lower one statement; `tail` only concerns a final `return`.*
   - Method `._emit_if(statement, tail)` - *`if` as a conditional branch and two labelled bodies.*
+  - Method `._emit_select_if(statement)` - *Lower `if t > c { t = t - c; } else { t = t + c; }` as sub, lea, cmov — or refuse.*
   - Method `._emit_while(statement)` - *`while` with its own break and continue targets.*
   - Method `._try_emit_halving_loop(statement)` - *Emit a fused odd-pair body as one unconditional half-step, or refuse.*
   - Method `._is_nonnegative(slot)` - *Whether the slot provably holds a non-negative value at this emit point.*
@@ -164,6 +170,7 @@
   - Method `._emit_binary(expression)` - *Short-circuit `&&`/`||`, otherwise place the left operand, then combine.*
   - Method `._emit_left_operand(left, right)` - *Evaluate `left`, keep it across `right`, and leave it in rcx with right in rax.*
   - Method `._emit_power_of_two_division(expression)` - *Lower `x / 2**b` or `x % 2**b` as a shift fixup chain; True when emitted.*
+  - Method `._emit_magic_division(expression)` - *Lower `x / d` or `x % d` for a positive literal `d` as a magic multiply.*
   - Method `._scaled_sum_terms(expression)` - *The scaled-item pattern of a `+` expression: `(Name, scale_log2, addend, with_base)`.*
   - Method `._emit_scaled_sum(expression)` - *Lower `c1 + k*c2` (either operand order) as one scaled `lea`; True when emitted.*
   - Method `._emit_division(operator)` - *Signed division with an explicit zero-divisor trap, quotient or remainder.*
@@ -172,6 +179,7 @@
   - Method `._emit_call(expression)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
   - Method `._is_pure_argument(expression)` - *Whether an argument can bind straight into its ABI register.*
   - Method `._emit_pure_arguments(arguments)` - *Bind call arguments straight into their registers, or return False.*
+  - Method `._contains_division(expression)` - *Whether any subtree of `expression` divides — the one trapping operand kind.*
   - Method `._delta_hold_units(function)` - *The per-level merge slots delta inlining needs, in 8-byte units, or 0 when ineligible.*
   - Method `._assign_writes_parameter(node, slot)` - *Whether any statement in `node` may rebind or shadow the parameter in `slot`.*
   - Method `._has_delta_self_call(node, name, slot)` - *Whether `node` contains at least one self-call whose argument carries a constant delta.*
@@ -188,6 +196,14 @@
   - Method `._emit_pair_self_call(expression, delta)` - *Lower a two-parameter shape self-call as pure text, binding the value first.*
   - Method `._is_inline_candidate(expression)` - *Whether this call may be lowered as an inline copy of the current function.*
   - Method `._emit_inlined_self_call(expression)` - *Lower a self-call as one inline copy: the argument to a shadow home, the body in place.*
+  - Method `._foreign_inline_target(expression)` - *The function to copy into this call site, or None when the shape stays a call.*
+  - Method `._body_is_copy_free(body)` - *Whether a whole statement tree calls, divides, loops, or breaks — any refuses a copy.*
+  - Method `._emit_foreign_inline(callee)` - *Lower a call to another function as one copy of its body, result in rax.*
+  - Method `._rebinds_parameters(body, count)` - *Whether any statement assigns a parameter slot.*
+  - Method `._expression_reads(expression, slot)` - *Whether an expression reads `slot`.*
+  - Method `._statement_touches(statement, slot)` - *Whether a statement reads or writes `slot` in any position.*
+  - Method `._statement_touches_branch(block, slot)` - *Whether any statement of a nested block, at any depth, touches `slot`.*
+  - Method `._cleared_before_use(body, slot)` - *Whether a top-level assignment to `slot` comes before anything can touch it.*
   - Method `._body_may_hold(body)` - *Whether any merge in this body keeps its left value across a right operand that calls.*
   - Method `._emit_call_site(target)` - *A call, padded so rsp is 16-byte aligned as the ABI requires.*
 
@@ -198,6 +214,7 @@
 - `def slot_of(expression)` - *The slot a parenthesised name refers to, or None for every other expression.*
 - `def _is_plus_step(statement, level)` - *Whether the statement is `amount = amount + level` for its own slot.*
 - `def is_leaf(expression)` - *Whether evaluating the expression is a load or a literal move and nothing else.*
+- `def magic_division_parameters(divisor)` - *A `(multiplier, shift)` so the magic-multiply chain divides by `divisor` exactly.*
 - `def generate(program)` - *Lower a checked program to a linked artifact.*
 
 ---
@@ -321,7 +338,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `429` lines (`19406` bytes)
+**Size**: `439` lines (`19857` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -361,6 +378,7 @@
   - Method `.cmp_imm(reg, value)` - *`cmp r64, imm`, so a comparison with a small literal needs no second register.*
   - Method `.arith_imm(extension, reg, value)` - *`op r64, imm` by group-1 extension: add (0), or (1), and (4), sub (5), xor (6).*
   - Method `.imul(destination, source)` - *`imul r64, r/m64`: two-operand signed multiply.*
+  - Method `.imul_high(reg)` - *One-operand `imul r64`: the signed 128-bit `rdx:rax = rax * reg`.*
   - Method `.test(reg)` - *`test r64, r64`, setting flags from a value without changing it.*
   - Method `.test_imm(reg, value)` - *`test r/m8, imm8` (F6 /0) for a small positive mask: flags only, value kept.*
   - Method `.setcc(condition)` - *`setcc al` followed by `movzx rax, al`: a comparison result as 0 or 1 in rax.*
@@ -727,7 +745,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `608` lines (`28824` bytes)
+**Size**: `853` lines (`41392` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -795,6 +813,9 @@
 - `class MultiArgumentCallTest` - *Pure arguments bind straight into their ABI registers, without the stack round-trip.*
   - Method `.test_both_pure_arguments_bind_without_the_stack()`
   - Method `.test_literal_arguments_bind_without_the_stack_from_main()`
+  - Method `.test_mixed_call_free_arguments_bind_reversed_without_the_stack()`
+  - Method `.test_a_call_inside_an_argument_keeps_the_stack_fallback()`
+  - Method `.test_a_division_inside_an_argument_keeps_the_stack_fallback()`
 - `class PairDeltaInliningTest` - *A two-parameter all-return-tree recursion inlines as pure text copies.*
   - Method `._pair_labels(source, name)`
   - Method `.test_pair_copies_carry_no_stack_state()`
@@ -804,12 +825,31 @@
   - Method `.test_a_parameter_rebind_stays_on_the_real_call_path()`
   - Method `.test_a_loop_in_the_body_stays_on_the_real_call_path()`
   - Method `.test_an_other_shaped_second_argument_stays_on_the_real_call_path()`
+- `class ForeignInlineTest` - *A call to another small, call-free function lowers as one copy of its body.*
+  - Method `.test_a_small_foreign_function_is_copied_into_its_caller()`
+  - Method `.test_a_copy_labels_the_caller_namespace()`
+  - Method `.test_free_homes_absorb_a_two_slot_copy_without_any_push()`
+  - Method `.test_parameters_ride_their_argument_registers_through_a_copy()`
+  - Method `.test_a_parameter_rebind_falls_back_to_the_bind_once_copy()`
+  - Method `.test_a_looping_callee_stays_a_real_call()`
+  - Method `.test_a_calling_callee_stays_a_real_call()`
+  - Method `.test_a_dividing_callee_stays_a_real_call()`
+  - Method `.test_a_printing_callee_stays_a_real_call()`
+  - Method `.test_a_frame_full_callee_stays_a_real_call()`
+  - Method `.test_a_one_argument_callee_copies_with_a_direct_bind()`
+- `class InsideACopyTest` - *A copy runs once per loop iteration, so prologue-once costs must not repeat in it.*
+  - Method `.test_a_tail_returning_copy_skips_the_implicit_return_zero()`
+  - Method `.test_a_copy_whose_last_statement_is_not_a_return_keeps_the_implicit_zero()`
+  - Method `.test_two_homed_names_compare_in_place()`
+  - Method `.test_a_folded_update_reads_the_other_home_directly()`
+  - Method `.test_two_homed_names_compare_never_routes_through_rax()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
 - `def body_text(source, name)` - *The .text bytes of one function's body, sliced from the generated artifact.*
 - `def region_text(source, name)` - *One function and its internal labels, stopping at the runtime helpers.*
 - `def region_bytes(source, name)` - *The .text bytes of one function's body, its inline copies included.*
+- `def calls_of(source, caller, callee)` - *How many real `call` sites inside `caller`'s region target `callee`.*
 
 ---
 
@@ -973,6 +1013,36 @@
   - Method `.test_label_records_the_current_offset()`
   - Method `.test_duplicate_label_is_a_compiler_bug()`
   - Method `.test_cmp_reg_reg_matches_the_cmp_encoding()`
+
+---
+
+### [`tests/test_magic_division.py`](tests/test_magic_division.py)
+> *Magic-multiply division: the parameter search is exact, and the bytes back it up.*
+
+**Size**: `226` lines (`10294` bytes)
+
+**Classes:**
+- `class MagicParameterTest` - *The parameter search before any code generation.*
+  - Method `.test_the_search_reproduces_gccs_parameters_for_the_benchmark_divisor()`
+  - Method `.test_powers_of_two_and_degenerate_divisors_refuse()`
+  - Method `.test_the_emitted_chain_matches_truncated_division_for_small_divisors()`
+  - Method `.test_the_emitted_chain_matches_truncated_division_for_large_divisors()`
+- `class MagicDivisionBytesTest` - *The lowering replaces the idiv and its trap branches.*
+  - Method `.main_region(body)`
+  - Method `.test_a_literal_remainder_carries_idiv_or_trap_branches_nowhere()`
+  - Method `.test_the_benchmark_chain_matches_the_captured_gcc_bytes()`
+  - Method `.test_a_quotient_keeps_the_sign_word_and_no_remainder_tail()`
+- `class MagicDivisionExecutionTest` - *Real executables agree with truncated division, extremes included.*
+  - Method `.execute(source, name)`
+  - Method `._cleanup(folder)`
+  - Method `.expected_battery()` - *The 18 printed lines of MAGIC_PROGRAM under truncated division semantics.*
+  - Method `.test_a_battery_of_dividends_matches_truncated_semantics()`
+  - Method `.test_plain_builds_agree_on_the_battery()`
+
+**Functions:**
+- `def truncdiv(n, d)` - *C-truncated division, the language's own / and % semantics.*
+- `def machine_chain(n, m_signed, s)` - *What the emitted instructions compute, modelled exactly.*
+- `def dividend_battery(d)` - *Every structured int64 edge a magic chain can go wrong on, both signs.*
 
 ---
 

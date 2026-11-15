@@ -298,8 +298,8 @@ comparison same-run while still reporting a best and a median:
 | `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-108 ms | 155-172 ms | 145-148 ms | 2,560 bytes |
 | `ackermann` | `A(3,9)`, about 25 million calls | 9.9 ms | 14.1 ms | 17.7 ms | 3,072 bytes |
 | `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 27.5 ms | 23.5 ms | 20.9 ms | 2,560 bytes |
-| `binary_gcd` | 1,000,000 Stein-GCD pairs | 190.2 ms | 169.9 ms | 141.8 ms | 3,072 bytes |
-| `call_chain` | 20,000,000 three-argument hot-path calls | 95.9 ms | 35.5 ms | 70.9 ms | 2,560 bytes |
+| `binary_gcd` | 1,000,000 Stein-GCD pairs | 179-195 ms | 165-178 ms | 139-155 ms | 3,072 bytes |
+| `call_chain` | 20,000,000 three-argument hot-path calls | 45-48 ms | 36-39 ms | 74-77 ms | 2,560 bytes |
 
 Standings per case: `fib30`, `folded_math` and `collatz` are won outright against both baselines (fib30
 net compute over the near-7 ms process-and-printf floor is about 0.6-0.8 ms against C's
@@ -335,12 +335,15 @@ rather than codegen. Its replacement, `xorshift`, is a serial state chain no opt
 vectorise; the folding evidence and the retired numbers are in ADR-017, and the argument-path
 rewrite is in ADR-018.
 
-Three later cases widen the measured surface (ADR-026), each landed behind at least one
-baseline and recorded as a target, `collatz`-style: `nqueens` (bitmask backtracking, many live
-locals per frame — 1.17x C, 1.31x Rust), `binary_gcd` (subtraction and shift loops with a
-swap — 1.12x C, 1.34x Rust) and `call_chain` (three-argument calls with non-pure operands on the
-hot path — 2.7x C, 1.35x Rust, the scoreboard's worst pairing since ADR-018's argument work
-began there). A twin-parity gate (`tests/test_end_to_end.py::TwinParityTest`) compiles every
+Three later cases widen the measured surface (ADR-026): `nqueens` (bitmask backtracking, many live
+locals per frame — 1.09-1.17x C, 1.21-1.41x Rust, recorded target), `binary_gcd` (subtraction and
+shift loops with a swap — ADR-027's magic-multiply division removed both `idiv` chains from the LCG
+loop, 190.2 → 178-195 ms: 1.08-1.14x C, 1.21-1.31x Rust, with the remaining gap the real `call
+bgcd` per pair plus its setcc-form bit conditions) and `call_chain` (three-argument calls with
+non-pure operands on the hot path — ADR-027's foreign-function inlining, flag-fused select and
+direct-into-register compute fell 95.9 → 45-48 ms: Rust's 70.9-76.5 is beaten outright at about
+0.62x, C's 36-39 ms is the last recorded closure target). A twin-parity gate
+(`tests/test_end_to_end.py::TwinParityTest`) compiles every
 case's Cairn, C and Rust sources and hard-fails unless all three print the identical total, so a
 standing can never be earned against a twin that computes something else.
 

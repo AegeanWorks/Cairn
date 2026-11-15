@@ -8,8 +8,8 @@ function uses must be saved and restored around its body.
 import unittest
 
 from cairn import parser, sema
-from cairn.codegen import CodeGenerator, function_label
-from cairn.machine import Assembler
+from cairn.codegen import HOME_REGISTERS, CodeGenerator, function_label
+from cairn.machine import ARGUMENT_REGISTERS, Assembler
 
 HOLD_REGISTERS = ("r13", "r15")  # the registers a copy's inline merge may hold its left value in
 
@@ -473,7 +473,9 @@ class TailReturnElisionTest(unittest.TestCase):
 
     def test_a_tail_return_emits_no_jmp(self) -> None:
         body = body_text(TAIL_SWING, "main")
-        self.assertNotIn(b"\xe9", body)  # `return 0` falls straight into the epilogue
+        # main's `return 0` still falls straight into the epilogue: the only jmp in the
+        # region is the inlined copy's `return 7`, which is not in tail position.
+        self.assertEqual(body.count(b"\xe9"), 1)  # the copy's non-tail return alone
 
     def test_a_non_tail_return_still_jumps_to_the_epilogue(self) -> None:
         body = body_text(TAIL_SWING, "f")
@@ -509,6 +511,46 @@ class MultiArgumentCallTest(unittest.TestCase):
         # f(3, 4) from main: rdx binds first, rcx second, no stack traffic in between.
         rdx_then_rcx = b"\x48\xba\x04\x00\x00\x00\x00\x00\x00\x00\x48\xb9\x03"
         self.assertIn(rdx_then_rcx, body)
+
+    def test_mixed_call_free_arguments_bind_reversed_without_the_stack(self) -> None:
+        # call_chain's shape: f(x, y >> 2, y & 255). The impure operands are call-free
+        # arithmetic, so reverse binding costs nothing observable: the third argument
+        # evaluates into rax and moves into r8, the second evaluates into rax and moves
+        # into rdx, the first is a name that moves straight into rcx. No push, no pop.
+        source = ("fn f(a: i64, b: i64, c: i64) -> i64 { return (a * 3) ^ (b << 2) + c; } "
+                  "fn main() -> i64 { var x: i64 = 7; return f(x, x >> 2, x & 65535); }")
+        body = body_text(source, "main")
+        self.assertNotIn(b"\x50", body)  # no push at the call site
+        self.assertNotIn(b"\x5a", body)  # no pop rdx
+        self.assertNotIn(b"\x59", body)  # no pop rcx
+        # The masked and shifted arguments compute in their own ABI registers: r8 takes
+        # x and masks in place, then rdx takes x and shifts in place — reverse order,
+        # and no rax round-trip between them.
+        r8 = b"\x49\x89\xd8"
+        rdx = b"\x48\x89\xda"
+        self.assertIn(r8, body)
+        self.assertIn(rdx, body)
+        self.assertLess(body.index(r8), body.index(rdx))
+        self.assertIn(b"\x49\x81\xe0\xff\xff\x00\x00", body)  # and r8, 65535
+        self.assertIn(b"\x48\xc1\xfa\x02", body)  # sar rdx, 2
+
+    def test_a_call_inside_an_argument_keeps_the_stack_fallback(self) -> None:
+        # A nested call clobbers the caller-saved argument registers, so an already-bound
+        # argument would not survive later evaluations: reverse binding must refuse.
+        source = ("fn f(a: i64, b: i64, c: i64) -> i64 { return a + b + c; } "
+                  "fn g(v: i64) -> i64 { return v * 2; } "
+                  "fn main() -> i64 { var x: i64 = 7; return f(x, x, g(x)); }")
+        body = body_text(source, "main")
+        self.assertIn(b"\x50", body)  # the generic push path survives
+
+    def test_a_division_inside_an_argument_keeps_the_stack_fallback(self) -> None:
+        # Division can trap; its trap would fire in a different order than the source's
+        # left-to-right argument order once binding runs in reverse, so it must refuse.
+        source = ("fn f(a: i64, b: i64, c: i64) -> i64 { return a + b + c; } "
+                  "fn main() -> i64 { var x: i64 = 7; var y: i64 = 2; "
+                  "return f(x, y, x / y); }")
+        body = body_text(source, "main")
+        self.assertIn(b"\x50", body)  # the generic push path survives
 
 
 ACKERMANN_SHAPE = (
@@ -606,3 +648,206 @@ class PairDeltaInliningTest(unittest.TestCase):
         self.assertEqual(self._pair_labels(source, "ack"), 0)
 
 
+
+
+MIX3_CALL_CHAIN = (
+    "fn mix3(a: i64, b: i64, c: i64) -> i64 { "
+    "var t: i64 = (a * 3) ^ (b << 2); "
+    "if t > c { t = t - c; } else { t = t + c; } "
+    "return t; } "
+    "fn main() -> i64 { var x: i64 = 1; var i: i64 = 0; var total: i64 = 0; "
+    "while i < 20000000 { "
+    "x = mix3(x, i >> 2, i & 65535); total = total + (x & 255); i = i + 1; } "
+    "print(total); return 0; }"
+)
+
+TWO_SLOT_FOREIGN_CALL = (
+    "fn h(a: i64, b: i64) -> i64 { var t: i64 = a + b; "
+    "if t > 10 { t = t - 1; } else { t = t + 1; } "
+    "return t; } "
+    "fn main() -> i64 { var x: i64 = h(4, 5); return h(x, 7); }"
+)
+
+
+def calls_of(source: str, caller: str, callee: str) -> int:
+    """How many real `call` sites inside `caller`'s region target `callee`.
+
+    Only a direct symbol call leaves a fixup on the bare function label; every other
+    branch fixup lands on a label in a function's own namespace.
+    """
+    program = sema.analyze(parser.parse(source))
+    artifact = CodeGenerator().generate(program)
+    start = artifact.text_labels[function_label(caller)]
+    later = sorted(offset for label, offset in artifact.text_labels.items()
+                   if offset > start and label.startswith("fn.")
+                   and label.count(".") == 1)
+    end = later[0] if later else len(artifact.text)
+    return sum(1 for offset, label in artifact.fixups
+               if label == function_label(callee) and start <= offset < end)
+
+
+class ForeignInlineTest(unittest.TestCase):
+    """A call to another small, call-free function lowers as one copy of its body.
+
+    gcc's edge on call_chain was inlining `mix3` entirely, and the same shape is what a
+    hot helper wants here: the copy binds its parameters once from the argument registers
+    (the callee can never observe a rebind order, because it cannot call), keeps its
+    remaining slots in spare home registers, crosses a reused caller home on the stack,
+    and leaves its result in rax. Callees that loop, call, or divide refuse the copy and
+    stay real calls.
+    """
+
+    def test_a_small_foreign_function_is_copied_into_its_caller(self) -> None:
+        self.assertEqual(calls_of(MIX3_CALL_CHAIN, "main", "mix3"), 0)
+
+    def test_a_copy_labels_the_caller_namespace(self) -> None:
+        program = sema.analyze(parser.parse(MIX3_CALL_CHAIN))
+        assembler = Assembler()
+        artifact = CodeGenerator(assembler=assembler).generate(program)
+        self.assertIn("fn.mix3", artifact.text_labels)
+        copies = [label for label in assembler.labels
+                  if label.startswith("fn.mix3.copy.")]
+        self.assertTrue(copies)
+
+    def test_free_homes_absorb_a_two_slot_copy_without_any_push(self) -> None:
+        program, assembler = lower(TWO_SLOT_FOREIGN_CALL)
+        main = function_label("main")
+        # main's prologue saves its one local's home (rbx); the two copies of h use
+        # spare homes only, so no other push or pop appears anywhere in main.
+        self.assertEqual([reg for owner, reg in assembler.pushes if owner == main],
+                         ["rbx"])
+        self.assertEqual([reg for owner, reg in assembler.pops if owner == main],
+                         ["rbx"])
+
+    def test_parameters_ride_their_argument_registers_through_a_copy(self) -> None:
+        program, assembler = lower(MIX3_CALL_CHAIN)
+        main = function_label("main")
+        pushes = [reg for owner, reg in assembler.pushes if owner == main]
+        pops = [reg for owner, reg in assembler.pops if owner == main]
+        # main's prologue saves rbx, r12, r13 and the print helper round-trips rax;
+        # the copy of mix3 needs nothing else: the parameters already sit in the ABI
+        # argument registers (which the call-free body never rebinds) and its local
+        # lives in a spare home, so no call-site stack traffic survives.
+        self.assertEqual(pushes, ["rbx", "r12", "r13", "rax"])
+        self.assertEqual(pops, ["rax", "r13", "r12", "rbx"])
+
+    def test_a_parameter_rebind_falls_back_to_the_bind_once_copy(self) -> None:
+        source = ("fn h(a: i64) -> i64 { a = a + 1; return a; } "
+                  "fn main() -> i64 { var x: i64 = h(4); return x; }")
+        self.assertEqual(calls_of(source, "main", "h"), 0)  # still a copy, just bound
+        program, assembler = lower(source)
+        copies = [label for label in assembler.labels
+                  if label.startswith("fn.h.copy.")]
+        self.assertEqual(len(copies), 1)
+
+    def test_a_looping_callee_stays_a_real_call(self) -> None:
+        source = ("fn h(a: i64) -> i64 { var t: i64 = 0; while t < a { t = t + 1; } "
+                  "return t; } fn main() -> i64 { return h(5); }")
+        self.assertGreater(calls_of(source, "main", "h"), 0)
+
+    def test_a_calling_callee_stays_a_real_call(self) -> None:
+        source = ("fn g(v: i64) -> i64 { return v * 2; } "
+                  "fn h(a: i64) -> i64 { return g(a + 1); } "
+                  "fn main() -> i64 { return h(5); }")
+        self.assertGreater(calls_of(source, "main", "h"), 0)
+
+    def test_a_dividing_callee_stays_a_real_call(self) -> None:
+        source = ("fn h(a: i64) -> i64 { return a / 2; } "
+                  "fn main() -> i64 { return h(84); }")
+        self.assertGreater(calls_of(source, "main", "h"), 0)
+
+    def test_a_printing_callee_stays_a_real_call(self) -> None:
+        source = ("fn h(a: i64) -> i64 { print(a); return a; } "
+                  "fn main() -> i64 { return h(5); }")
+        self.assertGreater(calls_of(source, "main", "h"), 0)
+
+    def test_a_frame_full_callee_stays_a_real_call(self) -> None:
+        # Nine slots cannot all live in home registers; the copy would read the caller's
+        # frame, so the shape must refuse.
+        body = " ".join(f"let v{index}: i64 = {index}; " for index in range(8))
+        source = f"fn h(a: i64) -> i64 {{ {body}return v7; }} " \
+                 "fn main() -> i64 { return h(3); }"
+        self.assertGreater(calls_of(source, "main", "h"), 0)
+
+    def test_a_one_argument_callee_copies_with_a_direct_bind(self) -> None:
+        source = ("fn h(a: i64) -> i64 { var t: i64 = a + 1; "
+                  "if t > 3 { t = t - 1; } return t; } "
+                  "fn main() -> i64 { return h(9); }")
+        self.assertEqual(calls_of(source, "main", "h"), 0)
+        program, assembler = lower(source)
+        main = function_label("main")
+        self.assertEqual([reg for owner, reg in assembler.pushes if owner == main], [])
+
+
+TAIL_RETURN_COPIES = (
+    "fn h(a: i64) -> i64 { var t: i64 = a + 1; "
+    "if t > 3 { t = t - 1; } "
+    "return t; } "
+    "fn main() -> i64 { var x: i64 = 5; while x < 100 { x = h(x); } print(x); return 0; }"
+)
+
+HOMED_CONDITION = (
+    "fn main() -> i64 { var a: i64 = 7; var c: i64 = 5; "
+    "if a < c { a = a + 1; } "
+    "return a; }"
+)
+
+
+class InsideACopyTest(unittest.TestCase):
+    """A copy runs once per loop iteration, so prologue-once costs must not repeat in it.
+
+    The implicit-return-zero move, the rax round-trip of a two-name compare, and the
+    move in front of a folded update are all loop-carried waste inside a copy. Each
+    drops only when the shape proves it dead.
+    """
+
+    def test_a_tail_returning_copy_skips_the_implicit_return_zero(self) -> None:
+        # mix3's shape: the body ends in a return, so no path falls off the copy's end.
+        # The ten-byte zero move has no reason to run once per iteration; only main's own
+        # prologue (once per function entry) keeps one.
+        body = region_bytes(TAIL_RETURN_COPIES, "main")
+        zero = b"\x48\xb8\x00\x00\x00\x00\x00\x00\x00\x00"
+        self.assertEqual(body.count(zero), 2)  # main's implicit zero + its tail `return 0`
+
+    def test_a_copy_whose_last_statement_is_not_a_return_keeps_the_implicit_zero(self) -> None:
+        # Both branches of the tail if return, so the copy cannot fall off its end either —
+        # but the last statement is an If, so the guard stays: one zero per copy remains
+        # (main's implicit zero and its tail `return 0` are the other two).
+        source = TAIL_RETURN_COPIES.replace(
+            "return t; } ", "if t > 3 { return t - 1; } else { return t + 1; } } ")
+        body = region_bytes(source, "main")
+        zero = b"\x48\xb8\x00\x00\x00\x00\x00\x00\x00\x00"
+        self.assertEqual(body.count(zero), 3)
+
+    def test_two_homed_names_compare_in_place(self) -> None:
+        body = region_bytes(HOMED_CONDITION, "main")
+        probe = Assembler()
+        probe.cmp_reg_reg("rbx", "r12")
+        self.assertIn(bytes(probe.code), body)
+
+    def test_a_folded_update_reads_the_other_home_directly(self) -> None:
+        source = ("fn h(a: i64, b: i64) -> i64 { var t: i64 = a; t = t + b; return t; } "
+                  "fn main() -> i64 { return h(4, 5); }")
+        body = region_bytes(source, "main")
+        # h is a copy: b lives in the ABI register rdx, not a home, and the folded
+        # `t = t + b` must read its register directly — no move through rax first.
+        registers = HOME_REGISTERS + ARGUMENT_REGISTERS
+        for home in registers:
+            probe = Assembler()
+            probe.binary(1, home, "rax")
+            self.assertNotIn(bytes(probe.code), body)
+        shapes = []
+        for home in registers:
+            for other in registers:
+                if home == other:
+                    continue
+                probe = Assembler()
+                probe.binary(1, home, other)
+                shapes.append(bytes(probe.code))
+        self.assertTrue(any(shape in body for shape in shapes))
+
+    def test_two_homed_names_compare_never_routes_through_rax(self) -> None:
+        body = region_bytes(HOMED_CONDITION, "main")
+        probe = Assembler()
+        probe.binary(0x39, "rbx", "rax")  # cmp rax against a name's home
+        self.assertNotIn(bytes(probe.code), body)

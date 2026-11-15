@@ -41,6 +41,9 @@ IMMEDIATE_SHIFT_EXTENSIONS = {"<<": 4, ">>": 7}
 UPDATE_OPCODES = {"+": 0x01, "-": 0x29, "&": 0x21, "|": 0x09, "^": 0x31}
 COMMUTATIVE_UPDATES = frozenset({"+", "*", "&", "|", "^"})
 IMMEDIATE_UPDATES = frozenset({"+", "-"})
+# `name * m` for these factors is one scaled `lea`: m = 2**log2 + 1, and the lea's
+# wrapping at 64 bits equals the multiply's, sign included.
+LEA_PRODUCT_FACTORS = {3: 1, 5: 2, 9: 3}
 IMMEDIATE_MIN = -0x80000000
 IMMEDIATE_MAX = 0x7FFFFFFF
 MAX_INLINE_DEPTH = 7
@@ -106,12 +109,56 @@ def is_leaf(expression: Optional[syntax.Expr]) -> bool:
     return isinstance(expression, (syntax.IntLiteral, syntax.Name))
 
 
+def magic_division_parameters(divisor: int) -> Optional[tuple]:
+    """A `(multiplier, shift)` so the magic-multiply chain divides by `divisor` exactly.
+
+    For a positive literal `divisor` that is not a power of two, the returned signed
+    multiplier and shift make the gcc-style chain -- signed mulhigh of the folded
+    (negative) multiplier, the dividend added back, `sar` by `shift`, and the sign
+    word subtracted -- compute truncated division for every int64 dividend.
+
+    Exactness argument. The chain computes `g(n) = floor(n*m / 2**(64+s)) - (n < 0)`
+    where `m = ceil(2**(64+s) / d)`. Writing `e = m*d - 2**(64+s)` (so `0 < e < d`)
+    turns both floors into the two integer inequalities below, and each is linear in
+    `n` within one residue class; the maximum over each residue class sits at the
+    largest valid `n`, so only the residue-wrap point (`n = 2**63 - 1`) and the
+    `d - 1` residue need checking, plus `INT64_MIN` for the negative side.
+    """
+    if divisor < 2 or (divisor & (divisor - 1)) == 0:
+        return None
+    top = (1 << 63) - 1
+    for shift in range(1, 64):
+        exponents = 64 + shift
+        multiplier = -(-2**exponents // divisor)
+        if multiplier >= 1 << 64:
+            continue
+        error = multiplier * divisor - 2**exponents   # 1 .. divisor - 1
+        n_wrap = top                                  # residue `(top - j) % divisor == 0`
+        n_last = top - ((top - (divisor - 1)) % divisor)  # residue `divisor - 1`
+        positive = all(
+            n * error < 2**exponents * (divisor - (n % divisor))
+            for n in (n_wrap, n_last))
+        if not positive:
+            continue
+        negative = all(
+            t * error <= 2**exponents * (divisor - (t % divisor))
+            for t in (n_wrap, n_last))
+        if not negative:
+            continue
+        # INT64_MIN: `ceil(2**63 * m / 2**(64+s))` must be `floor(2**63 / d) + 1`.
+        if -(-2**63 * multiplier // 2**exponents) != (2**63 // divisor) + 1:
+            continue
+        return multiplier - 2**64, shift
+    return None
+
+
 @dataclass
 class CodeGenerator:
     """One lowering pass over a checked program."""
 
     assembler: Assembler = field(default_factory=Assembler)
     rodata: ReadOnlyData = field(default_factory=ReadOnlyData)
+    program: Optional[syntax.Program] = None
     depth: int = 0
     temporaries: int = 0
     break_targets: List[str] = field(default_factory=list)
@@ -132,6 +179,7 @@ class CodeGenerator:
 
     def generate(self, program: syntax.Program) -> Artifact:
         """Emit the entry stub, every function, then the runtime helpers."""
+        self.program = program
         self._emit_entry()
         for function in program.functions:
             self._emit_function(function)
@@ -320,6 +368,10 @@ class CodeGenerator:
             if not self._update_keeps_nonneg(slot, expression):
                 self.nonnegative_slots.discard(slot)
             return
+        if home is not None and self._emit_binary_into(expression, home):
+            if not self._update_keeps_nonneg(slot, expression):
+                self.nonnegative_slots.discard(slot)
+            return
         self._emit_expression(expression)
         self._store_slot(slot)
         self.nonnegative_slots.discard(slot)
@@ -435,6 +487,16 @@ class CodeGenerator:
             else:
                 self.assembler.sub_imm(home, other.value)
             return True
+        if (isinstance(other, syntax.Name) and self._home(other.slot) is not None
+                and not (other.slot == self.delta_slot and self.delta_value)
+                and operator not in ("/", "%")):
+            # The other side lives in a register already: fold against that register
+            # instead of paying a move through rax first.
+            if operator == "*":
+                self.assembler.imul(home, self._home(other.slot))
+            else:
+                self.assembler.binary(UPDATE_OPCODES[operator], home, self._home(other.slot))
+            return True
         self._emit_into(other, "rax")
         if operator == "*":
             self.assembler.imul(home, "rax")
@@ -489,9 +551,186 @@ class CodeGenerator:
             self.assembler.mov_imm64(destination, expression.value)
         elif isinstance(expression, syntax.Name):
             self._load_slot(expression.slot, destination)
+        elif self._emit_binary_into(expression, destination):
+            pass
         else:
             self._emit_expression(expression)
             self.assembler.mov_reg_reg(destination, "rax")
+
+    def _emit_binary_into(self, expression: Optional[syntax.Expr],
+                          destination: str) -> bool:
+        """Lower a call-free, trap-free binary expression with its result in `destination`.
+
+        The general lowering computes in rax and moves; when the destination is known —
+        an argument register or a homed slot — the left operand computes in place and
+        the right stays in rax, so the closing move disappears. Refusals keep the
+        generic path: anything with calls, division, comparisons, `&&`/`||`, unary
+        shapes, or a right side that leaves rax (a multiply, a variable shift, a setcc)
+        cannot promise which registers survive.
+        """
+        if isinstance(expression, syntax.Parens):
+            return self._emit_binary_into(expression.inner, destination)
+        if not isinstance(expression, syntax.Binary):
+            return False
+        if self._contains_division(expression) or has_call(expression):
+            return False
+        operator = expression.op
+        left, right = expression.left, expression.right
+        if operator in ("&&", "||", "/") or operator in COMPARISON_CONDITIONS:
+            return False
+        if operator == "%" or operator == "~" or operator == "!":
+            return False
+        if operator in UPDATE_OPCODES:
+            if not self._computes_in_rax_only(right, destination):
+                return False
+            if not self._emit_left_into(left, destination):
+                return False
+            operand = self._stripped(right)
+            if (isinstance(operand, syntax.IntLiteral)
+                    and IMMEDIATE_MIN <= operand.value <= IMMEDIATE_MAX
+                    and operator in IMMEDIATE_BINARY_EXTENSIONS):
+                self.assembler.arith_imm(
+                    IMMEDIATE_BINARY_EXTENSIONS[operator], destination, operand.value)
+                return True
+            operand_home = (self._home(operand.slot)
+                            if isinstance(operand, syntax.Name) else None)
+            if operand_home is not None and operand_home != destination:
+                self.assembler.binary(UPDATE_OPCODES[operator],
+                                      destination, operand_home)
+                return True
+            self._emit_expression(right)
+            self.assembler.binary(UPDATE_OPCODES[operator], destination, "rax")
+            return True
+        if operator == "*":
+            if self._emit_scaled_product(expression, destination):
+                return True
+            if not self._computes_in_rax_only(right, destination):
+                return False
+            if not self._emit_left_into(left, destination):
+                return False
+            operand = self._stripped(right)
+            operand_home = (self._home(operand.slot)
+                            if isinstance(operand, syntax.Name) else None)
+            if operand_home is not None:
+                self.assembler.imul(destination, operand_home)
+                return True
+            self._emit_expression(right)
+            self.assembler.imul(destination, "rax")
+            return True
+        if operator in IMMEDIATE_SHIFT_EXTENSIONS:
+            operand = self._stripped(right)
+            if (not isinstance(operand, syntax.IntLiteral)
+                    or not 0 <= operand.value <= 63):
+                return False
+            if not self._emit_left_into(left, destination):
+                return False
+            self.assembler.shift_imm(IMMEDIATE_SHIFT_EXTENSIONS[operator],
+                                     destination, operand.value)
+            return True
+        return False
+
+    def _emit_left_into(self, expression: Optional[syntax.Expr], destination: str) -> bool:
+        """Compute the left operand with its value in `destination`, or refuse.
+
+        A homed name whose register IS the destination is already there; other leaves
+        load directly; nested accepted binaries recurse. A name whose register or frame
+        slot must survive later register use is a caller's concern — the destination is
+        owned by this expression alone.
+        """
+        expression = self._stripped(expression)
+        if isinstance(expression, syntax.IntLiteral):
+            self.assembler.mov_imm64(destination, expression.value)
+            return True
+        if isinstance(expression, syntax.Name):
+            home = self._home(expression.slot)
+            if home is None:
+                if destination == "rax":
+                    self._load_slot(expression.slot, "rax")
+                else:
+                    self.assembler.mov_load_rbp(destination, slot_offset(expression.slot))
+                return True
+            if home == destination:
+                return True
+            if destination == "rax":
+                self._emit_expression(expression)
+                return True
+            self.assembler.mov_reg_reg(destination, home)
+            return True
+        if self._emit_binary_into(expression, destination):
+            return True
+        if destination == "rax":
+            self._emit_expression(expression)
+            return True
+        return False
+
+    def _computes_in_rax_only(self, expression: Optional[syntax.Expr],
+                              destination: str) -> bool:
+        """Whether a right operand's lowering touches rax alone.
+
+        Leaves and their parenthesized forms do; a literal-count shift of such an
+        operand does (`mov rax, home`, one shift); a name-with-literal offset lowers as
+        one lea into rax. Operators whose lowerings need rcx (multiplies of arbitrary
+        operands, divisions, comparisons, short circuits) refuse, as does any homed name
+        that reads the destination register the left operand just wrote.
+        """
+        expression = self._stripped(expression)
+        if expression is None or isinstance(expression, syntax.IntLiteral):
+            return True
+        if isinstance(expression, syntax.Name):
+            home = self._home(expression.slot)
+            return home is None or home != destination
+        if isinstance(expression, syntax.Binary):
+            if (expression.op in ("&&", "||", "/", "%", "*")
+                    or expression.op in COMPARISON_CONDITIONS):
+                return False
+            right_literal = self._stripped(expression.right)
+            if not isinstance(right_literal, syntax.IntLiteral):
+                # Nested arithmetic lowers through rcx; only `name op literal` and a
+                # literal-count shift of the same kind stay inside rax.
+                return False
+            if expression.op in IMMEDIATE_BINARY_EXTENSIONS:
+                return self._computes_in_rax_only(expression.left, destination)
+            if (expression.op in IMMEDIATE_SHIFT_EXTENSIONS
+                    and 0 <= right_literal.value <= 63):
+                return self._computes_in_rax_only(expression.left, destination)
+            return False
+        return False
+
+    def _stripped(self, expression: Optional[syntax.Expr]) -> Optional[syntax.Expr]:
+        """The expression without its wrapping parentheses."""
+        while isinstance(expression, syntax.Parens):
+            expression = expression.inner
+        return expression
+
+    def _emit_scaled_product(self, expression: syntax.Binary,
+                             destination: str = "rax") -> bool:
+        """Lower `name * 3|5|9` as one scaled `lea` into `destination`, or refuse.
+
+        The factor is one more than a power of two, so the lea computes exactly the
+        multiply's wrapped value for every input including INT64_MIN; the sign is the
+        multiplication's sign. The general imul keeps every other factor.
+        """
+        left, right = expression.left, expression.right
+        stripped_left = self._stripped(left)
+        stripped_right = self._stripped(right)
+        factor = None
+        named = None
+        if isinstance(stripped_right, syntax.IntLiteral) \
+                and stripped_right.value in LEA_PRODUCT_FACTORS:
+            factor, named = stripped_right.value, stripped_left
+        elif isinstance(stripped_left, syntax.IntLiteral) \
+                and stripped_left.value in LEA_PRODUCT_FACTORS:
+            factor, named = stripped_left.value, stripped_right
+        if factor is None:
+            return False
+        if not isinstance(named, syntax.Name) or self.delta_value:
+            return False
+        home = self._home(named.slot)
+        if home is None:
+            return False
+        self.assembler.lea_scale(destination, home, home,
+                                 LEA_PRODUCT_FACTORS[factor], 0)
+        return True
 
     def _emit_block(self, block: Optional[syntax.Block], tail: bool = False) -> None:
         """Emit every statement of a block in order.
@@ -539,7 +778,10 @@ class CodeGenerator:
         With an else block, the else body sits inline and the condition branches forward
         over it to the then body: the unconditional `jmp` is then paid only by the else
         path, and the frequent path falls straight through to the code after the `if`.
+        A two-way select of the same slot folds into branchless arithmetic instead.
         """
+        if self._emit_select_if(statement):
+            return
         asm = self.assembler
         if statement.else_block is not None:
             then_label = self._fresh("if.then")
@@ -555,6 +797,71 @@ class CodeGenerator:
             self._emit_condition(statement.condition, otherwise, when_true=False)
             self._emit_block(statement.then_block, tail)
             asm.label(otherwise)
+
+    def _emit_select_if(self, statement: syntax.If) -> bool:
+        """Lower `if t > c { t = t - c; } else { t = t + c; }` as sub, lea, cmov — or refuse.
+
+        The subtract sets exactly the flags the comparison would test (`sub` and `cmp`
+        of the same operands agree on every input, overflow included), and `t + c` is
+        `(t - c) + 2*c`: one lea. The select then costs two instructions and no branch,
+        where the branchy form pays a data-dependent misprediction every iteration. The
+        exact shape required: one assignment to the same slot in each branch, minus and
+        plus of that slot and one other homed name, and a comparison of exactly those
+        two operands; the comparison's inverted flag selects the cmov.
+        """
+        asm = self.assembler
+        if statement.else_block is None:
+            return False
+        then_stmts = statement.then_block.statements
+        else_stmts = statement.else_block.statements
+        if len(then_stmts) != 1 or len(else_stmts) != 1:
+            return False
+        then_assign, else_assign = then_stmts[0], else_stmts[0]
+        if (not isinstance(then_assign, syntax.Assign)
+                or not isinstance(else_assign, syntax.Assign)):
+            return False
+        slot = then_assign.slot
+        if slot != else_assign.slot or self.delta_value:
+            return False
+        home = self._home(slot)
+        condition = statement.condition
+        if home is None or not isinstance(condition, syntax.Binary):
+            return False
+        condition_left, condition_right = condition.left, condition.right
+        while isinstance(condition_left, syntax.Parens):
+            condition_left = condition_left.inner
+        while isinstance(condition_right, syntax.Parens):
+            condition_right = condition_right.inner
+        if (condition.op not in COMPARISON_CONDITIONS
+                or not isinstance(condition_left, syntax.Name)
+                or condition_left.slot != slot
+                or not isinstance(condition_right, syntax.Name)
+                or condition_right.slot == slot):
+            return False
+        other_home = self._home(condition_right.slot)
+        if other_home is None:
+            return False
+
+        def select_side(assignment: syntax.Assign, operator: str) -> bool:
+            value = assignment.value
+            while isinstance(value, syntax.Parens):
+                value = value.inner
+            return (isinstance(value, syntax.Binary) and value.op == operator
+                    and isinstance(value.left, syntax.Name) and value.left.slot == slot
+                    and isinstance(value.right, syntax.Name)
+                    and value.right.slot == condition_right.slot)
+
+        if select_side(then_assign, "-") and select_side(else_assign, "+"):
+            move = INVERTED_CONDITIONS[COMPARISON_CONDITIONS[condition.op]]
+        elif select_side(then_assign, "+") and select_side(else_assign, "-"):
+            move = COMPARISON_CONDITIONS[condition.op]
+        else:
+            return False
+        self.nonnegative_slots.discard(slot)
+        asm.binary(UPDATE_OPCODES["-"], home, other_home)
+        asm.lea_scale("rax", home, other_home, 1, 0)
+        asm.cmov(move, home, "rax")
+        return True
 
     def _emit_while(self, statement: syntax.While) -> None:
         """`while` with its own break and continue targets."""
@@ -912,6 +1219,15 @@ class CodeGenerator:
                 asm.cmp_imm(self._home(left.slot), right.value)
                 asm.jcc(condition, target)
                 return
+        if (isinstance(left, syntax.Name) and isinstance(right, syntax.Name)
+                and self._home(left.slot) is not None and self._home(right.slot) is not None
+                and not (left.slot == self.delta_slot and self.delta_value)
+                and not (right.slot == self.delta_slot and self.delta_value)):
+            # Two homed names compare in place: the round-trips through rax and rcx are
+            # pure waste when both values already sit in a register.
+            asm.cmp_reg_reg(self._home(left.slot), self._home(right.slot))
+            asm.jcc(condition, target)
+            return
         if (isinstance(right, syntax.IntLiteral)
                 and IMMEDIATE_MIN <= right.value <= IMMEDIATE_MAX):
             self._emit_into(expression.left, "rax")
@@ -963,6 +1279,8 @@ class CodeGenerator:
         right = expression.right
         if expression.op == "+" and self._emit_scaled_sum(expression):
             return
+        if expression.op == "*" and self._emit_scaled_product(expression):
+            return
         if (expression.op in ("+", "-") and isinstance(right, syntax.IntLiteral)
                 and -IMMEDIATE_MAX - 1 <= right.value <= IMMEDIATE_MAX
                 and self._emit_home_offset("rax", expression)):
@@ -978,6 +1296,8 @@ class CodeGenerator:
             asm.shift_imm(IMMEDIATE_SHIFT_EXTENSIONS[expression.op], "rax", right.value)
             return
         if expression.op in ("/", "%") and self._emit_power_of_two_division(expression):
+            return
+        if expression.op in ("/", "%") and self._emit_magic_division(expression):
             return
         self._emit_left_operand(expression.left, expression.right)
         if expression.op in ("/", "%"):
@@ -1098,6 +1418,45 @@ class CodeGenerator:
                 asm.mov_imm64(SCRATCH, target)
                 asm.binary(0x21, "rax", SCRATCH)  # and rax, scratch
             asm.binary(0x29, "rax", "rcx")        # sub rax, rcx: drop the fixup
+        return True
+
+    def _emit_magic_division(self, expression: syntax.Binary) -> bool:
+        """Lower `x / d` or `x % d` for a positive literal `d` as a magic multiply.
+
+        With `m = ceil(2**(64+s) / d)` the gcc-style chain -- signed mulhigh of the
+        negative folded multiplier, the dividend added back, one arithmetic shift, and
+        the sign word subtracted afterwards -- is exactly
+        `floor(n*m / 2**(64+s)) - (n < 0)`, and the parameter search certifies that
+        function against truncated division over all of int64. The literal is neither
+        zero nor minus one, so the lowering cannot fault and the `DIV_ZERO` trap
+        branches disappear along with the `idiv`.
+        """
+        right = expression.right
+        while isinstance(right, syntax.Parens):
+            right = right.inner
+        if not isinstance(right, syntax.IntLiteral) or right.value < 2:
+            return False
+        parameters = magic_division_parameters(right.value)
+        if parameters is None:
+            return False
+        multiplier, shift = parameters
+        asm = self.assembler
+        self._emit_expression(expression.left)
+        asm.mov_reg_reg("rcx", "rax")       # the dividend, for the add-back and remainder
+        asm.mov_imm64(SCRATCH, multiplier)
+        asm.imul_high(SCRATCH)              # rdx:rax = rax * multiplier, signed 128-bit
+        asm.lea_scale("rax", "rdx", "rcx", 0, 0)  # rax = mulhigh + n (the add-back)
+        asm.shift_imm(7, "rax", shift)
+        asm.mov_reg_reg("rdx", "rcx")
+        asm.shift_imm(7, "rdx", 63)         # the sign word: 0 or -1
+        asm.binary(0x29, "rax", "rdx")      # truncated quotient
+        if expression.op == "/":
+            return True
+        asm.mov_reg_reg("rdx", "rax")
+        asm.mov_imm64(SCRATCH, right.value)
+        asm.imul("rdx", SCRATCH)            # quotient * divisor
+        asm.mov_reg_reg("rax", "rcx")
+        asm.binary(0x29, "rax", "rdx")      # n - (n / d) * d keeps the dividend's sign
         return True
 
     def _scaled_sum_terms(self, expression: syntax.Binary):
@@ -1254,20 +1613,22 @@ class CodeGenerator:
         elif self._is_inline_candidate(expression):
             self._emit_inlined_self_call(expression)
             return
+        target = self._foreign_inline_target(expression)
         if len(expression.arguments) == 1:
             self._emit_into(expression.arguments[0], ARGUMENT_REGISTERS[0])
-            self._emit_call_site(function_label(expression.name))
+        elif self._emit_pure_arguments(expression.arguments):
+            pass
+        else:
+            for argument in expression.arguments:
+                self._emit_expression(argument)
+                asm.push("rax")
+                self.depth += 8
+            for index in reversed(range(len(expression.arguments))):
+                asm.pop(ARGUMENT_REGISTERS[index])
+                self.depth -= 8
+        if target is not None:
+            self._emit_foreign_inline(target)
             return
-        if self._emit_pure_arguments(expression.arguments):
-            self._emit_call_site(function_label(expression.name))
-            return
-        for argument in expression.arguments:
-            self._emit_expression(argument)
-            asm.push("rax")
-            self.depth += 8
-        for index in reversed(range(len(expression.arguments))):
-            asm.pop(ARGUMENT_REGISTERS[index])
-            self.depth -= 8
         self._emit_call_site(function_label(expression.name))
 
     def _is_pure_argument(self, expression: Optional[syntax.Expr]) -> bool:
@@ -1309,11 +1670,37 @@ class CodeGenerator:
             for register, argument in zip(reversed(registers), reversed(arguments)):
                 self._emit_into(argument, register)
             return True
+        if (any(not self._is_pure_argument(argument) for argument in arguments)
+                and all(not has_call(argument) for argument in arguments)
+                and all(not self._contains_division(argument) for argument in arguments)):
+            # Every argument is call-free and trap-free, so binding in reverse costs
+            # nothing observable: source order only matters when an argument can call
+            # (nested calls clobber the caller-saved argument registers already bound)
+            # or trap (a trap would fire in the source's left-to-right order). Each
+            # binding writes only its own ABI register, and a later evaluation's lower
+            # -ings clobber none of them; the last-bound first argument lands in rcx,
+            # which variable shifts reuse as a scratch only after it is already bound.
+            for register, argument in zip(reversed(registers), reversed(arguments)):
+                self._emit_into(argument, register)
+            return True
         if len(arguments) == 2 and self._is_pure_argument(arguments[0]):
             self._emit_expression(arguments[1])
             self.assembler.mov_reg_reg(registers[1], "rax")
             self._emit_into(arguments[0], registers[0])
             return True
+        return False
+
+    def _contains_division(self, expression: Optional[syntax.Expr]) -> bool:
+        """Whether any subtree of `expression` divides — the one trapping operand kind."""
+        if isinstance(expression, syntax.Parens):
+            return self._contains_division(expression.inner)
+        if isinstance(expression, syntax.Binary):
+            if expression.op in ("/", "%"):
+                return True
+            return (self._contains_division(expression.left)
+                    or self._contains_division(expression.right))
+        if isinstance(expression, syntax.Unary):
+            return self._contains_division(expression.operand)
         return False
 
     def _delta_hold_units(self, function: syntax.Function) -> int:
@@ -1713,6 +2100,224 @@ class CodeGenerator:
         self.holds = saved_holds
         self.epilogue = saved_epilogue
         self.inline_depth -= 1
+
+    def _foreign_inline_target(self, expression: syntax.Call) -> Optional[syntax.Function]:
+        """The function to copy into this call site, or None when the shape stays a call.
+
+        A copy needs all of the callee's state in home registers (its slots cannot exceed
+        the home set, or a slot access would read the caller's frame), and the callee must
+        be completely call-free, trap-free, and loop-free: no nested call can then observe
+        the parameters' register bindings, no division can fire inside a foreign frame,
+        and no loop label or chain counter can outlive the copy. The caller must hold no
+        in-flight temporary across the copy, because the copy's lowerings would clobber
+        the register that keeps it.
+        """
+        if (self.program is None or self.current is None
+                or self.depth or self.temporaries
+                or self.inline_depth >= MAX_INLINE_DEPTH
+                or expression.name == self.current.name):
+            return None
+        for function in self.program.functions:
+            if function.name == expression.name:
+                break
+        else:
+            return None
+        if (len(expression.arguments) != len(function.parameters)
+                or not 0 < len(expression.arguments) <= MAX_PARAMETERS
+                or function.slots > len(HOME_REGISTERS)):
+            return None
+        if not self._body_is_copy_free(function.body):
+            return None
+        return function
+
+    def _body_is_copy_free(self, body: syntax.Block) -> bool:
+        """Whether a whole statement tree calls, divides, loops, or breaks — any refuses a copy."""
+
+        def visit(expression: Optional[syntax.Expr]) -> bool:
+            if expression is None:
+                return False
+            if isinstance(expression, syntax.Call):
+                return True
+            if isinstance(expression, syntax.Binary):
+                return (visit(expression.left) or visit(expression.right)
+                        or self._contains_division(expression))
+            if isinstance(expression, syntax.Unary):
+                return visit(expression.operand) or self._contains_division(expression)
+            if isinstance(expression, syntax.Parens):
+                return visit(expression.inner) or self._contains_division(expression)
+            return self._contains_division(expression)
+
+        def walk(statement: syntax.Stmt) -> bool:
+            if isinstance(statement, syntax.Block):
+                return any(walk(item) for item in statement.statements)
+            if isinstance(statement, (syntax.Let, syntax.Assign)):
+                return visit(statement.value)
+            if isinstance(statement, syntax.If):
+                return (visit(statement.condition) or walk(statement.then_block)
+                        or walk(statement.else_block))
+            if isinstance(statement, (syntax.While, syntax.Break, syntax.Continue)):
+                return True
+            if isinstance(statement, syntax.Return):
+                return visit(statement.value)
+            if isinstance(statement, syntax.ExprStmt):
+                return visit(statement.expression)
+            return False
+
+        return not walk(body)
+
+    def _emit_foreign_inline(self, callee: syntax.Function) -> None:
+        """Lower a call to another function as one copy of its body, result in rax.
+
+        When no statement rebinds a parameter, the argument registers themselves are the
+        parameter homes: the copy pays no binding moves and no spill for them, exactly
+        what a register-allocated compiler keeps after inlining. A rebind forces the
+        bind-once form, where each argument moves from its ABI register into a shadow
+        home and any reused caller home crosses the copy on the stack. The implicit
+        return zero runs at entry like a prologue's, minus when the body ends in a
+        return, and a slot whose top level assigns it before anything reads it skips
+        its clear.
+        """
+        asm = self.assembler
+        saved = (self.homes, self.current, self.epilogue, self.pad_slots, self.holds,
+                 self.delta_slot, self.delta_value, self.value_slot, self.hold_units,
+                 self.chain_loop_depth, self.temporaries, self.nonnegative_slots)
+        parameters = len(callee.parameters)
+        rebinds = self._rebinds_parameters(callee.body, parameters)
+        if rebinds:
+            free = [home for home in HOME_REGISTERS if home not in self.homes]
+            guest = tuple((free + list(self.homes))[:callee.slots])
+            spill = [home for home in self.homes if home in guest]
+        else:
+            # The ABI registers already hold the parameters, and a call-free body cannot
+            # observe a rebinding order: give the parameter slots their own registers and
+            # spend the home pool on the callee's locals.
+            entry = ARGUMENT_REGISTERS[:parameters]
+            spare = [home for home in HOME_REGISTERS
+                     if home not in self.homes and home not in entry]
+            shortfall = callee.slots - parameters - len(spare)
+            reused = list(self.homes[:shortfall]) if shortfall > 0 else []
+            spill = reused
+            guest = tuple(entry) + tuple(spare + reused)
+        for home in spill:
+            asm.push(home)
+        self.homes = guest
+        self.current = callee
+        self.epilogue = self._fresh(f"{function_label(callee.name)}.copy")
+        self.pad_slots = ()
+        self.holds = ()
+        self.delta_slot = -1
+        self.delta_value = 0
+        self.value_slot = -1
+        self.hold_units = 0
+        self.chain_loop_depth = 0
+        self.temporaries = 0
+        self.inline_depth += 1
+        for index, parameter in enumerate(callee.parameters[:MAX_PARAMETERS]):
+            if rebinds:
+                asm.mov_reg_reg(self.homes[index], ARGUMENT_REGISTERS[index])
+        for index in range(parameters, callee.slots):
+            if not self._cleared_before_use(callee.body, index):
+                asm.xor_zero(self.homes[index])
+        self.nonnegative_slots = set()
+        statements = callee.body.statements
+        if not (statements and isinstance(statements[-1], syntax.Return)):
+            # The implicit return zero only guards the fall-off-the-end path; a body
+            # whose last statement returns cannot reach the copy's epilogue without rax,
+            # and a copy runs once per loop iteration, so the move is loop-carried waste.
+            asm.mov_imm64("rax", 0)
+        self._emit_block(callee.body, tail=True)
+        asm.label(self.epilogue)
+        self.inline_depth -= 1
+        for home in reversed(spill):
+            asm.pop(home)
+        (self.homes, self.current, self.epilogue, self.pad_slots, self.holds,
+         self.delta_slot, self.delta_value, self.value_slot, self.hold_units,
+         self.chain_loop_depth, self.temporaries, self.nonnegative_slots) = saved
+
+    def _rebinds_parameters(self, body: Optional[syntax.Block], count: int) -> bool:
+        """Whether any statement assigns a parameter slot."""
+        if body is None:
+            return False
+        for statement in body.statements:
+            if isinstance(statement, syntax.Assign) and statement.slot < count:
+                return True
+            if isinstance(statement, syntax.Block) and self._rebinds_parameters(statement, count):
+                return True
+            if isinstance(statement, syntax.If):
+                if (self._rebinds_parameters(statement.then_block, count)
+                        or self._rebinds_parameters(statement.else_block, count)):
+                    return True
+            if isinstance(statement, syntax.While) and self._rebinds_parameters(statement.body, count):
+                return True
+        return False
+
+    def _expression_reads(self, expression: Optional[syntax.Expr], slot: int) -> bool:
+        """Whether an expression reads `slot`."""
+        if expression is None:
+            return False
+        if isinstance(expression, syntax.Name):
+            return expression.slot == slot
+        if isinstance(expression, syntax.Binary):
+            return (self._expression_reads(expression.left, slot)
+                    or self._expression_reads(expression.right, slot))
+        if isinstance(expression, syntax.Unary):
+            return self._expression_reads(expression.operand, slot)
+        if isinstance(expression, syntax.Parens):
+            return self._expression_reads(expression.inner, slot)
+        if isinstance(expression, syntax.Call):
+            return any(self._expression_reads(argument, slot)
+                       for argument in expression.arguments)
+        return False
+
+    def _statement_touches(self, statement: syntax.Stmt, slot: int) -> bool:
+        """Whether a statement reads or writes `slot` in any position."""
+        if isinstance(statement, (syntax.Let, syntax.Assign)):
+            return (statement.slot == slot
+                    or self._expression_reads(statement.value, slot))
+        if isinstance(statement, syntax.If):
+            return (self._expression_reads(statement.condition, slot)
+                    or (self._statement_touches_branch(statement.then_block, slot))
+                    or (self._statement_touches_branch(statement.else_block, slot)))
+        if isinstance(statement, syntax.While):
+            return (self._expression_reads(statement.condition, slot)
+                    or self._statement_touches_branch(statement.body, slot))
+        if isinstance(statement, syntax.Return):
+            return self._expression_reads(statement.value, slot)
+        if isinstance(statement, syntax.ExprStmt):
+            return self._expression_reads(statement.expression, slot)
+        return False
+
+    def _statement_touches_branch(self, block: Optional[syntax.Block], slot: int) -> bool:
+        """Whether any statement of a nested block, at any depth, touches `slot`."""
+        if block is None:
+            return False
+        if any(self._statement_touches(item, slot) for item in block.statements):
+            return True
+        for item in block.statements:
+            if isinstance(item, syntax.Block) and self._statement_touches_branch(item, slot):
+                return True
+            if isinstance(item, syntax.If):
+                if (self._statement_touches_branch(item.then_block, slot)
+                        or self._statement_touches_branch(item.else_block, slot)):
+                    return True
+            if isinstance(item, syntax.While) and self._statement_touches_branch(item.body, slot):
+                return True
+        return False
+
+    def _cleared_before_use(self, body: syntax.Block, slot: int) -> bool:
+        """Whether a top-level assignment to `slot` comes before anything can touch it.
+
+        A prologue's clear only defends a slot read before its first assignment; when
+        the first top-level statement is that assignment and its value cannot read the
+        slot, ... skip the clear. A slot first touched by a branch or by an assignment
+        that reads the slot still needs it.
+        """
+        for statement in body.statements:
+            if isinstance(statement, syntax.Let) and statement.slot == slot:
+                return not self._expression_reads(statement.value, slot)
+            if self._statement_touches(statement, slot):
+                return False
+        return False
 
     def _body_may_hold(self, body: Optional[syntax.Block]) -> bool:
         """Whether any merge in this body keeps its left value across a right operand that calls."""
