@@ -83,6 +83,14 @@ CASES: Tuple[Case, ...] = (
          "benchmarks/binary_gcd.rs", 1_000_000, "pairs"),
     Case("call_chain", "benchmarks/call_chain.crn", "benchmarks/call_chain.c",
          "benchmarks/call_chain.rs", 20_000_000, "calls"),
+    Case("tak", "benchmarks/tak.crn", "benchmarks/tak.c",
+         "benchmarks/tak.rs", 63_609, "calls"),
+    Case("primes", "benchmarks/primes.crn", "benchmarks/primes.c",
+         "benchmarks/primes.rs", 300_000, "candidates"),
+    Case("mandelbrot", "benchmarks/mandelbrot.crn", "benchmarks/mandelbrot.c",
+         "benchmarks/mandelbrot.rs", 2_073_600, "pixels"),
+    Case("splitmix", "benchmarks/splitmix.crn", "benchmarks/splitmix.c",
+         "benchmarks/splitmix.rs", 100_000_000, "mixes"),
 )
 
 

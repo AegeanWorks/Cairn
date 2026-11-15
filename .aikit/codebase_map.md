@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `92`
+- **Total Classes**: `93`
 - **Total Top-Level Functions**: `150`
-- **Total Class Methods**: `578`
-- **Total Source Lines**: `10450`
+- **Total Class Methods**: `583`
+- **Total Source Lines**: `10514`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
-- **Not indexed by this map**: cpp (`8` file(s)), rust (`8` file(s))
+- **Not indexed by this map**: cpp (`12` file(s)), rust (`12` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -32,7 +32,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C and Rust baselines.*
 
-**Size**: `478` lines (`21875` bytes)
+**Size**: `486` lines (`22374` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C and Rust sources, and what one iteration is.*
@@ -132,7 +132,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `2427` lines (`120570` bytes)
+**Size**: `2440` lines (`121486` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -637,7 +637,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `343` lines (`18564` bytes)
+**Size**: `344` lines (`18640` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -880,7 +880,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `569` lines (`20844` bytes)
+**Size**: `611` lines (`22236` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -931,11 +931,17 @@
   - Method `.test_nqueens_twins_print_the_same_total()`
   - Method `.test_binary_gcd_twins_print_the_same_total()`
   - Method `.test_call_chain_twins_print_the_same_total()`
+  - Method `.test_tak_twins_print_the_same_total()`
+  - Method `.test_primes_twins_print_the_same_total()`
+  - Method `.test_mandelbrot_twins_print_the_same_total()`
+  - Method `.test_splitmix_twins_print_the_same_total()`
 - `class FlagFusedConditionRuntimeTest` - *Branches the fuser claims to handle stay semantically exact over negative values.*
   - Method `.test_bit_tests_and_masks_over_negative_values()`
   - Method `.test_short_circuit_branches_skip_call_sides()`
   - Method `.test_chained_conjunctions_and_alternations()`
   - Method `.test_mask_counts_over_a_negative_span()`
+- `class OperandParkTest` - *A merged left value in its destination register must survive right-side evaluation.*
+  - Method `.test_parked_survives_a_generic_right_side()`
 
 ---
 

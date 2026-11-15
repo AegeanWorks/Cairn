@@ -300,6 +300,10 @@ comparison same-run while still reporting a best and a median:
 | `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 27.5 ms | 23.5 ms | 20.9 ms | 2,560 bytes |
 | `binary_gcd` | 1,000,000 Stein-GCD pairs | 179-195 ms | 165-178 ms | 139-155 ms | 3,072 bytes |
 | `call_chain` | 20,000,000 three-argument hot-path calls | 45-48 ms | 36-39 ms | 74-77 ms | 2,560 bytes |
+| `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 7.5 ms | 8.4-9.1 ms | 9.6-9.9 ms | 2,048 bytes |
+| `primes` | trial division over 2..300000 | 25.0-26.2 ms | 24.5-25.3 ms | 19.1-19.9 ms | 2,560 bytes |
+| `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.5-13.8 ms | 10.8-11.1 ms | 11.9-12.7 ms | 2,560 bytes |
+| `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 166-170 ms | 98.7-101.2 ms | 113.8-117.9 ms | 2,560 bytes |
 
 Standings per case: `fib30`, `folded_math` and `collatz` are won outright against both baselines (fib30
 net compute over the near-7 ms process-and-printf floor is about 0.6-0.8 ms against C's
@@ -347,6 +351,17 @@ direct-into-register compute fell 95.9 → 45-48 ms: Rust's 70.9-76.5 is beaten 
 (`tests/test_end_to_end.py::TwinParityTest`) compiles every
 case's Cairn, C and Rust sources and hard-fails unless all three print the identical total, so a
 standing can never be earned against a twin that computes something else.
+
+Four later cases widen the measured surface again (ADR-030): `tak` (three-argument
+data-dependent recursion — won outright against both baselines, 7.5 ms vs C 8.4-9.1 and Rust
+9.6-9.9), `primes` (trial division over 2..300000 — ties C at 25.0 vs 24.5 ms, both lowering
+modulo the same magic-multiply way, behind Rust's 19.1), `mandelbrot` (four 960x540 fixed-point
+escape frames — 13.5 ms vs C 10.8, the inner multiply/shift merge chain is the visible gap) and
+`splitmix` (100,000,000 wrapping 64-bit mixes — 165.9 ms vs C 98.7 and Rust 113.8, whose cost is
+rematerialized loop-invariant constants, the next recorded mechanism). Writing `splitmix` also
+exposed and fixed a real miscompilation: a merged left operand parked in its destination
+register could be clobbered by the right side's own register reuse
+(`tests/test_end_to_end.py::OperandParkTest`).
 
 Run-to-run spread on this machine is about 10 percent, so treat these as an order of magnitude
 rather than three significant figures; the harness prints best, median and worst for that reason.

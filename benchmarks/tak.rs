@@ -1,0 +1,13 @@
+// Takeuchi tak(18, 12, 6): three-argument recursion with a data-dependent call order,
+// a call-machinery stress neither optimizer may fold.
+// Twin of tak.crn and tak.c; all three print the identical result.
+fn tak(x: i64, y: i64, z: i64) -> i64 {
+    if y >= x {
+        return z;
+    }
+    return tak(tak(x - 1, y, z), tak(y - 1, z, x), tak(z - 1, x, y));
+}
+
+fn main() {
+    println!("{}", tak(18, 12, 6));
+}

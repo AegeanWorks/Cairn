@@ -475,6 +475,18 @@ class TwinParityTest(unittest.TestCase):
     def test_call_chain_twins_print_the_same_total(self) -> None:
         self._assert_par(self.harness.CASES[7])
 
+    def test_tak_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[8])
+
+    def test_primes_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[9])
+
+    def test_mandelbrot_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[10])
+
+    def test_splitmix_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[11])
+
 
 NEGATIVE_BIT_TESTS = """
 fn main() -> i64 {
@@ -563,6 +575,36 @@ class FlagFusedConditionRuntimeTest(EndToEndTest):
         completed = self.execute(MASK_COUNTS)
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "83\n")
+
+
+SPLITMIX_STAGE = """
+fn main() -> i64 {
+    var x: i64 = 88172645463325252;
+    x = x - 7046029254386353131;
+    print(x);
+    var w: i64 = x;
+    w = (w ^ ((w >> 30) & 17179869183)) * 3;
+    print(w);
+    w = (w ^ ((w >> 27) & 137438953471)) * -7723592293110705685;
+    print(w);
+    return 0;
+}
+"""
+
+
+@WINDOWS_ONLY
+class OperandParkTest(EndToEndTest):
+    """A merged left value in its destination register must survive right-side evaluation.
+
+    Found by the splitmix benchmark: the xor-and-shift chain parked `w` in rcx and the
+    big-mask `&` then parked its own left in the same register, so the xor consumed the
+    shifted value instead of `w`.
+    """
+
+    def test_parked_survives_a_generic_right_side(self) -> None:
+        completed = self.execute(SPLITMIX_STAGE)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "-6957856608923027879\n-2426825779848323636\n-1061881911778666648\n")
 
 
 if __name__ == "__main__":

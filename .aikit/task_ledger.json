@@ -1,43 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-flag-conditions",
+    "task_id": "cairn-more-benchmarks",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794761678.9397984,
+    "active_phase": 3,
+    "status": "in_progress",
+    "updated_at": 1794763925.1279426,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794761679.3116882,
-    "completed_head": "a538dcd8366852da445d847cdbc0d573d53a0de0",
-    "completed_tree": "954c0325f25b9384fec5e895bab43f883b2c8e0e"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-ackermann-win",
-      "phase": "2",
-      "phase_num": 2,
-      "description": "[4/4] Milestone: pair copies + counted chain loop land ackermann at 9.6-9.9 ms vs C 14.1-14.8 and Rust 16.5-49.6 (60-round reproduced), image 3072 bytes; ADR-025 + README written; 325 tests pass",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794749381.6116157,
-      "timestamp_str": "2026-11-15 16:29:41",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-ackermann-win",
-      "phase": "4",
-      "phase_num": 4,
-      "description": "[4/4] Verification: full suite 325 pass; formal 60-round interleaved harness twice; e2e ackermann probes exact",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794749389.791354,
-      "timestamp_str": "2026-11-15 16:29:49",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-ackermann-win",
       "phase": "completed",
@@ -293,6 +266,34 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-more-benchmarks",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794762045.0113482,
+      "timestamp_str": "2026-11-15 20:00:45",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "The scoreboard rests on eight cases; whole bottleneck classes (multiply-latency chains, three-argument recursion, division-heavy nested loops, fixed-point inner escapes) are unmeasured, so the next optimizations risk overfitting to measured paths.",
+        "benefits": "Four new triple-twin benchmarks extend coverage to tak, primes, mandelbrot and splitmix, and each new case is permanently gated by the twin-parity and regression-watch machinery.",
+        "risks": "contract: CASES tuple and TwinParityTest gain entries only, no pipeline contract changes; dependency: only the already-discovered gcc and rustc toolchains; concurrency: none, the harness is sequential; state: .aikit/benchmark_history.jsonl gains new-case records only and --compare claims nothing about cases seen for the first time. Language-semantics drift (signed overflow in C, arithmetic shift) is contained by uint64_t accumulators in the C twin where wrapping is load-bearing.",
+        "mitigation": "Twin-parity tests hard-fail on stdout divergence between the three languages; each triple is compiled and executed manually before entering CASES; loads are tuned to tens of milliseconds before baselines are saved."
+      }
+    },
+    {
+      "task_id": "cairn-more-benchmarks",
+      "phase": "in_progress",
+      "phase_num": 3,
+      "description": "[2/3-and-3/3 scope] Four twins written and parity-verified; operand-park miscompilation found by splitmix and fixed failing-first (GENERIC_EVAL_REGISTERS guard in _emit_binary_into); suite 425+39 green; baselines saved and compared exit 0; ADR-030 + README + KB done",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794763925.1279426,
+      "timestamp_str": "2026-11-15 20:32:05",
+      "agent": "mistral:vibe"
     }
   ]
 }

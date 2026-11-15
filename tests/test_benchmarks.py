@@ -269,7 +269,8 @@ class RegistryShapeTest(unittest.TestCase):
     def test_the_registry_names_every_commitment(self) -> None:
         names = [case.name for case in run_benchmarks.CASES]
         self.assertEqual(names, ["xorshift", "fib30", "folded_math", "collatz",
-                                 "ackermann", "nqueens", "binary_gcd", "call_chain"])
+                                 "ackermann", "nqueens", "binary_gcd", "call_chain",
+                                 "tak", "primes", "mandelbrot", "splitmix"])
 
     def test_each_case_declares_a_unit_and_a_positive_iteration_count(self) -> None:
         for case in run_benchmarks.CASES:

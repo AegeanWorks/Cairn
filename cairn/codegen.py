@@ -58,6 +58,10 @@ SCRATCH = "rsi"
 # Callee-saved registers that can hold a function's slots, in allocation order. `rsi` is the
 # division scratch and `rbp` is the frame pointer, so neither can be a home.
 HOME_REGISTERS = ("rbx", "r12", "r13", "r14", "r15", "rdi")
+# Registers the generic right-side evaluation may hold an operand in (rax results, rcx leaf
+# parks, r10/r11 temporary parks, rsi scratch): a merged left value must never be parked in
+# one of these across a right side that lowers generically.
+GENERIC_EVAL_REGISTERS = ("rax", "rcx", "rsi", "r11", "r10")
 
 
 def function_label(name: str) -> str:
@@ -598,6 +602,11 @@ class CodeGenerator:
                 self.assembler.binary(UPDATE_OPCODES[operator],
                                       destination, operand_home)
                 return True
+            if (not is_leaf(right) and destination in GENERIC_EVAL_REGISTERS):
+                # The merged left already sits in `destination`; a generic right side
+                # parks its own operands in the same registers, so refuse rather than
+                # let its evaluation destroy the pending value.
+                return False
             self._emit_expression(right)
             self.assembler.binary(UPDATE_OPCODES[operator], destination, "rax")
             return True
@@ -614,6 +623,10 @@ class CodeGenerator:
             if operand_home is not None:
                 self.assembler.imul(destination, operand_home)
                 return True
+            if (not is_leaf(right) and destination in GENERIC_EVAL_REGISTERS):
+                # As in the update path: a generic right side parks its own operands in
+                # the same registers the merged left already occupies.
+                return False
             self._emit_expression(right)
             self.assembler.imul(destination, "rax")
             return True

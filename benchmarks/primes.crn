@@ -1,0 +1,26 @@
+// Prime candidates 2..300000 by trial division: a nested loop paying an idiv- or
+// magic-multiply-modulo per step, guarded by a flag exit neither optimizer may fold.
+// Twin of primes.c and primes.rs; all three print the identical total.
+fn main() -> i64 {
+    var n: i64 = 2;
+    var total: i64 = 0;
+    while n <= 300000 {
+        var prime: i64 = 0;
+        if n == 2 {
+            prime = 1;
+        } else {
+            if n % 2 != 0 {
+                prime = 1;
+                var d: i64 = 3;
+                while d * d <= n && prime == 1 {
+                    if n % d == 0 { prime = 0; }
+                    d = d + 2;
+                }
+            }
+        }
+        if prime == 1 { total = total + n; }
+        n = n + 1;
+    }
+    print(total);
+    return 0;
+}

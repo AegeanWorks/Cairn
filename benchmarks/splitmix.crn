@@ -1,0 +1,21 @@
+// One hundred million splitmix64 mixes: a serial multiply-latency chain over 64-bit
+// wraparound constants, the opposite bottleneck of xorshift's shift-xor chain. Cairn's
+// `>>` is arithmetic, so each shifted operand is masked to its low bits, which is exactly
+// the logical shift the u64 twin performs.
+// Twin of splitmix.c and splitmix.rs; all three print the identical result.
+fn main() -> i64 {
+    var x: i64 = 88172645463325252;
+    var total: i64 = 0;
+    var i: i64 = 0;
+    while i < 100000000 {
+        x = x + -7046029254386353131;
+        var z: i64 = x;
+        z = (z ^ ((z >> 30) & 17179869183)) * -4658895280553007687;
+        z = (z ^ ((z >> 27) & 137438953471)) * -7723592293110705685;
+        z = z ^ ((z >> 31) & 8589934591);
+        total = total + ((z >> 60) & 15);
+        i = i + 1;
+    }
+    print(total);
+    return 0;
+}

@@ -1,0 +1,37 @@
+// Mandelbrot escape counts over four 960x540 frames in 2^21 fixed point: a multiply-heavy
+// inner loop with a data-dependent exit and signed truncating division, none of which an
+// optimizer may fold.
+// Twin of mandelbrot.c and mandelbrot.rs; all three print the identical result.
+fn main() -> i64 {
+    var total: i64 = 0;
+    var frame: i64 = 0;
+    while frame < 4 {
+        var py: i64 = 0;
+        while py < 540 {
+            var y0: i64 = frame * 8192 + py * 24576 - 1572864;
+            var px: i64 = 0;
+            while px < 960 {
+                var x0: i64 = px * 16384 - 4194304;
+                var count: i64 = 0;
+                var x: i64 = 0;
+                var y: i64 = 0;
+                var x2: i64 = 0;
+                var y2: i64 = 0;
+                while x2 + y2 <= 8388608 && count < 64 {
+                    var next: i64 = x2 - y2 + x0;
+                    y = x * y / 1048576 + y0;
+                    x = next;
+                    x2 = x * x;
+                    y2 = y * y;
+                    count = count + 1;
+                }
+                total = total + count;
+                px = px + 1;
+            }
+            py = py + 1;
+        }
+        frame = frame + 1;
+    }
+    print(total);
+    return 0;
+}
