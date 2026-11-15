@@ -1,47 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-regression-watch",
+    "task_id": "cairn-flag-conditions",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794759870.2621357,
+    "active_phase": 2,
+    "status": "in_progress",
+    "updated_at": 1794761594.6735668,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794759883.9867985,
-    "completed_head": "288e6d392064c031958c3990e4ee548c75b37aaf",
-    "completed_tree": "4d523841da5fb6f74f79b88abd45059912a0aba3"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-bench-suite-2",
-      "phase": "delivery",
-      "phase_num": 4,
-      "description": "[3/3] Docs, knowledge base and checkpoints done; benchmark suite committed with collatz won and ackermann as the open case",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794741339.4365838,
-      "timestamp_str": "2026-11-15 14:15:39",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-bench-suite-2",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-bench-suite-2' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794741456.351561,
-      "timestamp_str": "2026-11-15 14:17:36",
-      "agent": "mistral:vibe",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-ackermann-win",
       "phase": "implementation",
@@ -292,6 +261,35 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-flag-conditions",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/3] Plan: flag-fused conditions -- route (x & literal) == 0 / != 0 and x == 0 / x != 0 and small-literal comparison branches straight from test/cmp flags to jcc, deleting the setcc/movzx/test round-trip (7 instr -> 2-4); plus eliding branch-to-next instructions that _emit_if emits when the condition target label sits at the current address. Targets: binary_gcd shift loops, nqueens bit scans, xorshift parity; measured with the ADR-028 --save --compare watch",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794760939.0034704,
+      "timestamp_str": "2026-11-15 19:42:19",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "ADR-027 recorded the exact mechanism (bgcd pays setcc/movzx/test/branch where gcc tests flags) and binary_gcd/nqueens remain behind C and Rust",
+        "benefits": "fewer instructions and a shorter dependency chain in every hot bit-test loop; all three open scoreboard pairings benefit",
+        "risks": "contract: pure branch lowering, no semantics change if the flag routing is exact (== 0 -> jz, != 0 -> jnz); dependency: test_imm maxes at 127 so literals above it need the reg path; concurrency: none; state: none",
+        "mitigation": "failing-first branch-shape tests; full suite + twin-parity; ADR-028 --save --compare before commit, revert if worse"
+      },
+      "plan_digest": "6a88bedbd62a1b95bbd864a8c9dbdfb58539a701868ac8b85c9b00152358b1b1"
+    },
+    {
+      "task_id": "cairn-flag-conditions",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "flag-fused conditions landed: generalized bit-test branches (x % 2**b, x & m) and short-circuit &&/|| lowering in _emit_condition/_emit_comparison_branch; 400 tests + 39 subtests green; benchmarks --save --compare exit 0 (binary_gcd -7pct, ackermann -14pct, no regression); ADR-029 + README updated; knowledge base verified",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794761594.6735668,
+      "timestamp_str": "2026-11-15 19:53:14",
+      "agent": "mistral:vibe"
     }
   ]
 }

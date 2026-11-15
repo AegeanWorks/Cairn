@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `90`
-- **Total Top-Level Functions**: `147`
-- **Total Class Methods**: `567`
-- **Total Source Lines**: `10234`
+- **Total Classes**: `92`
+- **Total Top-Level Functions**: `150`
+- **Total Class Methods**: `578`
+- **Total Source Lines**: `10450`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -132,7 +132,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `2373` lines (`117975` bytes)
+**Size**: `2427` lines (`120570` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -168,6 +168,8 @@
   - Method `._countdown_slot(statement)` - *The slot a countdown loop's counter occupies.*
   - Method `._countdown_home(statement)` - *The callee-saved register a countdown loop's counter lives in, or None.*
   - Method `._emit_condition(expression, target, when_true)` - *Jump to `target` when the condition has the requested truth value.*
+  - Method `._emit_logical_branch(expression, target, when_true)` - *Branch on `a && b` / `a || b` from each side's flags in turn.*
+  - Method `._bit_test_operand(expression)` - *`(value, mask)` when the compare is `x % 2**b` or `x & m`, else None.*
   - Method `._emit_comparison_branch(expression, target, when_true)` - *Compare two operands and branch, using an immediate form when the right side is small.*
   - Method `._emit_expression(expression)` - *Lower one expression, leaving its value in rax.*
   - Method `._emit_unary(expression)` - *Negate, complement, or compare with zero.*
@@ -758,7 +760,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `853` lines (`41392` bytes)
+**Size**: `926` lines (`44686` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -809,6 +811,12 @@
   - Method `.test_a_wider_mask_counts_to_eight()`
   - Method `.test_a_mask_beyond_imm32_lands_in_a_scratch_register()`
   - Method `.test_an_unequal_compare_against_a_nonzero_literal_still_divides()`
+- `class FlagFusedConditionTest` - *Bit-test and short-circuit conditions branch from their flags, never setcc.*
+  - Method `.test_a_bit_test_condition_branches_from_the_flags()`
+  - Method `.test_conjoined_bit_tests_branch_from_two_flag_pairs()`
+  - Method `.test_a_disjoined_condition_short_circuits_its_right_side()`
+  - Method `.test_a_comparison_assigned_as_a_value_still_materialises_setcc()`
+  - Method `.test_masks_above_the_byte_form_still_decide_the_branch()`
 - `class SelfRecursionInliningTest` - *The left operand of a merge may be a self-call lowered in place, not a real call.*
   - Method `.test_a_merge_left_self_call_is_inlined()`
   - Method `.test_a_comparison_with_a_small_literal_skips_the_rax_load()`
@@ -861,6 +869,9 @@
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
 - `def body_text(source, name)` - *The .text bytes of one function's body, sliced from the generated artifact.*
 - `def region_text(source, name)` - *One function and its internal labels, stopping at the runtime helpers.*
+- `def region_of(source, name)` - *One function's bytes with its inline copies, as region_bytes does in helpers above.*
+- `def has_setcc(blob)` - *Any setcc opcode (0F 90..0F 9F): a comparison materialised as 0 or 1.*
+- `def count_test_imms(blob)` - *How many `test r/m8, imm8` byte tests (F6 with register-modrm, then a mask) appear.*
 - `def region_bytes(source, name)` - *The .text bytes of one function's body, its inline copies included.*
 - `def calls_of(source, caller, callee)` - *How many real `call` sites inside `caller`'s region target `callee`.*
 
@@ -869,7 +880,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `480` lines (`18438` bytes)
+**Size**: `569` lines (`20844` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -920,6 +931,11 @@
   - Method `.test_nqueens_twins_print_the_same_total()`
   - Method `.test_binary_gcd_twins_print_the_same_total()`
   - Method `.test_call_chain_twins_print_the_same_total()`
+- `class FlagFusedConditionRuntimeTest` - *Branches the fuser claims to handle stay semantically exact over negative values.*
+  - Method `.test_bit_tests_and_masks_over_negative_values()`
+  - Method `.test_short_circuit_branches_skip_call_sides()`
+  - Method `.test_chained_conjunctions_and_alternations()`
+  - Method `.test_mask_counts_over_a_negative_span()`
 
 ---
 

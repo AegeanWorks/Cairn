@@ -1157,9 +1157,68 @@ class CodeGenerator:
         if isinstance(expression, syntax.Binary) and expression.op in COMPARISON_CONDITIONS:
             self._emit_comparison_branch(expression, target, when_true)
             return
+        if isinstance(expression, syntax.Binary) and expression.op in ("&&", "||"):
+            self._emit_logical_branch(expression, target, when_true)
+            return
         self._emit_expression(expression)
         self.assembler.test("rax")
         self.assembler.jcc("nz" if when_true else "z", target)
+
+    def _emit_logical_branch(self, expression: syntax.Binary, target: str,
+                             when_true: bool) -> None:
+        """Branch on `a && b` / `a || b` from each side's flags in turn.
+
+        The short-circuit side decides the chain: its false (for `&&`) or true (for `||`)
+        outcome jumps past the other side. Because every side branches directly, no
+        comparison inside a condition ever materialises as 0 or 1.
+        """
+        left, right = expression.left, expression.right
+        if expression.op == "&&":
+            if when_true:
+                skipped = self._fresh("and.short")
+                self._emit_condition(left, skipped, False)
+                self._emit_condition(right, target, True)
+                self.assembler.label(skipped)
+            else:
+                # Jumping on the first false side already skips the rest of the chain.
+                self._emit_condition(left, target, False)
+                self._emit_condition(right, target, False)
+        else:
+            skipped = self._fresh("or.short")
+            self._emit_condition(left, skipped, True)
+            self._emit_condition(right, target, when_true)
+            self.assembler.label(skipped)
+
+    @staticmethod
+    def _bit_test_operand(expression: syntax.Binary) -> Optional[tuple]:
+        """`(value, mask)` when the compare is `x % 2**b` or `x & m`, else None.
+
+        For every sign, `% 2**b == 0` holds exactly when the low b bits are zero, and
+        `(x & m) == 0` / `!= 0` reads the same bits directly, so the mask alone decides.
+        """
+        value_expr = expression.left
+        while isinstance(value_expr, syntax.Parens):
+            value_expr = value_expr.inner
+        if not (isinstance(value_expr, syntax.Binary) and value_expr.op in ("%", "&")):
+            return None
+        operand_a = value_expr.left
+        operand_b = value_expr.right
+        while isinstance(operand_a, syntax.Parens):
+            operand_a = operand_a.inner
+        while isinstance(operand_b, syntax.Parens):
+            operand_b = operand_b.inner
+        if value_expr.op == "%":
+            divisor = operand_b.value if isinstance(operand_b, syntax.IntLiteral) else -1
+            power = divisor.bit_length() - 1 if divisor >= 1 else -1
+            if power >= 1 and (1 << power) == divisor:
+                return operand_a, (1 << power) - 1
+            return None
+        for literal, other in ((operand_a, operand_b), (operand_b, operand_a)):
+            if isinstance(literal, syntax.IntLiteral) and literal.value > 0:
+                while isinstance(other, syntax.Parens):
+                    other = other.inner
+                return other, literal.value
+        return None
 
     def _emit_comparison_branch(self, expression: syntax.Binary, target: str,
                                 when_true: bool) -> None:
@@ -1175,17 +1234,12 @@ class CodeGenerator:
         while isinstance(left, syntax.Parens):
             left = left.inner
         if (isinstance(right, syntax.IntLiteral) and right.value == 0
-                and expression.op in ("==", "!=")
-                and isinstance(left, syntax.Binary) and left.op == "%"):
-            dividend, divisor = left.left, left.right
-            while isinstance(divisor, syntax.Parens):
-                divisor = divisor.inner
-            power = divisor.value.bit_length() - 1 \
-                if isinstance(divisor, syntax.IntLiteral) else -1
-            if power >= 1 and (1 << power) == divisor.value:
+                and expression.op in ("==", "!=")):
+            bit_test = self._bit_test_operand(expression)
+            if bit_test is not None:
+                dividend, mask = bit_test
                 # `x % 2**b == 0` holds exactly when the low b bits are zero, for every
-                # sign, so the mask alone decides the branch and no fixup is needed.
-                mask = (1 << power) - 1
+                # sign, and `x & m` reads those bits directly, so the mask decides.
                 parity = "e" if COMPARISON_CONDITIONS[expression.op] == "e" else "ne"
                 dividend_slot = slot_of(dividend)
                 home = (self._home(dividend_slot)

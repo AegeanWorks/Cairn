@@ -338,8 +338,9 @@ rewrite is in ADR-018.
 Three later cases widen the measured surface (ADR-026): `nqueens` (bitmask backtracking, many live
 locals per frame — 1.09-1.17x C, 1.21-1.41x Rust, recorded target), `binary_gcd` (subtraction and
 shift loops with a swap — ADR-027's magic-multiply division removed both `idiv` chains from the LCG
-loop, 190.2 → 178-195 ms: 1.08-1.14x C, 1.21-1.31x Rust, with the remaining gap the real `call
-bgcd` per pair plus its setcc-form bit conditions) and `call_chain` (three-argument calls with
+loop, 190.2 → 178-195 ms, and ADR-029's flag-fused conditions fused every `(x & 1) == 0` branch and
+the conjoined shift loop into `test`/`test_imm` + one `jcc`, 202.1 → 188 ms best: 1.06-1.08x C,
+1.27x Rust, with the remaining gap the real `call bgcd` per pair) and `call_chain` (three-argument calls with
 non-pure operands on the hot path — ADR-027's foreign-function inlining, flag-fused select and
 direct-into-register compute fell 95.9 → 45-48 ms: Rust's 70.9-76.5 is beaten outright at about
 0.62x, C's 36-39 ms is the last recorded closure target). A twin-parity gate

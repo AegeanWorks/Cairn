@@ -476,5 +476,94 @@ class TwinParityTest(unittest.TestCase):
         self._assert_par(self.harness.CASES[7])
 
 
+NEGATIVE_BIT_TESTS = """
+fn main() -> i64 {
+    var x: i64 = -6;
+    var y: i64 = 3;
+    var total: i64 = 0;
+    if (x & 1) == 1 && y > 0 { total = total + 1; }
+    if (x & 2) != 0 || y < 0 { total = total + 2; }
+    if x > 0 && (y & 1) == 1 { total = total + 4; }
+    if x < 0 || (y / 2) > 5 { total = total + 8; }
+    if !((x & 4) == 4) { total = total + 16; }
+    while (x & 1) == 0 && x != 0 {
+        x = x / 2;
+        total = total + 16;
+    }
+    print(total);
+    return 0;
+}
+"""
+
+SHORT_CIRCUIT_CALLS = """
+fn tick(n: i64) -> i64 {
+    print(n);
+    return n;
+}
+
+fn main() -> i64 {
+    var x: i64 = 4;
+    if x > 0 || tick(7) > 0 { print(1); }
+    if x < 0 && tick(9) < 0 { print(2); }
+    print(3);
+    return 0;
+}
+"""
+
+CONDITION_CHAINS = """
+fn main() -> i64 {
+    var a: i64 = 5;
+    var b: i64 = -3;
+    var c: i64 = 8;
+    var total: i64 = 0;
+    if a > 1 && b < 0 && c > 2 { total = 1; }
+    if a > 9 || b > 0 || c > 100 { total = total + 2; }
+    if a > 9 && b < 0 && c > 2 { total = total + 4; }
+    if !(a > 9) && (b < 0 || c > 100) { total = total + 8; }
+    print(total);
+    return 0;
+}
+"""
+
+MASK_COUNTS = """
+fn main() -> i64 {
+    var total: i64 = 0;
+    var i: i64 = -20;
+    while i <= 20 {
+        if i % 4 == 0 { total = total + 1; }
+        if i % 8 != 0 { total = total + 2; }
+        i = i + 1;
+    }
+    print(total);
+    return 0;
+}
+"""
+
+
+@WINDOWS_ONLY
+class FlagFusedConditionRuntimeTest(EndToEndTest):
+    """Branches the fuser claims to handle stay semantically exact over negative values."""
+
+    def test_bit_tests_and_masks_over_negative_values(self) -> None:
+        completed = self.execute(NEGATIVE_BIT_TESTS)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "42\n")
+
+    def test_short_circuit_branches_skip_call_sides(self) -> None:
+        completed = self.execute(SHORT_CIRCUIT_CALLS)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "1\n3\n")
+
+    def test_chained_conjunctions_and_alternations(self) -> None:
+        completed = self.execute(CONDITION_CHAINS)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "9\n")
+
+    def test_mask_counts_over_a_negative_span(self) -> None:
+        completed = self.execute(MASK_COUNTS)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "83\n")
+
+
 if __name__ == "__main__":
     unittest.main()

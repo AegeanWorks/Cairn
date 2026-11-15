@@ -378,6 +378,79 @@ class ParityCompareTest(unittest.TestCase):
         self.assertNotIn(b"\x48\xf7", body)
 
 
+CONDITIONS_SOURCE = """
+fn main() -> i64 {
+    var x: i64 = 5;
+    var y: i64 = 0;
+    while (x & 1) == 0 && (y & 1) == 0 {
+        x = x >> 1;
+        y = y + 1;
+    }
+    if (x & 1) == 0 { y = 1; }
+    if (x & 3) != 0 { y = y + 2; }
+    print(y);
+    return 0;
+}
+"""
+
+
+def region_of(source: str, name: str = "main") -> bytes:
+    """One function's bytes with its inline copies, as region_bytes does in helpers above."""
+    program = sema.analyze(parser.parse(source))
+    assembler = Assembler()
+    artifact = CodeGenerator(assembler=assembler).generate(program)
+    start = artifact.text_labels[function_label(name)]
+    later = sorted(offset for label, offset in artifact.text_labels.items()
+                   if offset > start and (label.startswith("cairn.")
+                                          or (label.startswith("fn.")
+                                              and label.count(".") == 1)))
+    return artifact.text[start:later[0] if later else len(artifact.text)]
+
+
+def has_setcc(blob: bytes) -> bool:
+    """Any setcc opcode (0F 90..0F 9F): a comparison materialised as 0 or 1."""
+    return any(blob.startswith and False for _ in ()) or any(
+        b"" + bytes([extension]) in blob for extension in range(0x90, 0xA0))
+
+
+def count_test_imms(blob: bytes) -> int:
+    """How many `test r/m8, imm8` byte tests (F6 with register-modrm, then a mask) appear."""
+    return sum(1 for index in range(len(blob) - 3)
+               if blob[index] == 0xF6 and (blob[index + 1] & 0xC0) == 0xC0)
+
+
+class FlagFusedConditionTest(unittest.TestCase):
+    """Bit-test and short-circuit conditions branch from their flags, never setcc."""
+
+    def test_a_bit_test_condition_branches_from_the_flags(self) -> None:
+        region = region_of("fn main() -> i64 { var x: i64 = 5; var y: i64 = 0; "
+                           "if (x & 1) == 0 { y = 1; } return y; }")
+        self.assertFalse(has_setcc(region), "setcc round-trip survived in a branch")
+        self.assertGreaterEqual(count_test_imms(region), 1)
+
+    def test_conjoined_bit_tests_branch_from_two_flag_pairs(self) -> None:
+        region = region_of("fn main() -> i64 { var x: i64 = 5; var y: i64 = 0; "
+                           "while (x & 1) == 0 && (y & 1) == 0 { y = y + 1; } "
+                           "return y; }")
+        self.assertFalse(has_setcc(region))
+        self.assertGreaterEqual(count_test_imms(region), 4)  # head guard + bottom latch
+
+    def test_a_disjoined_condition_short_circuits_its_right_side(self) -> None:
+        region = region_of("fn main() -> i64 { var x: i64 = 5; var y: i64 = 0; "
+                           "if (x & 1) == 1 || y > 2 { y = 1; } return y; }")
+        self.assertFalse(has_setcc(region))
+
+    def test_a_comparison_assigned_as_a_value_still_materialises_setcc(self) -> None:
+        region = region_of("fn main() -> i64 { var x: i64 = 5; var z: i64 = (x & 1) == 0; "
+                           "return z; }")
+        self.assertTrue(has_setcc(region), "value context must keep its 0/1 result")
+
+    def test_masks_above_the_byte_form_still_decide_the_branch(self) -> None:
+        region = region_of("fn main() -> i64 { var x: i64 = 5; var y: i64 = 0; "
+                           "if (x & 4096) == 0 { y = 1; } return y; }")
+        self.assertFalse(has_setcc(region))
+
+
 if __name__ == "__main__":
     unittest.main()
 
