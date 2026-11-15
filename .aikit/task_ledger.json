@@ -3,25 +3,17 @@
   "active_task": {
     "task_id": "cairn-loop-invariants",
     "last_phase": "delivered",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794768283.8353677,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794768341.4181125,
+    "completed_head": "195caf3d329506cc12b082ed9241d15697c2cb0e",
+    "completed_tree": "c23325931dbfa39e0c425f300a62b93a03906d6e"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-case-closes",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[4/4] Commit 32f8ac3 landed (9 files, 1235 insertions): m2 backend batch + magic division with ADR-027, README standings, refreshed codebase map and ledger. Suite 363 + 39 subtests; project gates 4/4 passed earlier in the phase and re-verified by check before commit. Remaining recorded targets: call_chain vs C (1.3x), binary_gcd vs C/Rust via flag-fused bit conditions (bgcd setcc lowering) and nqueens spill/frame work (deferred by design). checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794759158.97883,
-      "timestamp_str": "2026-11-15 19:12:38",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-case-closes",
       "phase": "in_progress",
@@ -283,6 +275,22 @@
       "timestamp_str": "2026-11-15 21:44:43",
       "agent": "mistral:vibe",
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-loop-invariants",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-loop-invariants' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794768341.4618251,
+      "timestamp_str": "2026-11-15 21:45:41",
+      "agent": "mistral:vibe",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
