@@ -13,7 +13,7 @@ from cairn.diagnostics import Diagnostic, DiagnosticError
 from cairn.optimize import INT64_MAX
 
 BUILTINS = {"print": 1, "print_char": 1, "print_hex": 1}
-MAX_PARAMETERS = 4
+MAX_PARAMETERS = 8
 
 
 @dataclass
@@ -66,7 +66,7 @@ class Analyzer:
             if len(function.parameters) > MAX_PARAMETERS:
                 self._report("E3010",
                              f"function '{function.name}' takes {len(function.parameters)} "
-                             f"parameters; Cairn passes at most {MAX_PARAMETERS} in registers",
+                             f"parameters; Cairn carries four in registers",
                              f"Reduce the parameters to {MAX_PARAMETERS} or fewer, packing "
                              "the extras into one i64.",
                              function.span)

@@ -63,7 +63,7 @@ class CapabilitiesTest(unittest.TestCase):
     def test_manifest_publishes_the_frozen_surface(self) -> None:
         surface = capabilities.capabilities()
         self.assertEqual(surface["types"], ["i64"])
-        self.assertEqual(surface["limits"]["parameters_per_function"], 4)
+        self.assertEqual(surface["limits"]["parameters_per_function"], 8)
         self.assertEqual(surface["target"]["imports"],
                          {"GetStdHandle": "kernel32.dll", "WriteFile": "kernel32.dll",
                           "ExitProcess": "kernel32.dll"})

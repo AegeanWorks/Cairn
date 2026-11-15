@@ -85,8 +85,9 @@ fn main() -> i64 {
 
 - **One type**: `i64`. Every value is a signed 64-bit integer; comparisons yield `0` or `1`.
 - **One binding form per intent**: `let` is immutable, `var` is assignable. No shadowing.
-- **One function form**: `fn name(a: i64, b: i64) -> i64 { ... }`, up to four parameters,
-  which are passed in registers. `main` is the entry point, and its return value is the exit code.
+- **One function form**: `fn name(a: i64, b: i64) -> i64 { ... }`, up to eight parameters:
+  four in registers, the rest through the caller's outgoing stack area. `main` is the entry point,
+  and its return value is the exit code.
 - **Statements**: `let`, `var`, assignment, `if`/`else`, `while`, `for i in a..b` (or `a..=b`;
   the loop variable is scoped to the loop and `continue` still steps it), `return`, `break`,
   `continue`.
@@ -156,7 +157,7 @@ python -m cairn check broken.crn --json
 | E3007 | Undeclared name |
 | E3008 | `break`/`continue` outside a loop |
 | E3009 | Function can finish without returning |
-| E3010 | More than four parameters |
+| E3010 | More than eight parameters |
 | E3011 | Missing or ill-formed `main` |
 | E3012 | Builtin redefined or used as a value |
 

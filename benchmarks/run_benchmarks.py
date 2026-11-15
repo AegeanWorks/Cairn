@@ -100,6 +100,8 @@ CASES: Tuple[Case, ...] = (
          "benchmarks/splitmix.rs", "benchmarks/splitmix.cpp", 100_000_000, "mixes"),
     Case("hex_io", "benchmarks/hex_io.crn", "benchmarks/hex_io.c",
          "benchmarks/hex_io.rs", "benchmarks/hex_io.cpp", 400_000, "values"),
+    Case("many_params", "benchmarks/many_params.crn", "benchmarks/many_params.c",
+         "benchmarks/many_params.rs", "benchmarks/many_params.cpp", 10_000_000, "calls"),
 )
 
 

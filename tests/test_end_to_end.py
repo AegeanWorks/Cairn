@@ -399,6 +399,67 @@ fn main() -> i64 {
         completed = self.execute(source)
         self.assertEqual(completed.stdout, "00 1abcd 21579a 7\n")
 
+STACK_ARGS_PROGRAM = """
+fn combine(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64 {
+    return a * 31 + b * 37 + c * 41 + d * 43 + e * 47 + f * 53;
+}
+
+fn main() -> i64 {
+    print(combine(1, 2, 3, 4, 5, 6));
+    print(combine(6, 5, 4, 3, 2, 1));
+    var i: i64 = 0;
+    var total: i64 = 0;
+    while i < 3 {
+        total = total + combine(i, i * 2, 5 - i, i + 7, -i, i * 100);
+        i = i + 1;
+    }
+    print(total);
+    return 0;
+}
+"""
+
+class StackParametersTest(EndToEndTest):
+    """Six-argument calls: four in registers, two through the outgoing stack area."""
+
+    def test_stack_arguments_reach_the_callee_and_rotate(self) -> None:
+        completed = self.execute(STACK_ARGS_PROGRAM)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "953\n811\n17598\n")
+
+    def test_arguments_past_the_registers_evaluate_left_to_right(self) -> None:
+        source = ("fn take(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64"
+                  " { return a + b + c + d + e + f; }"
+                  "fn main() -> i64 { print(take(print(1), print(2), 3, 4,"
+                  " print(5), 6)); return 0; }")
+        completed = self.execute(source)
+        self.assertEqual(completed.stdout, "1\n2\n5\n21\n")
+
+    def test_stack_parameters_are_mutable_locals(self) -> None:
+        source = ("fn bump(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64 {"
+                  " var total: i64 = 0;"
+                  " for k in 0..3 { e = e + f; total = total + a + b + c + d + e; }"
+                  " return e * 1000 + total; }"
+                  "fn main() -> i64 { print(bump(1, 2, 3, 4, 5, 6)); return 0; }")
+        completed = self.execute(source)
+        # e walks 11, 17, 23; the round totals are 21 + 27 + 33 = 81.
+        self.assertEqual(completed.stdout, "23081\n")
+
+    def test_eight_parameters_pass(self) -> None:
+        source = ("fn sum8(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, g: i64,"
+                  " h: i64) -> i64 { return a + b + c + d + e + f + g + h; }"
+                  "fn main() -> i64 { print(sum8(1, 2, 3, 4, 5, 6, 7, 8)); return 0; }")
+        completed = self.execute(source)
+        self.assertEqual(completed.stdout, "36\n")
+
+    def test_deep_recursion_rotates_its_stack_parameters(self) -> None:
+        source = ("fn rot(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64 {"
+                  " if a == 0 { return e; }"
+                  " return rot(a - 1, f, a, b, c, d); }"
+                  "fn main() -> i64 { print(rot(9, 1, 2, 3, 4, 5)); return 0; }")
+        completed = self.execute(source)
+        # Nine (a-1, f, a, b, c, d) steps from (9,1,2,3,4,5): the model says 2.
+        self.assertEqual(completed.stdout, "2\n")
+
 class FusedCollatzLoopTest(EndToEndTest):
     """The fused odd-pair loop counts every reference step exactly, on every path.
 

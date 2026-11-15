@@ -39,7 +39,7 @@ REGISTRY: Tuple[Code, ...] = (
     Code("E3007", "semantics", "Undeclared name"),
     Code("E3008", "semantics", "break or continue outside a loop"),
     Code("E3009", "semantics", "Function can finish without returning"),
-    Code("E3010", "semantics", "More than four parameters"),
+    Code("E3010", "semantics", "More than eight parameters"),
     Code("E3011", "semantics", "Missing or ill-formed main"),
     Code("E3012", "semantics", "Builtin redefined or used as a value"),
     Code("V0001", "verify", "DOS or PE signature is missing"),

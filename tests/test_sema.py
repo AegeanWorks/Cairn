@@ -39,8 +39,14 @@ class SemaTest(unittest.TestCase):
                                "fn f() -> i64 { return 2; }"
                                "fn main() -> i64 { return f(); }"), ["E3001"])
 
-    def test_more_than_four_parameters(self) -> None:
-        self.assertEqual(codes("fn f(a: i64, b: i64, c: i64, d: i64, e: i64) -> i64 { return a; }"
+    def test_five_to_eight_parameters_are_accepted(self) -> None:
+        analyze(parse("fn f(a: i64, b: i64, c: i64, d: i64, e: i64," 
+                      " f2: i64, g: i64, h: i64) -> i64 { return a + h; }"
+                      "fn main() -> i64 { return 0; }"))
+
+    def test_more_than_eight_parameters(self) -> None:
+        self.assertEqual(codes("fn f(a: i64, b: i64, c: i64, d: i64, e: i64," 
+                               " f2: i64, g: i64, h: i64, i2: i64) -> i64 { return a; }"
                                "fn main() -> i64 { return 0; }"), ["E3010"])
 
     def test_unknown_name_and_use_before_declaration(self) -> None:

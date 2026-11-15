@@ -178,6 +178,9 @@ def region_text(source: str, name: str) -> bytes:
 ARGUMENT_IMM = ("fn f(a: i64) -> i64 { return a - 7; } "
                 "fn main() -> i64 { print(f(3)); return 0; }")
 SHIFT_IMM = "fn g(x: i64) -> i64 { return x >> 7; } fn main() -> i64 { print(g(9)); return 0; }"
+STACK_ARGS_CALL = ("fn combine(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64"
+                   " { return a + f; }"
+                   "fn main() -> i64 { print(combine(1, 2, 3, 4, 5, 6)); return 0; }")
 
 
 class ArgumentPathTest(unittest.TestCase):
@@ -761,6 +764,32 @@ def region_bytes(source: str, name: str) -> bytes:
                    if offset > start and label.startswith("fn.")
                    and label.count(".") == 1)
     return artifact.text[start:later[0] if later else len(artifact.text)]
+
+
+class StackParameterTest(unittest.TestCase):
+    """Parameters five to eight travel through the caller's outgoing area.
+
+    The callee reads stack parameter j at [rbp+16+8j], the slot right above the saved
+    return address; the caller reserves pad plus the stack-arg slots in one sub, so the
+    call runs with the register arguments bound and rsp 16-byte aligned.
+    """
+
+    def test_callee_pulls_stack_parameters_from_above_the_return_address(self) -> None:
+        body = body_text(STACK_ARGS_CALL, "combine")
+        self.assertIn(bytes([0x48, 0x8B, 0x45, 0x10]), body)  # mov rax, [rbp+16]
+        self.assertIn(bytes([0x48, 0x8B, 0x45, 0x18]), body)  # mov rax, [rbp+24]
+
+    def test_caller_stores_stack_arguments_into_the_outgoing_area(self) -> None:
+        body = body_text(STACK_ARGS_CALL, "main")
+        # The four register arguments are parked, so the store displacements name
+        # the slots at [rsp+32] and [rsp+40] (= base+0 and base+8 after the pops).
+        self.assertIn(bytes([0x48, 0x89, 0x44, 0x24, 0x20]), body)
+        self.assertIn(bytes([0x48, 0x89, 0x44, 0x24, 0x28]), body)
+
+    def test_the_outgoing_area_is_one_reservation_with_call_alignment(self) -> None:
+        body = body_text(STACK_ARGS_CALL, "main")
+        # sub rsp, 16 = two stack-arg slots; depth 0 + 16 keeps the call aligned.
+        self.assertIn(bytes([0x48, 0x81, 0xEC, 16, 0, 0, 0]), body)
 
 
 class BuiltinPrintHelpersTest(unittest.TestCase):

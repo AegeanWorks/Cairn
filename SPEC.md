@@ -67,7 +67,8 @@ fn name(a: i64, b: i64) -> i64 { block }
 
 - The keyword is always `fn`.
 - Every function declares `-> i64` and every path through its body ends in `return expr;`, else `E3009`.
-- At most four parameters (`E3010`); parameters are mutable slots.
+- At most eight parameters (`E3010`); the first four travel in registers and the rest in the
+  caller's outgoing stack area. Parameters are mutable slots.
 - Redefining any builtin (`print`, `print_char`, `print_hex`) is `E3012`. Duplicating a function is `E3001`.
 - `fn main() -> i64` with no parameters is the entry point (`E3011` when missing or ill-formed). Its return value is the process exit code.
 
@@ -156,6 +157,11 @@ One target only: Windows x86-64, PE32+ console, sections `.text` (code),
 Imports are exactly `GetStdHandle`, `WriteFile`, `ExitProcess` from
 `kernel32.dll`. There is no `#if target`, no `extern`, no triple flag.
 Header timestamps are zero, so identical sources give identical bytes.
+Calls use the Windows x64 register block (`rcx`, `rdx`, `r8`, `r9`) and a private
+contract for the rest: stack parameter `j` rides at `[rbp+16+8j]` in the callee, in
+the caller's padded outgoing area, without Microsoft's 32-byte shadow store. There is
+no foreign code to call, so the contract only has to satisfy itself; a debugger sees
+rbp-chained frames either way.
 
 ## 9. No dependency injection, no prelude
 

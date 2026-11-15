@@ -21,7 +21,6 @@ from cairn.machine import ARGUMENT_REGISTERS, Assembler
 from cairn.optimize import INT64_MIN, has_call, _contains_break_or_continue
 from cairn.runtime import (DIV_ZERO_LABEL, PRINT_CHAR_LABEL, PRINT_HEX_LABEL, PRINT_LABEL,
                            emit_runtime)
-from cairn.sema import MAX_PARAMETERS
 
 COMPARISON_CONDITIONS = {
     "==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge",
@@ -226,10 +225,13 @@ class CodeGenerator:
         self.epilogue = f"{function_label(function.name)}.epilogue"
         frame = align16((function.slots + len(self.homes)) * 8)
         asm.label(function_label(function.name))
-        if function.slots <= len(HOME_REGISTERS):
+        if (function.slots <= len(HOME_REGISTERS)
+                and len(function.parameters) <= len(ARGUMENT_REGISTERS)):
             # Every slot has a home, so no frame (and no rbp) is needed: the homes
             # save and restore with push/pop, which also drops the store-forwarding
-            # latency a frame store re-load pays on the hot call path.
+            # latency a frame store re-load pays on the hot call path. Functions with
+            # stack parameters need the frame: only an rbp chain addresses the
+            # caller's outgoing area at a fixed offset.
             hold_units = self._delta_hold_units(function)
             pair_mode = hold_units == 0 and self._pair_inline_shape(function)
             self.hoist_plans.update(self._plan_constant_hoists(function))
@@ -279,7 +281,7 @@ class CodeGenerator:
             self.chain_loop_depth = 0
             self.hold_units = hold_units
             self._clear_frame(function)
-            for index, parameter in enumerate(function.parameters[:MAX_PARAMETERS]):
+            for index, parameter in enumerate(function.parameters[:len(ARGUMENT_REGISTERS)]):
                 self._store_slot(parameter.slot, ARGUMENT_REGISTERS[index])
             self.depth = 0
             self.temporaries = 0
@@ -317,8 +319,14 @@ class CodeGenerator:
         self.pad_slots = ()
         self._save_homes()
         self._clear_frame(function)
-        for index, parameter in enumerate(function.parameters[:MAX_PARAMETERS]):
+        for index, parameter in enumerate(function.parameters[:len(ARGUMENT_REGISTERS)]):
             self._store_slot(parameter.slot, ARGUMENT_REGISTERS[index])
+        for index in range(len(ARGUMENT_REGISTERS), len(function.parameters)):
+            # A fifth-or-later parameter sits in the caller's outgoing area, directly
+            # above the saved return address; pull it into its own slot before the
+            # body (and rax) is touched.
+            asm.mov_load_rbp("rax", 16 + 8 * (index - len(ARGUMENT_REGISTERS)))
+            self._store_slot(function.parameters[index].slot, "rax")
         self.depth = 0
         self.temporaries = 0
         asm.mov_imm64("rax", 0)
@@ -1897,6 +1905,9 @@ class CodeGenerator:
         elif self._is_inline_candidate(expression):
             self._emit_inlined_self_call(expression)
             return
+        if len(expression.arguments) > len(ARGUMENT_REGISTERS):
+            self._emit_stack_call(expression)
+            return
         target = self._foreign_inline_target(expression)
         if len(expression.arguments) == 1:
             self._emit_into(expression.arguments[0], ARGUMENT_REGISTERS[0])
@@ -1914,6 +1925,39 @@ class CodeGenerator:
             self._emit_foreign_inline(target)
             return
         self._emit_call_site(function_label(expression.name))
+
+    def _emit_stack_call(self, expression: syntax.Call) -> None:
+        """Lower a five-or-more argument call: four registers, the rest via the stack.
+
+        Stack parameter j is read by the callee at [rbp+16+8j], so the caller stores
+        argument 4+j at [rsp+8j] at the call. One `sub rsp` reserves the pad and every
+        stack slot together; the call is issued directly because the reservation
+        already carries the alignment parity `_emit_call_site` would double-count.
+        Every argument still evaluates left to right: register candidates park on the
+        stack while later arguments evaluate, and each stack destination stores in
+        place, its displacement folding the parked pushes still outstanding.
+        """
+        asm = self.assembler
+        arguments = expression.arguments
+        stack_count = len(arguments) - len(ARGUMENT_REGISTERS)
+        reserve = 8 * stack_count + (8 if (self.depth + 8 * stack_count) % 16 else 0)
+        asm.sub_rsp(reserve)
+        self.depth += reserve
+        parked = 0
+        for index, argument in enumerate(arguments):
+            self._emit_expression(argument)
+            if index < len(ARGUMENT_REGISTERS):
+                asm.push("rax")
+                self.depth += 8
+                parked += 1
+            else:
+                asm.mov_store_rsp_disp(8 * (parked + index - len(ARGUMENT_REGISTERS)), "rax")
+        for register_index in reversed(range(len(ARGUMENT_REGISTERS))):
+            asm.pop(ARGUMENT_REGISTERS[register_index])
+            self.depth -= 8
+        asm.call(function_label(expression.name))
+        asm.add_rsp(reserve)
+        self.depth -= reserve
 
     def _is_pure_argument(self, expression: Optional[syntax.Expr]) -> bool:
         """Whether an argument can bind straight into its ABI register.
@@ -2407,7 +2451,7 @@ class CodeGenerator:
         else:
             return None
         if (len(expression.arguments) != len(function.parameters)
-                or not 0 < len(expression.arguments) <= MAX_PARAMETERS
+                or not 0 < len(expression.arguments) <= len(ARGUMENT_REGISTERS)
                 or function.slots > len(HOME_REGISTERS)):
             return None
         if not self._body_is_copy_free(function.body):
@@ -2496,7 +2540,7 @@ class CodeGenerator:
         self.chain_loop_depth = 0
         self.temporaries = 0
         self.inline_depth += 1
-        for index, parameter in enumerate(callee.parameters[:MAX_PARAMETERS]):
+        for index, parameter in enumerate(callee.parameters[:len(ARGUMENT_REGISTERS)]):
             if rebinds:
                 asm.mov_reg_reg(self.homes[index], ARGUMENT_REGISTERS[index])
         for index in range(parameters, callee.slots):
