@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `41`
-- **Total Classes**: `74`
-- **Total Top-Level Functions**: `128`
-- **Total Class Methods**: `431`
-- **Total Source Lines**: `7393`
+- **Total Classes**: `79`
+- **Total Top-Level Functions**: `137`
+- **Total Class Methods**: `473`
+- **Total Source Lines**: `8413`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`41` module(s))
-- **Not indexed by this map**: cpp (`3` file(s)), rust (`3` file(s))
+- **Not indexed by this map**: cpp (`5` file(s)), rust (`5` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -32,7 +32,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C and Rust baselines.*
 
-**Size**: `354` lines (`15860` bytes)
+**Size**: `358` lines (`16111` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C and Rust sources, and what one iteration is.*
@@ -128,7 +128,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `987` lines (`45635` bytes)
+**Size**: `1466` lines (`70431` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -143,6 +143,7 @@
   - Method `._load_slot(slot, destination)` - *Move one slot into `destination` from its register or its frame slot.*
   - Method `._store_slot(slot, source)` - *Write `source` into one slot's register or frame slot.*
   - Method `._emit_value(slot, expression)` - *Assign an expression to a slot, folding `slot = slot op value` in place.*
+  - Method `._update_keeps_nonneg(slot, expression)` - *Whether an in-place update provably keeps the slot's value non-negative.*
   - Method `._fold_update(home, slot, expression)` - *Emit `home = home op value` when the expression updates its own slot.*
   - Method `._emit_home_offset(destination, expression)` - *Lower `homed name ± literal` as one `lea`, or return False when the shape differs.*
   - Method `._emit_into(expression, destination)` - *Lower an expression, using `destination` directly when it is a leaf.*
@@ -150,6 +151,10 @@
   - Method `._emit_statement(statement, tail)` - *Lower one statement; `tail` only concerns a final `return`.*
   - Method `._emit_if(statement, tail)` - *`if` as a conditional branch and two labelled bodies.*
   - Method `._emit_while(statement)` - *`while` with its own break and continue targets.*
+  - Method `._try_emit_halving_loop(statement)` - *Emit a fused odd-pair body as one unconditional half-step, or refuse.*
+  - Method `._is_nonnegative(slot)` - *Whether the slot provably holds a non-negative value at this emit point.*
+  - Method `._expression_nonnegative(expression)` - *Whether the expression provably evaluates non-negative at this emit point.*
+  - Method `._guard_nonnegative(condition)` - *Slots a `while slot > c` (or `slot >= c + 1`) guard proves non-negative in its body.*
   - Method `._countdown_slot(statement)` - *The slot a countdown loop's counter occupies.*
   - Method `._countdown_home(statement)` - *The callee-saved register a countdown loop's counter lives in, or None.*
   - Method `._emit_condition(expression, target, when_true)` - *Jump to `target` when the condition has the requested truth value.*
@@ -158,6 +163,9 @@
   - Method `._emit_unary(expression)` - *Negate, complement, or compare with zero.*
   - Method `._emit_binary(expression)` - *Short-circuit `&&`/`||`, otherwise place the left operand, then combine.*
   - Method `._emit_left_operand(left, right)` - *Evaluate `left`, keep it across `right`, and leave it in rcx with right in rax.*
+  - Method `._emit_power_of_two_division(expression)` - *Lower `x / 2**b` or `x % 2**b` as a shift fixup chain; True when emitted.*
+  - Method `._scaled_sum_terms(expression)` - *The scaled-item pattern of a `+` expression: `(Name, scale_log2, addend, with_base)`.*
+  - Method `._emit_scaled_sum(expression)` - *Lower `c1 + k*c2` (either operand order) as one scaled `lea`; True when emitted.*
   - Method `._emit_division(operator)` - *Signed division with an explicit zero-divisor trap, quotient or remainder.*
   - Method `._emit_and(expression)` - *`&&`: the right side is evaluated only when the left side is non-zero.*
   - Method `._emit_or(expression)` - *`||`: the right side is evaluated only when the left side is zero.*
@@ -177,6 +185,7 @@
 - `def slot_offset(slot)` - *The rbp-relative offset of a frame slot; slot 0 is the first parameter.*
 - `def align16(value)` - *Round a frame size up to the 16-byte stack alignment the ABI requires.*
 - `def slot_of(expression)` - *The slot a parenthesised name refers to, or None for every other expression.*
+- `def _is_plus_step(statement, level)` - *Whether the statement is `amount = amount + level` for its own slot.*
 - `def is_leaf(expression)` - *Whether evaluating the expression is a load or a literal move and nothing else.*
 - `def generate(program)` - *Lower a checked program to a linked artifact.*
 
@@ -301,7 +310,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `343` lines (`15038` bytes)
+**Size**: `429` lines (`19406` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -311,11 +320,13 @@
   - Method `.rel32(target)` - *A placeholder displacement patched when the image is linked.*
   - Method `.call(target)` - *`call rel32` to a label in this image.*
   - Method `.call_indirect(target)` - *`call qword ptr [rip+disp32]`, used for imported functions through the IAT.*
-  - Method `.jmp(target)` - *`jmp rel32`.*
-  - Method `.jcc(condition, target)` - *`jcc rel32` for one of the named conditions.*
+  - Method `.jmp(target)` - *`jmp rel32`; a bound backward target within a byte takes `jmp rel8` (EB).*
+  - Method `.jcc(condition, target)` - *`jcc rel32`; a bound backward target within a byte takes `jcc rel8` (70+r).*
   - Method `.push(reg)` - *`push r64`.*
   - Method `.pop(reg)` - *`pop r64`.*
   - Method `.lea_imm(destination, base, offset)` - *`lea r64, [base+disp]`, computing `base + offset` without touching flags.*
+  - Method `.lea_scale(destination, base, index, scale_log2, displacement)` - *`lea r64, [base + index*2**scale_log2 + displacement]` (SIB byte).*
+  - Method `.lea_index(destination, index, scale_log2, displacement)` - *`lea r64, [index*2**scale_log2 + displacement]` with no base register.*
   - Method `.mov_reg_reg(destination, source)` - *`mov r64, r64`.*
   - Method `.mov_imm64(reg, value)` - *`mov r64, imm64`, used for every integer literal.*
   - Method `.mov_imm32(reg, value)` - *`mov r32, imm32`; writes zero-extend into the 64-bit register.*
@@ -334,10 +345,13 @@
   - Method `._group1_imm(extension, reg, value)` - *`op r/m64, imm8` (83 /n) or `op r/m64, imm32` (81 /n), sign-extended.*
   - Method `.add_imm(reg, value)` - *`add r64, imm`, used for `x = x + constant` without a register copy.*
   - Method `.sub_imm(reg, value)` - *`sub r64, imm`, used for `x = x - constant` without a register copy.*
+  - Method `.adc_imm(reg, value)` - *`adc r64, imm` (group-1 extension 2): adds the immediate plus carry.*
+  - Method `.cmov(condition, destination, source)` - *`cmovcc r64, r/m64`: conditional move, selected by the current flags.*
   - Method `.cmp_imm(reg, value)` - *`cmp r64, imm`, so a comparison with a small literal needs no second register.*
   - Method `.arith_imm(extension, reg, value)` - *`op r64, imm` by group-1 extension: add (0), or (1), and (4), sub (5), xor (6).*
   - Method `.imul(destination, source)` - *`imul r64, r/m64`: two-operand signed multiply.*
   - Method `.test(reg)` - *`test r64, r64`, setting flags from a value without changing it.*
+  - Method `.test_imm(reg, value)` - *`test r/m8, imm8` (F6 /0) for a small positive mask: flags only, value kept.*
   - Method `.setcc(condition)` - *`setcc al` followed by `movzx rax, al`: a comparison result as 0 or 1 in rax.*
   - Method `.cqo()` - *Sign-extend rax into rdx:rax before a signed division.*
   - Method `.divide(reg, signed)` - *`idiv`/`div r64`; the caller sets rdx and rax.*
@@ -366,11 +380,11 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `496` lines (`21639` bytes)
+**Size**: `666` lines (`29664` bytes)
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
-  - Method `.run(program)` - *Optimise every function body, then convert eligible counter loops.*
+  - Method `.run(program)` - *Optimise every function body, then convert counter loops and fuse odd pairs.*
   - Method `._block(block)` - *Optimise each statement; splice merged branches and truncate what cannot run.*
   - Method `._statement(statement)` - *Fold one statement, replacing a constant `if` with the branch it always takes.*
   - Method `._choose_branch(statement)` - *Replace an `if` whose condition is a constant with the branch it always takes.*
@@ -395,6 +409,13 @@
 - `def _try_countdown_latch(statement, init, count, trailing)` - *Rewrite one `while v < C { ...; v = v + 1; ... }` as `while v > 0`, or refuse.*
 - `def _countdown_block(block, trailing, parameters, changed)` - *Walk one block, converting eligible counter loops; `trailing` guards post-loop reads.*
 - `def apply_countdown_latches(program)` - *Convert `while v < C` loops with a dead counter into countdown latches.*
+- `def _is_plus_one(statement)` - *Whether the statement is `s = s + 1` (either operand order).*
+- `def _scaled_odd_term(value, slot)` - *The odd multiplier of `slot * m` (either order), or None.*
+- `def _odd_step_value(value, slot)` - *The `(m, c)` of `k = k*m + c` with both odd, or None.*
+- `def _halving_value(value, slot)` - *Whether `value` is exactly `k / 2` for the slot.*
+- `def slot_of_name(expression)` - *The slot of a (parenthesised) name, or None.*
+- `def _fuse_odd_pair(statement)` - *Rewrite one collatz-shaped loop body so the odd step rides with the halving after it.*
+- `def apply_odd_pair_fusion(program)` - *Fuse collatz-shaped odd steps with the halving that follows them, loop-wide.*
 - `def _flatten(statements)` - *Splice a branch selected by folding into its parent, since Cairn has one flat scope.*
 - `def _reachable(statements)` - *Drop statements after one that cannot fall through: `return`, `break`, `continue`.*
 - `def optimize(program)` - *Run one folding pass over a checked program, then convert counter loops.*
@@ -692,7 +713,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `287` lines (`12002` bytes)
+**Size**: `481` lines (`22400` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -717,6 +738,32 @@
   - Method `.test_a_literal_subtrahend_uses_the_immediate_form()`
   - Method `.test_a_single_argument_moves_into_rcx_without_the_stack()`
   - Method `.test_a_shift_by_literal_shifts_in_place()`
+- `class PowerOfTwoDivisionTest` - *`x / 2**b` and `x % 2**b` lower as a sar/shr fixup chain, never as `idiv`.*
+  - Method `.test_division_by_a_power_of_two_literal_never_divides()`
+  - Method `.test_division_by_two_emits_the_shift_fixup_chain()`
+  - Method `.test_a_remainder_by_two_masks_instead_of_dividing()`
+  - Method `.test_a_non_power_of_two_literal_still_divides()`
+  - Method `.test_a_negative_power_of_two_still_divides()`
+- `class HalvingPairLoopTest` - *The fused odd-pair collatz body lowers to one branchless halving pass.*
+  - Method `.test_a_fused_pair_lowers_branchless()`
+  - Method `.test_the_steps_counter_pays_both_steps_with_one_adc()`
+  - Method `.test_a_negative_addend_stays_on_the_generic_path()`
+  - Method `.test_a_body_with_break_stays_on_the_generic_path()`
+  - Method `.test_the_swapped_parity_test_takes_the_same_form()`
+  - Method `.test_a_non_zero_parity_target_stays_on_the_generic_path()`
+- `class ScaledSumTest` - *`c1 + k*c2` lowers as one scaled `lea`; the multiply path stays for other factors.*
+  - Method `.test_three_k_plus_one_is_one_lea()`
+  - Method `.test_the_mirrored_operand_order_is_one_lea_too()`
+  - Method `.test_two_k_plus_five_uses_a_scale_of_one()`
+  - Method `.test_four_k_nine_takes_the_index_only_form()`
+  - Method `.test_an_unsupported_factor_still_multiplies()`
+  - Method `.test_an_unscaled_k_is_left_alone()`
+- `class ParityCompareTest` - *`x % 2**b == 0` is `(x & (2**b-1)) == 0` for every sign: one `and`, one branch.*
+  - Method `.test_an_even_test_is_a_test_mask_and_a_branch()`
+  - Method `.test_an_uneven_test_branches_on_the_same_and()`
+  - Method `.test_a_wider_mask_counts_to_eight()`
+  - Method `.test_a_mask_beyond_imm32_lands_in_a_scratch_register()`
+  - Method `.test_an_unequal_compare_against_a_nonzero_literal_still_divides()`
 - `class SelfRecursionInliningTest` - *The left operand of a merge may be a self-call lowered in place, not a real call.*
   - Method `.test_a_merge_left_self_call_is_inlined()`
   - Method `.test_a_comparison_with_a_small_literal_skips_the_rax_load()`
@@ -735,13 +782,14 @@
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
 - `def body_text(source, name)` - *The .text bytes of one function's body, sliced from the generated artifact.*
+- `def region_text(source, name)` - *One function and its internal labels, stopping at the runtime helpers.*
 
 ---
 
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `283` lines (`10173` bytes)
+**Size**: `370` lines (`13702` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -753,6 +801,7 @@
   - Method `.test_arithmetic_truncates_shifts_and_returns_the_exit_code()`
   - Method `.test_recursion_and_loop_control()`
   - Method `.test_countdown_latches_match_count_up_semantics()`
+  - Method `.test_power_of_two_division_truncates_like_the_machine_would()`
   - Method `.test_division_by_zero_is_a_trap_with_a_message_and_exit_code_3()`
   - Method `.test_traps_behave_identically_without_the_folding_pass()`
   - Method `.test_run_forwards_the_programs_own_exit_code()`
@@ -768,6 +817,13 @@
   - Method `.test_forty_locals_use_wide_frame_displacements()`
   - Method `.test_a_binding_from_a_branch_that_never_ran_reads_as_zero()`
   - Method `.test_optimised_and_unoptimised_builds_behave_identically()`
+- `class FusedCollatzLoopTest` - *The fused odd-pair loop counts every reference step exactly, on every path.*
+  - Method `._steps_source(k, odd_value, even_test)`
+  - Method `.test_a_probe_starting_odd_counts_both_steps_of_the_pair()`
+  - Method `.test_a_probe_starting_even_takes_the_halving_path()`
+  - Method `.test_a_five_k_pair_counts_the_same_way()`
+  - Method `.test_a_refused_pair_keeps_the_generic_shrink_chain()`
+  - Method `.test_the_swapped_parity_test_counts_identically()`
 
 ---
 
@@ -851,7 +907,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `108` lines (`5039` bytes)
+**Size**: `108` lines (`5035` bytes)
 
 **Classes:**
 - `class EncodingTest` - *Each test names one encoding and its expected bytes.*
@@ -880,7 +936,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `239` lines (`11419` bytes)
+**Size**: `239` lines (`11431` bytes)
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
