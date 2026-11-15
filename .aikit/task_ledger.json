@@ -2,31 +2,15 @@
   "version": 1,
   "active_task": {
     "task_id": "cairn-language-surface",
-    "last_phase": "verification",
-    "active_phase": 4,
+    "last_phase": "milestone-boundary",
+    "active_phase": 3,
     "status": "in_progress",
-    "updated_at": 1794772209.4321682,
+    "updated_at": 1794772423.250923,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-flag-conditions",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-flag-conditions' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794761679.3547213,
-      "timestamp_str": "2026-11-15 19:54:39",
-      "agent": "mistral:vibe",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-more-benchmarks",
       "phase": "in_progress",
@@ -289,6 +273,17 @@
       "agent": "mistral:vibe",
       "head": "dd7aff432024fd27f14953d32b94fb35f05280e9",
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-language-surface",
+      "phase": "milestone-boundary",
+      "phase_num": 3,
+      "description": "Milestone 1/3 committed as the tree's for milestone; milestone 2 print_char/print_hex is next",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794772423.250923,
+      "timestamp_str": "2026-11-15 22:53:43",
+      "agent": "mistral:vibe"
     }
   ]
 }
