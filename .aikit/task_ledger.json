@@ -2,26 +2,15 @@
   "version": 1,
   "active_task": {
     "task_id": "cairn-language-surface",
-    "last_phase": "implementation",
-    "active_phase": 3,
+    "last_phase": "validate",
+    "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1794774910.9129431,
+    "updated_at": 1794777056.841593,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-more-benchmarks",
-      "phase": "in_progress",
-      "phase_num": 3,
-      "description": "[2/3-and-3/3 scope] Four twins written and parity-verified; operand-park miscompilation found by splitmix and fixed failing-first (GENERIC_EVAL_REGISTERS guard in _emit_binary_into); suite 425+39 green; baselines saved and compared exit 0; ADR-030 + README + KB done",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794763925.1279426,
-      "timestamp_str": "2026-11-15 20:32:05",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-more-benchmarks",
       "phase": "in_progress",
@@ -278,6 +267,18 @@
       "timestamp": 1794774910.9129431,
       "timestamp_str": "2026-11-15 23:35:10",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-language-surface",
+      "phase": "validate",
+      "phase_num": 4,
+      "description": "[3/3] eight parameters with stack passing: MAX_PARAMETERS=8, outgoing-area caller path with left-to-right parking, callee [rbp+16+8j] pulls with frame prologue forced for >4 params, inlining gates to four registers, many_params benchmark per the third rule, SPEC/README/ADR-036, 652 tests + 39 subtests, gate exit 0",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794777056.841593,
+      "timestamp_str": "2026-11-16 00:10:56",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
     }
   ]
 }

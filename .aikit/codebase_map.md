@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `105`
+- **Total Classes**: `107`
 - **Total Top-Level Functions**: `165`
-- **Total Class Methods**: `650`
-- **Total Source Lines**: `11714`
+- **Total Class Methods**: `660`
+- **Total Source Lines**: `11856`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
-- **Not indexed by this map**: cpp (`26` file(s)), rust (`13` file(s))
+- **Not indexed by this map**: cpp (`28` file(s)), rust (`14` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -32,7 +32,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `546` lines (`25727` bytes)
+**Size**: `548` lines (`25899` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `2657` lines (`132421` bytes)
+**Size**: `2701` lines (`134869` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -194,6 +194,7 @@
   - Method `._emit_and(expression)` - *`&&`: the right side is evaluated only when the left side is non-zero.*
   - Method `._emit_or(expression)` - *`||`: the right side is evaluated only when the left side is zero.*
   - Method `._emit_call(expression)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
+  - Method `._emit_stack_call(expression)` - *Lower a five-or-more argument call: four registers, the rest via the stack.*
   - Method `._is_pure_argument(expression)` - *Whether an argument can bind straight into its ABI register.*
   - Method `._emit_pure_arguments(arguments)` - *Bind call arguments straight into their registers, or return False.*
   - Method `._contains_division(expression)` - *Whether any subtree of `expression` divides — the one trapping operand kind.*
@@ -239,7 +240,7 @@
 ### [`cairn/codes.py`](cairn/codes.py)
 > *The diagnostic code registry: one record per code the compiler can emit.*
 
-**Size**: `78` lines (`3478` bytes)
+**Size**: `78` lines (`3479` bytes)
 
 **Classes:**
 - `class Code` - *One diagnostic code: its stage family and a one-line statement of what it means.*
@@ -543,7 +544,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `291` lines (`13734` bytes)
+**Size**: `291` lines (`13715` bytes)
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -658,7 +659,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `464` lines (`26063` bytes)
+**Size**: `464` lines (`26078` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -789,7 +790,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1063` lines (`51308` bytes)
+**Size**: `1092` lines (`52923` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -876,6 +877,10 @@
   - Method `.test_mixed_call_free_arguments_bind_reversed_without_the_stack()`
   - Method `.test_a_call_inside_an_argument_keeps_the_stack_fallback()`
   - Method `.test_a_division_inside_an_argument_keeps_the_stack_fallback()`
+- `class StackParameterTest` - *Parameters five to eight travel through the caller's outgoing area.*
+  - Method `.test_callee_pulls_stack_parameters_from_above_the_return_address()`
+  - Method `.test_caller_stores_stack_arguments_into_the_outgoing_area()`
+  - Method `.test_the_outgoing_area_is_one_reservation_with_call_alignment()`
 - `class BuiltinPrintHelpersTest` - *print_char and print_hex dispatch to their own runtime helpers.*
   - Method `.test_the_helpers_are_emitted_into_every_executable()`
   - Method `.test_print_char_calls_its_helper_with_the_stack_round_trip()`
@@ -928,7 +933,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `865` lines (`30325` bytes)
+**Size**: `926` lines (`33067` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -963,6 +968,12 @@
   - Method `.test_print_hex_wraps_to_the_unsigned_sixty_four_bit_value()`
   - Method `.test_print_hex_used_as_a_value_returns_its_argument()`
   - Method `.test_print_builtins_compose_in_one_program()`
+- `class StackParametersTest` - *Six-argument calls: four in registers, two through the outgoing stack area.*
+  - Method `.test_stack_arguments_reach_the_callee_and_rotate()`
+  - Method `.test_arguments_past_the_registers_evaluate_left_to_right()`
+  - Method `.test_stack_parameters_are_mutable_locals()`
+  - Method `.test_eight_parameters_pass()`
+  - Method `.test_deep_recursion_rotates_its_stack_parameters()`
 - `class FusedCollatzLoopTest` - *The fused odd-pair loop counts every reference step exactly, on every path.*
   - Method `._steps_source(k, odd_value, even_test)`
   - Method `.test_a_probe_starting_odd_counts_both_steps_of_the_pair()`
@@ -1279,7 +1290,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `154` lines (`7548` bytes)
+**Size**: `160` lines (`7887` bytes)
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -1287,7 +1298,8 @@
   - Method `.test_names_resolve_to_the_parameter_slot()`
   - Method `.test_missing_main_is_the_entry_point_error()`
   - Method `.test_duplicate_function()`
-  - Method `.test_more_than_four_parameters()`
+  - Method `.test_five_to_eight_parameters_are_accepted()`
+  - Method `.test_more_than_eight_parameters()`
   - Method `.test_unknown_name_and_use_before_declaration()`
   - Method `.test_assignment_to_a_let_is_refused()`
   - Method `.test_duplicate_binding_without_shadowing()`
