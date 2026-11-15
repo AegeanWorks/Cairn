@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `104`
-- **Total Top-Level Functions**: `163`
-- **Total Class Methods**: `637`
-- **Total Source Lines**: `11543`
+- **Total Classes**: `105`
+- **Total Top-Level Functions**: `165`
+- **Total Class Methods**: `650`
+- **Total Source Lines**: `11714`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
-- **Not indexed by this map**: cpp (`24` file(s)), rust (`12` file(s))
+- **Not indexed by this map**: cpp (`26` file(s)), rust (`13` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -32,7 +32,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `544` lines (`25582` bytes)
+**Size**: `546` lines (`25727` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `2639` lines (`131680` bytes)
+**Size**: `2657` lines (`132421` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -529,10 +529,12 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `112` lines (`4113` bytes)
+**Size**: `189` lines (`7192` bytes)
 
 **Functions:**
 - `def emit_print_i64(assembler)` - *Emit `print_i64`: write rax in decimal plus a newline.*
+- `def emit_print_char(assembler)` - *Emit `print_char`: write the low byte of rax to stdout, no newline.*
+- `def emit_print_hex(assembler)` - *Emit `print_hex`: write rax in lowercase hex, no newline, no leading zeros.*
 - `def emit_div_zero(assembler, rodata)` - *Emit the trap taken when a divisor is zero: message on stderr, exit code 3.*
 - `def emit_runtime(assembler, rodata)` - *Emit every helper routine and the data they reference, in a stable order.*
 
@@ -541,7 +543,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `291` lines (`13701` bytes)
+**Size**: `291` lines (`13734` bytes)
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -656,7 +658,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `464` lines (`26053` bytes)
+**Size**: `464` lines (`26063` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -787,7 +789,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1037` lines (`49951` bytes)
+**Size**: `1063` lines (`51308` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -874,6 +876,10 @@
   - Method `.test_mixed_call_free_arguments_bind_reversed_without_the_stack()`
   - Method `.test_a_call_inside_an_argument_keeps_the_stack_fallback()`
   - Method `.test_a_division_inside_an_argument_keeps_the_stack_fallback()`
+- `class BuiltinPrintHelpersTest` - *print_char and print_hex dispatch to their own runtime helpers.*
+  - Method `.test_the_helpers_are_emitted_into_every_executable()`
+  - Method `.test_print_char_calls_its_helper_with_the_stack_round_trip()`
+  - Method `.test_print_hex_calls_its_helper()`
 - `class PairDeltaInliningTest` - *A two-parameter all-return-tree recursion inlines as pure text copies.*
   - Method `._pair_labels(source, name)`
   - Method `.test_pair_copies_carry_no_stack_state()`
@@ -922,7 +928,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `830` lines (`28374` bytes)
+**Size**: `865` lines (`30325` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -950,6 +956,13 @@
   - Method `.test_forty_locals_use_wide_frame_displacements()`
   - Method `.test_a_binding_from_a_branch_that_never_ran_reads_as_zero()`
   - Method `.test_optimised_and_unoptimised_builds_behave_identically()`
+  - Method `.test_print_char_writes_single_bytes_without_a_newline()`
+  - Method `.test_print_char_used_as_a_value_returns_its_argument()`
+  - Method `.test_print_char_wraps_to_the_low_byte()`
+  - Method `.test_print_hex_prints_lowercase_hex_without_leading_zeros()`
+  - Method `.test_print_hex_wraps_to_the_unsigned_sixty_four_bit_value()`
+  - Method `.test_print_hex_used_as_a_value_returns_its_argument()`
+  - Method `.test_print_builtins_compose_in_one_program()`
 - `class FusedCollatzLoopTest` - *The fused odd-pair loop counts every reference step exactly, on every path.*
   - Method `._steps_source(k, odd_value, even_test)`
   - Method `.test_a_probe_starting_odd_counts_both_steps_of_the_pair()`
@@ -1266,7 +1279,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `141` lines (`6630` bytes)
+**Size**: `154` lines (`7548` bytes)
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -1283,6 +1296,9 @@
   - Method `.test_five_arguments_hits_the_four_parameter_limit()`
   - Method `.test_print_is_callable_not_redefinable()`
   - Method `.test_builtin_cannot_be_a_parameter_or_an_assignment_target()`
+  - Method `.test_print_char_and_print_hex_are_one_argument_builtins()`
+  - Method `.test_new_builtins_take_exactly_one_argument()`
+  - Method `.test_new_builtins_are_callable_not_values_redefinable()`
   - Method `.test_literal_above_max_plus_one_is_refused()`
   - Method `.test_break_outside_a_loop()`
   - Method `.test_function_must_return_on_every_path()`

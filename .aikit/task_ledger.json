@@ -2,32 +2,15 @@
   "version": 1,
   "active_task": {
     "task_id": "cairn-language-surface",
-    "last_phase": "milestone-boundary",
+    "last_phase": "implementation",
     "active_phase": 3,
     "status": "in_progress",
-    "updated_at": 1794772423.250923,
+    "updated_at": 1794774910.9129431,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-more-benchmarks",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794762045.0113482,
-      "timestamp_str": "2026-11-15 20:00:45",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "The scoreboard rests on eight cases; whole bottleneck classes (multiply-latency chains, three-argument recursion, division-heavy nested loops, fixed-point inner escapes) are unmeasured, so the next optimizations risk overfitting to measured paths.",
-        "benefits": "Four new triple-twin benchmarks extend coverage to tak, primes, mandelbrot and splitmix, and each new case is permanently gated by the twin-parity and regression-watch machinery.",
-        "risks": "contract: CASES tuple and TwinParityTest gain entries only, no pipeline contract changes; dependency: only the already-discovered gcc and rustc toolchains; concurrency: none, the harness is sequential; state: .aikit/benchmark_history.jsonl gains new-case records only and --compare claims nothing about cases seen for the first time. Language-semantics drift (signed overflow in C, arithmetic shift) is contained by uint64_t accumulators in the C twin where wrapping is load-bearing.",
-        "mitigation": "Twin-parity tests hard-fail on stdout divergence between the three languages; each triple is compiled and executed manually before entering CASES; loads are tuned to tens of milliseconds before baselines are saved."
-      }
-    },
     {
       "task_id": "cairn-more-benchmarks",
       "phase": "in_progress",
@@ -283,6 +266,17 @@
       "status": "in_progress",
       "timestamp": 1794772423.250923,
       "timestamp_str": "2026-11-15 22:53:43",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-language-surface",
+      "phase": "implementation",
+      "phase_num": 3,
+      "description": "[2/3] print_char/print_hex builtins: sema BUILTINS, codegen dispatch with print's stack round-trip, two new runtime emitters, hex_io benchmark case per the third user rule, docs+ADR-035, 616 tests + 39 subtests, gate exit 0 twice",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794774910.9129431,
+      "timestamp_str": "2026-11-15 23:35:10",
       "agent": "mistral:vibe"
     }
   ]
