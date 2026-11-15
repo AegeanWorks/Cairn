@@ -30,6 +30,7 @@ REGISTRY: Tuple[Code, ...] = (
     Code("E2002", "parser", "Unknown type"),
     Code("E2003", "parser", "Assignment target is not a name"),
     Code("E2004", "parser", "Expression statement with no effect"),
+    Code("E2005", "parser", "For range missing '..' or '..='"),
     Code("E3001", "semantics", "Duplicate function"),
     Code("E3003", "semantics", "Unknown function"),
     Code("E3004", "semantics", "Wrong argument count"),

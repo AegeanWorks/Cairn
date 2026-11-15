@@ -122,6 +122,8 @@ class Parser:
             return self._parse_if()
         if token.is_keyword("while"):
             return self._parse_while()
+        if token.is_keyword("for"):
+            return self._parse_for()
         if token.is_keyword("return"):
             return self._parse_return()
         if token.is_keyword("break"):
@@ -174,6 +176,28 @@ class Parser:
         body = self._parse_block()
         return syntax.While(span=Span.join(start.span, body.span), condition=condition,
                             body=body)
+
+    def _parse_for(self) -> syntax.For:
+        """`for name in start..end block`, with `..=` for the inclusive upper bound."""
+        start = self._expect_keyword("for")
+        name = self._expect_ident("a loop variable name")
+        self._expect_keyword("in")
+        lower = self._parse_expression()
+        token = self._peek()
+        if token.is_symbol(".."):
+            inclusive = False
+            self._advance()
+        elif token.is_symbol("..="):
+            inclusive = True
+            self._advance()
+        else:
+            raise fail("E2005", "expected '..' or '..=' in the for range",
+                       "Write 'for i in 0..10 { ... }' or 'for i in 0..=10 { ... }'.",
+                       token.span, self.path)
+        upper = self._parse_expression()
+        body = self._parse_block()
+        return syntax.For(span=Span.join(start.span, body.span), name=name.text,
+                          start=lower, end=upper, inclusive=inclusive, body=body)
 
     def _parse_return(self) -> syntax.Return:
         """`return expr;`."""

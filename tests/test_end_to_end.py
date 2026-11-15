@@ -140,6 +140,56 @@ fn main() -> i64 {
 """
 
 
+FOR_LOOPS = """
+fn main() -> i64 {
+    var t: i64 = 0;
+    var j: i64 = 0;
+    let i: i64 = 9;
+    for i in 1..5 { t = t + i; }
+    print(t);
+    t = 0;
+    for i in 1..=5 { t = t + i; }
+    print(t);
+    t = 0;
+    for i in 5..5 { t = t + 1; }
+    print(t);
+    for i in 5..0 { t = t + 1; }
+    print(t);
+    t = 0;
+    for i in 0..10 {
+        if i % 3 == 0 { continue; }
+        t = t + 1;
+    }
+    print(t);
+    t = 0;
+    for i in 0..10 {
+        if i == 4 { break; }
+        t = t + 1;
+    }
+    print(t);
+    for i in 0..3 {
+        for j in 0..4 { t = t + 1; }
+    }
+    print(t);
+    print(j);
+    print(i);
+    return 0;
+}
+"""
+
+FOR_END_REEVALUATED = """
+fn edge(n: i64) -> i64 {
+    print(n);
+    return n;
+}
+
+fn main() -> i64 {
+    for i in 0..edge(3) { print(i); }
+    return 0;
+}
+"""
+
+
 @WINDOWS_ONLY
 class EndToEndTest(unittest.TestCase):
     """Each test compiles a source, writes it to a temporary folder and executes it."""
@@ -732,6 +782,23 @@ fn main() -> i64 {
     return 0;
 }
 """
+
+@WINDOWS_ONLY
+class ForLoopValueTest(EndToEndTest):
+    """The for loop earns its place by running: ranges, control flow and scoped names."""
+
+    def test_for_ranges_control_flow_and_scoped_variables(self) -> None:
+        completed = self.execute(FOR_LOOPS)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "10\n15\n0\n0\n6\n4\n16\n0\n9\n")
+
+    def test_the_end_bound_is_re_evaluated_each_iteration_like_c(self) -> None:
+        completed = self.execute(FOR_END_REEVALUATED)
+        self.assertEqual(completed.returncode, 0)
+        # C order: the condition runs before the body on every check, so edge(3) prints
+        # before i is printed each iteration and once more on the failing check.
+        self.assertEqual(completed.stdout, "3\n0\n3\n1\n3\n2\n3\n")
+
 
 
 @WINDOWS_ONLY

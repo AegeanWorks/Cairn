@@ -235,5 +235,85 @@ class CountdownLatchTest(unittest.TestCase):
         self.assertNotIn(b"\x49\x83\xc4\x01", lowered)  # add r12,1: the old update fold
 
 
+class ForLoweringTest(unittest.TestCase):
+    """The for sugar lowers to Let + While before any other pass; no For survives lowering."""
+
+    def lowered(self, source: str):
+        program = analyze(parse(f"fn main() -> i64 {{ {source} return 0; }}"))
+        return optimize.lower_for_loops(program).functions[0].body.statements
+
+    def test_an_exclusive_for_becomes_let_plus_while(self) -> None:
+        statements = self.lowered("var t: i64 = 0; for i in 0..4 { t = t + i; }")
+        loop_let, while_stmt = statements[1], statements[2]
+        self.assertIsInstance(loop_let, syntax.Let)
+        self.assertTrue(loop_let.mutable)
+        self.assertEqual(loop_let.slot, 1)
+        self.assertIsInstance(while_stmt, syntax.While)
+        condition = while_stmt.condition
+        self.assertEqual(condition.op, "<")
+        self.assertEqual(condition.left.slot, 1)
+        self.assertEqual(condition.right.value, 4)
+        increment = while_stmt.body.statements[-1]
+        self.assertIsInstance(increment, syntax.Assign)
+        self.assertEqual(increment.slot, 1)
+        self.assertEqual(increment.value.op, "+")
+
+    def test_an_inclusive_for_compares_less_equal(self) -> None:
+        statements = self.lowered("for i in 0..=4 { break; }")
+        self.assertEqual(statements[1].condition.op, "<=")
+
+    def test_a_continue_inside_the_for_steps_before_jumping(self) -> None:
+        block = self.lowered("var t: i64 = 0; for i in 0..4 { if i == 2 { continue; } t = t + 1; }")
+        body = block[2].body.statements[0].then_block.statements
+        replaced = body[0]
+        self.assertIsInstance(replaced, syntax.Block)
+        self.assertIsInstance(replaced.statements[0], syntax.Assign)
+        self.assertEqual(replaced.statements[0].slot, 1)
+        self.assertIsInstance(replaced.statements[1], syntax.Continue)
+
+    def test_a_continue_in_a_nested_while_is_not_touched(self) -> None:
+        block = self.lowered("var t: i64 = 0; for i in 0..4 {"
+                             " while t < 8 { t = t + 1; continue; } }")
+        inner = block[2].body.statements[0]
+        self.assertIsInstance(inner, syntax.While)
+        self.assertEqual([type(item).__name__ for item in inner.body.statements],
+                         ["Assign", "Continue"])
+
+    def test_nested_fors_bind_the_continue_to_the_inner_loop(self) -> None:
+        block = self.lowered("var t: i64 = 0; for i in 0..3 { for j in 0..3 { continue; } }")
+        outer_while = block[2]
+        self.assertIsInstance(outer_while, syntax.While)
+        self.assertEqual(outer_while.condition.left.slot, 1)
+        inner_while = outer_while.body.statements[1]
+        self.assertIsInstance(inner_while, syntax.While)
+        replaced = inner_while.body.statements[0]
+        self.assertIsInstance(replaced, syntax.Block)
+        self.assertEqual(replaced.statements[0].slot, 2)
+        self.assertIsInstance(replaced.statements[1], syntax.Continue)
+
+    def test_no_for_survives_anywhere_in_a_mixed_program(self) -> None:
+        program = analyze(parse(
+            "fn side(n: i64) -> i64 { for k in 0..n { print(k); } return n; }"
+            "fn main() -> i64 { for i in 0..side(2) { } return 0; }"))
+        lowered = optimize.lower_for_loops(program)
+
+        def walk(node) -> bool:
+            if isinstance(node, (syntax.For,)):
+                return True
+            if isinstance(node, syntax.Program):
+                return any(walk(item) for item in node.functions)
+            if isinstance(node, syntax.Function):
+                return walk(node.body)
+            if isinstance(node, syntax.Block):
+                return any(walk(item) for item in node.statements)
+            if isinstance(node, syntax.If):
+                return walk(node.then_block) or walk(node.else_block)
+            if isinstance(node, syntax.While):
+                return walk(node.body)
+            return False
+
+        self.assertFalse(walk(lowered))
+
+
 if __name__ == "__main__":
     unittest.main()

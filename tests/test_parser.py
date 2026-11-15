@@ -116,5 +116,42 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(values, [1, 0])
 
 
+class ForTest(unittest.TestCase):
+    """`for name in start..end block` parses into a real node; `..=` is the inclusive bound."""
+
+    def test_an_exclusive_range_parses(self) -> None:
+        statement = body("for i in 0..10 { print(i); }").statements[0]
+        self.assertIsInstance(statement, syntax.For)
+        self.assertEqual(statement.name, "i")
+        self.assertFalse(statement.inclusive)
+        self.assertEqual(statement.start.value, 0)
+        self.assertEqual(statement.end.value, 10)
+        self.assertEqual(len(statement.body.statements), 1)
+
+    def test_an_inclusive_range_parses(self) -> None:
+        statement = body("var n: i64 = 2; for i in n..=n + 5 { n = n + 1; }").statements[1]
+        self.assertIsInstance(statement, syntax.For)
+        self.assertTrue(statement.inclusive)
+        self.assertIsInstance(statement.start, syntax.Name)
+        self.assertIsInstance(statement.end, syntax.Binary)
+
+    def test_a_missing_range_symbol_is_a_positioned_refusal(self) -> None:
+        with self.assertRaises(DiagnosticError) as caught:
+            parse("fn main() -> i64 { for i in 0 10 { } return 0; }")
+        diagnostic = caught.exception.diagnostics[0]
+        self.assertEqual(diagnostic.code, "E2005")
+        self.assertIn("..", diagnostic.message)
+
+    def test_the_loop_variable_must_be_a_name(self) -> None:
+        with self.assertRaises(DiagnosticError) as caught:
+            parse("fn main() -> i64 { for 5 in 0..3 { } return 0; }")
+        self.assertEqual(caught.exception.diagnostics[0].code, "E2001")
+
+    def test_the_loop_needs_the_in_keyword(self) -> None:
+        with self.assertRaises(DiagnosticError) as caught:
+            parse("fn main() -> i64 { for i 0..3 { } return 0; }")
+        self.assertEqual(caught.exception.diagnostics[0].code, "E2001")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,10 @@ class LexerTest(unittest.TestCase):
         texts = [token.text for token in tokenize("<= >= == != && || << >>")]
         self.assertEqual(texts[:-1], ["<=", ">=", "==", "!=", "&&", "||", "<<", ">>"])
 
+    def test_range_symbols_lex_before_the_number_boundary(self) -> None:
+        texts = [token.text for token in tokenize("1..10 1..=10")]
+        self.assertEqual(texts[:-1], ["1", "..", "10", "1", "..=", "10"])
+
     def test_integer_beyond_i64_is_a_positioned_error(self) -> None:
         with self.assertRaises(DiagnosticError) as caught:
             tokenize("let x: i64 = 9223372036854775809;")

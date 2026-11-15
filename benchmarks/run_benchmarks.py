@@ -1,8 +1,8 @@
-"""Benchmark harness: measure Cairn executables and, when one exists, C and Rust baselines.
+"""Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.
 
 The harness compiles each case with the compiler in this repository and runs the produced
-executable several times, reporting the best and median wall clock. A C or Rust compiler is
-used only when it is already on `PATH`; when none is found the report says so instead of
+executable several times, reporting the best and median wall clock. A C, C++ or Rust compiler
+is used only when it is already on `PATH`; when none is found the report says so instead of
 guessing, because an invented comparison would be worse than no comparison.
 
 Usage:

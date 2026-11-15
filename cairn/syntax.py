@@ -121,6 +121,22 @@ class While(Stmt):
 
 
 @dataclass
+class For(Stmt):
+    """`for name in start..end { ... }`, or `start..=end` for the inclusive bound.
+
+    Semantic analysis gives the loop variable its own scoped slot; the optimiser lowers
+    the node to a mutable `let` plus a `while`, so code generation never sees it.
+    """
+
+    name: str = ""
+    start: Optional[Expr] = None
+    end: Optional[Expr] = None
+    inclusive: bool = False
+    body: Optional[Block] = None
+    slot: int = -1
+
+
+@dataclass
 class Return(Stmt):
     """`return e;`; every function returns an i64."""
 
@@ -172,7 +188,7 @@ class Program(Node):
 
 
 __all__ = [
-    "Assign", "Binary", "Block", "Break", "Call", "Continue", "Expr", "ExprStmt", "Function",
-    "If", "IntLiteral", "Let", "Name", "Node", "Parameter", "Parens", "Program", "Return",
-    "Stmt", "Unary", "While",
+    "Assign", "Binary", "Block", "Break", "Call", "Continue", "Expr", "ExprStmt", "For",
+    "Function", "If", "IntLiteral", "Let", "Name", "Node", "Parameter", "Parens", "Program",
+    "Return", "Stmt", "Unary", "While",
 ]

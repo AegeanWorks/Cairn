@@ -31,8 +31,8 @@ task re-verifies every claim below against those sources.
 comment      ::= "//" ~[\n]*
 ident        ::= [A-Za-z_][A-Za-z0-9_]*        (ASCII only)
 int          ::= [0-9]+                          (decimal only, must fit in i64)
-keyword      ::= fn | let | var | if | else | while | return | break | continue | true | false
-symbol       ::= "->" | "==" | "!=" | "<=" | ">=" | "&&" | "||" | "<<" | ">>"
+keyword      ::= fn | let | var | if | else | while | for | in | return | break | continue | true | false
+symbol       ::= "..=" | ".." | "->" | "==" | "!=" | "<=" | ">=" | "&&" | "||" | "<<" | ">>"
                | "(" | ")" | "{" | "}" | "," | ":" | ";" | "=" | "+" | "-" | "*" | "/" | "%"
                | "<" | ">" | "!" | "&" | "|" | "^" | "~"
 ```
@@ -112,14 +112,24 @@ print(x)
 ```
 if expr { } else if expr { } else { }
 while expr { }
+for ident in expr ".." expr { }
+for ident in expr "..=" expr { }
 break;  continue;
 return expr;
 { block }
 ```
 
-No `for`, no `match`, no exceptions. `break`/`continue` outside `while` is
+No `match`, no exceptions. `break`/`continue` outside `while` or `for` is
 `E3008`. An `if` condition that is a comparison branches directly; `!cond`
 flips the branch.
+
+A `for` declares one scoped, mutable loop variable: the start bound is
+evaluated once in the enclosing scope, the end bound is re-evaluated before
+every test like C, `..` excludes and `..=` includes it, `continue` still
+steps the counter, and a name the loop variable shares with an existing
+binding resumes that binding after the loop (`E3006` still refuses shadowing
+inside the body). The loop lowers to `var` + `while` before optimisation;
+code generation never sees a `for`.
 
 ## 7. Defined semantics
 
@@ -154,7 +164,7 @@ prints one. (Divergence from Alloy SPEC §§9–10, recorded deliberately.)
 ## 10. Standard surface (the whole of it)
 
 - Types: `i64`. Literals: decimal integer; `true`/`false`.
-- Statements: `let`, `var`, assignment, `if`/`else`, `while`, `return`, `break`, `continue`, block.
+- Statements: `let`, `var`, assignment, `if`/`else`, `while`, `for` (counted range), `return`, `break`, `continue`, block.
 - Builtin: `print(x: i64) -> i64`.
 - Comments: `//` to end of line.
 - Limits: 4 parameters; `i64` range `-9223372036854775808..9223372036854775807`; ASCII identifiers, no shadowing.
@@ -189,10 +199,11 @@ function-item::= "fn" ident "(" [ params ] ")" "->" "i64" block
 params       ::= param { "," param }
 param        ::= ident ":" "i64"
 block        ::= "{" { stmt } "}"
-stmt         ::= let-stmt | if-stmt | while-stmt | return-stmt | break-stmt | continue-stmt | block | expr-stmt
+stmt         ::= let-stmt | if-stmt | while-stmt | for-stmt | return-stmt | break-stmt | continue-stmt | block | expr-stmt
 let-stmt     ::= ("let" | "var") ident ":" "i64" "=" expr ";"
 if-stmt      ::= "if" expr block [ "else" (if-stmt | block) ]
 while-stmt   ::= "while" expr block
+for-stmt     ::= "for" ident "in" expr ( ".." | "..=" ) expr block
 return-stmt  ::= "return" expr ";"
 break-stmt   ::= "break" ";"
 continue-stmt ::= "continue" ";"
@@ -259,7 +270,7 @@ A source file is valid Cairn 0.1 if every box ticks:
 - [ ] No type name besides `i64` appears
 - [ ] Every call has exact arity; `print` is only ever called with one argument
 - [ ] `fn main() -> i64` exists, takes no parameters, and every function ends in `return`
-- [ ] No statement besides assignment or call sits bare; `break`/`continue` are inside `while`
+- [ ] No statement besides assignment or call sits bare; `break`/`continue` are inside a loop (a `while` or a `for`)
 - [ ] `python -m cairn check file.crn --json` reports `ok: true`
 - [ ] `python -m cairn verify file.crn` reports verified (same ten `V####` rules as a built `.exe`)
 - [ ] `python -m cairn run file.crn` prints the expected integers and forwards the expected exit code

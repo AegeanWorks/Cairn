@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `99`
-- **Total Top-Level Functions**: `158`
-- **Total Class Methods**: `612`
-- **Total Source Lines**: `11150`
+- **Total Classes**: `104`
+- **Total Top-Level Functions**: `163`
+- **Total Class Methods**: `637`
+- **Total Source Lines**: `11543`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -30,9 +30,9 @@
 ---
 
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
-> *Benchmark harness: measure Cairn executables and, when one exists, C and Rust baselines.*
+> *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `544` lines (`25572` bytes)
+**Size**: `544` lines (`25582` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -79,7 +79,7 @@
 ### [`cairn/builder.py`](cairn/builder.py)
 > *Build pipeline: source text to executable bytes.*
 
-**Size**: `81` lines (`2885` bytes)
+**Size**: `83` lines (`3023` bytes)
 
 **Classes:**
 - `class Build` - *One successful build: the parsed program, the linked artifact and the image bytes.*
@@ -96,7 +96,7 @@
 ### [`cairn/capabilities.py`](cairn/capabilities.py)
 > *The machine-readable description of what this compiler accepts and emits.*
 
-**Size**: `105` lines (`5119` bytes)
+**Size**: `105` lines (`5126` bytes)
 
 **Functions:**
 - `def _operators()` - *Operators grouped by precedence tier, loosest first.*
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `2635` lines (`131460` bytes)
+**Size**: `2639` lines (`131680` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -239,7 +239,7 @@
 ### [`cairn/codes.py`](cairn/codes.py)
 > *The diagnostic code registry: one record per code the compiler can emit.*
 
-**Size**: `77` lines (`3414` bytes)
+**Size**: `78` lines (`3478` bytes)
 
 **Classes:**
 - `class Code` - *One diagnostic code: its stage family and a one-line statement of what it means.*
@@ -319,7 +319,7 @@
 ### [`cairn/lexer.py`](cairn/lexer.py)
 > *Lexer: source text to a flat token list.*
 
-**Size**: `157` lines (`6401` bytes)
+**Size**: `157` lines (`6427` bytes)
 
 **Classes:**
 - `class Token` - *One lexical unit: its kind, its text, its value when it is an integer, and its span.*
@@ -426,7 +426,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `666` lines (`29664` bytes)
+**Size**: `755` lines (`33782` bytes)
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -454,6 +454,11 @@
 - `def _find_increment(store, slot)` - *Locate the (list, index) of `v = v + 1` inside a statement list, or None.*
 - `def _try_countdown_latch(statement, init, count, trailing)` - *Rewrite one `while v < C { ...; v = v + 1; ... }` as `while v > 0`, or refuse.*
 - `def _countdown_block(block, trailing, parameters, changed)` - *Walk one block, converting eligible counter loops; `trailing` guards post-loop reads.*
+- `def lower_for_loops(program)` - *Lower every `for` into a mutable `let` plus a `while`; runs before any folding.*
+- `def _lower_block(block)` - *Lower one block in place; the loop body lowers before the loop itself.*
+- `def _for_to_while(statement)` - *The two statements a `for` becomes: the mutable initialiser and the counted `while`.*
+- `def _increment(name, slot, span)` - *`name = name + 1` on the loop's own slot.*
+- `def _rewrite_continues(block, name, slot)` - *Prefix every `continue` bound to this loop with the increment, in place.*
 - `def apply_countdown_latches(program)` - *Convert `while v < C` loops with a dead counter into countdown latches.*
 - `def _is_plus_one(statement)` - *Whether the statement is `s = s + 1` (either operand order).*
 - `def _scaled_odd_term(value, slot)` - *The odd multiplier of `slot * m` (either order), or None.*
@@ -471,7 +476,7 @@
 ### [`cairn/parser.py`](cairn/parser.py)
 > *Parser: recursive descent over the token list.*
 
-**Size**: `325` lines (`13593` bytes)
+**Size**: `349` lines (`14649` bytes)
 
 **Classes:**
 - `class Parser` - *A cursor over one token list; every parse method consumes what it matches.*
@@ -484,6 +489,7 @@
   - Method `._parse_binding()` - *`let|var name: i64 = expr;`.*
   - Method `._parse_if()` - *`if expr block [else (if | block)]`.*
   - Method `._parse_while()` - *`while expr block`.*
+  - Method `._parse_for()` - *`for name in start..end block`, with `..=` for the inclusive upper bound.*
   - Method `._parse_return()` - *`return expr;`.*
   - Method `._parse_expression_statement()` - *An assignment to a name, or a call whose value is discarded.*
   - Method `._parse_expression(minimum)` - *Precedence climbing: parse operators at least as tight as `minimum`.*
@@ -535,7 +541,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `266` lines (`12554` bytes)
+**Size**: `291` lines (`13701` bytes)
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -548,6 +554,7 @@
   - Method `._new_slot()` - *Allocate the next 8-byte frame slot.*
   - Method `._check_block(block)` - *Check statements in order; the scope is flat and function-wide.*
   - Method `._check_statement(statement)` - *Dispatch one statement to its checker.*
+  - Method `._check_for(statement)` - *A `for` declares one scoped, mutable loop variable for its body, then restores.*
   - Method `._check_binding(statement)` - *A `let`/`var` declares one new name and initialises it from an i64 expression.*
   - Method `._check_assign(statement)` - *Assignment requires an existing `var` binding.*
   - Method `._check_expression(expression)` - *Dispatch one expression to its checker.*
@@ -563,7 +570,7 @@
 ### [`cairn/syntax.py`](cairn/syntax.py)
 > *Syntax tree: one dataclass per construct, each carrying its source span.*
 
-**Size**: `178` lines (`3795` bytes)
+**Size**: `194` lines (`4258` bytes)
 
 **Classes:**
 - `class Node` - *Every node carries the span it was parsed from.*
@@ -580,6 +587,7 @@
 - `class Assign` - *`x = e;`, valid only for a `var` binding.*
 - `class If` - *`if cond { ... } else { ... }`, where the else block is optional.*
 - `class While` - *`while cond { ... }`; `countdown` marks a counter loop the optimiser converted.*
+- `class For` - *`for name in start..end { ... }`, or `start..=end` for the inclusive bound.*
 - `class Return` - *`return e;`; every function returns an i64.*
 - `class Break` - *Leave the innermost loop.*
 - `class Continue` - *Start the next iteration of the innermost loop.*
@@ -914,7 +922,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `763` lines (`26763` bytes)
+**Size**: `830` lines (`28374` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -981,6 +989,9 @@
 - `class MergedMaskLoopValueTest` - *The reclaimed mix lowering must stay exact across a real mixer loop.*
   - Method `.test_a_masked_xor_multiplier_loop_wraps_like_the_source()`
   - Method `.test_a_merged_left_update_never_leaks_into_a_right_home_read()`
+- `class ForLoopValueTest` - *The for loop earns its place by running: ranges, control flow and scoped names.*
+  - Method `.test_for_ranges_control_flow_and_scoped_variables()`
+  - Method `.test_the_end_bound_is_re_evaluated_each_iteration_like_c()`
 - `class LoopConstantHoistValueTest` - *Hoisted big constants must read the loaded value on every loop iteration.*
   - Method `.test_a_countdown_mixer_with_hoisted_constants_wraps_like_the_source()`
   - Method `.test_two_sequential_loops_hoist_their_own_constants()`
@@ -1023,13 +1034,14 @@
 ### [`tests/test_lexer.py`](tests/test_lexer.py)
 > *Lexer tests: token shape, spans, comments and the two literal failures.*
 
-**Size**: `75` lines (`3275` bytes)
+**Size**: `79` lines (`3490` bytes)
 
 **Classes:**
 - `class LexerTest` - *The scanner is the first stage an agent's source touches, so its reports must be exact.*
   - Method `.test_tokens_carry_kind_text_value_and_span()`
   - Method `.test_comment_runs_to_end_of_line()`
   - Method `.test_two_character_operators_win_over_one()`
+  - Method `.test_range_symbols_lex_before_the_number_boundary()`
   - Method `.test_integer_beyond_i64_is_a_positioned_error()`
   - Method `.test_two_to_the_63_lexes_so_unary_minus_can_fold_it()`
   - Method `.test_unexpected_character_names_the_fix()`
@@ -1129,7 +1141,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `239` lines (`11431` bytes)
+**Size**: `319` lines (`15359` bytes)
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -1165,6 +1177,14 @@
   - Method `.test_a_loop_with_break_refuses_the_rewrite()`
   - Method `.test_a_loop_with_continue_refuses_the_rewrite()`
   - Method `.test_a_countdown_loop_latches_with_a_bottom_dec_and_jnz()`
+- `class ForLoweringTest` - *The for sugar lowers to Let + While before any other pass; no For survives lowering.*
+  - Method `.lowered(source)`
+  - Method `.test_an_exclusive_for_becomes_let_plus_while()`
+  - Method `.test_an_inclusive_for_compares_less_equal()`
+  - Method `.test_a_continue_inside_the_for_steps_before_jumping()`
+  - Method `.test_a_continue_in_a_nested_while_is_not_touched()`
+  - Method `.test_nested_fors_bind_the_continue_to_the_inner_loop()`
+  - Method `.test_no_for_survives_anywhere_in_a_mixed_program()`
 
 **Functions:**
 - `def folded_value(op, left, right)` - *`fold_constant` for one pair, through the public entry point.*
@@ -1175,7 +1195,7 @@
 ### [`tests/test_parser.py`](tests/test_parser.py)
 > *Parser tests: shapes, precedence and the grammar's positioned refusals.*
 
-**Size**: `120` lines (`5594` bytes)
+**Size**: `157` lines (`7400` bytes)
 
 **Classes:**
 - `class ParserTest` - *The tree shape decides code shape, so these assertions are about generated code too.*
@@ -1195,6 +1215,12 @@
   - Method `.test_min_int_is_spellable_as_negated_two_to_the_63()`
   - Method `.test_parenthesised_min_int_folds_like_the_bare_form()`
   - Method `.test_true_and_false_are_integers()`
+- `class ForTest` - *`for name in start..end block` parses into a real node; `..=` is the inclusive bound.*
+  - Method `.test_an_exclusive_range_parses()`
+  - Method `.test_an_inclusive_range_parses()`
+  - Method `.test_a_missing_range_symbol_is_a_positioned_refusal()`
+  - Method `.test_the_loop_variable_must_be_a_name()`
+  - Method `.test_the_loop_needs_the_in_keyword()`
 
 **Functions:**
 - `def body(source)` - *The body of the single function in a tiny program.*
@@ -1240,7 +1266,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `97` lines (`4527` bytes)
+**Size**: `141` lines (`6630` bytes)
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -1262,6 +1288,15 @@
   - Method `.test_function_must_return_on_every_path()`
   - Method `.test_if_else_returning_both_ways_is_accepted()`
   - Method `.test_every_diagnostic_is_collected_in_one_pass()`
+- `class ForLoopTest` - *The for variable is scoped to its loop: reusable across loops, restored outside.*
+  - Method `.test_two_loops_may_reuse_the_loop_variable()`
+  - Method `.test_the_loop_variable_shadows_an_outer_binding_and_restores_it()`
+  - Method `.test_assigning_the_loop_variable_inside_the_body_is_allowed()`
+  - Method `.test_the_body_may_not_shadow_the_loop_variable()`
+  - Method `.test_a_loop_variable_named_like_a_builtin_is_refused()`
+  - Method `.test_the_loop_variable_is_gone_after_the_loop()`
+  - Method `.test_continue_and_break_are_valid_inside_a_for()`
+  - Method `.test_the_range_bounds_must_be_i64_expressions()`
 
 **Functions:**
 - `def codes(source)` - *The diagnostic codes a source produces; asserts it is refused.*

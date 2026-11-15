@@ -29,6 +29,8 @@ class Build:
 def compile_source(source: str, path: str = "<source>", optimise: bool = True) -> Build:
     """Run every stage over one source text and return the executable image."""
     program = sema.analyze(parser.parse(source, path), path)
+    # Always: `--no-optimize` skips folding, not sugar lowering; codegen has no for path.
+    program = optimize.lower_for_loops(program)
     folded = 0
     if optimise:
         folder = optimize.Optimizer()

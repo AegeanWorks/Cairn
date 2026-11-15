@@ -824,6 +824,10 @@ class CodeGenerator:
             self._emit_block(statement, tail)
         elif isinstance(statement, syntax.ExprStmt):
             self._emit_expression(statement.expression)
+        elif isinstance(statement, syntax.For):
+            raise RuntimeError(
+                "internal: a for statement reached code generation unlowered; "
+                "lower_for_loops must run before generate")
 
     def _emit_if(self, statement: syntax.If, tail: bool = False) -> None:
         """`if` as a conditional branch and two labelled bodies.

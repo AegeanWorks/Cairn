@@ -75,10 +75,8 @@ fn fib(n: i64) -> i64 {
 
 fn main() -> i64 {
     var total: i64 = 0;
-    var i: i64 = 0;
-    while i < 10 {
+    for i in 0..10 {
         total = total + fib(i);
-        i = i + 1;
     }
     print(total);
     return 0;
@@ -89,7 +87,9 @@ fn main() -> i64 {
 - **One binding form per intent**: `let` is immutable, `var` is assignable. No shadowing.
 - **One function form**: `fn name(a: i64, b: i64) -> i64 { ... }`, up to four parameters,
   which are passed in registers. `main` is the entry point, and its return value is the exit code.
-- **Statements**: `let`, `var`, assignment, `if`/`else`, `while`, `return`, `break`, `continue`.
+- **Statements**: `let`, `var`, assignment, `if`/`else`, `while`, `for i in a..b` (or `a..=b`;
+  the loop variable is scoped to the loop and `continue` still steps it), `return`, `break`,
+  `continue`.
 - **Operators**, C precedence: `|| && | ^ & == != < <= > >= << >> + - * / %`, unary `- ! ~`.
 - **Builtin**: `print(x)` writes the decimal form and a newline, and returns `x`.
 - **Comments**: `//` to the end of the line.
@@ -145,6 +145,7 @@ python -m cairn check broken.crn --json
 | E2002 | Unknown type |
 | E2003 | Assignment target is not a name |
 | E2004 | Expression statement with no effect |
+| E2005 | For range missing `..` or `..=` |
 | E3001 | Duplicate function |
 | E3003 | Unknown function |
 | E3004 | Wrong argument count |
@@ -396,38 +397,47 @@ the noise band. The project rule (recorded as a guideline from the user): after 
 compiler, run the full benchmark suite again and compare, so winning one case while quietly losing
 another surfaces at the change that caused it.
 
+A second project rule (recorded as a guideline from the user): every function or construct added
+to the language ships with its own tests — exercising the new surface directly (values, edge
+cases, misuses reported as diagnostics) — committed in the same change, never covered only by
+incidental passes of existing tests.
+
 Compile time is about 150-280 ms per case, nearly all of it Python interpreter startup; the
 produced executable is two kilobytes because there is no runtime to link.
 
-What is *not* claimed: that Cairn is faster than C or Rust in general. Beating an optimising C compiler
+What is *not* claimed: that Cairn is faster than C, C++ or Rust in general. Beating an optimising C compiler
 on arbitrary code is a claim about optimisers and workloads, not about syntax, and this compiler
 has one folding pass and a register fast path, not a modern optimiser. What Cairn does claim
 today is a zero-cost execution model on its subset, sub-second compiles, deterministic output,
 and a total dependency surface of one Python interpreter.
 
-### Goal: faster than C and Rust, measured per case
+### Goal: faster than C, C++ and Rust, measured per case
 
-The owner's target is that Cairn beats the C twin on every committed benchmark case, and the Rust
-twin as well. That is a goal with a scoreboard, not a slogan the README asserts:
+The owner's target is that Cairn beats the C twin on every committed benchmark case, the Rust
+twin as well, and the C++ twin alongside them. That is a goal with a scoreboard, not a slogan the
+README asserts:
 `run_benchmarks.py` measures every baseline whose compiler is already installed, in the same run,
 and derives one verdict per case per language.
 
 ```bash
 python benchmarks/run_benchmarks.py           # table plus a "Goal: faster than ..." line per baseline
-python benchmarks/run_benchmarks.py --json    # goal.faster_than_c / goal.faster_than_rust: true, false or null
+python benchmarks/run_benchmarks.py --json    # goal.faster_than_c / _cpp / _rust: true, false or null
 python benchmarks/run_benchmarks.py --strict  # gate: 0 won, 1 slower or errored, 2 no baseline at all
 ```
 
 A verdict is `faster`, `tie`, `slower`, `unavailable` or `error`, one per case per baseline. `unavailable`
-means the language's compiler (`gcc`, `clang` or `cl` for C; `rustc` for Rust) was not found on
+means the language's compiler (`gcc`, `clang` or `cl` for C; `g++`, `clang++` or `cl` for C++;
+`rustc` for Rust) was not found on
 `PATH`, and `--strict` then exits `2` only when no baseline at all can be measured, rather than
 reporting a win it did not measure. `error` means the case's own build or run failed instead of
 producing a time, and `--strict` exits `1`. The goal is measured on the development machine with
-both baselines: `fib30` and `folded_math` beat both baselines outright, and `xorshift` is a
-structural tie (ADR-023) — a serial loop pinned at the ISA latency floor, where all three
+all three baselines: `collatz`, `ackermann`,
+`tak`, `folded_math` and `splitmix` beat all three outright, and `xorshift` is a structural tie
+(ADR-023) — a serial loop pinned at the ISA latency floor, where all the
 compilers emit identical dependent chain shapes and the shared countdown latch makes the
-bookkeeping identical too.
-The three cases cover a serial integer loop, recursion and constant arithmetic only.
+bookkeeping identical too. The committed cases cover a serial integer loop, recursion, constant
+arithmetic, branch-heavy counting, three-argument recursion, bit masking, fixed-point math and a
+64-bit mixing function.
 
 ## What's Inside
 

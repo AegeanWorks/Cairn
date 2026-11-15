@@ -62,8 +62,8 @@ def capabilities() -> Dict[str, Any]:
                    "sections": SECTIONS, "imports": {name: "kernel32.dll" for name in IMPORTS}},
         "types": sorted(TYPE_NAMES),
         "literals": {"integer": "decimal, signed 64-bit", "boolean": "true is 1, false is 0"},
-        "statements": ["let", "var", "assignment", "if/else", "while", "return", "break",
-                       "continue", "block"],
+        "statements": ["let", "var", "assignment", "if/else", "while", "for", "return",
+                       "break", "continue", "block"],
         "operators_by_precedence": _operators(),
         "unary_operators": ["-", "!", "~"],
         "builtins": {name: {"parameters": arity, "returns": "its argument"}

@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from cairn import syntax
+from cairn.diagnostics import Span
 
 INT64_MIN = -(2 ** 63)
 INT64_MAX = 2 ** 63 - 1
@@ -451,13 +452,101 @@ def _countdown_block(block: Optional[syntax.Block], trailing, parameters, change
                 if (isinstance(counter, syntax.Name)
                         and counter.slot not in parameters
                         and counter.slot in literal_writes):
+                    bound = _constant(condition.right)
+                    # A while over a computed bound (a lowered `for i in a..edge()`)
+                    # has no literal count to latch onto; leave it alone.
+                    if bound is None:
+                        continue
                     init, initial = literal_writes[counter.slot]
-                    count = wrap(_constant(condition.right) - initial)
+                    count = wrap(bound - initial)
                     if _try_countdown_latch(statement, init, count, rest):
                         changed.append(statement)
             for slot in list(literal_writes):
                 if _mentions_slot(statement.body, slot):
                     literal_writes.pop(slot)
+
+
+def lower_for_loops(program: syntax.Program) -> syntax.Program:
+    """Lower every `for` into a mutable `let` plus a `while`; runs before any folding.
+
+    Innermost loops lower first, so a `continue` in a nested `for` was already bound to
+    the inner increment before the outer rewrite looks at the block, and the outer
+    rewrite never descends into a `while`, which is what the inner loop became.
+    """
+    for function in program.functions:
+        _lower_block(function.body)
+    return program
+
+
+def _lower_block(block: Optional[syntax.Block]) -> None:
+    """Lower one block in place; the loop body lowers before the loop itself."""
+    if block is None:
+        return
+    lowered: List[syntax.Stmt] = []
+    for statement in block.statements:
+        if isinstance(statement, syntax.For):
+            _lower_block(statement.body)
+            _rewrite_continues(statement.body, statement.name, statement.slot)
+            statement.body.statements.append(_increment(statement.name, statement.slot,
+                                                        statement.span))
+            lowered.extend(_for_to_while(statement))
+        elif isinstance(statement, (syntax.If, syntax.While, syntax.Block)):
+            if isinstance(statement, syntax.If):
+                _lower_block(statement.then_block)
+                _lower_block(statement.else_block)
+            elif isinstance(statement, syntax.While):
+                _lower_block(statement.body)
+            else:
+                _lower_block(statement)
+            lowered.append(statement)
+        else:
+            lowered.append(statement)
+    block.statements = lowered
+
+
+def _for_to_while(statement: syntax.For) -> List[syntax.Stmt]:
+    """The two statements a `for` becomes: the mutable initialiser and the counted `while`."""
+    comparison = "<=" if statement.inclusive else "<"
+    condition = syntax.Binary(
+        span=Span.join(statement.start.span, statement.end.span), op=comparison,
+        left=syntax.Name(span=statement.start.span, name=statement.name,
+                         slot=statement.slot),
+        right=statement.end)
+    initialiser = syntax.Let(span=statement.span, name=statement.name, mutable=True,
+                             type_name="i64", value=statement.start, slot=statement.slot)
+    return [initialiser,
+            syntax.While(span=statement.span, condition=condition, body=statement.body)]
+
+
+def _increment(name: str, slot: int, span) -> syntax.Assign:
+    """`name = name + 1` on the loop's own slot."""
+    return syntax.Assign(
+        span=span, name=name, slot=slot,
+        value=syntax.Binary(span=span, op="+",
+                            left=syntax.Name(span=span, name=name, slot=slot),
+                            right=syntax.IntLiteral(span=span, value=1)))
+
+
+def _rewrite_continues(block: Optional[syntax.Block], name: str, slot: int) -> None:
+    """Prefix every `continue` bound to this loop with the increment, in place.
+
+    A `continue` in a nested `while` (or in a nested block of one) belongs to that
+    inner loop and is left alone; `if` branches and bare blocks are descended into.
+    """
+    if block is None:
+        return
+    for index, statement in enumerate(block.statements):
+        if isinstance(statement, syntax.Continue):
+            block.statements[index] = syntax.Block(
+                span=statement.span,
+                statements=[_increment(name, slot, statement.span), statement])
+        elif isinstance(statement, syntax.If):
+            _rewrite_continues(statement.then_block, name, slot)
+            _rewrite_continues(statement.else_block, name, slot)
+        elif isinstance(statement, syntax.While):
+            continue
+        elif isinstance(statement, syntax.Block):
+            _rewrite_continues(statement, name, slot)
 
 
 def apply_countdown_latches(program: syntax.Program) -> int:
@@ -662,5 +751,5 @@ def optimize(program: syntax.Program) -> syntax.Program:
 
 
 __all__ = ["INT64_MAX", "INT64_MIN", "MASK64", "Optimizer", "apply_countdown_latches",
-           "apply_odd_pair_fusion",
-           "fold_constant", "fold_unary", "has_call", "optimize", "truncate_division", "wrap"]
+           "apply_odd_pair_fusion", "fold_constant", "fold_unary", "has_call",
+           "lower_for_loops", "optimize", "truncate_division", "wrap"]

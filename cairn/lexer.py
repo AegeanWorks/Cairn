@@ -9,10 +9,10 @@ from typing import List
 
 from cairn.diagnostics import Span, fail
 
-KEYWORDS = frozenset({"fn", "let", "var", "if", "else", "while", "return",
+KEYWORDS = frozenset({"fn", "let", "var", "if", "else", "while", "for", "in", "return",
                       "break", "continue", "true", "false"})
 
-MULTI_CHAR_SYMBOLS = ("->", "==", "!=", "<=", ">=", "&&", "||", "<<", ">>")
+MULTI_CHAR_SYMBOLS = ("..=", "..", "->", "==", "!=", "<=", ">=", "&&", "||", "<<", ">>")
 SINGLE_CHAR_SYMBOLS = frozenset("(){}:,;=+-*/%<>!&|^~")
 
 INT64_MAX = 2 ** 63 - 1

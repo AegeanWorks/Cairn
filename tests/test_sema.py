@@ -2,6 +2,7 @@
 
 import unittest
 
+from cairn import syntax
 from cairn.diagnostics import DiagnosticError
 from cairn.parser import parse
 from cairn.sema import analyze
@@ -91,6 +92,49 @@ class SemaTest(unittest.TestCase):
         found = codes("fn main() -> i64 { let a: i64 = b; c = 1; return d(); }")
         self.assertEqual(found.count("E3007"), 2)
         self.assertEqual(found.count("E3003"), 1)
+
+
+class ForLoopTest(unittest.TestCase):
+    """The for variable is scoped to its loop: reusable across loops, restored outside."""
+
+    def test_two_loops_may_reuse_the_loop_variable(self) -> None:
+        program = analyze(parse(
+            "fn main() -> i64 { var t: i64 = 0; for i in 0..3 { t = t + i; }"
+            " for i in 0..4 { t = t + i; } return t; }"))
+        loops = [statement for statement in program.functions[0].body.statements
+                 if isinstance(statement, syntax.For)]
+        self.assertEqual([loop.slot for loop in loops], [1, 2])
+        self.assertEqual(program.functions[0].slots, 3)
+
+    def test_the_loop_variable_shadows_an_outer_binding_and_restores_it(self) -> None:
+        program = analyze(parse(
+            "fn main() -> i64 { let i: i64 = 9; var t: i64 = 0; for i in 0..2 { t = t + i; }"
+            " return i + t; }"))
+        returned = program.functions[0].body.statements[3].value
+        self.assertIsInstance(returned, syntax.Binary)
+        self.assertEqual(returned.left.slot, 0)
+
+    def test_assigning_the_loop_variable_inside_the_body_is_allowed(self) -> None:
+        analyze(parse("fn main() -> i64 { for i in 0..2 { i = i + 10; } return 0; }"))
+
+    def test_the_body_may_not_shadow_the_loop_variable(self) -> None:
+        self.assertIn("E3006", codes(
+            "fn main() -> i64 { for i in 0..2 { let i: i64 = 1; } return 0; }"))
+
+    def test_a_loop_variable_named_like_a_builtin_is_refused(self) -> None:
+        self.assertIn("E3012", codes(
+            "fn main() -> i64 { for print in 0..2 { } return 0; }"))
+
+    def test_the_loop_variable_is_gone_after_the_loop(self) -> None:
+        codes("fn main() -> i64 { for i in 0..2 { } return i; }")
+
+    def test_continue_and_break_are_valid_inside_a_for(self) -> None:
+        analyze(parse(
+            "fn main() -> i64 { for i in 0..9 { if i == 3 { break; }"
+            " if i == 1 { continue; } } return 0; }"))
+
+    def test_the_range_bounds_must_be_i64_expressions(self) -> None:
+        codes("fn main() -> i64 { for i in 0..nope { } return 0; }")
 
 
 if __name__ == "__main__":

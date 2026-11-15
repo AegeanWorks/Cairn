@@ -138,6 +138,8 @@ class Analyzer:
             self.loop_depth += 1
             self._check_block(statement.body)
             self.loop_depth -= 1
+        elif isinstance(statement, syntax.For):
+            self._check_for(statement)
         elif isinstance(statement, syntax.Return):
             self._check_expression(statement.value)
         elif isinstance(statement, (syntax.Break, syntax.Continue)):
@@ -149,6 +151,29 @@ class Analyzer:
             self._check_block(statement)
         elif isinstance(statement, syntax.ExprStmt):
             self._check_expression(statement.expression)
+
+    def _check_for(self, statement: syntax.For) -> None:
+        """A `for` declares one scoped, mutable loop variable for its body, then restores.
+
+        The start bound is evaluated in the enclosing scope; the end bound sees the loop
+        variable, matching the lowered `while shape the loop actually runs as.
+        """
+        if statement.name in BUILTINS:
+            self._report("E3012", f"'{statement.name}' is a builtin and cannot be redefined",
+                         "Rename the loop variable.", statement.span)
+            return
+        self._check_expression(statement.start)
+        outer = self.bindings.get(statement.name)
+        statement.slot = self._new_slot()
+        self.bindings[statement.name] = Binding(statement.slot, True, statement.span)
+        self._check_expression(statement.end)
+        self.loop_depth += 1
+        self._check_block(statement.body)
+        self.loop_depth -= 1
+        if outer is None:
+            del self.bindings[statement.name]
+        else:
+            self.bindings[statement.name] = outer
 
     def _check_binding(self, statement: syntax.Let) -> None:
         """A `let`/`var` declares one new name and initialises it from an i64 expression."""
