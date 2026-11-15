@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `97`
-- **Total Top-Level Functions**: `154`
-- **Total Class Methods**: `593`
-- **Total Source Lines**: `10720`
+- **Total Classes**: `99`
+- **Total Top-Level Functions**: `156`
+- **Total Class Methods**: `604`
+- **Total Source Lines**: `10964`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -132,7 +132,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `2488` lines (`124054` bytes)
+**Size**: `2635` lines (`131460` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -160,7 +160,14 @@
   - Method `._emit_statement(statement, tail)` - *Lower one statement; `tail` only concerns a final `return`.*
   - Method `._emit_if(statement, tail)` - *`if` as a conditional branch and two labelled bodies.*
   - Method `._emit_select_if(statement)` - *Lower `if t > c { t = t - c; } else { t = t + c; }` as sub, lea, cmov — or refuse.*
-  - Method `._emit_while(statement)` - *`while` with its own break and continue targets.*
+  - Method `._plan_constant_hoists(function)` - *Reserve spare homes for each loop's invariant big literals, or return none.*
+  - Method `._loops_within(block)` - *Every While statement at or below `block`, outer loops before nested ones.*
+  - Method `._big_literal_counts(loop)` - *Distinct literals outside the immediate range (the movabs-only forms), counted.*
+  - Method `._count_in_block(block, counter)`
+  - Method `._count_in(expression, counter)`
+  - Method `._emit_while(statement)` - *Load the loop's plan-hoisted constants into their spare homes, then lower.*
+  - Method `._lowers_as_real_body()` - *Whether emission runs in the real body of a fully-homed, pair-free function.*
+  - Method `._emit_while_body(statement)` - *`while` with its own break and continue targets.*
   - Method `._try_emit_halving_loop(statement)` - *Emit a fused odd-pair body as one unconditional half-step, or refuse.*
   - Method `._is_nonnegative(slot)` - *Whether the slot provably holds a non-negative value at this emit point.*
   - Method `._expression_nonnegative(expression)` - *Whether the expression provably evaluates non-negative at this emit point.*
@@ -762,7 +769,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1000` lines (`48047` bytes)
+**Size**: `1037` lines (`49951` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -822,6 +829,9 @@
 - `class LogicalShiftPeepholeTest` - *`(a >> k) & (2**(64-k) - 1)` needs no arithmetic-shift fixup or mask load.*
   - Method `.test_a_covering_mask_lowers_as_one_logical_shift()`
   - Method `.test_a_partial_mask_keeps_its_and()`
+- `class LoopConstantHoistTest` - *Countdown loops read their big literals from pre-loaded spare homes.*
+  - Method `.test_the_loop_never_rematerialises_its_big_constants()`
+  - Method `.test_the_constants_load_into_spare_homes_before_the_loop()`
 - `class MergedMaskMixTest` - *A masked xor merged into its home register lowers park-free, in place.*
   - Method `.test_the_mixer_never_materialises_or_spills_its_mask()`
   - Method `.test_the_xor_combines_in_place_right_after_the_shift()`
@@ -883,6 +893,8 @@
 - `def count_test_imms(blob)` - *How many `test r/m8, imm8` byte tests (F6 with register-modrm, then a mask) appear.*
 - `def _has_shr(blob, count)`
 - `def _has_mask_movabs(blob)` - *The 0x3FFFFFFFF mask riding a movabs immediate.*
+- `def _movabs_rax(value)` - *The full `movabs rax, value` encoding.*
+- `def _hoisted_movabs_candidates(value)` - *`movabs <home>, value` for every home a hoist could pick.*
 - `def _combine_right_after_shr(region, count)` - *Whether an update combine follows its peephole `shr rax, count` with no park.*
 - `def region_bytes(source, name)` - *The .text bytes of one function's body, its inline copies included.*
 - `def calls_of(source, caller, callee)` - *How many real `call` sites inside `caller`'s region target `callee`.*
@@ -892,7 +904,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `695` lines (`24657` bytes)
+**Size**: `755` lines (`26260` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -959,6 +971,9 @@
 - `class MergedMaskLoopValueTest` - *The reclaimed mix lowering must stay exact across a real mixer loop.*
   - Method `.test_a_masked_xor_multiplier_loop_wraps_like_the_source()`
   - Method `.test_a_merged_left_update_never_leaks_into_a_right_home_read()`
+- `class LoopConstantHoistValueTest` - *Hoisted big constants must read the loaded value on every loop iteration.*
+  - Method `.test_a_countdown_mixer_with_hoisted_constants_wraps_like_the_source()`
+  - Method `.test_two_sequential_loops_hoist_their_own_constants()`
 
 **Functions:**
 - `def _wrap(value)`

@@ -647,7 +647,7 @@ fn main() -> i64 {
     var z: i64 = 548732102;
     var i: i64 = 0;
     while i < 64 {
-        z = (z ^ ((z >> 30) & 17179869183)) * 1812433253;
+        z = (z ^ ((z >> 30) & 17179869183)) * 6364136223846793005;
         i = i + 1;
     }
     print(z);
@@ -680,7 +680,7 @@ class MergedMaskLoopValueTest(EndToEndTest):
         self.assertEqual(completed.returncode, 0)
         z = 548732102
         for _ in range(64):
-            z = _wrap((z ^ ((z >> 30) & 17179869183)) * 1812433253)
+            z = _wrap((z ^ ((z >> 30) & 17179869183)) * 6364136223846793005)
         self.assertEqual(completed.stdout, f"{z}\n")
 
     def test_a_merged_left_update_never_leaks_into_a_right_home_read(self) -> None:
@@ -689,6 +689,66 @@ class MergedMaskLoopValueTest(EndToEndTest):
         # The peephole reads z before the xor's left side (z + 5) has replaced it:
         # 16 ^ ((11 >> 30) & mask) = 16, never the post-update value.
         self.assertEqual(completed.stdout, "16\n")
+
+
+HOISTED_MIXER_LOOP = """
+fn main() -> i64 {
+    var z: i64 = 548732102;
+    var i: i64 = 64;
+    while i > 0 {
+        z = (z ^ ((z >> 30) & 17179869183)) * 6364136223846793005;
+        z = z + 7046029254386353131;
+        i = i - 1;
+    }
+    print(z);
+    return 0;
+}
+"""
+
+TWO_HOISTED_LOOPS = """
+fn main() -> i64 {
+    var a: i64 = 42;
+    var b: i64 = 11;
+    var i: i64 = 9;
+    while i > 0 {
+        a = a * 6364136223846793005;
+        i = i - 1;
+    }
+    i = 7;
+    while i > 0 {
+        b = b * 6364136223846793005;
+        i = i - 1;
+    }
+    print(a);
+    print(b);
+    return 0;
+}
+"""
+
+
+@WINDOWS_ONLY
+class LoopConstantHoistValueTest(EndToEndTest):
+    """Hoisted big constants must read the loaded value on every loop iteration."""
+
+    def test_a_countdown_mixer_with_hoisted_constants_wraps_like_the_source(self) -> None:
+        completed = self.execute(HOISTED_MIXER_LOOP)
+        self.assertEqual(completed.returncode, 0)
+        z = 548732102
+        for _ in range(64):
+            z = _wrap((z ^ ((z >> 30) & 17179869183)) * 6364136223846793005)
+            z = _wrap(z + 7046029254386353131)
+        self.assertEqual(completed.stdout, f"{z}\n")
+
+    def test_two_sequential_loops_hoist_their_own_constants(self) -> None:
+        completed = self.execute(TWO_HOISTED_LOOPS)
+        self.assertEqual(completed.returncode, 0)
+        a = 42
+        for _ in range(9):
+            a = _wrap(a * 6364136223846793005)
+        b = 11
+        for _ in range(7):
+            b = _wrap(b * 6364136223846793005)
+        self.assertEqual(completed.stdout, f"{a}\n{b}\n")
 
 
 if __name__ == "__main__":

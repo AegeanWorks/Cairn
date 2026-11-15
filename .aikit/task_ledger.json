@@ -2,44 +2,15 @@
   "version": 1,
   "active_task": {
     "task_id": "cairn-loop-invariants",
-    "last_phase": "verification",
+    "last_phase": "delivered",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1794767000.845117,
+    "updated_at": 1794768283.8353677,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-case-closes",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/4] Plan: close call_chain (attributed binds, then small-function inlining), binary_gcd (constant division by reciprocal multiply), nqueens last (spill/frame work); measure, ADR, commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794752098.2490125,
-      "timestamp_str": "2026-11-15 17:14:58",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "user ordered 'get faster': three committed cases sit behind at least one baseline, worst call_chain 2.7x C \u2014 the scoreboard commitment is at or ahead on every case",
-        "benefits": "contract: no semantics change anywhere the shape gates refuse; the strict goal becomes green when all closures measure",
-        "risks": "contract: argument reordering on bind (impure operands still evaluate once, left to right); dependency: inlining reuses the pair-copy engine and must not fire on loops/calls in bodies; concurrency: none; state: none",
-        "mitigation": "every new pass is a silent fallback on refusal; ParityTest + full suite (335) plus e2e probes gate each milestone; measure before and after; revert any variant that measures worse (the delta-nonzero precedent)"
-      },
-      "plan_digest": "a33bbea4e46e7d5f591defdf1d893a89202fe3cd7422ca6a950021da8788d3af"
-    },
-    {
-      "task_id": "cairn-case-closes",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[3/4] Land M2 backend batch + magic division: foreign-function inlining (call-free/loop-free/label-free callee copies under fn.<name>.copy.N), branchless select (sub+lea+cmovcc), direct-into-register compute with strict rax-shape gate, two-homed compare, magic-multiply division for positive literal / and % (search proves int64 exactness at two inequality worst points + INT64_MIN; reproduces gcc's 2147483647 params; no DIV_ZERO trap remains at magic sites). Measurements: call_chain 95.9->45-48 ms (Rust beaten 0.62x, C 1.3x pending); binary_gcd 190.2->178-195 ms (C 1.08x, Rust 1.28x). 363 tests + 39 subtests pass incl. byte-parity twin gate. ADR-027 recorded; README rows + prose updated; codebase map refreshed. checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794759127.8862293,
-      "timestamp_str": "2026-11-15 19:12:07",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-case-closes",
       "phase": "in_progress",
@@ -287,6 +258,29 @@
       "status": "in_progress",
       "timestamp": 1794767000.845117,
       "timestamp_str": "2026-11-15 21:23:20",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-loop-invariants",
+      "phase": "implementation",
+      "phase_num": 3,
+      "description": "[3/3] Phase 3: loop-invariant big constants hoisted into prologue-saved spare home registers (per-loop plan, peephole-mask skip, copy-context refusals, pad parity extended); 24 tests, suite 497 + 39 subtests green; splitmix 110.0 -> 94.3 ms, now faster than C(98-101) and Rust(110-113); ADR-032; README + KB; G-004 exit 0",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794768276.4833658,
+      "timestamp_str": "2026-11-15 21:44:36",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-loop-invariants",
+      "phase": "delivered",
+      "phase_num": 4,
+      "description": "[3/3] Phase 4: milestone 3 verified \u2014 full suite green, G-004 --save --compare exit 0 with splitmix improved and nothing regressed beyond the band; Post-Flight checklist passed: tests, README, ADR-032, KB sync, secrets scan; task's three milestones all committed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794768283.8353677,
+      "timestamp_str": "2026-11-15 21:44:43",
       "agent": "mistral:vibe",
       "checklists": "passed"
     }

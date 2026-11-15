@@ -11,6 +11,7 @@ that uses those registers saves them on entry and restores them on every exit. F
 slots than registers keep the stack path for the rest.
 """
 
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
@@ -47,6 +48,9 @@ LEA_PRODUCT_FACTORS = {3: 1, 5: 2, 9: 3}
 IMMEDIATE_MIN = -0x80000000
 IMMEDIATE_MAX = 0x7FFFFFFF
 MAX_INLINE_DEPTH = 7
+# Spare home registers one loop may claim for its invariant big constants, so the
+# remaining pool still covers the next outer loop's constants.
+HOIST_HOMES_PER_LOOP = 3
 # A pair copy branches two ways per level (its own n-argument chain and the m-shifted
 # descent), so pure-text copies grow like 2**depth; the cap keeps the emission bounded.
 MAX_PAIR_INLINE_DEPTH = 6
@@ -176,6 +180,12 @@ class CodeGenerator:
     value_slot: int = -1
     hold_units: int = 0
     nonnegative_slots: set = field(default_factory=set)
+    # Loop-invariant hoisting: hoist_plans maps one While statement's identity to its
+    # (value, home) pairs, hoist_imm is the active value-to-home map while a hoisted
+    # loop's body lowers, and hoist_homes lists the registers the prologue must save.
+    hoist_plans: dict = field(default_factory=dict)
+    hoist_imm: dict = field(default_factory=dict)
+    hoist_homes: Tuple[str, ...] = ()
 
     def generate(self, program: syntax.Program) -> Artifact:
         """Emit the entry stub, every function, then the runtime helpers."""
@@ -221,13 +231,23 @@ class CodeGenerator:
             # latency a frame store re-load pays on the hot call path.
             hold_units = self._delta_hold_units(function)
             pair_mode = hold_units == 0 and self._pair_inline_shape(function)
-            pad_units = 0 if (len(self.homes) + hold_units) % 2 else 1
+            self.hoist_plans.update(self._plan_constant_hoists(function))
+            self.hoist_homes = tuple(home for pairs in
+                                     (self.hoist_plans.get(id(loop), [])
+                                      for loop in self._loops_within(function.body))
+                                     for home in (home for _, home in pairs))
+            # The hoisted homes ride the save area like slot homes: the parity count
+            # that keeps every call 16-aligned must see them too.
+            saved_units = len(self.homes) + len(self.hoist_homes)
+            pad_units = 0 if (saved_units + hold_units) % 2 else 1
             merging = hold_units == 0 and self._body_may_hold(function.body)
-            pad = hold_units == 0 and (function.slots % 2 == 0 or merging)
-            filler = merging and function.slots % 2 == 1
+            pad = hold_units == 0 and (saved_units % 2 == 0 or merging)
+            filler = merging and saved_units % 2 == 1
             self.current = function
             for home in self.homes:
                 asm.push(home)
+            for register in self.hoist_homes:
+                asm.push(register)
             if pair_mode:
                 # The chain counter's save slot: copies rebind r13 freely, and every
                 # call inside the copies preserves it (callee-saved ABI register).
@@ -275,6 +295,9 @@ class CodeGenerator:
                 asm.pop(HOME_REGISTERS[-1])
             if pair_mode:
                 asm.pop("r13")
+            for register in reversed(self.hoist_homes):
+                asm.pop(register)
+            self.hoist_homes = ()
             for home in reversed(self.homes):
                 asm.pop(home)
             asm.ret()
@@ -287,6 +310,7 @@ class CodeGenerator:
             return
         asm.push("rbp")
         asm.mov_reg_reg("rbp", "rsp")
+        self.hoist_homes = ()      # every home is a slot home here; nothing to hoist into
         if frame:
             asm.sub_rsp(frame)
         self.pad_slots = ()
@@ -548,7 +572,11 @@ class CodeGenerator:
         elif self._emit_home_offset(destination, expression):
             pass
         elif isinstance(expression, syntax.IntLiteral):
-            self.assembler.mov_imm64(destination, expression.value)
+            hoisted = self.hoist_imm.get(expression.value)
+            if hoisted is None:
+                self.assembler.mov_imm64(destination, expression.value)
+            elif hoisted != destination:
+                self.assembler.mov_reg_reg(destination, hoisted)
         elif isinstance(expression, syntax.Name):
             self._load_slot(expression.slot, destination)
         elif self._emit_binary_into(expression, destination):
@@ -644,7 +672,11 @@ class CodeGenerator:
         """
         expression = self._stripped(expression)
         if isinstance(expression, syntax.IntLiteral):
-            self.assembler.mov_imm64(destination, expression.value)
+            hoisted = self.hoist_imm.get(expression.value)
+            if hoisted is None:
+                self.assembler.mov_imm64(destination, expression.value)
+            elif hoisted != destination:
+                self.assembler.mov_reg_reg(destination, hoisted)
             return True
         if isinstance(expression, syntax.Name):
             home = self._home(expression.slot)
@@ -884,7 +916,118 @@ class CodeGenerator:
         asm.cmov(move, home, "rax")
         return True
 
+    def _plan_constant_hoists(self, function: syntax.Function) -> dict:
+        """Reserve spare homes for each loop's invariant big literals, or return none.
+
+        Only the leaf frame shape (every slot homed, none left over) leaves registers
+        that no push saves; each While statement takes up to `HOIST_HOMES_PER_LOOP` of
+        them for its most-used big literals, outer loops first so nested loops never
+        share a register. Frame-shaped functions have no spare homes and no plan.
+        """
+        spare = list(HOME_REGISTERS[len(self.homes):])
+        if not spare:
+            return {}
+        plan: dict = {}
+        cursor = 0
+        for loop in self._loops_within(function.body):
+            counts = self._big_literal_counts(loop)
+            if not counts or cursor >= len(spare):
+                continue
+            homes = spare[cursor:cursor + min(HOIST_HOMES_PER_LOOP, len(spare) - cursor)]
+            cursor += len(homes)
+            plan[id(loop)] = [(value, home) for (value, _), home
+                              in zip(counts.most_common(), homes)]
+            if cursor >= len(spare):
+                break
+        return plan
+
+    def _loops_within(self, block: Optional[syntax.Block]):
+        """Every While statement at or below `block`, outer loops before nested ones."""
+        if block is None:
+            return
+        for statement in block.statements:
+            if isinstance(statement, syntax.While):
+                yield statement
+                yield from self._loops_within(statement.body)
+            elif isinstance(statement, syntax.If):
+                yield from self._loops_within(statement.then_block)
+                yield from self._loops_within(statement.else_block)
+
+    def _big_literal_counts(self, loop: syntax.While) -> Counter:
+        """Distinct literals outside the immediate range (the movabs-only forms), counted."""
+        counter: Counter = Counter()
+        self._count_in(loop.condition, counter)
+        self._count_in_block(loop.body, counter)
+        return counter
+
+    def _count_in_block(self, block: Optional[syntax.Block], counter: Counter) -> None:
+        if block is None:
+            return
+        for statement in block.statements:
+            if isinstance(statement, (syntax.Let, syntax.Assign)):
+                self._count_in(statement.value, counter)
+            elif isinstance(statement, syntax.If):
+                self._count_in(statement.condition, counter)
+                self._count_in_block(statement.then_block, counter)
+                self._count_in_block(statement.else_block, counter)
+            elif isinstance(statement, syntax.While):
+                self._count_in(statement.condition, counter)
+                self._count_in_block(statement.body, counter)
+            elif isinstance(statement, (syntax.Return, syntax.ExprStmt)):
+                self._count_in(statement.value if isinstance(statement, syntax.Return)
+                               else statement.expression, counter)
+
+    def _count_in(self, expression: Optional[syntax.Expr], counter: Counter) -> None:
+        if expression is None:
+            return
+        if isinstance(expression, syntax.IntLiteral):
+            if not IMMEDIATE_MIN <= expression.value <= IMMEDIATE_MAX:
+                counter[expression.value] += 1
+        elif isinstance(expression, syntax.Binary):
+            if expression.op == "&":
+                shape = self._logical_shift_shape(expression)
+                if shape is not None:
+                    # The peephole emits nothing for the mask or the count, so only
+                    # the shift operand's own literals can reach a movabs.
+                    self._count_in(shape[0], counter)
+                    return
+            self._count_in(expression.left, counter)
+            self._count_in(expression.right, counter)
+        elif isinstance(expression, syntax.Unary):
+            self._count_in(expression.operand, counter)
+        elif isinstance(expression, syntax.Parens):
+            self._count_in(expression.inner, counter)
+        elif isinstance(expression, syntax.Call):
+            for argument in expression.arguments:
+                self._count_in(argument, counter)
+
     def _emit_while(self, statement: syntax.While) -> None:
+        """Load the loop's plan-hoisted constants into their spare homes, then lower."""
+        plan = self.hoist_plans.get(id(statement))
+        if plan and not self._lowers_as_real_body():
+            plan = None      # a copy's frame never saved the spare homes
+        if not plan:
+            self._emit_while_body(statement)
+            return
+        saved_hoist = self.hoist_imm
+        for value, register in plan:
+            self.assembler.mov_imm64(register, value)
+        self.hoist_imm = {**saved_hoist, **dict(plan)}
+        try:
+            self._emit_while_body(statement)
+        finally:
+            self.hoist_imm = saved_hoist
+
+    def _lowers_as_real_body(self) -> bool:
+        """Whether emission runs in the real body of a fully-homed, pair-free function.
+
+        Copies re-lower this statement inside another frame whose prologue never saved
+        the planned spare homes, so only the real body may read them.
+        """
+        return (self.inline_depth == 0 and self.delta_value == 0
+                and self.value_slot == -1 and self.hold_units == 0)
+
+    def _emit_while_body(self, statement: syntax.While) -> None:
         """`while` with its own break and continue targets."""
         asm = self.assembler
         start = self._fresh("while.start")
@@ -1356,7 +1499,11 @@ class CodeGenerator:
             return
         asm = self.assembler
         if isinstance(expression, syntax.IntLiteral):
-            asm.mov_imm64("rax", expression.value)
+            hoisted = self.hoist_imm.get(expression.value)
+            if hoisted is None:
+                asm.mov_imm64("rax", expression.value)
+            else:
+                asm.mov_reg_reg("rax", hoisted)
         elif isinstance(expression, syntax.Parens):
             self._emit_expression(expression.inner)
         elif isinstance(expression, syntax.Name):

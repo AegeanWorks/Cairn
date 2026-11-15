@@ -363,15 +363,17 @@ Rust 113.8 was rematerialized loop-invariant constants, the early recorded mecha
 destination register could be clobbered by the right side's own register reuse
 (`tests/test_end_to_end.py::OperandParkTest`).
 
-The mixer then gained two backend mechanisms (the logical-shift peephole, then ADR-031's
-reclaimed merged-park fast path): `(z ^ ((z >> 30) & M)) * c` lowers the `&` as one logical
-`shr` whose mask never materialises, and the xor and multiply combine directly in the home
-register — no dead park, no temporary spill, no `imul` re-park. splitmix fell 165.9 → 110 ms,
-now at par with Rust (110-113) and about 1.1x C's 98-101; every other benchmark executable
-compiles byte-identical against the pre-change compiler, which is the recorded proof that the
-soundness hardening of `_computes_in_rax_only` cost no fast path anywhere else. Recorded next
-mechanisms: park-free `imul` constants, direct home-to-home assignments, and loop-invariant
-constant hoisting.
+The mixer then gained three backend mechanisms (the logical-shift peephole, then ADR-031's
+reclaimed merged-park fast path, then ADR-032's loop-invariant hoisting): `(z ^ ((z >> 30) & M)) * c`
+lowers the `&` as one logical `shr` whose mask never materialises, the xor and multiply combine
+directly in the home register with no dead park, no temporary spill and no `imul` re-park, and a
+countdown loop's big constants load once into prologue-saved spare home registers instead of
+re-materializing a 10-byte `movabs` on every iteration. splitmix fell 165.9 → 94.3 ms — now
+faster than its C twin (98-102) and Rust (110-113); every other benchmark executable compiles
+byte-identical against the pre-change compiler except the splitmix rewrites themselves, the
+recorded proof that the soundness hardening of `_computes_in_rax_only` cost no fast path
+anywhere else. Recorded next mechanisms: three-operand immediate multiplies, inner-loop merge
+pressure (mandelbrot), and call overhead (fib30, call_chain).
 
 Run-to-run spread on this machine is about 10 percent, so treat these as an order of magnitude
 rather than three significant figures; the harness prints best, median and worst for that reason.

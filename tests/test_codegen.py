@@ -482,6 +482,43 @@ class LogicalShiftPeepholeTest(unittest.TestCase):
 MIX_PROGRAM = ("fn main() -> i64 { var x: i64 = 7; var z: i64 = x; "
                "z = (z ^ ((z >> 30) & 17179869183)) * 3; return z; }")
 
+HOIST_LOOP = ("fn main() -> i64 { var z: i64 = 548732102; var i: i64 = 64; "
+              "while i > 0 { z = (z ^ ((z >> 30) & 17179869183)) * 6364136223846793005; "
+              "z = z + 7046029254386353131; i = i - 1; } return z; }")
+
+
+def _movabs_rax(value: int) -> bytes:
+    """The full `movabs rax, value` encoding."""
+    return bytes([0x48, 0xB8]) + (value & ((1 << 64) - 1)).to_bytes(8, "little")
+
+
+def _hoisted_movabs_candidates(value: int) -> List[bytes]:
+    """`movabs <home>, value` for every home a hoist could pick."""
+    payload = (value & ((1 << 64) - 1)).to_bytes(8, "little")
+    return [bytes([0x48, 0xB8 + index]) + payload for index in range(8)] + \
+           [bytes([0x49, 0xB8 + (index - 8)]) + payload for index in range(8, 16)]
+
+
+class LoopConstantHoistTest(unittest.TestCase):
+    """Countdown loops read their big literals from pre-loaded spare homes."""
+
+    def test_the_loop_never_rematerialises_its_big_constants(self) -> None:
+        region = region_of(HOIST_LOOP)
+        for value in (1812433253, 7046029254386353131):
+            self.assertNotIn(_movabs_rax(value), region,
+                             f"{value} re-materialised into rax inside the loop")
+
+    def test_the_constants_load_into_spare_homes_before_the_loop(self) -> None:
+        region = region_of(HOIST_LOOP)
+        loads = [region.index(encoding) for encoding in
+                 _hoisted_movabs_candidates(6364136223846793005)
+                 if encoding in region] + [region.index(encoding) for encoding in
+                                           _hoisted_movabs_candidates(7046029254386353131)
+                                           if encoding in region]
+        self.assertEqual(len(loads), 2, "each big constant must load exactly once")
+        self.assertLess(max(loads), region.find(bytes([0xC1, 0xE8, 0x1E])),
+                        "the loads must precede the loop body")
+
 
 def _combine_right_after_shr(region: bytes, count: int) -> bool:
     """Whether an update combine follows its peephole `shr rax, count` with no park."""
