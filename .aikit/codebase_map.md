@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `107`
+- **Total Classes**: `109`
 - **Total Top-Level Functions**: `165`
-- **Total Class Methods**: `660`
-- **Total Source Lines**: `11856`
+- **Total Class Methods**: `682`
+- **Total Source Lines**: `12237`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `2701` lines (`134869` bytes)
+**Size**: `2922` lines (`146247` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -146,8 +146,10 @@
   - Method `._restore_homes()` - *Put the caller's values back before returning.*
   - Method `._clear_frame(function)` - *Clear every slot so a binding declared in a branch that never ran reads as zero.*
   - Method `._home(slot)` - *The register that holds `slot`, or None when the slot stays in the frame.*
+  - Method `._emit_loop_head(label)` - *Pad onto a 16-byte boundary, then bind the loop's backedge target.*
   - Method `._load_slot(slot, destination)` - *Move one slot into `destination` from its register or its frame slot.*
   - Method `._store_slot(slot, source)` - *Write `source` into one slot's register or frame slot.*
+  - Method `._emit_zero_extend_mask(expression, destination)` - *Lower `name & 255` / `name & 65535` as one movzx of the name's home, or refuse.*
   - Method `._emit_value(slot, expression)` - *Assign an expression to a slot, folding `slot = slot op value` in place.*
   - Method `._update_keeps_nonneg(slot, expression)` - *Whether an in-place update provably keeps the slot's value non-negative.*
   - Method `._fold_update(home, slot, expression)` - *Emit `home = home op value` when the expression updates its own slot.*
@@ -193,10 +195,15 @@
   - Method `._emit_division(operator)` - *Signed division with an explicit zero-divisor trap, quotient or remainder.*
   - Method `._emit_and(expression)` - *`&&`: the right side is evaluated only when the left side is non-zero.*
   - Method `._emit_or(expression)` - *`||`: the right side is evaluated only when the left side is zero.*
-  - Method `._emit_call(expression)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
+  - Method `._emit_call(expression, copy_home)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
+  - Method `._emit_foreign_call(expression, copy_home)` - *Bind or substitute the arguments, then copy the callee or call it for real.*
+  - Method `._emit_foreign_arguments(expression, skip)` - *Bind every unsubstituted argument left to right into its ABI register.*
+  - Method `._plan_foreign_copy(callee)` - *The copy's guest, spill and rebind decisions, without emitting anything.*
+  - Method `._return_slot_override(callee, guest, alias, copy_home)` - *Whether the copy's final result slot may simply use the return destination.*
+  - Method `._ends_in_return(body)` - *Whether a body's last statement returns (the copy honors a return home).*
   - Method `._emit_stack_call(expression)` - *Lower a five-or-more argument call: four registers, the rest via the stack.*
   - Method `._is_pure_argument(expression)` - *Whether an argument can bind straight into its ABI register.*
-  - Method `._emit_pure_arguments(arguments)` - *Bind call arguments straight into their registers, or return False.*
+  - Method `._emit_pure_arguments(arguments, skip)` - *Bind call arguments straight into their registers, or return False.*
   - Method `._contains_division(expression)` - *Whether any subtree of `expression` divides — the one trapping operand kind.*
   - Method `._delta_hold_units(function)` - *The per-level merge slots delta inlining needs, in 8-byte units, or 0 when ineligible.*
   - Method `._assign_writes_parameter(node, slot)` - *Whether any statement in `node` may rebind or shadow the parameter in `slot`.*
@@ -216,7 +223,9 @@
   - Method `._emit_inlined_self_call(expression)` - *Lower a self-call as one inline copy: the argument to a shadow home, the body in place.*
   - Method `._foreign_inline_target(expression)` - *The function to copy into this call site, or None when the shape stays a call.*
   - Method `._body_is_copy_free(body)` - *Whether a whole statement tree calls, divides, loops, or breaks — any refuses a copy.*
-  - Method `._emit_foreign_inline(callee)` - *Lower a call to another function as one copy of its body, result in rax.*
+  - Method `._substitution_plan(expression, target)` - *Which arguments a foreign-inline copy never binds: the bare names.*
+  - Method `._alias_substitution(substitution, borrowed)` - *Keep every alias whose home register the copy leaves intact.*
+  - Method `._emit_foreign_inline(callee, alias, copy_home)` - *Lower a call to another function as one copy of its body, result in rax.*
   - Method `._rebinds_parameters(body, count)` - *Whether any statement assigns a parameter slot.*
   - Method `._expression_reads(expression, slot)` - *Whether an expression reads `slot`.*
   - Method `._statement_touches(statement, slot)` - *Whether a statement reads or writes `slot` in any position.*
@@ -356,7 +365,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `439` lines (`19857` bytes)
+**Size**: `457` lines (`20848` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -385,6 +394,9 @@
   - Method `.mov_load_rsp_disp(offset, destination)` - *`mov r64, [rsp+disp8]`: a load from one of the real frame's hold slots.*
   - Method `.lea_rbp(destination, offset)` - *`lea r64, [rbp+disp]` for a frame address.*
   - Method `.lea_rip(destination, target)` - *`lea r64, [rip+disp32]`, used for read-only data addresses.*
+  - Method `.movzx_from8(destination, source)` - *`movzx r32, r8`: the `& 255` mask of a register's value in one instruction.*
+  - Method `.movzx_from16(destination, source)` - *`movzx r32, r16`: the `& 65535` mask of a register's value in one instruction.*
+  - Method `._movzx(extension, destination, source)` - *Shared `movzx r32, r/m16|8` register form; REX appears only for r8-r15.*
   - Method `.xor_zero(reg)` - *`xor r32, r32`: the zero idiom, which also clears the upper 32 bits.*
   - Method `.binary(opcode, destination, source)` - *A 64-bit `op r/m64, r64` form: add, sub, and, or, xor and cmp share it.*
   - Method `.cmp_reg_reg(left, right)` - *`cmp r64, r64`: compare `left` against `right` (G-002 named wrapper).*
@@ -790,7 +802,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1092` lines (`52923` bytes)
+**Size**: `1222` lines (`58858` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -873,7 +885,6 @@
   - Method `.test_a_non_tail_return_still_jumps_to_the_epilogue()`
 - `class MultiArgumentCallTest` - *Pure arguments bind straight into their ABI registers, without the stack round-trip.*
   - Method `.test_both_pure_arguments_bind_without_the_stack()`
-  - Method `.test_literal_arguments_bind_without_the_stack_from_main()`
   - Method `.test_mixed_call_free_arguments_bind_reversed_without_the_stack()`
   - Method `.test_a_call_inside_an_argument_keeps_the_stack_fallback()`
   - Method `.test_a_division_inside_an_argument_keeps_the_stack_fallback()`
@@ -912,11 +923,23 @@
   - Method `.test_two_homed_names_compare_in_place()`
   - Method `.test_a_folded_update_reads_the_other_home_directly()`
   - Method `.test_two_homed_names_compare_never_routes_through_rax()`
+- `class ZeroExtendMaskTest` - *A mask of 255 or 65535 over a name is a zero extend, not an and-and-move.*
+  - Method `._any_shape(source, builder)` - *Whether any dest/src register pair of the builder's shape lands in main.*
+  - Method `.test_low_byte_mask_loads_the_home_without_mov_or_and()`
+  - Method `.test_low_word_mask_loads_the_home_without_mov_or_and()`
+  - Method `.test_a_masked_argument_binds_as_one_movzx()`
+  - Method `.test_a_frame_slot_name_keeps_the_generic_mask()`
+- `class PureArgumentSubstitutionTest` - *A bare-name argument aliases into the copy instead of binding to a register.*
+  - Method `.test_the_call_chain_copy_binds_only_what_computes()`
+  - Method `.test_the_substituted_factor_reads_the_caller_home_directly()`
+  - Method `.test_a_twice_used_argument_copies_instead_of_calling()`
+  - Method `.test_a_copy_whose_guest_borrows_caller_homes_still_copies()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
 - `def body_text(source, name)` - *The .text bytes of one function's body, sliced from the generated artifact.*
 - `def region_text(source, name)` - *One function and its internal labels, stopping at the runtime helpers.*
+- `def region_bytes(source, name)` - *The .text bytes of one function's body, its inline copies included.*
 - `def region_of(source, name)` - *One function's bytes with its inline copies, as region_bytes does in helpers above.*
 - `def has_setcc(blob)` - *Any setcc opcode (0F 90..0F 9F): a comparison materialised as 0 or 1.*
 - `def count_test_imms(blob)` - *How many `test r/m8, imm8` byte tests (F6 with register-modrm, then a mask) appear.*
@@ -925,7 +948,6 @@
 - `def _movabs_rax(value)` - *The full `movabs rax, value` encoding.*
 - `def _hoisted_movabs_candidates(value)` - *`movabs <home>, value` for every home a hoist could pick.*
 - `def _combine_right_after_shr(region, count)` - *Whether an update combine follows its peephole `shr rax, count` with no park.*
-- `def region_bytes(source, name)` - *The .text bytes of one function's body, its inline copies included.*
 - `def calls_of(source, caller, callee)` - *How many real `call` sites inside `caller`'s region target `callee`.*
 
 ---
@@ -1106,7 +1128,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `108` lines (`5035` bytes)
+**Size**: `120` lines (`5661` bytes)
 
 **Classes:**
 - `class EncodingTest` - *Each test names one encoding and its expected bytes.*
@@ -1129,6 +1151,8 @@
   - Method `.test_label_records_the_current_offset()`
   - Method `.test_duplicate_label_is_a_compiler_bug()`
   - Method `.test_cmp_reg_reg_matches_the_cmp_encoding()`
+  - Method `.test_movzx_word_selects_the_extended_register_bits()`
+  - Method `.test_movzx_byte_selects_the_extended_register_bits()`
 
 ---
 

@@ -246,6 +246,24 @@ class Assembler:
         self.emit(bytes([_rex(True, dst >> 3, 0, 0), 0x8D, 0x00 | ((dst & 7) << 3) | 5]))
         self.rel32(target)
 
+    def movzx_from8(self, destination: str, source: str) -> None:
+        """`movzx r32, r8`: the `& 255` mask of a register's value in one instruction.
+
+        The 32-bit destination zero-extends into the full 64-bit register, and the
+        8-bit read never needs the source's sign: both come free with the opcode.
+        """
+        self._movzx(0xB6, destination, source)
+
+    def movzx_from16(self, destination: str, source: str) -> None:
+        """`movzx r32, r16`: the `& 65535` mask of a register's value in one instruction."""
+        self._movzx(0xB7, destination, source)
+
+    def _movzx(self, extension: int, destination: str, source: str) -> None:
+        """Shared `movzx r32, r/m16|8` register form; REX appears only for r8-r15."""
+        dst, src = REGISTERS[destination], REGISTERS[source]
+        prefix = bytes([_rex(False, dst >> 3, 0, src >> 3)]) if (dst >= 8 or src >= 8) else b""
+        self.emit(prefix, b"\x0F", bytes([extension]), bytes(_modrm(3, dst, src)))
+
     def xor_zero(self, reg: str) -> None:
         """`xor r32, r32`: the zero idiom, which also clears the upper 32 bits."""
         code = REGISTERS[reg]

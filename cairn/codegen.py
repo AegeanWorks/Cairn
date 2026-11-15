@@ -62,6 +62,8 @@ SCRATCH = "rsi"
 # Callee-saved registers that can hold a function's slots, in allocation order. `rsi` is the
 # division scratch and `rbp` is the frame pointer, so neither can be a home.
 HOME_REGISTERS = ("rbx", "r12", "r13", "r14", "r15", "rdi")
+ZERO_EXTEND_MASKS = {255: 8, 65535: 16}
+
 
 
 def function_label(name: str) -> str:
@@ -186,6 +188,12 @@ class CodeGenerator:
     hoist_plans: dict = field(default_factory=dict)
     hoist_imm: dict = field(default_factory=dict)
     hoist_homes: Tuple[str, ...] = ()
+    # A foreign-inline copy whose bare-name arguments skip their binds maps the copy's
+    # parameter slots to the caller's home registers through copy_alias. copy_return,
+    # when set, is the register the copy's single return stores into, replacing the
+    # result's rax round trip.
+    copy_alias: dict = field(default_factory=dict)
+    copy_return: Optional[str] = None
 
     def generate(self, program: syntax.Program) -> Artifact:
         """Emit the entry stub, every function, then the runtime helpers."""
@@ -362,10 +370,30 @@ class CodeGenerator:
                 asm.xor_zero(home)
 
     def _home(self, slot: int) -> Optional[str]:
-        """The register that holds `slot`, or None when the slot stays in the frame."""
+        """The register that holds `slot`, or None when the slot stays in the frame.
+
+        An alias slot of an inlined copy's substituted argument names the caller's own
+        home register, so every home-aware lowering (scaled `lea`s, in-place folds,
+        immediate compares) treats it exactly like a normal homed slot.
+        """
+        if self.copy_alias and slot in self.copy_alias:
+            return self.copy_alias[slot]
         if 0 <= slot < len(self.homes):
             return self.homes[slot]
         return None
+
+    def _emit_loop_head(self, label: str) -> None:
+        """Pad onto a 16-byte boundary, then bind the loop's backedge target.
+
+        The rotated loop's head is the branch destination every iteration; when it
+        sits in the middle of a fetch line, the fetch window per cycle undersupplies
+        the retirement width, which is several percent on a register-bound loop.
+        The pad is nops before the label, so every fixup targeting it stays valid.
+        """
+        pad = (16 - self.assembler.here() % 16) % 16
+        if pad:
+            self.assembler.code.extend(b"\x90" * pad)
+        self.assembler.label(label)
 
     def _load_slot(self, slot: int, destination: str = "rax") -> None:
         """Move one slot into `destination` from its register or its frame slot.
@@ -391,6 +419,40 @@ class CodeGenerator:
         elif home != source:
             self.assembler.mov_reg_reg(home, source)
 
+    def _emit_zero_extend_mask(self, expression: syntax.Binary,
+                               destination: str) -> bool:
+        """Lower `name & 255` / `name & 65535` as one movzx of the name's home, or refuse.
+
+        `movzx r32, r/m8|16` reads exactly the masked low bits and zero-extends them,
+        so the generic move-plus-and pair computes the same value in one instruction,
+        which is what gcc emits for call_chain's `i & 65535`. A name in the frame keeps
+        the generic mask (movzx reads only registers), the destination must not be the
+        source's own home (movzx would destroy the value it reads), and a delta copy's
+        shifted reads refuse because the home no longer holds the slot's own value.
+        """
+        if self.delta_value:
+            return False
+        left = self._stripped(expression.left)
+        right = self._stripped(expression.right)
+        mask = None
+        named = None
+        if isinstance(right, syntax.IntLiteral) and right.value in ZERO_EXTEND_MASKS:
+            mask, named = right.value, left
+        elif isinstance(left, syntax.IntLiteral) and left.value in ZERO_EXTEND_MASKS:
+            mask, named = left.value, right
+        if not isinstance(named, syntax.Name) or mask is None:
+            return False
+        if named.slot == self.delta_slot or named.slot == self.value_slot:
+            return False
+        home = self._home(named.slot)
+        if home is None or home == destination:
+            return False
+        if mask == 255:
+            self.assembler.movzx_from8(destination, home)
+        else:
+            self.assembler.movzx_from16(destination, home)
+        return True
+
     def _emit_value(self, slot: int, expression: Optional[syntax.Expr]) -> None:
         """Assign an expression to a slot, folding `slot = slot op value` in place."""
         home = self._home(slot)
@@ -400,6 +462,14 @@ class CodeGenerator:
         if folded:
             if not self._update_keeps_nonneg(slot, expression):
                 self.nonnegative_slots.discard(slot)
+            return
+        if (home is not None and isinstance(expression, syntax.Call)
+                and self._foreign_inline_target(expression) is not None):
+            # A copyable call stores its result directly into the slot's home register;
+            # nothing returns through rax, and the caller skips its own rax store.
+            written = self._emit_foreign_call(expression, copy_home=home)
+            if written is None:
+                self._store_slot(slot)
             return
         if home is not None and self._emit_binary_into(expression, home):
             if not self._update_keeps_nonneg(slot, expression):
@@ -613,6 +683,8 @@ class CodeGenerator:
             return False
         if expression.op == "&" and self._emit_logical_shift(expression, destination):
             return True
+        if expression.op == "&" and self._emit_zero_extend_mask(expression, destination):
+            return True
         operator = expression.op
         left, right = expression.left, expression.right
         if operator in ("&&", "||", "/") or operator in COMPARISON_CONDITIONS:
@@ -820,7 +892,10 @@ class CodeGenerator:
         elif isinstance(statement, syntax.While):
             self._emit_while(statement)
         elif isinstance(statement, syntax.Return):
-            self._emit_expression(statement.value)
+            if self.copy_return is not None and tail:
+                self._emit_into(statement.value, self.copy_return)
+            else:
+                self._emit_expression(statement.value)
             if not tail:
                 asm.jmp(self.epilogue)
         elif isinstance(statement, syntax.Break):
@@ -1050,7 +1125,7 @@ class CodeGenerator:
             # the bottom with one decrement and one taken-backward conditional branch. The
             # optimiser already deleted the in-body increment, so the latch must be emitted.
             self._emit_condition(statement.condition, end, when_true=False)
-            asm.label(start)
+            self._emit_loop_head(start)
             self.break_targets.append(end)
             self._emit_block(statement.body)
             self.break_targets.pop()
@@ -1071,7 +1146,7 @@ class CodeGenerator:
         if has_call(statement.condition):
             # A condition whose evaluation calls would run twice if the loop re-emitted it
             # as the bottom latch, so the head-tested shape stays.
-            asm.label(start)
+            self._emit_loop_head(start)
             self._emit_condition(statement.condition, end, when_true=False)
             self.break_targets.append(end)
             self.continue_targets.append(start)
@@ -1085,7 +1160,7 @@ class CodeGenerator:
         # the bottom of the body with one taken-backward conditional branch, so no iteration
         # ends in a `jmp` and the head check leaves the loop behind a single branch.
         self._emit_condition(statement.condition, end, when_true=False)
-        asm.label(start)
+        self._emit_loop_head(start)
         latch = self._fresh("while.latch")
         self.break_targets.append(end)
         self.continue_targets.append(latch)
@@ -1235,7 +1310,7 @@ class CodeGenerator:
         # the pass's steps (1 + the odd path's second step) in one instruction.
         scratch = SCRATCH
         self._emit_condition(statement.condition, end, when_true=False)
-        asm.label(top)
+        self._emit_loop_head(top)
         asm.shift_imm(5, k_home, 1)   # shr: k >>= 1, CF = old low bit (the pair's parity)
         asm.lea_scale(scratch, k_home, k_home, scale_log2, (multiplier + addend) // 2)
         asm.cmov("c", k_home, scratch)
@@ -1552,6 +1627,8 @@ class CodeGenerator:
         right = expression.right
         if expression.op == "&" and self._emit_logical_shift(expression, "rax"):
             return
+        if expression.op == "&" and self._emit_zero_extend_mask(expression, "rax"):
+            return
         if expression.op == "+" and self._emit_scaled_sum(expression):
             return
         if expression.op == "*" and self._emit_scaled_product(expression):
@@ -1845,7 +1922,8 @@ class CodeGenerator:
         asm.mov_imm64("rax", 1)
         asm.label(end)
 
-    def _emit_call(self, expression: syntax.Call) -> None:
+    def _emit_call(self, expression: syntax.Call,
+                  copy_home: Optional[str] = None) -> None:
         """Evaluate arguments left to right, place them in the ABI registers, then call.
 
         `print` keeps a stack round-trip on purpose: the runtime helper clobbers both `rax` and
@@ -1908,23 +1986,124 @@ class CodeGenerator:
         if len(expression.arguments) > len(ARGUMENT_REGISTERS):
             self._emit_stack_call(expression)
             return
+        self._emit_foreign_call(expression, copy_home)
+
+    def _emit_foreign_call(self, expression: syntax.Call,
+                           copy_home: Optional[str] = None) -> Optional[str]:
+        """Bind or substitute the arguments, then copy the callee or call it for real.
+
+        The copy's return lands in `copy_home` when the caller asked for one and the
+        copy can honor it: its body ends in one return, and the destination is not a
+        register the copy borrows (a borrowed home is restored to the caller's own
+        value on the way out, which would erase the return). The function returns the
+        register that received the value, or None when rax kept it and a caller that
+        asked for a home must still store.
+        """
+        asm = self.assembler
         target = self._foreign_inline_target(expression)
-        if len(expression.arguments) == 1:
-            self._emit_into(expression.arguments[0], ARGUMENT_REGISTERS[0])
-        elif self._emit_pure_arguments(expression.arguments):
-            pass
-        else:
-            for argument in expression.arguments:
-                self._emit_expression(argument)
-                asm.push("rax")
-                self.depth += 8
-            for index in reversed(range(len(expression.arguments))):
-                asm.pop(ARGUMENT_REGISTERS[index])
-                self.depth -= 8
-        if target is not None:
-            self._emit_foreign_inline(target)
+        if target is None:
+            self._emit_foreign_arguments(expression, frozenset())
+            self._emit_call_site(function_label(expression.name))
+            return None
+        rebinds, _, spill = self._plan_foreign_copy(target)
+        if (copy_home is not None
+                and (rebinds or copy_home in spill
+                     or not self._ends_in_return(target.body))):
+            copy_home = None
+        skip = frozenset()
+        alias: dict = {}
+        if not rebinds:
+            substitution = self._substitution_plan(expression, target)
+            alias, skip = self._alias_substitution(substitution, spill)
+        self._emit_foreign_arguments(expression, skip)
+        self._emit_foreign_inline(target, alias, copy_home)
+        return copy_home
+
+    def _emit_foreign_arguments(self, expression: syntax.Call, skip: frozenset) -> None:
+        """Bind every unsubstituted argument left to right into its ABI register."""
+        asm = self.assembler
+        arguments = expression.arguments
+        if len(arguments) == 1:
+            if 0 not in skip:
+                self._emit_into(arguments[0], ARGUMENT_REGISTERS[0])
             return
-        self._emit_call_site(function_label(expression.name))
+        if self._emit_pure_arguments(arguments, skip):
+            return
+        for index, argument in enumerate(arguments):
+            if index in skip:
+                continue
+            self._emit_expression(argument)
+            asm.push("rax")
+            self.depth += 8
+        for index in reversed(range(len(arguments))):
+            if index in skip:
+                continue
+            asm.pop(ARGUMENT_REGISTERS[index])
+            self.depth -= 8
+
+    def _plan_foreign_copy(self, callee: syntax.Function):
+        """The copy's guest, spill and rebind decisions, without emitting anything."""
+        parameters = len(callee.parameters)
+        if self._rebinds_parameters(callee.body, parameters):
+            free = [home for home in HOME_REGISTERS if home not in self.homes]
+            guest = tuple((free + list(self.homes))[:callee.slots])
+            spill = [home for home in self.homes if home in guest]
+            return True, guest, spill
+        # The ABI registers already hold the parameters, and a call-free body cannot
+        # observe a rebinding order: give the parameter slots their own registers and
+        # spend the home pool on the callee's locals.
+        entry = ARGUMENT_REGISTERS[:parameters]
+        spare = [home for home in HOME_REGISTERS
+                 if home not in self.homes and home not in entry]
+        shortfall = callee.slots - parameters - len(spare)
+        reused = list(self.homes[:shortfall]) if shortfall > 0 else []
+        return False, tuple(entry) + tuple(spare + reused), reused
+
+    def _return_slot_override(self, callee: syntax.Function, guest: tuple,
+                              alias: dict, copy_home: str) -> int:
+        """Whether the copy's final result slot may simply use the return destination.
+
+        A copy stores the body's last `return` value into the caller's destination
+        after computing it in a guest register - one serial move per call, which is
+        call_chain's `mov r14, rbx`. When that value's slot is a local the body
+        defines before it reads, the slot can home in the destination register
+        itself, and the move disappears - but only if no substituted alias whose
+        register is the destination survives the slot's first definition (a later
+        read would observe the copy's result, not the caller's argument), and the
+        slot needs no entry-time clear (the xor would erase an aliased caller home).
+        """
+        body = callee.body
+        statements = body.statements if body else []
+        if not (statements and isinstance(statements[-1], syntax.Return)):
+            return -1
+        result = self._stripped(statements[-1].value)
+        if not isinstance(result, syntax.Name):
+            return -1
+        slot = result.slot
+        if (slot in alias or slot >= len(guest)
+                or guest[slot] == copy_home
+                or not self._cleared_before_use(body, slot)):
+            return -1
+        aliased = {name_slot for name_slot, home in alias.items() if home == copy_home}
+        first = -1
+        for index in range(len(statements) - 1):
+            statement = statements[index]
+            if (isinstance(statement, (syntax.Let, syntax.Assign))
+                    and statement.slot == slot):
+                first = index
+                break
+        if first < 0:
+            return -1
+        for statement in statements[first + 1:]:
+            for name_slot in aliased:
+                if self._statement_touches(statement, name_slot):
+                    return -1
+        return slot
+
+    def _ends_in_return(self, body: Optional[syntax.Block]) -> bool:
+        """Whether a body's last statement returns (the copy honors a return home)."""
+        return bool(body and body.statements
+                    and isinstance(body.statements[-1], syntax.Return))
 
     def _emit_stack_call(self, expression: syntax.Call) -> None:
         """Lower a five-or-more argument call: four registers, the rest via the stack.
@@ -1985,18 +2164,21 @@ class CodeGenerator:
             )
         return False
 
-    def _emit_pure_arguments(self, arguments: list) -> bool:
+    def _emit_pure_arguments(self, arguments: list, skip: frozenset = frozenset()) -> bool:
         """Bind call arguments straight into their registers, or return False.
 
         The generic path pays a push and a pop per argument plus the round-trip
         through rax; every multi-argument call with pure arguments drops both. When
         only the first argument is pure (the Ackermann shape `f(m - 1, f(m, n - 1))`),
         it still binds directly after the second argument evaluates, saving one pair.
+        `skip` names argument indices a foreign-inline copy substitutes instead of
+        binding, so their evaluation happens at the copy's use sites, not here.
         """
         registers = ARGUMENT_REGISTERS[:len(arguments)]
         if all(self._is_pure_argument(argument) for argument in arguments):
-            for register, argument in zip(reversed(registers), reversed(arguments)):
-                self._emit_into(argument, register)
+            for index in range(len(arguments) - 1, -1, -1):
+                if index not in skip:
+                    self._emit_into(arguments[index], registers[index])
             return True
         if (any(not self._is_pure_argument(argument) for argument in arguments)
                 and all(not has_call(argument) for argument in arguments)
@@ -2008,13 +2190,15 @@ class CodeGenerator:
             # binding writes only its own ABI register, and a later evaluation's lower
             # -ings clobber none of them; the last-bound first argument lands in rcx,
             # which variable shifts reuse as a scratch only after it is already bound.
-            for register, argument in zip(reversed(registers), reversed(arguments)):
-                self._emit_into(argument, register)
+            for index in range(len(arguments) - 1, -1, -1):
+                if index not in skip:
+                    self._emit_into(arguments[index], registers[index])
             return True
         if len(arguments) == 2 and self._is_pure_argument(arguments[0]):
             self._emit_expression(arguments[1])
             self.assembler.mov_reg_reg(registers[1], "rax")
-            self._emit_into(arguments[0], registers[0])
+            if 0 not in skip:
+                self._emit_into(arguments[0], registers[0])
             return True
         return False
 
@@ -2220,7 +2404,7 @@ class CodeGenerator:
         self.chain_loop_depth += 1
         asm.mov_reg_reg("r13", value_home)       # k := n: the count the chain runs
         asm.mov_imm64(value_home, 1)             # v := 1: the chain's own base case
-        asm.label(top)
+        self._emit_loop_head(top)
         asm.cmp_imm("r13", 0)
         asm.jcc("e", exit_label)
         # One application f(v): the m-shifted copy reads the value register as it is.
@@ -2493,7 +2677,47 @@ class CodeGenerator:
 
         return not walk(body)
 
-    def _emit_foreign_inline(self, callee: syntax.Function) -> None:
+    def _substitution_plan(self, expression: syntax.Call,
+                           target: Optional[syntax.Function]) -> dict:
+        """Which arguments a foreign-inline copy never binds: the bare names.
+
+        An argument that is a bare name with a register home aliases into the copy:
+        the copy's parameter slot resolves, through `_home`, to the caller's own home
+        register, so every use of the parameter loads the value where it already sits
+        and the bind move never happens. Arguments that compute, trap, or call keep
+        their bound form, and callees that rebind a parameter refuse the whole plan:
+        a rebind must write the bind-once shadow home, not the caller's register.
+        """
+        if target is None or self.delta_value or self.value_slot >= 0:
+            return {}
+        if self._rebinds_parameters(target.body, len(target.parameters)):
+            return {}
+        plan: dict = {}
+        for index, argument in enumerate(expression.arguments[:len(target.parameters)]):
+            argument = self._stripped(argument)
+            if (isinstance(argument, syntax.Name)
+                    and argument.slot != self.delta_slot
+                    and argument.slot != self.value_slot
+                    and self._home(argument.slot) is not None):
+                plan[index] = self._home(argument.slot)
+        return plan
+
+    def _alias_substitution(self, substitution: dict, borrowed: list):
+        """Keep every alias whose home register the copy leaves intact.
+
+        The copy's guest borrows caller homes only when its locals outgrow the free
+        ones; a borrowed register is restored to the caller's own value on the way
+        out, so an alias onto it would let the copy overwrite the value it reads.
+        Returns the alias map (parameter slot -> caller home) and the substituted
+        indices.
+        """
+        alias = {slot: home for slot, home in substitution.items()
+                 if home not in borrowed}
+        return alias, frozenset(alias)
+
+    def _emit_foreign_inline(self, callee: syntax.Function,
+                             alias: Optional[dict] = None,
+                             copy_home: Optional[str] = None) -> None:
         """Lower a call to another function as one copy of its body, result in rax.
 
         When no statement rebinds a parameter, the argument registers themselves are the
@@ -2508,24 +2732,16 @@ class CodeGenerator:
         asm = self.assembler
         saved = (self.homes, self.current, self.epilogue, self.pad_slots, self.holds,
                  self.delta_slot, self.delta_value, self.value_slot, self.hold_units,
-                 self.chain_loop_depth, self.temporaries, self.nonnegative_slots)
+                 self.chain_loop_depth, self.temporaries, self.nonnegative_slots,
+                 self.copy_alias, self.copy_return)
+        alias = dict(alias or {})
         parameters = len(callee.parameters)
-        rebinds = self._rebinds_parameters(callee.body, parameters)
-        if rebinds:
-            free = [home for home in HOME_REGISTERS if home not in self.homes]
-            guest = tuple((free + list(self.homes))[:callee.slots])
-            spill = [home for home in self.homes if home in guest]
-        else:
-            # The ABI registers already hold the parameters, and a call-free body cannot
-            # observe a rebinding order: give the parameter slots their own registers and
-            # spend the home pool on the callee's locals.
-            entry = ARGUMENT_REGISTERS[:parameters]
-            spare = [home for home in HOME_REGISTERS
-                     if home not in self.homes and home not in entry]
-            shortfall = callee.slots - parameters - len(spare)
-            reused = list(self.homes[:shortfall]) if shortfall > 0 else []
-            spill = reused
-            guest = tuple(entry) + tuple(spare + reused)
+        rebinds, guest, spill = self._plan_foreign_copy(callee)
+        if copy_home is not None and not rebinds:
+            ret_slot = self._return_slot_override(callee, guest, alias, copy_home)
+            if ret_slot >= 0:
+                guest = tuple(copy_home if index == ret_slot else home
+                              for index, home in enumerate(guest))
         for home in spill:
             asm.push(home)
         self.homes = guest
@@ -2540,6 +2756,10 @@ class CodeGenerator:
         self.chain_loop_depth = 0
         self.temporaries = 0
         self.inline_depth += 1
+        # Substituted arguments read the caller's homes through alias slots; a return
+        # destination, when honored, receives the copy's result without the rax move.
+        self.copy_alias = alias
+        self.copy_return = copy_home
         for index, parameter in enumerate(callee.parameters[:len(ARGUMENT_REGISTERS)]):
             if rebinds:
                 asm.mov_reg_reg(self.homes[index], ARGUMENT_REGISTERS[index])
@@ -2560,7 +2780,8 @@ class CodeGenerator:
             asm.pop(home)
         (self.homes, self.current, self.epilogue, self.pad_slots, self.holds,
          self.delta_slot, self.delta_value, self.value_slot, self.hold_units,
-         self.chain_loop_depth, self.temporaries, self.nonnegative_slots) = saved
+         self.chain_loop_depth, self.temporaries, self.nonnegative_slots,
+         self.copy_alias, self.copy_return) = saved
 
     def _rebinds_parameters(self, body: Optional[syntax.Block], count: int) -> bool:
         """Whether any statement assigns a parameter slot."""

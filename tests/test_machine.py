@@ -104,5 +104,17 @@ class EncodingTest(unittest.TestCase):
                          self.code(lambda a: a.binary(0x39, "rcx", "rax")))
 
 
+    def test_movzx_word_selects_the_extended_register_bits(self) -> None:
+        self.assertEqual(self.code(lambda a: a.movzx_from16("r8", "r12")),
+                         b"\x45\x0f\xb7\xc4")
+        self.assertEqual(self.code(lambda a: a.movzx_from16("rax", "rcx")),
+                         b"\x0f\xb7\xc1")
+
+    def test_movzx_byte_selects_the_extended_register_bits(self) -> None:
+        self.assertEqual(self.code(lambda a: a.movzx_from8("rax", "rbx")),
+                         b"\x0f\xb6\xc3")
+        self.assertEqual(self.code(lambda a: a.movzx_from8("r15", "r9")),
+                         b"\x45\x0f\xb6\xf9")
+
 if __name__ == "__main__":
     unittest.main()

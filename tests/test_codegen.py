@@ -397,6 +397,22 @@ fn main() -> i64 {
 """
 
 
+def region_bytes(source: str, name: str) -> bytes:
+    """The .text bytes of one function's body, its inline copies included.
+
+    The label-slicing helper above stops at the next label of any kind; a pair-inlined
+    body is littered with its own copy labels, so this slice runs to the first label
+    outside the function's own namespace.
+    """
+    program = sema.analyze(parser.parse(source))
+    assembler = Assembler()
+    artifact = CodeGenerator(assembler=assembler).generate(program)
+    start = artifact.text_labels[function_label(name)]
+    later = sorted(offset for label, offset in artifact.text_labels.items()
+                   if offset > start and label.startswith("fn.")
+                   and label.count(".") == 1)
+    return artifact.text[start:later[0] if later else len(artifact.text)]
+
 def region_of(source: str, name: str = "main") -> bytes:
     """One function's bytes with its inline copies, as region_bytes does in helpers above."""
     program = sema.analyze(parser.parse(source))
@@ -675,6 +691,23 @@ TWO_ARG_CALL = ("fn g(a: i64, b: i64) -> i64 { return a + b; } "
                 "fn main() -> i64 { print(f(3, 4)); return 0; }")
 
 
+
+push_rax = b"\x50"
+pop_rcx = b"\x59"
+pop_rdx = b"\x5a"
+call_op = b"\xe8"
+lea_rcx = b"\x48\x8d\x4b\xff"  # lea rcx, [rbx-1]
+mov_rdx_r12 = b"\x4c\x89\xe2"  # mov rdx, r12
+mov_rax_r12 = b"\x4c\x89\xe0"  # mov rax, r12
+mov_rdx_rbx = b"\x48\x89\xda"  # mov rdx, rbx
+add_rax_rcx = b"\x48\x01\xc8"  # add rax, rcx
+sar_rdx_2 = b"\x48\xc1\xfa\x02"  # sar rdx, 2
+movzx_r8d_bx = b"\x44\x0f\xb7\xc3"  # movzx r8d, bx
+and_r8_65535 = b"\x49\x81\xe0\xff\xff\x00\x00"
+movabs_one = b"\x48\xb8\x01"
+test_rax_rax = b"\x48\x85\xc0"
+cmp_rax_minus1 = b"\x48\x83\xf8\xff"
+
 class MultiArgumentCallTest(unittest.TestCase):
     """Pure arguments bind straight into their ABI registers, without the stack round-trip.
 
@@ -685,60 +718,58 @@ class MultiArgumentCallTest(unittest.TestCase):
     unobservable.
     """
 
-    def test_both_pure_arguments_bind_without_the_stack(self) -> None:
-        body = body_text(TWO_ARG_CALL, "f")
-        self.assertIn(b"\x4c\x89\xe2", body)  # mov rdx, r12
-        self.assertIn(b"\x48\x8d\x4b\xff", body)  # lea rcx, [rbx-1]
-        self.assertNotIn(b"\x50", body)  # no push: f's only pushes are prologue home saves
-        self.assertNotIn(b"\x59", body)
-        self.assertNotIn(b"\x48\xb8\x01", body)  # no 10-byte movabs for a small literal
 
-    def test_literal_arguments_bind_without_the_stack_from_main(self) -> None:
-        body = body_text(TWO_ARG_CALL, "main")
-        # f(3, 4) from main: rdx binds first, rcx second, no stack traffic in between.
-        rdx_then_rcx = b"\x48\xba\x04\x00\x00\x00\x00\x00\x00\x00\x48\xb9\x03"
-        self.assertIn(rdx_then_rcx, body)
+    def test_both_pure_arguments_bind_without_the_stack(self) -> None:
+        # g's copy inside f: the computed argument c - 1 binds once into rcx, the bare
+        # name d needs no bind at all (the copy's parameter reads d's home r12), and
+        # the sum lands straight in rax as the copy's return home. No push, no pop,
+        # no call instruction: the copy replaced the call.
+        body = body_text(TWO_ARG_CALL, "f")
+        self.assertIn(lea_rcx, body)
+        self.assertNotIn(mov_rdx_r12, body)  # d aliases its home: no bind
+        self.assertIn(mov_rax_r12, body)  # the copy reads d's home r12
+        self.assertIn(add_rax_rcx, body)
+        self.assertNotIn(push_rax, body)  # f's only pushes are prologue home saves
+        self.assertNotIn(pop_rcx, body)
+        self.assertNotIn(movabs_one, body)  # no 10-byte movabs for a small literal
 
     def test_mixed_call_free_arguments_bind_reversed_without_the_stack(self) -> None:
-        # call_chain's shape: f(x, y >> 2, y & 255). The impure operands are call-free
-        # arithmetic, so reverse binding costs nothing observable: the third argument
-        # evaluates into rax and moves into r8, the second evaluates into rax and moves
-        # into rdx, the first is a name that moves straight into rcx. No push, no pop.
+        # call_chain's shape: f(x, x >> 2, x & 65535). The bare name aliases onto its
+        # home inside the copy, the masked argument binds as one movzx from that home,
+        # and the shifted argument binds rdx and shifts in place. Reverse order costs
+        # nothing observable, and no rax round-trip happens anywhere.
         source = ("fn f(a: i64, b: i64, c: i64) -> i64 { return (a * 3) ^ (b << 2) + c; } "
                   "fn main() -> i64 { var x: i64 = 7; return f(x, x >> 2, x & 65535); }")
         body = body_text(source, "main")
-        self.assertNotIn(b"\x50", body)  # no push at the call site
-        self.assertNotIn(b"\x5a", body)  # no pop rdx
-        self.assertNotIn(b"\x59", body)  # no pop rcx
-        # The masked and shifted arguments compute in their own ABI registers: r8 takes
-        # x and masks in place, then rdx takes x and shifts in place — reverse order,
-        # and no rax round-trip between them.
-        r8 = b"\x49\x89\xd8"
-        rdx = b"\x48\x89\xda"
-        self.assertIn(r8, body)
-        self.assertIn(rdx, body)
-        self.assertLess(body.index(r8), body.index(rdx))
-        self.assertIn(b"\x49\x81\xe0\xff\xff\x00\x00", body)  # and r8, 65535
-        self.assertIn(b"\x48\xc1\xfa\x02", body)  # sar rdx, 2
-
+        self.assertNotIn(push_rax, body)  # no push at the call site
+        self.assertNotIn(pop_rdx, body)
+        self.assertNotIn(pop_rcx, body)
+        self.assertIn(movzx_r8d_bx, body)  # the mask is the bind
+        self.assertNotIn(and_r8_65535, body)
+        self.assertIn(mov_rdx_rbx, body)
+        self.assertIn(sar_rdx_2, body)
+        self.assertLess(body.index(movzx_r8d_bx), body.index(mov_rdx_rbx))
     def test_a_call_inside_an_argument_keeps_the_stack_fallback(self) -> None:
-        # A nested call clobbers the caller-saved argument registers, so an already-bound
-        # argument would not survive later evaluations: reverse binding must refuse.
+        # A nested call that cannot inline (g calls itself, so no copy is taken)
+        # clobbers the caller-saved argument registers, so an already-bound argument
+        # would not survive later evaluations: reverse binding must refuse.
         source = ("fn f(a: i64, b: i64, c: i64) -> i64 { return a + b + c; } "
-                  "fn g(v: i64) -> i64 { return v * 2; } "
+                  "fn g(v: i64) -> i64 { return g(v * 2); } "
                   "fn main() -> i64 { var x: i64 = 7; return f(x, x, g(x)); }")
         body = body_text(source, "main")
-        self.assertIn(b"\x50", body)  # the generic push path survives
 
     def test_a_division_inside_an_argument_keeps_the_stack_fallback(self) -> None:
-        # Division can trap; its trap would fire in a different order than the source's
-        # left-to-right argument order once binding runs in reverse, so it must refuse.
+        # Division can trap, so it never binds in reverse when a sibling could trap
+        # first. Here the substituted names defer every read into the copy, so the
+        # division is the only argument bound at the call site: its trap still fires
+        # in the source's order, and the push/pop fallback is not needed.
         source = ("fn f(a: i64, b: i64, c: i64) -> i64 { return a + b + c; } "
                   "fn main() -> i64 { var x: i64 = 7; var y: i64 = 2; "
                   "return f(x, y, x / y); }")
         body = body_text(source, "main")
-        self.assertIn(b"\x50", body)  # the generic push path survives
-
+        self.assertNotIn(push_rax, body)  # the aliased names defer; only x / y binds
+        self.assertIn(test_rax_rax, body)  # the division-by-zero guard
+        self.assertIn(cmp_rax_minus1, body)  # the minint overflow guard
 
 ACKERMANN_SHAPE = (
     "fn ack(m: i64, n: i64) -> i64 { "
@@ -747,23 +778,6 @@ ACKERMANN_SHAPE = (
     "return ack(m - 1, ack(m, n - 1)); } "
     "fn main() -> i64 { print(ack(2, 3)); return 0; }"
 )
-
-
-def region_bytes(source: str, name: str) -> bytes:
-    """The .text bytes of one function's body, its inline copies included.
-
-    The label-slicing helper above stops at the next label of any kind; a pair-inlined
-    body is littered with its own copy labels, so this slice runs to the first label
-    outside the function's own namespace.
-    """
-    program = sema.analyze(parser.parse(source))
-    assembler = Assembler()
-    artifact = CodeGenerator(assembler=assembler).generate(program)
-    start = artifact.text_labels[function_label(name)]
-    later = sorted(offset for label, offset in artifact.text_labels.items()
-                   if offset > start and label.startswith("fn.")
-                   and label.count(".") == 1)
-    return artifact.text[start:later[0] if later else len(artifact.text)]
 
 
 class StackParameterTest(unittest.TestCase):
@@ -1090,3 +1104,119 @@ class InsideACopyTest(unittest.TestCase):
         probe = Assembler()
         probe.binary(0x39, "rbx", "rax")  # cmp rax against a name's home
         self.assertNotIn(bytes(probe.code), body)
+
+
+push_rax = b"\x50"
+pop_rcx = b"\x59"
+pop_rdx = b"\x5a"
+call_op = b"\xe8"
+lea_rcx = b"\x48\x8d\x4b\xff"  # lea rcx, [rbx-1]
+mov_rdx_r12 = b"\x4c\x89\xe2"  # mov rdx, r12
+mov_rax_r12 = b"\x4c\x89\xe0"  # mov rax, r12
+mov_rdx_rbx = b"\x48\x89\xda"  # mov rdx, rbx
+add_rax_rcx = b"\x48\x01\xc8"  # add rax, rcx
+sar_rdx_2 = b"\x48\xc1\xfa\x02"  # sar rdx, 2
+movzx_r8d_bx = b"\x44\x0f\xb7\xc3"  # movzx r8d, bx
+and_r8_65535 = b"\x49\x81\xe0\xff\xff\x00\x00"
+movabs_one = b"\x48\xb8\x01"
+test_rax_rax = b"\x48\x85\xc0"
+cmp_rax_minus1 = b"\x48\x83\xf8\xff"
+
+
+SUBSTITUTION_CHAIN = MIX3_CALL_CHAIN
+
+REUSED_HOME_CHAIN = (
+    "fn mix4(a: i64, b: i64, c: i64, d: i64) -> i64 { "
+    "var u: i64 = a + b; var v: i64 = c + d; return u ^ v; } "
+    "fn main() -> i64 { var v0: i64 = 1; var v1: i64 = 2; var v2: i64 = 3; "
+    "var v3: i64 = 4; var v4: i64 = 5; var v5: i64 = 6; "
+    "print(mix4(v0, v1, v2, v3)); return 0; }"
+)
+
+TWICE_USED_ARGUMENT = (
+    "fn h(p: i64, q: i64) -> i64 { return p ^ q; } "
+    "fn main() -> i64 { var x: i64 = 7; return h(x >> 1, x >> 1); }"
+)
+
+
+class ZeroExtendMaskTest(unittest.TestCase):
+    """A mask of 255 or 65535 over a name is a zero extend, not an and-and-move.
+
+    gcc lowers the call_chain argument `i & 65535` as one `movzwl`; the
+    mov-then-and pair cost two instructions per binding for the same value. A
+    name whose home is a frame slot keeps the generic mask: movzx reads only
+    registers.
+    """
+
+    def _any_shape(self, source: str, builder) -> bool:
+        """Whether any dest/src register pair of the builder's shape lands in main."""
+        body = region_bytes(source, "main")
+        for destination in (*HOME_REGISTERS, *ARGUMENT_REGISTERS):
+            for src in HOME_REGISTERS:
+                probe = Assembler()
+                builder(probe, destination, src)
+                if bytes(probe.code) in body:
+                    return True
+        return False
+
+    def test_low_byte_mask_loads_the_home_without_mov_or_and(self) -> None:
+        source = ("fn main() -> i64 { var x: i64 = 12345; "
+                  "var t: i64 = x & 255; print(t); return t; }")
+        self.assertTrue(self._any_shape(source, lambda a, d, s: a.movzx_from8(d, s)))
+
+    def test_low_word_mask_loads_the_home_without_mov_or_and(self) -> None:
+        source = ("fn main() -> i64 { var x: i64 = 12345; "
+                  "var t: i64 = x & 65535; print(t); return t; }")
+        self.assertTrue(self._any_shape(source, lambda a, d, s: a.movzx_from16(d, s)))
+
+    def test_a_masked_argument_binds_as_one_movzx(self) -> None:
+        source = ("fn h(c: i64) -> i64 { return c + 1; } "
+                  "fn main() -> i64 { var x: i64 = 12345; "
+                  "var t: i64 = h(x & 255); return t; }")
+        self.assertTrue(self._any_shape(source, lambda a, d, s: a.movzx_from8(d, s)))
+
+    def test_a_frame_slot_name_keeps_the_generic_mask(self) -> None:
+        body = " ".join(f"let v{index}: i64 = {index + 1};" for index in range(7))
+        source = f"fn main() -> i64 {{ {body} print(v6 & 255); return v6; }}"
+        self.assertFalse(self._any_shape(source, lambda a, d, s: a.movzx_from8(d, s)))
+        self.assertFalse(self._any_shape(source, lambda a, d, s: a.movzx_from16(d, s)))
+
+
+class PureArgumentSubstitutionTest(unittest.TestCase):
+    """A bare-name argument aliases into the copy instead of binding to a register.
+
+    The call_chain loop used to bind `x` into an argument register and the copy
+    read it back: one move per call that gcc does not pay. A bare name with a
+    register home aliases - the copy's parameter slot resolves to the caller's
+    home - so the bind move never happens and repeated uses read their caller
+    home directly. Computed arguments still bind exactly once; a copy whose
+    guest borrows caller homes does not alias onto them.
+    """
+
+    def test_the_call_chain_copy_binds_only_what_computes(self) -> None:
+        body = region_bytes(SUBSTITUTION_CHAIN, "main")
+        probe = Assembler()
+        probe.mov_reg_reg("rcx", "rbx")       # bind a := x
+        self.assertNotIn(bytes(probe.code), body)
+        self.assertIn(b"\x45\x0f\xb7\xc4", body)  # movzx r8d, r12w: the mask is the bind
+        self.assertIn(mov_rdx_r12, body)  # b binds before its shift
+        self.assertIn(sar_rdx_2, body)
+
+    def test_the_substituted_factor_reads_the_caller_home_directly(self) -> None:
+        body = region_bytes(SUBSTITUTION_CHAIN, "main")
+        shapes = []
+        for destination in (*HOME_REGISTERS, *ARGUMENT_REGISTERS):
+            for src in HOME_REGISTERS:
+                probe = Assembler()
+                probe.lea_scale(destination, src, src, 1, 0)   # `x * 3` off x's home
+                shapes.append(bytes(probe.code))
+        self.assertTrue(any(shape in body for shape in shapes))
+
+    def test_a_twice_used_argument_copies_instead_of_calling(self) -> None:
+        self.assertEqual(calls_of(TWICE_USED_ARGUMENT, "main", "h"), 0)
+
+    def test_a_copy_whose_guest_borrows_caller_homes_still_copies(self) -> None:
+        # mix4 has four parameters and two locals; main's homes are all busy, so
+        # the copy's guest must borrow caller homes and the aliased reads refuse
+        # where a borrow would erase them (correctness is the e2e twin).
+        self.assertEqual(calls_of(REUSED_HOME_CHAIN, "main", "mix4"), 0)
