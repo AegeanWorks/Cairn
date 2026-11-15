@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `93`
-- **Total Top-Level Functions**: `150`
-- **Total Class Methods**: `583`
-- **Total Source Lines**: `10514`
+- **Total Classes**: `97`
+- **Total Top-Level Functions**: `154`
+- **Total Class Methods**: `593`
+- **Total Source Lines**: `10720`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -132,7 +132,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `2440` lines (`121486` bytes)
+**Size**: `2488` lines (`124054` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -153,7 +153,7 @@
   - Method `._emit_into(expression, destination)` - *Lower an expression, using `destination` directly when it is a leaf.*
   - Method `._emit_binary_into(expression, destination)` - *Lower a call-free, trap-free binary expression with its result in `destination`.*
   - Method `._emit_left_into(expression, destination)` - *Compute the left operand with its value in `destination`, or refuse.*
-  - Method `._computes_in_rax_only(expression, destination)` - *Whether a right operand's lowering touches rax alone.*
+  - Method `._computes_in_rax_only(expression, destination, parked_noop)` - *Whether a right operand's lowering leaves `destination` untouched.*
   - Method `._stripped(expression)` - *The expression without its wrapping parentheses.*
   - Method `._emit_scaled_product(expression, destination)` - *Lower `name * 3|5|9` as one scaled `lea` into `destination`, or refuse.*
   - Method `._emit_block(block, tail)` - *Emit every statement of a block in order.*
@@ -170,6 +170,8 @@
   - Method `._emit_condition(expression, target, when_true)` - *Jump to `target` when the condition has the requested truth value.*
   - Method `._emit_logical_branch(expression, target, when_true)` - *Branch on `a && b` / `a || b` from each side's flags in turn.*
   - Method `._bit_test_operand(expression)` - *`(value, mask)` when the compare is `x % 2**b` or `x & m`, else None.*
+  - Method `._logical_shift_shape(expression)` - *The `(operand, shift)` of a `(a >> k) & (2**(64-k) - 1)` tree, or None.*
+  - Method `._emit_logical_shift(expression, destination)` - *Lower `(a >> k) & (2**(64-k) - 1)` as one logical `shr`, or refuse.*
   - Method `._emit_comparison_branch(expression, target, when_true)` - *Compare two operands and branch, using an immediate form when the right side is small.*
   - Method `._emit_expression(expression)` - *Lower one expression, leaving its value in rax.*
   - Method `._emit_unary(expression)` - *Negate, complement, or compare with zero.*
@@ -760,7 +762,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `926` lines (`44686` bytes)
+**Size**: `1000` lines (`48047` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -817,6 +819,13 @@
   - Method `.test_a_disjoined_condition_short_circuits_its_right_side()`
   - Method `.test_a_comparison_assigned_as_a_value_still_materialises_setcc()`
   - Method `.test_masks_above_the_byte_form_still_decide_the_branch()`
+- `class LogicalShiftPeepholeTest` - *`(a >> k) & (2**(64-k) - 1)` needs no arithmetic-shift fixup or mask load.*
+  - Method `.test_a_covering_mask_lowers_as_one_logical_shift()`
+  - Method `.test_a_partial_mask_keeps_its_and()`
+- `class MergedMaskMixTest` - *A masked xor merged into its home register lowers park-free, in place.*
+  - Method `.test_the_mixer_never_materialises_or_spills_its_mask()`
+  - Method `.test_the_xor_combines_in_place_right_after_the_shift()`
+  - Method `.test_the_merged_mul_stays_in_its_home_register()`
 - `class SelfRecursionInliningTest` - *The left operand of a merge may be a self-call lowered in place, not a real call.*
   - Method `.test_a_merge_left_self_call_is_inlined()`
   - Method `.test_a_comparison_with_a_small_literal_skips_the_rax_load()`
@@ -872,6 +881,9 @@
 - `def region_of(source, name)` - *One function's bytes with its inline copies, as region_bytes does in helpers above.*
 - `def has_setcc(blob)` - *Any setcc opcode (0F 90..0F 9F): a comparison materialised as 0 or 1.*
 - `def count_test_imms(blob)` - *How many `test r/m8, imm8` byte tests (F6 with register-modrm, then a mask) appear.*
+- `def _has_shr(blob, count)`
+- `def _has_mask_movabs(blob)` - *The 0x3FFFFFFFF mask riding a movabs immediate.*
+- `def _combine_right_after_shr(region, count)` - *Whether an update combine follows its peephole `shr rax, count` with no park.*
 - `def region_bytes(source, name)` - *The .text bytes of one function's body, its inline copies included.*
 - `def calls_of(source, caller, callee)` - *How many real `call` sites inside `caller`'s region target `callee`.*
 
@@ -880,7 +892,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `611` lines (`22236` bytes)
+**Size**: `695` lines (`24657` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -942,6 +954,14 @@
   - Method `.test_mask_counts_over_a_negative_span()`
 - `class OperandParkTest` - *A merged left value in its destination register must survive right-side evaluation.*
   - Method `.test_parked_survives_a_generic_right_side()`
+- `class LogicalShiftValueTest` - *Covering masks over every sign must read exactly the logical shift.*
+  - Method `.test_masked_shifts_match_the_logical_result_everywhere()`
+- `class MergedMaskLoopValueTest` - *The reclaimed mix lowering must stay exact across a real mixer loop.*
+  - Method `.test_a_masked_xor_multiplier_loop_wraps_like_the_source()`
+  - Method `.test_a_merged_left_update_never_leaks_into_a_right_home_read()`
+
+**Functions:**
+- `def _wrap(value)`
 
 ---
 

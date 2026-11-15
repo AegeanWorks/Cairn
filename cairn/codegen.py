@@ -58,10 +58,6 @@ SCRATCH = "rsi"
 # Callee-saved registers that can hold a function's slots, in allocation order. `rsi` is the
 # division scratch and `rbp` is the frame pointer, so neither can be a home.
 HOME_REGISTERS = ("rbx", "r12", "r13", "r14", "r15", "rdi")
-# Registers the generic right-side evaluation may hold an operand in (rax results, rcx leaf
-# parks, r10/r11 temporary parks, rsi scratch): a merged left value must never be parked in
-# one of these across a right side that lowers generically.
-GENERIC_EVAL_REGISTERS = ("rax", "rcx", "rsi", "r11", "r10")
 
 
 def function_label(name: str) -> str:
@@ -578,14 +574,19 @@ class CodeGenerator:
             return False
         if self._contains_division(expression) or has_call(expression):
             return False
+        if expression.op == "&" and self._emit_logical_shift(expression, destination):
+            return True
         operator = expression.op
         left, right = expression.left, expression.right
         if operator in ("&&", "||", "/") or operator in COMPARISON_CONDITIONS:
             return False
         if operator == "%" or operator == "~" or operator == "!":
             return False
+        stripped_left = self._stripped(left)
+        parked_noop = (isinstance(stripped_left, syntax.Name)
+                       and self._home(stripped_left.slot) == destination)
         if operator in UPDATE_OPCODES:
-            if not self._computes_in_rax_only(right, destination):
+            if not self._computes_in_rax_only(right, destination, parked_noop):
                 return False
             if not self._emit_left_into(left, destination):
                 return False
@@ -602,18 +603,13 @@ class CodeGenerator:
                 self.assembler.binary(UPDATE_OPCODES[operator],
                                       destination, operand_home)
                 return True
-            if (not is_leaf(right) and destination in GENERIC_EVAL_REGISTERS):
-                # The merged left already sits in `destination`; a generic right side
-                # parks its own operands in the same registers, so refuse rather than
-                # let its evaluation destroy the pending value.
-                return False
             self._emit_expression(right)
             self.assembler.binary(UPDATE_OPCODES[operator], destination, "rax")
             return True
         if operator == "*":
             if self._emit_scaled_product(expression, destination):
                 return True
-            if not self._computes_in_rax_only(right, destination):
+            if not self._computes_in_rax_only(right, destination, parked_noop):
                 return False
             if not self._emit_left_into(left, destination):
                 return False
@@ -623,10 +619,6 @@ class CodeGenerator:
             if operand_home is not None:
                 self.assembler.imul(destination, operand_home)
                 return True
-            if (not is_leaf(right) and destination in GENERIC_EVAL_REGISTERS):
-                # As in the update path: a generic right side parks its own operands in
-                # the same registers the merged left already occupies.
-                return False
             self._emit_expression(right)
             self.assembler.imul(destination, "rax")
             return True
@@ -677,21 +669,27 @@ class CodeGenerator:
         return False
 
     def _computes_in_rax_only(self, expression: Optional[syntax.Expr],
-                              destination: str) -> bool:
-        """Whether a right operand's lowering touches rax alone.
+                              destination: str,
+                              parked_noop: bool = False) -> bool:
+        """Whether a right operand's lowering leaves `destination` untouched.
 
-        Leaves and their parenthesized forms do; a literal-count shift of such an
-        operand does (`mov rax, home`, one shift); a name-with-literal offset lowers as
-        one lea into rax. Operators whose lowerings need rcx (multiplies of arbitrary
-        operands, divisions, comparisons, short circuits) refuse, as does any homed name
-        that reads the destination register the left operand just wrote.
+        The caller has already lowered the left operand into `destination`, so the
+        right side's evaluation must not write that register — and must not read a
+        value that the left side has replaced. Leaves and their parenthesized forms
+        load rax alone; a literal-count shift of such an operand does (`mov rax, home`,
+        one shift); a name-with-literal offset lowers as one lea into rax; the
+        logical-shift peephole lowers the whole `&` tree into rax. Operators whose
+        lowerings park operands in rcx (multiplies of arbitrary operands, divisions,
+        comparisons, short circuits, masked sparing of a non-immediate literal) refuse,
+        as does any homed name that reads the merged left — unless the caller dropped
+        that name in place (`parked_noop`), when the register still holds its value.
         """
         expression = self._stripped(expression)
         if expression is None or isinstance(expression, syntax.IntLiteral):
             return True
         if isinstance(expression, syntax.Name):
             home = self._home(expression.slot)
-            return home is None or home != destination
+            return home is None or home != destination or parked_noop
         if isinstance(expression, syntax.Binary):
             if (expression.op in ("&&", "||", "/", "%", "*")
                     or expression.op in COMPARISON_CONDITIONS):
@@ -701,11 +699,21 @@ class CodeGenerator:
                 # Nested arithmetic lowers through rcx; only `name op literal` and a
                 # literal-count shift of the same kind stay inside rax.
                 return False
-            if expression.op in IMMEDIATE_BINARY_EXTENSIONS:
-                return self._computes_in_rax_only(expression.left, destination)
+            if expression.op == "&":
+                shape = self._logical_shift_shape(expression)
+                if shape is not None:
+                    return self._computes_in_rax_only(shape[0], destination,
+                                                      parked_noop)
+            if (expression.op in IMMEDIATE_BINARY_EXTENSIONS
+                    and IMMEDIATE_MIN <= right_literal.value <= IMMEDIATE_MAX):
+                return self._computes_in_rax_only(expression.left, destination,
+                                                  parked_noop)
             if (expression.op in IMMEDIATE_SHIFT_EXTENSIONS
                     and 0 <= right_literal.value <= 63):
-                return self._computes_in_rax_only(expression.left, destination)
+                return self._computes_in_rax_only(expression.left, destination,
+                                                  parked_noop)
+            # A literal outside the immediate range lowers generically, parking its
+            # left operand in rcx — the original merged-park miscompile shape.
             return False
         return False
 
@@ -1233,6 +1241,44 @@ class CodeGenerator:
                 return other, literal.value
         return None
 
+    def _logical_shift_shape(self, expression: syntax.Expr) -> Optional[tuple]:
+        """The `(operand, shift)` of a `(a >> k) & (2**(64-k) - 1)` tree, or None.
+
+        Cairn's `>>` is arithmetic and fills the vacated high bits with the sign, but a
+        mask that clears every filled bit makes the fill unobservable: the logical shift
+        computes the masked value alone. One instruction replaces the shift, the mask
+        load and the `and`, which is what a hash mixer's unmasking step pays for.
+        """
+        left = self._stripped(expression.left)
+        right = self._stripped(expression.right)
+        if not (isinstance(left, syntax.Binary) and left.op == ">>"
+                and isinstance(right, syntax.IntLiteral)):
+            return None
+        count = self._stripped(left.right)
+        if not isinstance(count, syntax.IntLiteral):
+            return None
+        shift, mask = count.value, right.value
+        if not 1 <= shift <= 63 or mask != (1 << (64 - shift)) - 1:
+            return None
+        return left.left, shift
+
+    def _emit_logical_shift(self, expression: syntax.Binary, destination: str) -> bool:
+        """Lower `(a >> k) & (2**(64-k) - 1)` as one logical `shr`, or refuse."""
+        shape = self._logical_shift_shape(expression)
+        if shape is None:
+            return False
+        operand, shift = shape
+        stripped_operand = self._stripped(operand)
+        if (destination == "rax" and not isinstance(stripped_operand, (syntax.Name,
+                syntax.IntLiteral))):
+            # The generic rax path may hold a pending left value in rcx; only a leaf
+            # operand's load is guaranteed to touch rax alone.
+            return False
+        if not self._emit_left_into(operand, destination):
+            return False
+        self.assembler.shift_imm(5, destination, shift)   # shr: the logical form
+        return True
+
     def _emit_comparison_branch(self, expression: syntax.Binary, target: str,
                                 when_true: bool) -> None:
         """Compare two operands and branch, using an immediate form when the right side is small."""
@@ -1344,6 +1390,8 @@ class CodeGenerator:
             return
         asm = self.assembler
         right = expression.right
+        if expression.op == "&" and self._emit_logical_shift(expression, "rax"):
+            return
         if expression.op == "+" and self._emit_scaled_sum(expression):
             return
         if expression.op == "*" and self._emit_scaled_product(expression):

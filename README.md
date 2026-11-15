@@ -357,11 +357,21 @@ data-dependent recursion — won outright against both baselines, 7.5 ms vs C 8.
 9.6-9.9), `primes` (trial division over 2..300000 — ties C at 25.0 vs 24.5 ms, both lowering
 modulo the same magic-multiply way, behind Rust's 19.1), `mandelbrot` (four 960x540 fixed-point
 escape frames — 13.5 ms vs C 10.8, the inner multiply/shift merge chain is the visible gap) and
-`splitmix` (100,000,000 wrapping 64-bit mixes — 165.9 ms vs C 98.7 and Rust 113.8, whose cost is
-rematerialized loop-invariant constants, the next recorded mechanism). Writing `splitmix` also
-exposed and fixed a real miscompilation: a merged left operand parked in its destination
-register could be clobbered by the right side's own register reuse
+`splitmix` (100,000,000 wrapping 64-bit mixes, whose first standing of 165.9 ms vs C 98.7 and
+Rust 113.8 was rematerialized loop-invariant constants, the early recorded mechanism). Writing
+`splitmix` also exposed and fixed a real miscompilation: a merged left operand parked in its
+destination register could be clobbered by the right side's own register reuse
 (`tests/test_end_to_end.py::OperandParkTest`).
+
+The mixer then gained two backend mechanisms (the logical-shift peephole, then ADR-031's
+reclaimed merged-park fast path): `(z ^ ((z >> 30) & M)) * c` lowers the `&` as one logical
+`shr` whose mask never materialises, and the xor and multiply combine directly in the home
+register — no dead park, no temporary spill, no `imul` re-park. splitmix fell 165.9 → 110 ms,
+now at par with Rust (110-113) and about 1.1x C's 98-101; every other benchmark executable
+compiles byte-identical against the pre-change compiler, which is the recorded proof that the
+soundness hardening of `_computes_in_rax_only` cost no fast path anywhere else. Recorded next
+mechanisms: park-free `imul` constants, direct home-to-home assignments, and loop-invariant
+constant hoisting.
 
 Run-to-run spread on this machine is about 10 percent, so treat these as an order of magnitude
 rather than three significant figures; the harness prints best, median and worst for that reason.

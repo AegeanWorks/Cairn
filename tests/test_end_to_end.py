@@ -607,5 +607,89 @@ class OperandParkTest(EndToEndTest):
         self.assertEqual(completed.stdout, "-6957856608923027879\n-2426825779848323636\n-1061881911778666648\n")
 
 
+LOGICAL_SHIFT_VALUES = """
+fn main() -> i64 {
+    var a: i64 = -12345678;
+    var b: i64 = 987654321;
+    var lo: i64 = -9223372036854775807 - 1;
+    print((a >> 30) & 17179869183);
+    print((b >> 63) & 1);
+    print((lo >> 60) & 15);
+    print((a >> 1) & 9223372036854775807);
+    return 0;
+}
+"""
+
+
+@WINDOWS_ONLY
+class LogicalShiftValueTest(EndToEndTest):
+    """Covering masks over every sign must read exactly the logical shift."""
+
+    def test_masked_shifts_match_the_logical_result_everywhere(self) -> None:
+        completed = self.execute(LOGICAL_SHIFT_VALUES)
+        self.assertEqual(completed.returncode, 0)
+        def sar(v, k):
+            return v >> k
+        def masked(v, k):
+            return sar(v, k) & ((1 << (64 - k)) - 1)
+        lo = -9223372036854775808
+        expected = "\n".join(str(value) for value in (
+            masked(-12345678, 30),
+            masked(987654321, 63),
+            masked(lo, 60),
+            masked(-12345678, 1),
+        )) + "\n"
+        self.assertEqual(completed.stdout, expected)
+
+
+SPLITMIX_LOOP = """
+fn main() -> i64 {
+    var z: i64 = 548732102;
+    var i: i64 = 0;
+    while i < 64 {
+        z = (z ^ ((z >> 30) & 17179869183)) * 1812433253;
+        i = i + 1;
+    }
+    print(z);
+    return 0;
+}
+"""
+
+
+def _wrap(value: int) -> int:
+    value &= (1 << 64) - 1
+    return value - (1 << 64) if value >= (1 << 63) else value
+
+
+READ_AFTER_MERGE_TRAP = """
+fn main() -> i64 {
+    var z: i64 = 11;
+    z = (z + 5) ^ ((z >> 30) & 17179869183);
+    print(z);
+    return 0;
+}
+"""
+
+
+@WINDOWS_ONLY
+class MergedMaskLoopValueTest(EndToEndTest):
+    """The reclaimed mix lowering must stay exact across a real mixer loop."""
+
+    def test_a_masked_xor_multiplier_loop_wraps_like_the_source(self) -> None:
+        completed = self.execute(SPLITMIX_LOOP)
+        self.assertEqual(completed.returncode, 0)
+        z = 548732102
+        for _ in range(64):
+            z = _wrap((z ^ ((z >> 30) & 17179869183)) * 1812433253)
+        self.assertEqual(completed.stdout, f"{z}\n")
+
+    def test_a_merged_left_update_never_leaks_into_a_right_home_read(self) -> None:
+        completed = self.execute(READ_AFTER_MERGE_TRAP)
+        self.assertEqual(completed.returncode, 0)
+        # The peephole reads z before the xor's left side (z + 5) has replaced it:
+        # 16 ^ ((11 >> 30) & mask) = 16, never the post-update value.
+        self.assertEqual(completed.stdout, "16\n")
+
+
 if __name__ == "__main__":
     unittest.main()

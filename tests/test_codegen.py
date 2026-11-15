@@ -451,6 +451,80 @@ class FlagFusedConditionTest(unittest.TestCase):
         self.assertFalse(has_setcc(region))
 
 
+MASK_SHIFTS = ("fn main() -> i64 { var x: i64 = -123456789; "
+               "var t: i64 = (x >> 30) & 17179869183; print(t); return t; }")
+
+
+def _has_shr(blob: bytes, count: int) -> bool:
+    return any(blob[index] == 0xC1 and ((blob[index + 1] >> 3) & 0x7) == 0x5
+               and blob[index + 2] == count for index in range(len(blob) - 2))
+
+
+def _has_mask_movabs(blob: bytes) -> bool:
+    """The 0x3FFFFFFFF mask riding a movabs immediate."""
+    return bytes([0xFF, 0xFF, 0xFF, 0xFF, 0x03, 0x00, 0x00, 0x00]) in blob
+
+
+class LogicalShiftPeepholeTest(unittest.TestCase):
+    """`(a >> k) & (2**(64-k) - 1)` needs no arithmetic-shift fixup or mask load."""
+
+    def test_a_covering_mask_lowers_as_one_logical_shift(self) -> None:
+        region = region_of(MASK_SHIFTS)
+        self.assertTrue(_has_shr(region, 30))
+        self.assertFalse(_has_mask_movabs(region))
+
+    def test_a_partial_mask_keeps_its_and(self) -> None:
+        region = region_of("fn main() -> i64 { var x: i64 = -123456789; "
+                           "var t: i64 = (x >> 30) & 1023; print(t); return t; }")
+        self.assertFalse(_has_shr(region, 30))
+
+
+MIX_PROGRAM = ("fn main() -> i64 { var x: i64 = 7; var z: i64 = x; "
+               "z = (z ^ ((z >> 30) & 17179869183)) * 3; return z; }")
+
+
+def _combine_right_after_shr(region: bytes, count: int) -> bool:
+    """Whether an update combine follows its peephole `shr rax, count` with no park."""
+    shr = bytes([0xC1, 0xE8, count])
+    index = region.find(shr)
+    if index < 0:
+        return False
+    tail = region[index + len(shr):index + len(shr) + 3]
+    # xor <callee-saved home>, rax: REX.W (+REX.B for the high homes), opcode 31,
+    # then modrm 11 reg000 rm — rbx..rdi sit at C3..C7.
+    return any(tail == bytes([rex, 0x31, 0xC0 | rm])
+               for rex in (0x48, 0x49)
+               for rm in (3, 4, 5, 6, 7))
+
+
+class MergedMaskMixTest(unittest.TestCase):
+    """A masked xor merged into its home register lowers park-free, in place."""
+
+    def test_the_mixer_never_materialises_or_spills_its_mask(self) -> None:
+        region = region_of(MIX_PROGRAM)
+        self.assertTrue(_has_shr(region, 30))
+        self.assertFalse(_has_mask_movabs(region),
+                         "a covering mask must ride the peephole, not a movabs")
+
+    def test_the_xor_combines_in_place_right_after_the_shift(self) -> None:
+        region = region_of(MIX_PROGRAM)
+        self.assertTrue(_combine_right_after_shr(region, 30),
+                        "no in-place combine directly after the peephole shr")
+
+    def test_the_merged_mul_stays_in_its_home_register(self) -> None:
+        region = region_of(MIX_PROGRAM)
+        # imul <home>, rax (0F AF /r): the destination rides the modrm reg field, so a
+        # high home carries its index there with REX.R — the probe shape is
+        # 4C 0F AF E0 (imul r12, rax). The product must land in a callee-saved home
+        # the xor merged into, with no closing move or re-park between them.
+        candidates = []
+        for home_index in (3, 4, 5, 6, 7, 12, 13, 14, 15):
+            rex = 0x4C if home_index >= 8 else 0x48
+            candidates.append(bytes([rex, 0x0F, 0xAF, 0xC0 | ((home_index & 7) << 3)]))
+        self.assertTrue(any(pattern in region for pattern in candidates),
+                        "the multiply must write a callee-saved home via rax")
+
+
 if __name__ == "__main__":
     unittest.main()
 
