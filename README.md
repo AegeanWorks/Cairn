@@ -292,11 +292,13 @@ comparison same-run while still reporting a best and a median:
 
 | Case | Work | Cairn best | C best | Rust best | Cairn size |
 |---|---|---|---|---|---|
-| `xorshift` | 200,000,000 serial xorshift steps | 301.0 ms | 302.7 ms | 295.4 ms | 2,048 bytes |
+| `xorshift` | 200,000,000 serial xorshift steps | 301.7 ms | 302.7 ms | 295.4 ms | 2,048 bytes |
 | `fib30` | 2,692,537 recursive calls | 6.4 ms | 7.1 ms | 8.6 ms | 12,800 bytes |
 | `folded_math` | 20,000,000 bit-mixed constant additions | 15.3 ms | 16.1 ms | 17.3 ms | 2,048 bytes |
+| `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-108 ms | 155-172 ms | 145-148 ms | 2,560 bytes |
+| `ackermann` | `A(3,9)`, about 25 million calls | 44-65 ms | 16-19 ms | 53-54 ms | 2,560 bytes |
 
-Standings per case: `fib30` and `folded_math` are won outright against both baselines (fib30
+Standings per case: `fib30`, `folded_math` and `collatz` are won outright against both baselines (fib30
 net compute over the near-7 ms process-and-printf floor is about 0.6-0.8 ms against C's
 0.9-1.0), and `xorshift` is a measured three-way tie — the three implementations sit within
 about one percent of each other around 300 ms, with the best run flipping between them, which
@@ -305,13 +307,20 @@ pending: the benchmark's serial chain costs 6 dependent cycles per iteration (on
 xor per line, each waiting on the previous state), and the loop bookkeeping executes entirely
 inside those latencies, so the countdown latch it now shares with gcc (ADR-023) cannot shave
 cycles — disassembly of all three compilers shows identical two-op dependent chains with
-zero-latency register copies, pinning the case at the ISA latency floor.
+zero-latency registers, pinning the case at the ISA latency floor.
 `fib30`'s call path is frame-less (ADR-019), literal argument offsets such as `n - 1` fold into
 one `lea`, a homed name compares against a small literal in place, the delta-inlining pass
 (ADR-021) lowers the first seven recursion levels as pure text with merge values in
 level-indexed slots of the real frame, and the tail-return pass (ADR-022) lets every final
 `return` fall through instead of jumping — one instruction less per merge on the recursion's
 dependency chain.
+`collatz` is the odd-pair branchless win (ADR-024): the fused `3k+1` step halves first (`shr`
+carries the parity bit in CF), the odd value is one scaled `lea` of the halved slot, a `cmov`
+replaces the parity branch, and one `adc` pays the pair's steps — three instructions per
+reference step, one taken branch, zero mispredicts, where both baselines branch on the parity
+test. `ackermann` is the open case: deep two-argument recursion pays the full call path at
+2.7-3.8x C's dedicated frame, which no inlining story covers yet — it beats Rust in most runs,
+and it is the next recorded target.
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 `movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics

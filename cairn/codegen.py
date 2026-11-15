@@ -17,7 +17,7 @@ from typing import List, Optional, Tuple
 from cairn import syntax
 from cairn.image import ENTRY_LABEL, Artifact, ReadOnlyData, iat_label
 from cairn.machine import ARGUMENT_REGISTERS, Assembler
-from cairn.optimize import INT64_MIN, has_call
+from cairn.optimize import INT64_MIN, has_call, _contains_break_or_continue
 from cairn.runtime import DIV_ZERO_LABEL, PRINT_LABEL, emit_runtime
 from cairn.sema import MAX_PARAMETERS
 
@@ -76,6 +76,26 @@ def slot_of(expression: Optional[syntax.Expr]) -> Optional[int]:
     return expression.slot if isinstance(expression, syntax.Name) else None
 
 
+def _is_plus_step(statement: syntax.Stmt, level: int) -> bool:
+    """Whether the statement is `amount = amount + level` for its own slot."""
+    if not isinstance(statement, syntax.Assign) or statement.slot < 0:
+        return False
+    value = statement.value
+    while isinstance(value, syntax.Parens):
+        value = value.inner
+    if not (isinstance(value, syntax.Binary) and value.op == "+"):
+        return False
+    left, right = value.left, value.right
+    while isinstance(left, syntax.Parens):
+        left = left.inner
+    while isinstance(right, syntax.Parens):
+        right = right.inner
+    if isinstance(right, syntax.IntLiteral) and right.value == level:
+        left, right = right, left
+    return isinstance(left, syntax.IntLiteral) and left.value == level \
+        and isinstance(right, syntax.Name) and right.slot == statement.slot
+
+
 def is_leaf(expression: Optional[syntax.Expr]) -> bool:
     """Whether evaluating the expression is a load or a literal move and nothing else."""
     while isinstance(expression, syntax.Parens):
@@ -104,6 +124,7 @@ class CodeGenerator:
     delta_slot: int = -1
     delta_value: int = 0
     hold_units: int = 0
+    nonnegative_slots: set = field(default_factory=set)
 
     def generate(self, program: syntax.Program) -> Artifact:
         """Emit the entry stub, every function, then the runtime helpers."""
@@ -268,6 +289,7 @@ class CodeGenerator:
 
     def _store_slot(self, slot: int, source: str = "rax") -> None:
         """Write `source` into one slot's register or frame slot."""
+        self.nonnegative_slots.discard(slot)
         home = self._home(slot)
         if home is None:
             self.assembler.mov_store_rbp(slot_offset(slot), source)
@@ -277,10 +299,55 @@ class CodeGenerator:
     def _emit_value(self, slot: int, expression: Optional[syntax.Expr]) -> None:
         """Assign an expression to a slot, folding `slot = slot op value` in place."""
         home = self._home(slot)
-        if home is not None and self._fold_update(home, slot, expression):
+        # The fact stays while the right side reads the slot's guarded value; once the
+        # assignment lands, the value is whatever the expression produced.
+        folded = home is not None and self._fold_update(home, slot, expression)
+        if folded:
+            if not self._update_keeps_nonneg(slot, expression):
+                self.nonnegative_slots.discard(slot)
             return
         self._emit_expression(expression)
         self._store_slot(slot)
+        self.nonnegative_slots.discard(slot)
+
+    def _update_keeps_nonneg(self, slot: int, expression: Optional[syntax.Expr]) -> bool:
+        """Whether an in-place update provably keeps the slot's value non-negative.
+
+        Only updates whose result derives from a non-negative reading of the same slot
+        qualify: `slot / 2**b` is one `sar` (non-negative stays non-negative), the
+        remainder mask cannot clear the sign bit, and `slot + slot*f + c` is a scaled
+        `lea` that stays non-negative when both parts are.
+        """
+        if slot not in self.nonnegative_slots or self.delta_value:
+            return False
+        expr = expression
+        while isinstance(expr, syntax.Parens):
+            expr = expr.inner
+        if not isinstance(expr, syntax.Binary):
+            return False
+        if expr.op in ("/", "%"):
+            divisor = expr.right
+            while isinstance(divisor, syntax.Parens):
+                divisor = divisor.inner
+            power = divisor.value.bit_length() - 1 if isinstance(divisor, syntax.IntLiteral) else -1
+            if not (1 <= power <= 63 and (1 << power) == divisor.value):
+                return False
+            if slot_of(expr.left) == slot:
+                return True
+            # A fused odd step `slot = (slot*m + c) / 2**b`: the dividend is one scaled lea
+            # of the slot's own non-negative value and the halving keeps it non-negative.
+            if expr.op != "/":
+                return False
+            terms = self._scaled_sum_terms(expr.left)
+            return (terms is not None and terms[0].slot == slot
+                    and self._expression_nonnegative(expr.left))
+        if expr.op == "+":
+            terms = self._scaled_sum_terms(expr)
+            if terms is None:
+                return False
+            operand, _, addend, _ = terms
+            return operand.slot == slot and addend >= 0
+        return False
 
     def _fold_update(self, home: str, slot: int, expression: Optional[syntax.Expr]) -> bool:
         """Emit `home = home op value` when the expression updates its own slot.
@@ -300,6 +367,51 @@ class CodeGenerator:
                 other = expression.left
         elif operator == "-" and slot_of(expression.left) == slot:
             other = expression.right
+        if (operator in ("/", "%") and self._is_nonnegative(slot)
+                and slot_of(expression.left) == slot):
+            divisor = expression.right
+            while isinstance(divisor, syntax.Parens):
+                divisor = divisor.inner
+            power = divisor.value.bit_length() - 1 if isinstance(divisor, syntax.IntLiteral) else -1
+            if 1 <= power <= 63 and (1 << power) == divisor.value:
+                # A non-negative dividend truncates like it floors, so the whole update is
+                # one shift (quotient) or one mask (remainder) in the slot's own register.
+                if operator == "/":
+                    self.assembler.shift_imm(7, home, power)
+                else:
+                    self.assembler.arith_imm(4, home, divisor.value - 1)
+                return True
+        if (operator == "/" and isinstance(expression.left, syntax.Binary)
+                and self._is_nonnegative(slot)):
+            # The fused odd step `slot = (slot * m + c) / 2**b`: one scaled lea of its own
+            # register, then the halving, still in the slot's register.
+            divisor = expression.right
+            while isinstance(divisor, syntax.Parens):
+                divisor = divisor.inner
+            power = divisor.value.bit_length() - 1 if isinstance(divisor, syntax.IntLiteral) else -1
+            terms = None
+            left = expression.left
+            if 1 <= power <= 63 and (1 << power) == divisor.value:
+                terms = self._scaled_sum_terms(left)
+            if terms is not None and terms[0].slot == slot:
+                _, scale_log2, addend, with_base = terms
+                if with_base:
+                    self.assembler.lea_scale(home, home, home, scale_log2, addend)
+                else:
+                    self.assembler.lea_index(home, home, scale_log2, addend)
+                self.assembler.shift_imm(7, home, power)
+                return True
+        if other is None and operator == "+" and not self.delta_value:
+            terms = self._scaled_sum_terms(expression)
+            if terms is not None:
+                operand, scale_log2, addend, with_base = terms
+                source = self._home(operand.slot)
+                if source is not None and (operand.slot != self.delta_slot or not self.delta_value):
+                    if with_base:
+                        self.assembler.lea_scale(home, source, source, scale_log2, addend)
+                    else:
+                        self.assembler.lea_index(home, source, scale_log2, addend)
+                    return True
         if other is None:
             return False
         if (operator in IMMEDIATE_UPDATES and isinstance(other, syntax.IntLiteral)
@@ -406,18 +518,26 @@ class CodeGenerator:
             self._emit_expression(statement.expression)
 
     def _emit_if(self, statement: syntax.If, tail: bool = False) -> None:
-        """`if` as a conditional branch and two labelled bodies."""
+        """`if` as a conditional branch and two labelled bodies.
+
+        With an else block, the else body sits inline and the condition branches forward
+        over it to the then body: the unconditional `jmp` is then paid only by the else
+        path, and the frequent path falls straight through to the code after the `if`.
+        """
         asm = self.assembler
-        otherwise = self._fresh("if.else")
-        end = self._fresh("if.end")
-        self._emit_condition(statement.condition, otherwise, when_true=False)
-        self._emit_block(statement.then_block, tail)
         if statement.else_block is not None:
-            asm.jmp(end)
-            asm.label(otherwise)
+            then_label = self._fresh("if.then")
+            end = self._fresh("if.end")
+            self._emit_condition(statement.condition, then_label, when_true=True)
             self._emit_block(statement.else_block, tail)
+            asm.jmp(end)
+            asm.label(then_label)
+            self._emit_block(statement.then_block, tail)
             asm.label(end)
         else:
+            otherwise = self._fresh("if.else")
+            self._emit_condition(statement.condition, otherwise, when_true=False)
+            self._emit_block(statement.then_block, tail)
             asm.label(otherwise)
 
     def _emit_while(self, statement: syntax.While) -> None:
@@ -442,18 +562,240 @@ class CodeGenerator:
                 self._load_slot(counter)
                 asm.sub_imm("rax", 1)
                 self._store_slot(counter)
+            self.nonnegative_slots.discard(self._countdown_slot(statement))
             asm.jcc("nz", start)
             asm.label(end)
             return
-        asm.label(start)
+        if self._try_emit_halving_loop(statement):
+            return
+        if has_call(statement.condition):
+            # A condition whose evaluation calls would run twice if the loop re-emitted it
+            # as the bottom latch, so the head-tested shape stays.
+            asm.label(start)
+            self._emit_condition(statement.condition, end, when_true=False)
+            self.break_targets.append(end)
+            self.continue_targets.append(start)
+            self._emit_block(statement.body)
+            self.break_targets.pop()
+            self.continue_targets.pop()
+            asm.jmp(start)
+            asm.label(end)
+            return
+        # A pure guard rotates to do-while shape: tested once before entry, then latched at
+        # the bottom of the body with one taken-backward conditional branch, so no iteration
+        # ends in a `jmp` and the head check leaves the loop behind a single branch.
         self._emit_condition(statement.condition, end, when_true=False)
+        asm.label(start)
+        latch = self._fresh("while.latch")
         self.break_targets.append(end)
-        self.continue_targets.append(start)
+        self.continue_targets.append(latch)
+        facts = self._guard_nonnegative(statement.condition)
+        restored = self.nonnegative_slots
+        self.nonnegative_slots = restored | set(facts)
         self._emit_block(statement.body)
+        self.nonnegative_slots = restored
         self.break_targets.pop()
         self.continue_targets.pop()
-        asm.jmp(start)
+        asm.label(latch)
+        self._emit_condition(statement.condition, start, when_true=True)
         asm.label(end)
+
+    def _try_emit_halving_loop(self, statement: syntax.While) -> bool:
+        """Emit a fused odd-pair body as one unconditional half-step, or refuse.
+
+        The optimiser's odd-pair pass leaves the shape `while k > c { if k % 2 == 0
+        { k = k/2; s = s + 1 } else { k = (k*m + c)/2; s = s + 2 } }`, where m and c
+        are odd. Halving FIRST is the same computation with the parity test folded
+        into the halving: `shr` leaves the old low bit in CF, so the even path is one
+        `add` and the odd path one scaled `lea` of the halved slot, both re-tested by
+        the bottom latch. One by-64 identity makes the odd path a single lea, wrap
+        included: with k odd and h = k >> 1, `m*k + c` is `2*m*h + (m + c)`, and m + c
+        is even, so `(m*k + c) / 2` is exactly `m*h + (m + c) / 2` modulo 2**64. The
+        guard `k > c` (c >= 0) proves k >= 1, which is what the odd identity needs and
+        what makes `shr` equal `(k*m + c) / 2`'s signed halving. Loops with break or
+        continue are refused: both would skip the latch-driven re-test.
+        """
+        if statement.countdown or statement.body is None:
+            return False
+        if has_call(statement.condition) or _contains_break_or_continue(statement.body):
+            return False
+        statements = list(statement.body.statements)
+        if len(statements) != 1 or not isinstance(statements[0], syntax.If):
+            return False
+        branch = statements[0]
+        if branch.then_block is None or branch.else_block is None:
+            return False
+        # The guard proves the dividend non-negative: `k > c` with c >= 0, `k >= c` with c >= 1.
+        condition = statement.condition
+        while isinstance(condition, syntax.Parens):
+            condition = condition.inner
+        if not (isinstance(condition, syntax.Binary)
+                and condition.op in (">", ">=")
+                and isinstance(condition.right, syntax.IntLiteral)
+                and (condition.right.value >= 0 if condition.op == ">"
+                     else condition.right.value >= 1)):
+            return False
+        k_slot = slot_of(condition.left)
+        # The fact is derived here, before the generic rotation seeds it: the guard runs
+        # before every body execution, so `k > c` (c >= 0) proves `k` non-negative in the body.
+        if k_slot is None or k_slot < 0 or k_slot not in self._guard_nonnegative(condition):
+            return False
+        if k_slot == self.delta_slot and self.delta_value:
+            return False
+        # The parity dispatch: `k % 2 == 0` (then = even) or `k % 2 != 0` (then = odd).
+        test = condition_branch = branch.condition
+        while isinstance(test, syntax.Parens):
+            test = test.inner
+        if not (isinstance(test, syntax.Binary) and test.op in ("==", "!=")):
+            return False
+        zero = test.right
+        while isinstance(zero, syntax.Parens):
+            zero = zero.inner
+        parity = test.left
+        while isinstance(parity, syntax.Parens):
+            parity = parity.inner
+        if not (isinstance(zero, syntax.IntLiteral) and zero.value == 0
+                and isinstance(parity, syntax.Binary) and parity.op == "%"):
+            return False
+        divisor = parity.right
+        while isinstance(divisor, syntax.Parens):
+            divisor = divisor.inner
+        if not (isinstance(divisor, syntax.IntLiteral) and divisor.value == 2):
+            return False
+        if slot_of(parity.left) != k_slot:
+            return False
+        then_stmts = list(branch.then_block.statements)
+        else_stmts = list(branch.else_block.statements)
+        even_stmts, odd_stmts = ((then_stmts, else_stmts) if test.op == "=="
+                                 else (else_stmts, then_stmts))
+        if len(even_stmts) != 2 or len(odd_stmts) != 2:
+            return False
+        even, bump_even = even_stmts
+        odd, bump_odd = odd_stmts
+        if not (isinstance(even, syntax.Assign) and even.slot == k_slot
+                and isinstance(odd, syntax.Assign) and odd.slot == k_slot):
+            return False
+        # Even path: exactly `k = k / 2`.
+        division = even.value
+        while isinstance(division, syntax.Parens):
+            division = division.inner
+        if not (isinstance(division, syntax.Binary) and division.op == "/"):
+            return False
+        divisor_two = division.right
+        while isinstance(divisor_two, syntax.Parens):
+            divisor_two = divisor_two.inner
+        if not (isinstance(divisor_two, syntax.IntLiteral) and divisor_two.value == 2
+                and slot_of(division.left) == k_slot):
+            return False
+        # Odd path: exactly `k = <k*m + c> / 2` with m, c odd.
+        fused = odd.value
+        while isinstance(fused, syntax.Parens):
+            fused = fused.inner
+        if not (isinstance(fused, syntax.Binary) and fused.op == "/"):
+            return False
+        fused_two = fused.right
+        while isinstance(fused_two, syntax.Parens):
+            fused_two = fused_two.inner
+        fused_sum = fused.left
+        while isinstance(fused_sum, syntax.Parens):
+            fused_sum = fused_sum.inner
+        if not (isinstance(fused_two, syntax.IntLiteral) and fused_two.value == 2
+                and isinstance(fused_sum, syntax.Binary) and fused_sum.op == "+"):
+            return False
+        terms = self._scaled_sum_terms(fused_sum)
+        if terms is None:
+            return False
+        operand, scale_log2, addend, with_base = terms
+        if operand.slot != k_slot or not with_base or scale_log2 not in (1, 2, 3):
+            return False
+        multiplier = (1 << scale_log2) + 1
+        # A fused odd step leaves k' = m*h + (m + c)/2 with h = k >> 1 >= 0; the guard-free
+        # odd loop-back needs k' >= 2, i.e. m + c >= 4 (m = 3, c = 1 is the minimal firing shape).
+        if addend % 2 == 0 or multiplier + addend < 4 \
+                or not -2 ** 31 <= (multiplier + addend) // 2 < 2 ** 31:
+            return False
+        # The steps counter: `+ 1` on the even path, `+ 2` on the odd path, no aliasing.
+        if not (isinstance(bump_even, syntax.Assign) and bump_even.slot >= 0
+                and _is_plus_step(bump_even, 1)
+                and isinstance(bump_odd, syntax.Assign)
+                and bump_odd.slot == bump_even.slot and _is_plus_step(bump_odd, 2)):
+            return False
+        s_slot = bump_even.slot
+        if s_slot == k_slot or s_slot == self.delta_slot or self.delta_value:
+            return False
+        k_home, s_home = self._home(k_slot), self._home(s_slot)
+        if k_home is None or s_home is None:
+            return False
+        asm = self.assembler
+        end = self._fresh("while.end")
+        top = self._fresh("while.half")
+        latch = self._fresh("while.latch")
+        # Branchless pair: `shr` puts the pair's parity in CF, the odd value rides one
+        # scaled lea of the halved slot, `cmov` selects it with no branch, and `adc` pays
+        # the pass's steps (1 + the odd path's second step) in one instruction.
+        scratch = SCRATCH
+        self._emit_condition(statement.condition, end, when_true=False)
+        asm.label(top)
+        asm.shift_imm(5, k_home, 1)   # shr: k >>= 1, CF = old low bit (the pair's parity)
+        asm.lea_scale(scratch, k_home, k_home, scale_log2, (multiplier + addend) // 2)
+        asm.cmov("c", k_home, scratch)
+        asm.adc_imm(s_home, 1)        # s += 1 + CF
+        asm.label(latch)
+        self._emit_condition(statement.condition, top, when_true=True)
+        asm.jmp(end)
+        asm.label(end)
+        return True
+
+    def _is_nonnegative(self, slot: int) -> bool:
+        """Whether the slot provably holds a non-negative value at this emit point.
+
+        The fact drops through a store of the slot, and a copy-shifted parameter reads a
+        moved value, so that case counts as unknown.
+        """
+        return slot in self.nonnegative_slots and (slot != self.delta_slot or not self.delta_value)
+
+    def _expression_nonnegative(self, expression: Optional[syntax.Expr]) -> bool:
+        """Whether the expression provably evaluates non-negative at this emit point.
+
+        A name reads its slot's guard fact; `k*f + c` in one lea form is non-negative when
+        k is and the addend is, which is what a fused collatz odd step divides.
+        """
+        expr = expression
+        while isinstance(expr, syntax.Parens):
+            expr = expr.inner
+        if isinstance(expr, syntax.Name):
+            return self._is_nonnegative(expr.slot)
+        if isinstance(expr, syntax.Binary) and expr.op == "+":
+            terms = self._scaled_sum_terms(expr)
+            if terms is not None:
+                operand, _, addend, _ = terms
+                return addend >= 0 and self._is_nonnegative(operand.slot)
+        return False
+
+    def _guard_nonnegative(self, condition: Optional[syntax.Expr]) -> List[int]:
+        """Slots a `while slot > c` (or `slot >= c + 1`) guard proves non-negative in its body.
+
+        The guard runs before every body execution, so during the body the slot exceeds a
+        non-negative constant; only a store of the slot can break that, and stores drop the
+        fact. Division then lowers as one bare arithmetic shift instead of the sign-fixup
+        chain, which is the same proof strength gcc's value-range pass provides.
+        """
+        expression = condition
+        while isinstance(expression, syntax.Parens):
+            expression = expression.inner
+        if not isinstance(expression, syntax.Binary) or expression.op not in (">", ">="):
+            return []
+        bound = expression.right
+        while isinstance(bound, syntax.Parens):
+            bound = bound.inner
+        if not isinstance(bound, syntax.IntLiteral):
+            return []
+        slot = slot_of(expression.left)
+        if slot is None or slot < 0:
+            return []
+        if (expression.op == ">" and bound.value >= 0) or (expression.op == ">=" and bound.value >= 1):
+            return [slot]
+        return []
 
     def _countdown_slot(self, statement: syntax.While) -> int:
         """The slot a countdown loop's counter occupies."""
@@ -509,6 +851,38 @@ class CodeGenerator:
         left = expression.left
         while isinstance(left, syntax.Parens):
             left = left.inner
+        if (isinstance(right, syntax.IntLiteral) and right.value == 0
+                and expression.op in ("==", "!=")
+                and isinstance(left, syntax.Binary) and left.op == "%"):
+            dividend, divisor = left.left, left.right
+            while isinstance(divisor, syntax.Parens):
+                divisor = divisor.inner
+            power = divisor.value.bit_length() - 1 \
+                if isinstance(divisor, syntax.IntLiteral) else -1
+            if power >= 1 and (1 << power) == divisor.value:
+                # `x % 2**b == 0` holds exactly when the low b bits are zero, for every
+                # sign, so the mask alone decides the branch and no fixup is needed.
+                mask = (1 << power) - 1
+                parity = "e" if COMPARISON_CONDITIONS[expression.op] == "e" else "ne"
+                dividend_slot = slot_of(dividend)
+                home = (self._home(dividend_slot)
+                        if dividend_slot is not None
+                        and (dividend_slot != self.delta_slot or not self.delta_value)
+                        else None)
+                if mask <= 127 and home is not None:
+                    # The home's low bits decide the branch: no load, no destroyed rax.
+                    asm.test_imm(home, mask)
+                else:
+                    self._emit_expression(dividend)
+                    if mask <= 127:
+                        asm.test_imm("rax", mask)
+                    elif mask <= IMMEDIATE_MAX:
+                        asm.arith_imm(4, "rax", mask)   # and rax, 2**b - 1
+                    else:
+                        asm.mov_imm64(SCRATCH, mask)
+                        asm.binary(0x21, "rax", SCRATCH)  # and rax, scratch
+                asm.jcc(parity if when_true else INVERTED_CONDITIONS[parity], target)
+                return
         if isinstance(right, syntax.IntLiteral) and isinstance(left, syntax.Name) and self._home(left.slot) is not None:
             if left.slot == self.delta_slot and self.delta_value:
                 # Inside a copy the parameter is shifted, so the compared value moves too.
@@ -571,6 +945,8 @@ class CodeGenerator:
             return
         asm = self.assembler
         right = expression.right
+        if expression.op == "+" and self._emit_scaled_sum(expression):
+            return
         if (expression.op in ("+", "-") and isinstance(right, syntax.IntLiteral)
                 and -IMMEDIATE_MAX - 1 <= right.value <= IMMEDIATE_MAX
                 and self._emit_home_offset("rax", expression)):
@@ -584,6 +960,8 @@ class CodeGenerator:
                 and expression.op in IMMEDIATE_SHIFT_EXTENSIONS:
             self._emit_expression(expression.left)
             asm.shift_imm(IMMEDIATE_SHIFT_EXTENSIONS[expression.op], "rax", right.value)
+            return
+        if expression.op in ("/", "%") and self._emit_power_of_two_division(expression):
             return
         self._emit_left_operand(expression.left, expression.right)
         if expression.op in ("/", "%"):
@@ -660,6 +1038,107 @@ class CodeGenerator:
         self._emit_expression(right)
         asm.pop("rcx")
         self.depth -= 8
+
+    def _emit_power_of_two_division(self, expression: syntax.Binary) -> bool:
+        """Lower `x / 2**b` or `x % 2**b` as a shift fixup chain; True when emitted.
+
+        Division by a positive power of two never faults and needs no `idiv`: the
+        sign word `x >>sar 63` (0 or all-ones) becomes `0` or `2**b - 1` by a logical
+        shift right, the addition forces negative dividends up to the next multiple
+        (toward-zero truncation), and the arithmetic shift gives the quotient. For a
+        remainder, masking the shifted-up value and subtracting the fixup recovers
+        exactly `x - (x / 2**b) * 2**b`, which keeps the dividend's sign.
+        """
+        right = expression.right
+        while isinstance(right, syntax.Parens):
+            right = right.inner
+        if not isinstance(right, syntax.IntLiteral) or right.value <= 0:
+            return False
+        power = right.value.bit_length() - 1
+        if power < 1 or power > 63 or (1 << power) != right.value:
+            return False
+        asm = self.assembler
+        if self._expression_nonnegative(expression.left):
+            # A non-negative dividend truncates like it floors, so the sign fixup drops:
+            # the quotient is one shift and the remainder one mask.
+            self._emit_expression(expression.left)
+            if expression.op == "/":
+                asm.shift_imm(7, "rax", power)
+            else:
+                asm.arith_imm(4, "rax", (1 << power) - 1)
+            return True
+        self._emit_expression(expression.left)
+        asm.mov_reg_reg("rcx", "rax")
+        asm.shift_imm(7, "rcx", 63)       # sar rcx, 63: the sign word
+        asm.shift_imm(5, "rcx", 64 - power)  # shr rcx, 64-b: 0 or 2**b - 1 (shift group /5)
+        asm.binary(0x01, "rax", "rcx")    # add rax, rcx
+        if expression.op == "/":
+            asm.shift_imm(7, "rax", power)
+        else:
+            target = (1 << power) - 1
+            if target <= IMMEDIATE_MAX:
+                asm.arith_imm(4, "rax", target)   # and rax, 2**b - 1: the masked-up value
+            else:
+                asm.mov_imm64(SCRATCH, target)
+                asm.binary(0x21, "rax", SCRATCH)  # and rax, scratch
+            asm.binary(0x29, "rax", "rcx")        # sub rax, rcx: drop the fixup
+        return True
+
+    def _scaled_sum_terms(self, expression: syntax.Binary):
+        """The scaled-item pattern of a `+` expression: `(Name, scale_log2, addend, with_base)`.
+
+        The factor must be one more than a power of two (`base + index*2**log2`) or a pure
+        power of two (`index*2**log2`, no base); the addend must fit the x86 displacement.
+        `None` when the expression does not match.
+        """
+        left, right = expression.left, expression.right
+        while isinstance(left, syntax.Parens):
+            left = left.inner
+        while isinstance(right, syntax.Parens):
+            right = right.inner
+        addend, scaled, operand = None, None, None
+        for part in (left, right):
+            if isinstance(part, syntax.IntLiteral) and addend is None:
+                addend = part.value
+            elif isinstance(part, syntax.Binary) and part.op == "*" and scaled is None:
+                multiplier, term = part.left, part.right
+                while isinstance(multiplier, syntax.Parens):
+                    multiplier = multiplier.inner
+                while isinstance(term, syntax.Parens):
+                    term = term.inner
+                if isinstance(multiplier, syntax.IntLiteral) and isinstance(term, syntax.Name):
+                    scaled, operand = multiplier.value, term
+                elif isinstance(term, syntax.IntLiteral) and isinstance(multiplier, syntax.Name):
+                    scaled, operand = term.value, multiplier
+        if addend is None or scaled is None or operand.slot < 0 or not -2 ** 31 <= addend < 2 ** 31:
+            return None
+        # A power of two that is also one more than a power of two (only 2) prefers the
+        # base form; both are one instruction with a displacement.
+        forms = {2: (0, True), 3: (1, True), 4: (2, False), 5: (2, True), 9: (3, True)}
+        if scaled not in forms:
+            return None
+        scale_log2, with_base = forms[scaled]
+        return operand, scale_log2, addend, with_base
+
+    def _emit_scaled_sum(self, expression: syntax.Binary) -> bool:
+        """Lower `c1 + k*c2` (either operand order) as one scaled `lea`; True when emitted.
+
+        This is the `idiv` companion: a collatz-style step `3*k + 1` becomes one instruction.
+        """
+        terms = self._scaled_sum_terms(expression)
+        if terms is None:
+            return False
+        operand, scale_log2, addend, with_base = terms
+        home = self._home(operand.slot)
+        if home is None or home == "rbp":
+            self._emit_expression(operand)
+            home = "rax"
+        asm = self.assembler
+        if with_base:
+            asm.lea_scale("rax", home, home, scale_log2, addend)
+        else:
+            asm.lea_index("rax", home, scale_log2, addend)
+        return True
 
     def _emit_division(self, operator: str) -> None:
         """Signed division with an explicit zero-divisor trap, quotient or remainder.

@@ -58,7 +58,7 @@ class EncodingTest(unittest.TestCase):
     def test_shift_by_immediate_needs_no_count_register(self) -> None:
         self.assertEqual(self.code(lambda a: a.shift_imm(4, "rax", 13)), b"\x48\xc1\xe0\x0d")
         self.assertEqual(self.code(lambda a: a.shift_imm(7, "rax", 7)), b"\x48\xc1\xf8\x07")
-        self.assertEqual(self.code(lambda a: a.shift_imm(4, "r12", 1)), b"\x49\xc1\xe4\x01")
+        self.assertEqual(self.code(lambda a: a.shift_imm(4, "r12", 1)), b"\x49\xd1\xe4")
         with self.assertRaises(ValueError):
             self.code(lambda a: a.shift_imm(4, "rax", 64))
         with self.assertRaises(ValueError):

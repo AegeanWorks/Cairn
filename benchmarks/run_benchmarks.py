@@ -65,6 +65,10 @@ CASES: Tuple[Case, ...] = (
          2_692_537, "calls"),
     Case("folded_math", "benchmarks/folded_math.crn", "benchmarks/folded_math.c",
          "benchmarks/folded_math.rs", 20_000_000, "iterations"),
+    Case("collatz", "benchmarks/collatz.crn", "benchmarks/collatz.c",
+         "benchmarks/collatz.rs", 1_000_000, "probes"),
+    Case("ackermann", "benchmarks/ackermann.crn", "benchmarks/ackermann.c",
+         "benchmarks/ackermann.rs", 1, "calls"),
 )
 
 

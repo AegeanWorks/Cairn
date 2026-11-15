@@ -1,0 +1,25 @@
+// Collatz total stopping times for every probe below a constant bound: a branchy, division
+// heavy loop with data-dependent control flow neither optimizer may fold.
+// Twin of collatz.c and collatz.rs; all three print the identical total.
+fn main() -> i64 {
+    var n: i64 = 1;
+    var k: i64 = 0;
+    var steps: i64 = 0;
+    var total: i64 = 0;
+    while n < 1000000 {
+        k = n;
+        steps = 0;
+        while k > 1 {
+            if k % 2 == 0 {
+                k = k / 2;
+            } else {
+                k = 3 * k + 1;
+            }
+            steps = steps + 1;
+        }
+        total = total + steps;
+        n = n + 1;
+    }
+    print(total);
+    return 0;
+}

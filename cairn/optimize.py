@@ -7,7 +7,7 @@ trap. `print` is an effect, so no rewrite may drop or duplicate a call.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from cairn import syntax
 
@@ -134,10 +134,17 @@ class Optimizer:
     folded: int = field(default=0)
 
     def run(self, program: syntax.Program) -> syntax.Program:
-        """Optimise every function body, then convert eligible counter loops."""
+        """Optimise every function body, then convert counter loops and fuse odd pairs."""
         for function in program.functions:
             function.body = self._block(function.body)
         apply_countdown_latches(program)
+        for _ in range(2):
+            if not apply_odd_pair_fusion(program):
+                break
+            # A fused step re-reads the folded expressions; fold again so constant
+            # arithmetic does not survive, then one more fusion round if shapes repeat.
+            for function in program.functions:
+                function.body = self._block(function.body)
         return program
 
     def _block(self, block: Optional[syntax.Block]) -> Optional[syntax.Block]:
@@ -468,6 +475,168 @@ def apply_countdown_latches(program: syntax.Program) -> int:
     return len(changed)
 
 
+def _is_plus_one(statement: syntax.Assign) -> bool:
+    """Whether the statement is `s = s + 1` (either operand order)."""
+    if statement.slot < 0:
+        return False
+    value = _peel_parens(statement.value)
+    if not (isinstance(value, syntax.Binary) and value.op == "+"):
+        return False
+    left, right = _peel_parens(value.left), _peel_parens(value.right)
+    if isinstance(right, syntax.IntLiteral) and right.value == 1:
+        left, right = right, left
+    return isinstance(left, syntax.IntLiteral) and left.value == 1 and \
+        isinstance(right, syntax.Name) and right.slot == statement.slot
+
+
+def _scaled_odd_term(value: Optional[syntax.Expr], slot: int) -> Optional[int]:
+    """The odd multiplier of `slot * m` (either order), or None."""
+    term = _peel_parens(value)
+    if not (isinstance(term, syntax.Binary) and term.op == "*"):
+        return None
+    left, right = _peel_parens(term.left), _peel_parens(term.right)
+    if isinstance(left, syntax.Name) and left.slot == slot \
+            and isinstance(right, syntax.IntLiteral) and right.value % 2 == 1:
+        return right.value
+    if isinstance(right, syntax.Name) and right.slot == slot \
+            and isinstance(left, syntax.IntLiteral) and left.value % 2 == 1:
+        return left.value
+    return None
+
+
+def _odd_step_value(value: Optional[syntax.Expr], slot: int) -> Optional[Tuple[int, int]]:
+    """The `(m, c)` of `k = k*m + c` with both odd, or None.
+
+    Both odd is what makes the fusion sound: on the odd path `k` is odd, so `m*k + c`
+    (odd times odd plus odd) is even and the halving that follows is guaranteed.
+    """
+    expression = _peel_parens(value)
+    if not (isinstance(expression, syntax.Binary) and expression.op == "+"):
+        return None
+    for term, addend in ((_peel_parens(expression.left), _peel_parens(expression.right)),
+                         (_peel_parens(expression.right), _peel_parens(expression.left))):
+        multiplier = _scaled_odd_term(term, slot)
+        if multiplier is not None and isinstance(addend, syntax.IntLiteral) \
+                and addend.value % 2 == 1:
+            return multiplier, addend.value
+    return None
+
+
+def _halving_value(value: Optional[syntax.Expr], slot: int) -> bool:
+    """Whether `value` is exactly `k / 2` for the slot."""
+    expression = _peel_parens(value)
+    if not (isinstance(expression, syntax.Binary) and expression.op == "/"):
+        return False
+    right = _peel_parens(expression.right)
+    return slot_of_name(_peel_parens(expression.left)) == slot \
+        and isinstance(right, syntax.IntLiteral) and right.value == 2
+
+
+def slot_of_name(expression: Optional[syntax.Expr]) -> Optional[int]:
+    """The slot of a (parenthesised) name, or None."""
+    return expression.slot if isinstance(expression, syntax.Name) else None
+
+
+def _fuse_odd_pair(statement: syntax.While) -> bool:
+    """Rewrite one collatz-shaped loop body so the odd step rides with the halving after it.
+
+    On the odd path `k = k*m + c` (m and c odd) leaves an even `k`, so the next iteration
+    is a guaranteed halving before anything else reads `k`. Fusing them into
+    `k = (k*m + c) / 2` and raising that path's step count to two performs the identical
+    sequence of values and step totals with one pass through the parity test instead of two.
+    Loops with `break`/`continue` are refused: both would skip the shared increment this
+    rewrite moves into the branches.
+    """
+    if statement.countdown:
+        return False
+    body = statement.body
+    if body is None or _contains_break_or_continue(body):
+        return False
+    statements = body.statements
+    for index in range(len(statements) - 1):
+        branch, increment = statements[index], statements[index + 1]
+        if not isinstance(branch, syntax.If) or branch.else_block is None:
+            continue
+        if not isinstance(increment, syntax.Assign) or not _is_plus_one(increment):
+            continue
+        condition = _peel_parens(branch.condition)
+        if not (isinstance(condition, syntax.Binary) and condition.op in ("==", "!=")):
+            continue
+        zero = _peel_parens(condition.right)
+        if not (isinstance(zero, syntax.IntLiteral) and zero.value == 0):
+            continue
+        parity = _peel_parens(condition.left)
+        if not (isinstance(parity, syntax.Binary) and parity.op == "%"):
+            continue
+        dividend, modulus = _peel_parens(parity.left), _peel_parens(parity.right)
+        if not (isinstance(modulus, syntax.IntLiteral) and modulus.value == 2):
+            continue
+        slot = slot_of_name(dividend)
+        if slot is None or slot < 0:
+            continue
+        then_stmts = list(branch.then_block.statements) if branch.then_block else []
+        else_stmts = list(branch.else_block.statements) if branch.else_block else []
+        if len(then_stmts) != 1 or len(else_stmts) != 1:
+            continue
+        even_side, odd_side = then_stmts[0], else_stmts[0]
+        if condition.op == "!=":
+            even_side, odd_side = odd_side, even_side
+        if not (isinstance(even_side, syntax.Assign) and even_side.slot == slot
+                and _halving_value(even_side.value, slot)):
+            continue
+        if not (isinstance(odd_side, syntax.Assign) and odd_side.slot == slot):
+            continue
+        scaled = _odd_step_value(odd_side.value, slot)
+        if scaled is None:
+            continue
+        multiplier, addend = scaled
+        # The value the odd step leaves: `(k * m + c) / 2`.
+        fused = syntax.Assign(span=odd_side.span, name=odd_side.name, slot=slot,
+                              value=syntax.Binary(
+                                  span=odd_side.value.span, op="/",
+                                  left=odd_side.value,
+                                  right=syntax.IntLiteral(span=zero.span, value=2)))
+        counted = [syntax.Assign(span=increment.span, name=increment.name, slot=increment.slot,
+                                 value=syntax.Binary(
+                                     span=increment.value.span, op="+",
+                                     left=syntax.Name(span=increment.span,
+                                                      name=increment.name, slot=increment.slot),
+                                     right=syntax.IntLiteral(span=increment.span, value=level)))
+                   for level in (1, 2)]
+        if condition.op == "==":
+            branch.then_block.statements = [even_side, counted[0]]
+            branch.else_block.statements = [fused, counted[1]]
+        else:
+            branch.then_block.statements = [fused, counted[1]]
+            branch.else_block.statements = [even_side, counted[0]]
+        del statements[index + 1]
+        return True
+    return False
+
+
+def apply_odd_pair_fusion(program: syntax.Program) -> int:
+    """Fuse collatz-shaped odd steps with the halving that follows them, loop-wide."""
+    changed: list = []
+
+    def visit(block: Optional[syntax.Block]) -> None:
+        if block is None:
+            return
+        for statement in block.statements:
+            if isinstance(statement, syntax.While):
+                visit(statement.body)
+                if _fuse_odd_pair(statement):
+                    changed.append(statement)
+            elif isinstance(statement, syntax.If):
+                visit(statement.then_block)
+                visit(statement.else_block)
+            elif isinstance(statement, syntax.Block):
+                visit(statement)
+
+    for function in program.functions:
+        visit(function.body)
+    return len(changed)
+
+
 def _flatten(statements: List[syntax.Stmt]) -> List[syntax.Stmt]:
     """Splice a branch selected by folding into its parent, since Cairn has one flat scope."""
     flattened: List[syntax.Stmt] = []
@@ -493,4 +662,5 @@ def optimize(program: syntax.Program) -> syntax.Program:
 
 
 __all__ = ["INT64_MAX", "INT64_MIN", "MASK64", "Optimizer", "apply_countdown_latches",
+           "apply_odd_pair_fusion",
            "fold_constant", "fold_unary", "has_call", "optimize", "truncate_division", "wrap"]

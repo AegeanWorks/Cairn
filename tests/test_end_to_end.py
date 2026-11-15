@@ -78,6 +78,29 @@ fn main() -> i64 {
 }
 """
 
+POWER_DIVISION = """
+fn main() -> i64 {
+    var a: i64 = -9;
+    var b: i64 = 7;
+    var c: i64 = -1;
+    var d: i64 = -20;
+    var lo: i64 = -9223372036854775807 - 1;
+    print(a / 4);
+    print(a % 4);
+    print(b / 4);
+    print(b % 4);
+    print(c / 2);
+    print(c % 2);
+    print(d / 4);
+    print(d % 4);
+    print(lo / 2);
+    print(lo % 8);
+    print(a / 2);
+    print(a % 2);
+    return 0;
+}
+"""
+
 DIVIDE_BY_ZERO = """
 fn main() -> i64 {
     var zero: i64 = 0;
@@ -161,6 +184,18 @@ class EndToEndTest(unittest.TestCase):
         completed = self.execute(COUNTDOWN)
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "35\n0\n0\n")
+
+    def test_power_of_two_division_truncates_like_the_machine_would(self) -> None:
+        completed = self.execute(POWER_DIVISION)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "\n".join([
+            "-2", "-1",       # -9 / 4, -9 % 4
+            "1", "3",         # 7 / 4, 7 % 4
+            "0", "-1",        # -1 / 2, -1 % 2
+            "-5", "0",        # -20 / 4, -20 % 4
+            "-4611686018427387904", "0",  # INT64_MIN / 2, INT64_MIN % 8
+            "-4", "-1",       # -9 / 2, -9 % 2
+        ]) + "\n")
 
     def test_division_by_zero_is_a_trap_with_a_message_and_exit_code_3(self) -> None:
         completed = self.execute(DIVIDE_BY_ZERO)
@@ -277,6 +312,58 @@ fn main() -> i64 {
         self.assertEqual(completed.stdout, folded)
         self.assertEqual(folded.splitlines(),
                          ["-5", "4", "-9223372036854775808", "1", "3", "0", "4", "0"])
+
+
+class FusedCollatzLoopTest(EndToEndTest):
+    """The fused odd-pair loop counts every reference step exactly, on every path.
+
+    The cmov lowering commits one halving per pass and adds the pass's steps with one
+    `adc` (1 + carry), so the tests pin the totals: the odd path pays two, the even path
+    one, and shapes the specialized emitter refuses keep the generic shrink-chain's
+    identical arithmetic.
+    """
+
+    def _steps_source(self, k: str, odd_value: str, even_test: str = "== 0") -> str:
+        return ("fn main() -> i64 {"
+                f" var k: i64 = {k}; var s: i64 = 0;"
+                " while k > 1 {"
+                f" if k % 2 {even_test} {{ k = k / 2; s = s + 1; }}"
+                f" else {{ k = ({odd_value}) / 2; s = s + 2; }} }} "
+                " print(s); return 0; }")
+
+    def test_a_probe_starting_odd_counts_both_steps_of_the_pair(self) -> None:
+        # 27's total stopping time is 111 steps; the first pass sees odd k.
+        completed = self.execute(self._steps_source(27, "k * 3 + 1"))
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "111\n")
+
+    def test_a_probe_starting_even_takes_the_halving_path(self) -> None:
+        completed = self.execute(self._steps_source(6, "k * 3 + 1"))
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "8\n")
+
+    def test_a_five_k_pair_counts_the_same_way(self) -> None:
+        # 5k + 1 with odd k: (5k + 1)/2 = 5*(k >> 1) + 3; 3 -> 8, 4, 2, 1.
+        completed = self.execute(self._steps_source(3, "k * 5 + 1"))
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "5\n")
+
+    def test_a_refused_pair_keeps_the_generic_shrink_chain(self) -> None:
+        # m + c = 2 < 4 refuses the cmov form; the arithmetic must not change.
+        # 3 -> 4 (odd pair), 2, 1.
+        completed = self.execute(self._steps_source(3, "k * 3 - 1"))
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "4\n")
+
+    def test_the_swapped_parity_test_counts_identically(self) -> None:
+        source = ("fn main() -> i64 { var k: i64 = 3; var s: i64 = 0;"
+                  " while k > 1 {"
+                  " if k % 2 != 0 { k = (k * 3 + 1) / 2; s = s + 2; }"
+                  " else { k = k / 2; s = s + 1; } }"
+                  " print(s); return 0; }")
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "7\n")  # 3 -> 5, 8, 4, 2, 1
 
 
 if __name__ == "__main__":

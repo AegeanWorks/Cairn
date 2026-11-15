@@ -24,7 +24,11 @@ ARGUMENT_REGISTERS = ("rcx", "rdx", "r8", "r9")
 
 CONDITIONS = {
     "e": 0x4, "ne": 0x5, "l": 0xC, "le": 0xE, "g": 0xF, "ge": 0xD,
-    "z": 0x4, "nz": 0x5, "s": 0x8, "ns": 0x9,
+    "z": 0x4, "nz": 0x5, "s": 0x8, "ns": 0x9, "c": 0x2, "nc": 0x3,
+}
+CMOV_CONDITIONS = {
+    "e": 0x40, "ne": 0x45, "l": 0x4C, "le": 0x4E, "g": 0x4F, "ge": 0x4D,
+    "s": 0x48, "ns": 0x49, "c": 0x42, "nc": 0x43,
 }
 
 
@@ -88,13 +92,28 @@ class Assembler:
         self.rel32(target)
 
     def jmp(self, target: str) -> None:
-        """`jmp rel32`."""
+        """`jmp rel32`; a bound backward target within a byte takes `jmp rel8` (EB)."""
+        if target in self.labels:
+            displacement = self.labels[target] - (self.here() + 2)
+            if -128 <= displacement <= 127:
+                self.emit(bytes([0xEB, displacement & 0xFF]))
+                return
         self.emit(b"\xE9")
         self.rel32(target)
 
     def jcc(self, condition: str, target: str) -> None:
-        """`jcc rel32` for one of the named conditions."""
-        self.emit(b"\x0F", bytes([0x80 | CONDITIONS[condition]]))
+        """`jcc rel32`; a bound backward target within a byte takes `jcc rel8` (70+r).
+
+        Hot loops latch backward, so their repeated conditional branch is the two-byte
+        form whenever the distance allows.
+        """
+        code = CONDITIONS[condition]
+        if target in self.labels:
+            displacement = self.labels[target] - (self.here() + 2)
+            if -128 <= displacement <= 127:
+                self.emit(bytes([0x70 | code, displacement & 0xFF]))
+                return
+        self.emit(b"\x0F", bytes([0x80 | code]))
         self.rel32(target)
 
     def push(self, reg: str) -> None:
@@ -128,6 +147,38 @@ class Assembler:
             self.emit(bytes([offset & 0xFF]))
         else:
             self.emit((offset & 0xFFFFFFFF).to_bytes(4, "little"))
+
+    def lea_scale(self, destination: str, base: str, index: str, scale_log2: int,
+                  displacement: int) -> None:
+        """`lea r64, [base + index*2**scale_log2 + displacement]` (SIB byte).
+
+        Neither base nor index may be `rsp`; a caller picks the base+index form when
+        the factor is one more than a power of two and the index-only form otherwise.
+        """
+        dst, base_code, index_code = REGISTERS[destination], REGISTERS[base], REGISTERS[index]
+        assert base_code != REGISTERS["rsp"] and index_code != REGISTERS["rsp"]
+        wide = not (-128 <= displacement <= 127)
+        self.emit(bytes([_rex(True, dst >> 3, index_code >> 3, base_code >> 3), 0x8D,
+                         *_modrm(2 if wide else 1, dst, 4)]))
+        self.emit(bytes([(scale_log2 << 6) | (index_code & 7) << 3 | (base_code & 7)]))
+        if wide:
+            self.emit((displacement & 0xFFFFFFFF).to_bytes(4, "little"))
+        else:
+            self.emit(bytes([displacement & 0xFF]))
+
+    def lea_index(self, destination: str, index: str, scale_log2: int,
+                  displacement: int) -> None:
+        """`lea r64, [index*2**scale_log2 + displacement]` with no base register.
+
+        The base-less SIB form always carries a 32-bit displacement; the caller must
+        keep it inside int32. `rbp` as the index needs a `mov` through rax instead.
+        """
+        dst, index_code = REGISTERS[destination], REGISTERS[index]
+        assert index_code not in (REGISTERS["rsp"], REGISTERS["rbp"])
+        self.emit(bytes([_rex(True, dst >> 3, index_code >> 3, 0), 0x8D,
+                         *_modrm(0, dst, 4)]))
+        self.emit(bytes([(scale_log2 << 6) | (index_code & 7) << 3 | 0b101]))
+        self.emit((displacement & 0xFFFFFFFF).to_bytes(4, "little"))
 
     def mov_reg_reg(self, destination: str, source: str) -> None:
         """`mov r64, r64`."""
@@ -233,6 +284,22 @@ class Assembler:
         """`sub r64, imm`, used for `x = x - constant` without a register copy."""
         self._group1_imm(5, reg, value)
 
+    def adc_imm(self, reg: str, value: int) -> None:
+        """`adc r64, imm` (group-1 extension 2): adds the immediate plus carry."""
+        self._group1_imm(2, reg, value)
+
+    def cmov(self, condition: str, destination: str, source: str) -> None:
+        """`cmovcc r64, r/m64`: conditional move, selected by the current flags.
+
+        A data-flow select with no branch, no prediction and no misprediction; the
+        source and destination both stay unchanged when the condition is false.
+        """
+        if condition not in CMOV_CONDITIONS:
+            raise ValueError(f"unknown cmov condition: {condition}")
+        dst, src = REGISTERS[destination], REGISTERS[source]
+        self.emit(bytes([_rex(True, dst >> 3, 0, src >> 3), 0x0F, CMOV_CONDITIONS[condition],
+                         *_modrm(3, dst, src)]))
+
     def cmp_imm(self, reg: str, value: int) -> None:
         """`cmp r64, imm`, so a comparison with a small literal needs no second register."""
         self._group1_imm(7, reg, value)
@@ -251,6 +318,18 @@ class Assembler:
         """`test r64, r64`, setting flags from a value without changing it."""
         code = REGISTERS[reg]
         self.emit(bytes([_rex(True, code >> 3, 0, code >> 3), 0x85] + list(_modrm(3, code, code))))
+
+    def test_imm(self, reg: str, value: int) -> None:
+        """`test r/m8, imm8` (F6 /0) for a small positive mask: flags only, value kept.
+
+        The masks are bit queries such as `x % 2**b == 0` through `and 2**b - 1` with b at
+        most 7, so the byte form always reaches and the zero flag decides the branch.
+        """
+        if not 0 <= value <= 127:
+            raise ValueError("test mask does not fit in 8 bits")
+        code = REGISTERS[reg]
+        self.emit(bytes([_rex(False, 0, 0, code >> 3), 0xF6,
+                         0xC0 | (code & 7), value & 0xFF]))
 
     def setcc(self, condition: str) -> None:
         """`setcc al` followed by `movzx rax, al`: a comparison result as 0 or 1 in rax."""
@@ -277,10 +356,17 @@ class Assembler:
         self.emit(b"\x48\xD3", bytes([0xC0 | (extension << 3)]))
 
     def shift_imm(self, extension: int, reg: str, count: int) -> None:
-        """`shl` (4) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip."""
+        """`shl` (4) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip.
+
+        A count of one uses the shorter `D1 /n` form, which every division-by-two step emits.
+        """
         if not 0 <= count <= 63:
             raise ValueError("shift count does not fit in six bits")
         code = REGISTERS[reg]
+        if count == 1:
+            self.emit(bytes([_rex(True, 0, 0, code >> 3), 0xD1,
+                             0xC0 | (extension << 3) | (code & 7)]))
+            return
         self.emit(bytes([_rex(True, 0, 0, code >> 3), 0xC1,
                          0xC0 | (extension << 3) | (code & 7), count & 0xFF]))
 
