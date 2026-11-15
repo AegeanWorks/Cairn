@@ -1,77 +1,19 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-loop-invariants",
-    "last_phase": "delivered",
+    "task_id": "cairn-cpp-baseline",
+    "last_phase": "verification",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1794768283.8353677,
+    "updated_at": 1794769629.9171722,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": [],
-    "completed_at": 1794768341.4181125,
-    "completed_head": "195caf3d329506cc12b082ed9241d15697c2cb0e",
-    "completed_tree": "c23325931dbfa39e0c425f300a62b93a03906d6e"
+    "completed_at": 1794769718.4404912,
+    "completed_head": "e3cf29b3674b695272a81417701fa6fb711b7484",
+    "completed_tree": "8a88f606c4e054d1fa29aaa68adb4f5c1d15b1d5"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-case-closes",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "Phase 4 re-verified after commit 32f8ac3: aikit.py check cairn --strict gates 4/4 PASS (test 24.0s, hygiene, guidelines freshness, secrets)",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794759191.8233547,
-      "timestamp_str": "2026-11-15 19:13:11",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-case-closes",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-case-closes' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794759192.120736,
-      "timestamp_str": "2026-11-15 19:13:12",
-      "agent": "mistral:vibe",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-regression-watch",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/2] Plan: benchmark-regression watch -- run_benchmarks.py gains --save (append one JSONL record per run to .aikit/benchmark_history.jsonl with commit stamp) so --compare diffs the newest saved record per-case and exits nonzero on a Cairn regression beyond the documented 10% noise band; pure compare_runs() carries the logic; failing-first tests; README + project guideline record the rule: benchmarks re-run after every compiler change",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794759466.3584092,
-      "timestamp_str": "2026-11-15 19:17:46",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "user's standing 'get faster' plus ADR-026 targets means a compiler change can win one case while silently losing another; only a same-run comparison catches it",
-        "benefits": "regressions surface at the change that caused them, with commit stamps in history; the strict scoreboard gets an automatic pre-flight",
-        "risks": "contract: compare reads its own saved JSONL only, no semantics change to reports; dependency: git rev-parse may be absent (commit stamped None, compare still works); concurrency: appends are single-agent; state: history file lives in .aikit next to the ledger and is tracked",
-        "mitigation": "failing-first tests for compare_runs (regressed/improved/new/within-noise); corrupted history lines skipped; first-ever --compare with empty history prints guidance and exits 0"
-      },
-      "plan_digest": "1dbae0238afb3d1516cc97a8ce7392b931c402e10ad72c4e81aecfa473d23ff1"
-    },
-    {
-      "task_id": "cairn-regression-watch",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[2/2] Regression watch landed: run_benchmarks.py --save appends commit-stamped JSONL records to .aikit/benchmark_history.jsonl, --compare diffs per case at the 10% noise band and exits 1 on regression (Cairn column only). CompareRunsTest (8, failing-first) green; live save/compare loop exercised at 32f8ac3 with exit 0. Guideline G-004 records the rule (user source); ADR-028 + README updated; knowledge map refreshed. aikit.py check cairn: 4/4 gates. checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794759870.2621357,
-      "timestamp_str": "2026-11-15 19:24:30",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-regression-watch",
       "phase": "completed",
@@ -284,6 +226,63 @@
       "status": "completed",
       "timestamp": 1794768341.4618251,
       "timestamp_str": "2026-11-15 21:45:41",
+      "agent": "mistral:vibe",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-cpp-baseline",
+      "phase": "planning",
+      "phase_num": 2,
+      "description": "[1/2] Phase 2 plan",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794768514.6218235,
+      "timestamp_str": "2026-11-15 21:48:34",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "The user's standing goal is that Cairn measures faster than C, C++ and Rust; the scoreboard only measures C (gcc/clang/cl) and Rust (rustc) today, so the claim cannot be tested for C++ at all. contract: additive Case field and new report keys only, existing fields and exit codes unchanged. dependency: C++ compilers already installed (g++ or clang++ or cl) detected the same way as the C row; no new toolchain requirement when absent - C++ verdicts read unavailable. concurrency: single-threaded harness, unchanged. state: history records gain a cpp key; compare_runs reads only the Cairn column, so old records stay comparable.",
+        "benefits": "The goal line gains a third verdict per case; 12 .cpp twins widen the parity gate; any C++-vs-C performance split that gcc's C++ frontend produces becomes visible and optimizable.",
+        "risks": "contract: the TwinParityTest shape changes from triples to quadruples - old tests must keep passing until updated in the same commit. dependency: a broken or exotic C++ installation must degrade to unavailable, never crash the harness. concurrency: none. state: malformed cpp key in history must be skipped like the other baseline keys.",
+        "mitigation": "Additive-only schema change with the C build plumbing mirrored; parity gate run before any scoreboard number is recorded; absence of a C++ compiler returns unavailable verdicts and exit 2 only when no baseline at all exists"
+      },
+      "plan_digest": "d8bff34a358d92a9cad3433ccd83d916065227109376e21cee135ab7b4cce834"
+    },
+    {
+      "task_id": "cairn-cpp-baseline",
+      "phase": "implementation",
+      "phase_num": 3,
+      "description": "C++ baseline measured: 12 cpp twins, harness quadruple column, parity and full suite green, --save --compare gate no Cairn regression",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794769625.8250635,
+      "timestamp_str": "2026-11-15 22:07:05",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-cpp-baseline",
+      "phase": "verification",
+      "phase_num": 4,
+      "description": "Phase 4 passed: 505 tests + 39 subtests green, TwinParityTest quadruple parity, --save --compare exit 0, ADR-033 and README updated, KB synced",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794769629.9171722,
+      "timestamp_str": "2026-11-15 22:07:09",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-cpp-baseline",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-cpp-baseline' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794769718.496116,
+      "timestamp_str": "2026-11-15 22:08:38",
       "agent": "mistral:vibe",
       "delivery": {
         "roots": [
