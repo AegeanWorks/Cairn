@@ -1,98 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-case-closes",
+    "task_id": "cairn-regression-watch",
     "last_phase": "in_progress",
-    "active_phase": 2,
+    "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1794759127.8862293,
+    "updated_at": 1794759870.2621357,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-scoreboard-pass",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-scoreboard-pass' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794690546.5805788,
-      "timestamp_str": "2026-11-15 00:09:06",
-      "agent": "mistral:vibe",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-xorshift-win",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/3] Win or honestly re-baseline xorshift: disassembly-ident twins, three blind lanes (source-level, codegen, calling convention), objdump for mechanism, interleaved A/B + 3 benchbacks against gcc -O2 and rustc -O",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794691949.7704446,
-      "timestamp_str": "2026-11-15 00:32:29",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "xorshift pairing is a 1% tie (the only unwon scoreboard case); calling out one lane without disassembly reasoning misunderstands ISA-parallel benches; frame-relative access is infeasible on x86-64",
-        "benefits": "Each candidate targets a specific mechanism found in emitted code (blind instruction streams are guesswork); objdump confirms exact instruction counts",
-        "risks": "contract: compiler output changes but CRN surface, PE layout, exit codes unchanged; dependency: stdlib objdumpsrv wrapper only; concurrency: temp-dir isolation only; state: no persisted formats touched",
-        "mitigation": "objdump-verified temp dir isolation, interleaved A/B with fresh twins and mtime-guarded imports, 100% gate pass before any commit"
-      },
-      "checklists": "passed",
-      "plan_digest": "93713c3add513c818839f373b00be48b21ca133dadae4dda7c14968d9ea65651"
-    },
-    {
-      "task_id": "cairn-xorshift-win",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[2/3] Countdown latch landed (optimizer pass + codegen latch + failing-first tests, 246 green, probes n=0..30 match gcc); xorshift tie re-baselined as structural (ADR-023: 6-cycle dependent chain pins the case)",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794692796.7235346,
-      "timestamp_str": "2026-11-15 00:46:36",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-xorshift-win",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-xorshift-win' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794692874.4235063,
-      "timestamp_str": "2026-11-15 00:47:54",
-      "agent": "mistral:vibe",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-bench-suite-2",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/3] Add collatz and ackermann twins, wire into the harness, measure",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794733691.8780391,
-      "timestamp_str": "2026-11-15 12:08:11",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "The goal demands beating C and Rust on every committed benchmark case, but three cases cover only call, arithmetic and serial-chain paths; branchy division and two-argument recursion are unmeasured",
-        "benefits": "New collatz (branch+mod) and ackermann (two-arg deep recursion) cases widen coverage; any measured gap becomes a general codegen win with failing-first tests",
-        "risks": "contract: benchmark twins must print identical values or the case is invalid; dependency: harness registry only; concurrency: none; state: README table and goal verdicts change shape but keep schema",
-        "mitigation": "Twins verified against each other before timing, failing-first tests for every compiler change, fresh interleaved runs, honest tie reporting"
-      },
-      "checklists": "passed",
-      "plan_digest": "e1f018c28e671e58a2306fb8c7bfebb7d2bd5ebf3be6cfd27f1cbbd70f58d514"
-    },
     {
       "task_id": "cairn-bench-suite-2",
       "phase": "implementation",
@@ -298,6 +216,75 @@
       "timestamp": 1794759127.8862293,
       "timestamp_str": "2026-11-15 19:12:07",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-case-closes",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[4/4] Commit 32f8ac3 landed (9 files, 1235 insertions): m2 backend batch + magic division with ADR-027, README standings, refreshed codebase map and ledger. Suite 363 + 39 subtests; project gates 4/4 passed earlier in the phase and re-verified by check before commit. Remaining recorded targets: call_chain vs C (1.3x), binary_gcd vs C/Rust via flag-fused bit conditions (bgcd setcc lowering) and nqueens spill/frame work (deferred by design). checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794759158.97883,
+      "timestamp_str": "2026-11-15 19:12:38",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-case-closes",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "Phase 4 re-verified after commit 32f8ac3: aikit.py check cairn --strict gates 4/4 PASS (test 24.0s, hygiene, guidelines freshness, secrets)",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794759191.8233547,
+      "timestamp_str": "2026-11-15 19:13:11",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-case-closes",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-case-closes' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794759192.120736,
+      "timestamp_str": "2026-11-15 19:13:12",
+      "agent": "mistral:vibe",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-regression-watch",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/2] Plan: benchmark-regression watch -- run_benchmarks.py gains --save (append one JSONL record per run to .aikit/benchmark_history.jsonl with commit stamp) so --compare diffs the newest saved record per-case and exits nonzero on a Cairn regression beyond the documented 10% noise band; pure compare_runs() carries the logic; failing-first tests; README + project guideline record the rule: benchmarks re-run after every compiler change",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794759466.3584092,
+      "timestamp_str": "2026-11-15 19:17:46",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "user's standing 'get faster' plus ADR-026 targets means a compiler change can win one case while silently losing another; only a same-run comparison catches it",
+        "benefits": "regressions surface at the change that caused them, with commit stamps in history; the strict scoreboard gets an automatic pre-flight",
+        "risks": "contract: compare reads its own saved JSONL only, no semantics change to reports; dependency: git rev-parse may be absent (commit stamped None, compare still works); concurrency: appends are single-agent; state: history file lives in .aikit next to the ledger and is tracked",
+        "mitigation": "failing-first tests for compare_runs (regressed/improved/new/within-noise); corrupted history lines skipped; first-ever --compare with empty history prints guidance and exits 0"
+      },
+      "plan_digest": "1dbae0238afb3d1516cc97a8ce7392b931c402e10ad72c4e81aecfa473d23ff1"
+    },
+    {
+      "task_id": "cairn-regression-watch",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[2/2] Regression watch landed: run_benchmarks.py --save appends commit-stamped JSONL records to .aikit/benchmark_history.jsonl, --compare diffs per case at the 10% noise band and exits 1 on regression (Cairn column only). CompareRunsTest (8, failing-first) green; live save/compare loop exercised at 32f8ac3 with exit 0. Guideline G-004 records the rule (user source); ADR-028 + README updated; knowledge map refreshed. aikit.py check cairn: 4/4 gates. checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794759870.2621357,
+      "timestamp_str": "2026-11-15 19:24:30",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
     }
   ]
 }

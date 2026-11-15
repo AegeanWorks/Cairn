@@ -12,3 +12,4 @@ without modifying or quarantining that file; older versions migrate when a migra
 - **G-001** (ADR-003): a new diagnostic check takes a new code from its stage family and is listed in README.md in the same change.
 - **G-002** (ADR-002): a new machine instruction enters machine.py as one documented method with a test, never as an inline byte string elsewhere.
 - **G-003** (ADR-009): a core value or its evidence command changes only with a new ADR, and every value keeps a live guard test named in values.py
+- **G-004** (user): After every change to cairn/ code, run the full benchmark suite once more and diff it against the newest saved baseline (python benchmarks/run_benchmarks.py --save --compare): a case regressed beyond the documented 10 percent noise band must be fixed or justified in an ADR before the commit lands.

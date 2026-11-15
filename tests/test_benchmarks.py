@@ -277,5 +277,67 @@ class RegistryShapeTest(unittest.TestCase):
             self.assertGreater(case.iterations, 0, case.name)
 
 
+class CompareRunsTest(unittest.TestCase):
+    """The regression watch: a saved run's numbers diffed against the new run."""
+
+    def test_a_cairn_regression_beyond_the_noise_band_is_flagged(self) -> None:
+        previous = {"cairn": {"binary_gcd": 180.0, "nqueens": 25.0}}
+        current = {"cairn": {"binary_gcd": 200.0, "nqueens": 25.5}}
+        lines, regressed = run_benchmarks.compare_runs(current, previous, noise=0.10)
+        self.assertTrue(regressed)
+        self.assertIn("binary_gcd", "".join(lines))
+        self.assertIn("regressed", "".join(lines))
+
+    def test_drift_inside_the_noise_band_is_reported_but_not_flagged(self) -> None:
+        previous = {"cairn": {"binary_gcd": 180.0}}
+        current = {"cairn": {"binary_gcd": 190.0}}
+        lines, regressed = run_benchmarks.compare_runs(current, previous, noise=0.10)
+        self.assertFalse(regressed)
+        self.assertIn("within noise", "".join(lines))
+
+    def test_an_improvement_is_named_and_never_flags(self) -> None:
+        previous = {"cairn": {"call_chain": 48.0}}
+        current = {"cairn": {"call_chain": 43.0}}
+        lines, regressed = run_benchmarks.compare_runs(current, previous, noise=0.10)
+        self.assertFalse(regressed)
+        self.assertIn("improved", "".join(lines))
+
+    def test_a_case_absent_from_the_previous_run_is_reported_as_new(self) -> None:
+        previous = {"cairn": {}}
+        current = {"cairn": {"xorshift": 300.0}}
+        lines, regressed = run_benchmarks.compare_runs(current, previous, noise=0.10)
+        self.assertFalse(regressed)
+        self.assertIn("new", "".join(lines))
+
+    def test_a_case_missing_from_the_current_run_is_not_imagined(self) -> None:
+        previous = {"cairn": {"binary_gcd": 180.0}}
+        current = {"cairn": {}}
+        lines, regressed = run_benchmarks.compare_runs(current, previous, noise=0.10)
+        self.assertFalse(regressed)
+        self.assertEqual(lines, [])
+
+    def test_compare_is_symmetric_about_the_noise_band_edges(self) -> None:
+        # changes clearly inside the band stay unflagged, clearly outside it flag;
+        # the exact boundary itself is float territory no assertion should live on
+        previous = {"cairn": {"x": 100.0}}
+        for factor, flagged in ((1.09, False), (1.12, True), (0.91, False)):
+            lines, regressed = run_benchmarks.compare_runs(
+                {"cairn": {"x": 100.0 * factor}}, previous, noise=0.10)
+            self.assertEqual(regressed, flagged, factor)
+
+    def test_the_newest_valid_history_record_wins_over_corrupt_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "history.jsonl"
+            good = json.dumps({"timestamp": 1, "cairn": {"x": 100.0}})
+            path.write_text(good + "\nnot json\n{bad\n", encoding="utf-8")
+            record = run_benchmarks.latest_history_record(path)
+            self.assertIsNotNone(record)
+            self.assertEqual(record["cairn"], {"x": 100.0})
+
+    def test_missing_history_reads_as_no_record(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertIsNone(run_benchmarks.latest_history_record(Path(folder) / "none.jsonl"))
+
+
 if __name__ == "__main__":
     unittest.main()

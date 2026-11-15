@@ -349,6 +349,13 @@ standing can never be earned against a twin that computes something else.
 
 Run-to-run spread on this machine is about 10 percent, so treat these as an order of magnitude
 rather than three significant figures; the harness prints best, median and worst for that reason.
+The comparison never depends on remembering numbers by hand: `python benchmarks/run_benchmarks.py
+--save` appends one JSONL record (commit stamp plus every best time) to `.aikit/benchmark_history.jsonl`,
+and `--compare` diffs the current run against the newest saved record per case, printing each delta —
+`improved`, `within noise`, or `regressed` — and exiting nonzero when a Cairn case regressed beyond
+the noise band. The project rule (recorded as a guideline from the user): after every change to the
+compiler, run the full benchmark suite again and compare, so winning one case while quietly losing
+another surfaces at the change that caused it.
 
 Compile time is about 150-280 ms per case, nearly all of it Python interpreter startup; the
 produced executable is two kilobytes because there is no runtime to link.

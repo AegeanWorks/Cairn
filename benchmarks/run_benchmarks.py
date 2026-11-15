@@ -9,6 +9,10 @@ Usage:
   python benchmarks/run_benchmarks.py              # human table
   python benchmarks/run_benchmarks.py --json       # machine-readable report
   python benchmarks/run_benchmarks.py --rounds 7   # more samples per case
+  python benchmarks/run_benchmarks.py --save       # append the run to the history file
+  python benchmarks/run_benchmarks.py --save --compare   # diff against the newest saved
+                                                   # run; exit 1 on a Cairn regression
+                                                   # beyond the noise band
   python benchmarks/run_benchmarks.py --strict     # exit 1 unless Cairn wins every
                                                    # measured baseline; exit 2 when no
                                                    # baseline can be measured
@@ -34,6 +38,10 @@ DEFAULT_ROUNDS = 5
 EXIT_OK = 0
 EXIT_SLOWER = 1
 EXIT_NO_BASELINE = 2
+# Run-to-run spread on this machine is about 10 percent (README); a comparison only
+# flags a change in the Cairn numbers that is bigger than this band.
+NOISE_BAND = 0.10
+HISTORY = ROOT / ".aikit" / "benchmark_history.jsonl"
 
 C_COMPILERS: Dict[str, List[str]] = {
     "gcc": ["gcc", "-O2", "-o"],
@@ -188,6 +196,86 @@ def verdict(best_cairn: Optional[float], best_c: Optional[float]) -> str:
     return "tie"
 
 
+def compare_runs(current: Dict[str, Dict[str, float]], previous: Dict[str, Dict[str, float]],
+                 noise: float = NOISE_BAND) -> Tuple[List[str], bool]:
+    """Per-case best-time deltas against a saved run; (readable lines, any regression).
+
+    Only the Cairn numbers gate: a previous run's C or Rust readings cannot regress
+    from a change to this repository, so a `noise`-banded look at the Cairn column is
+    what a regression is. A case the previous run never measured is reported as `new`,
+    and a case the current run is missing is simply not claimed.
+    """
+    lines = []
+    regressed = False
+    for case, now in current.get("cairn", {}).items():
+        was = previous.get("cairn", {}).get(case)
+        if was is None or was <= 0:
+            lines.append(f"{case}: new (no earlier measurement to compare)")
+            continue
+        delta = (float(now) - float(was)) / float(was)
+        band = noise * float(was)
+        if float(now) - float(was) > band:
+            state = "regressed"
+            regressed = True
+        elif float(was) - float(now) > band:
+            state = "improved"
+        else:
+            state = "within noise"
+        lines.append(f"{case}: {was:.1f} -> {now:.1f} ms  {delta:+.1%}  {state}")
+    return lines, regressed
+
+
+def latest_history_record(path: Path) -> Optional[Dict[str, object]]:
+    """The newest valid JSONL record in the history file, or None without one.
+
+    A corrupted trailing line is skipped over, never allowed to hide the last good
+    run: partial writes and hand edits must not turn the watch off.
+    """
+    if not path.is_file():
+        return None
+    with open(path, encoding="utf-8") as history:
+        lines = history.readlines()
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(record, dict):
+            return record
+    return None
+
+
+def record_from_reports(reports: List[Dict[str, object]], compiler: Optional[str],
+                        rust_compiler: Optional[str], rounds: int, optimise: bool) -> Dict[str, object]:
+    """One history record: the commit this run measured and each best time by language."""
+    def bests(key: str) -> Dict[str, float]:
+        table: Dict[str, float] = {}
+        for report in reports:
+            data = report.get(key)
+            if isinstance(data, dict) and data.get("best_ms") is not None:
+                table[str(report["case"])] = float(data["best_ms"])
+        return table
+
+    commit = None
+    git = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
+                         text=True, timeout=10, cwd=str(ROOT))
+    if git.returncode == 0:
+        commit = git.stdout.strip() or None
+    return {"timestamp": round(time.time(), 3), "commit": commit, "rounds": rounds,
+            "optimise": optimise, "c_compiler": compiler, "rust_compiler": rust_compiler,
+            "cairn": bests("cairn"), "c": bests("c"), "rust": bests("rust")}
+
+
+def save_record(path: Path, record: Dict[str, object]) -> None:
+    """Append one record as a single JSONL line."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as history:
+        history.write(json.dumps(record) + "\n")
+
+
 def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Path,
                    optimise: bool = True, rust_compiler: Optional[str] = None) -> Dict[str, object]:
     """Measure one case in Cairn and, when available, in C and in Rust."""
@@ -324,6 +412,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--strict", action="store_true",
                         help="exit 1 unless Cairn is at least as fast as every measured "
                              "baseline on every case; exit 2 when no baseline can be measured")
+    parser.add_argument("--save", action="store_true",
+                        help="append this run's best times and commit to "
+                             f"{HISTORY.relative_to(ROOT)}")
+    parser.add_argument("--compare", action="store_true",
+                        help="diff this run's Cairn best times against the newest saved "
+                             "record and exit 1 on a regression beyond the noise band")
     arguments = parser.parse_args(argv)
     compiler = find_c_compiler()
     rust_compiler = find_rust_compiler()
@@ -350,6 +444,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                           "cases": reports}, indent=2))
     else:
         print(render(reports, compiler, optimise, rust_compiler))
+    previous = latest_history_record(HISTORY) if arguments.compare else None
+    if arguments.save:
+        save_record(HISTORY, record_from_reports(reports, compiler, rust_compiler,
+                                                 arguments.rounds, optimise))
+        print(f"[SAVED] {HISTORY.relative_to(ROOT)}")
+    if arguments.compare:
+        if previous is None:
+            print("Compare: no earlier saved run; this --save run becomes the baseline.")
+        else:
+            lines, regressed = compare_runs(
+                record_from_reports(reports, compiler, rust_compiler,
+                                    arguments.rounds, optimise), previous,
+                noise=NOISE_BAND)
+            print("Compare against the newest saved run"
+                  + (f" (commit {previous.get('commit')})"
+                     if previous.get("commit") else "") + ":")
+            for line in lines:
+                print(f"  {line}")
+            if regressed:
+                return EXIT_SLOWER
     if not arguments.strict:
         return EXIT_OK
     if compiler is None and rust_compiler is None:

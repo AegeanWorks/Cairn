@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `89`
-- **Total Top-Level Functions**: `143`
-- **Total Class Methods**: `559`
-- **Total Source Lines**: `10058`
+- **Total Classes**: `90`
+- **Total Top-Level Functions**: `147`
+- **Total Class Methods**: `567`
+- **Total Source Lines**: `10234`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -32,7 +32,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C and Rust baselines.*
 
-**Size**: `364` lines (`16507` bytes)
+**Size**: `478` lines (`21875` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C and Rust sources, and what one iteration is.*
@@ -48,6 +48,10 @@
 - `def measure(executable, rounds)` - *Wall-clock milliseconds for each run of one executable.*
 - `def summarise(samples, iterations)` - *Best, median and per-unit cost from one set of wall-clock samples.*
 - `def verdict(best_cairn, best_c)` - *The measured standing against one baseline: `faster`, `slower`, `tie` or `unavailable`.*
+- `def compare_runs(current, previous, noise)` - *Per-case best-time deltas against a saved run; (readable lines, any regression).*
+- `def latest_history_record(path)` - *The newest valid JSONL record in the history file, or None without one.*
+- `def record_from_reports(reports, compiler, rust_compiler, rounds, optimise)` - *One history record: the commit this run measured and each best time by language.*
+- `def save_record(path, record)` - *Append one record as a single JSONL line.*
 - `def benchmark_case(case, compiler, rounds, folder, optimise, rust_compiler)` - *Measure one case in Cairn and, when available, in C and in Rust.*
 - `def render(reports, compiler, optimise, rust_compiler)` - *The human table; one line per case and per measured language.*
 - `def _goal_lines(reports, label, compiler, verdict_key, install_hint)` - *The scoreboard line for one baseline, decided only by measurements from this run.*
@@ -631,7 +635,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `281` lines (`15367` bytes)
+**Size**: `343` lines (`18564` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -665,6 +669,15 @@
 - `class RegistryShapeTest` - *The measured set: which cases the scoreboard commits to, by name and unit.*
   - Method `.test_the_registry_names_every_commitment()`
   - Method `.test_each_case_declares_a_unit_and_a_positive_iteration_count()`
+- `class CompareRunsTest` - *The regression watch: a saved run's numbers diffed against the new run.*
+  - Method `.test_a_cairn_regression_beyond_the_noise_band_is_flagged()`
+  - Method `.test_drift_inside_the_noise_band_is_reported_but_not_flagged()`
+  - Method `.test_an_improvement_is_named_and_never_flags()`
+  - Method `.test_a_case_absent_from_the_previous_run_is_reported_as_new()`
+  - Method `.test_a_case_missing_from_the_current_run_is_not_imagined()`
+  - Method `.test_compare_is_symmetric_about_the_noise_band_edges()`
+  - Method `.test_the_newest_valid_history_record_wins_over_corrupt_lines()`
+  - Method `.test_missing_history_reads_as_no_record()`
 
 ---
 
