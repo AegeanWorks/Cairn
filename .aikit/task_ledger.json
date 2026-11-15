@@ -3,25 +3,16 @@
   "active_task": {
     "task_id": "cairn-bench-cases-2",
     "last_phase": "4",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794750722.5392308,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794750727.5698898,
+    "completed_head": "b1f23f3795efeb0a91c927c705e1211c025d46bf"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-scoreboard-pass",
-      "phase": "in_progress",
-      "phase_num": 5,
-      "description": "pad/pop miscompile fixed with e2e regression test; self-recursive inlining (shadow-home copies, depth cap 4) and cmp-homed-imm fold shipped; fib30 at Cairn/C 1.03-1.15, faster than Rust on all cases",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794677545.274269,
-      "timestamp_str": "2026-11-14 20:32:25",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-scoreboard-pass",
       "phase": "in_progress",
@@ -288,6 +279,22 @@
       "timestamp_str": "2026-11-15 16:52:02",
       "agent": "mistral:vibe",
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-bench-cases-2",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-bench-cases-2' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794750727.5899525,
+      "timestamp_str": "2026-11-15 16:52:07",
+      "agent": "mistral:vibe",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
