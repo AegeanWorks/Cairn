@@ -3,54 +3,17 @@
   "active_task": {
     "task_id": "cairn-flag-conditions",
     "last_phase": "in_progress",
-    "active_phase": 2,
-    "status": "in_progress",
-    "updated_at": 1794761594.6735668,
+    "active_phase": 5,
+    "status": "completed",
+    "updated_at": 1794761678.9397984,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794761679.3116882,
+    "completed_head": "a538dcd8366852da445d847cdbc0d573d53a0de0",
+    "completed_tree": "954c0325f25b9384fec5e895bab43f883b2c8e0e"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-ackermann-win",
-      "phase": "implementation",
-      "phase_num": 2,
-      "description": "[1/4] Plan ackermann win: direct-register multi-arg call args, then 2-param delta inlining",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794745108.9005198,
-      "timestamp_str": "2026-11-15 15:18:28",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "The goal demands beating C and Rust on every committed benchmark, and ackermann is the last open case: Cairn 2.7-3.8x behind C because both inline paths require one-parameter functions, so all 25M calls stay real while gcc's 10-level self-inlining collapses the A(1,n)/A(2,n) shells into call-free loops",
-        "benefits": "L1 (direct-register simple args) removes the push/pop/movabs shuffle from every multi-arg call program-wide; L2 (2-param delta inlining: param0 constant-delta lea reads, param1 bound in one dedicated callee-saved register) eliminates the shell calls that dominate A(3,9) and closes the gap toward C",
-        "risks": "contract: inline copies must stay semantically identical including trap and overflow behavior; dependency: codegen 100-330 and 1190-1400, machine assembler opcodes; concurrency: none; state: README standings, ADR register, benchmark harness numbers",
-        "mitigation": "Failing-first shape and e2e tests per lever, strict refusals (param rebind, non-return-tree body, arg1 forms outside literal/param+-imm/self-call, depth cap bounding the 2^d copy growth), interleaved harness runs 2-3x, gates and KB sync before commit"
-      },
-      "plan_digest": "66677c4a5d80f1060a2036f3bcee4bef06268c27ffcad23bbd065730378e63ee"
-    },
-    {
-      "task_id": "cairn-ackermann-win",
-      "phase": "implementation",
-      "phase_num": 2,
-      "description": "[2/4] L1 direct-register pure args + L2 pair inlining implemented; 324 tests green, ackermann dropped to ~20 ms vs C ~16",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794746460.0243864,
-      "timestamp_str": "2026-11-15 15:41:00",
-      "agent": "mistral:vibe"
-    },
-    {
-      "task_id": "cairn-ackermann-win",
-      "phase": "implementation",
-      "phase_num": 2,
-      "description": "[3/4] Milestone: loop-ify the delta-0 n-chain - R(n) = f^(n+1)(1) with f(v) = ack(m-1, v); d=6 pair inlining stands at 17-21 ms vs C 16-19",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794746760.683403,
-      "timestamp_str": "2026-11-15 15:46:00",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-ackermann-win",
       "phase": "2",
@@ -290,6 +253,46 @@
       "timestamp": 1794761594.6735668,
       "timestamp_str": "2026-11-15 19:53:14",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-flag-conditions",
+      "phase": "in_progress",
+      "phase_num": 3,
+      "description": "Phase 4 verified: suite 400+39 green at a538dcd, cairn strict gate 4/4, compare exit 0; committed perf(codegen) fuse bit-test and logical conditions",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794761670.0057578,
+      "timestamp_str": "2026-11-15 19:54:30",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-flag-conditions",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "Phase 4 checklist outcome: suite 400+39 green at a538dcd, aikit check cairn --strict 4/4 passed, secrets and README gates passed, benchmark compare exit 0",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794761678.9397984,
+      "timestamp_str": "2026-11-15 19:54:38",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-flag-conditions",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-flag-conditions' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794761679.3547213,
+      "timestamp_str": "2026-11-15 19:54:39",
+      "agent": "mistral:vibe",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
