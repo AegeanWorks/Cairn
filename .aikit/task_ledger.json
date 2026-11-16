@@ -3,26 +3,17 @@
   "active_task": {
     "task_id": "cairn-stream-input",
     "last_phase": "4",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794865401.542221,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794865604.7072523,
+    "completed_head": "7c8c5466e705d98a9d9db17c7acf52c65a16420c",
+    "completed_tree": "83df2d5f8d871cc72a5ac5b6ca5692b9eaab8fdd"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-allocation",
-      "phase": "4",
-      "phase_num": 2,
-      "description": "[2/3] Loop-depth home preference: _home_slots ranks slots by deepest while nesting (ties: later slot first), leaf functions keep declaration order, _clear_frame clears map-declined slots; mandelbrot inner loop 13 frame refs down to 2 (x0, y0), 14.4 -> 13.2 ms",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794821605.8337004,
-      "timestamp_str": "2026-11-16 12:33:25",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-allocation",
       "phase": "4",
@@ -315,6 +306,23 @@
       "timestamp_str": "2026-11-17 00:43:21",
       "agent": "mistral:vibe",
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-stream-input",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-stream-input' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794865604.749693,
+      "timestamp_str": "2026-11-17 00:46:44",
+      "agent": "mistral:vibe",
+      "head": "7c8c5466e705d98a9d9db17c7acf52c65a16420c",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
