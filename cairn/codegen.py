@@ -331,6 +331,15 @@ class CodeGenerator:
         if frame:
             asm.sub_rsp(frame)
         self.pad_slots = ()
+        # The body (and the foreign copies it hosts) must know which function is
+        # live: without this, a frame function forfeits every foreign inline.
+        self.current = function
+        self.delta_slot = -1
+        self.delta_value = 0
+        self.value_slot = -1
+        self.hold_units = 0
+        self.chain_loop_depth = 0
+        self.holds = ()
         self._save_homes()
         self._clear_frame(function)
         for index, parameter in enumerate(function.parameters[:len(ARGUMENT_REGISTERS)]):
@@ -348,6 +357,8 @@ class CodeGenerator:
         asm.label(self.epilogue)
         self._restore_homes()
         asm.leave_ret()
+        self.current = None
+        self.holds = ()
 
     def _save_homes(self) -> None:
         """Keep the caller's values for every callee-saved register this function uses."""
@@ -2661,7 +2672,7 @@ class CodeGenerator:
         the register that keeps it.
         """
         if (self.program is None or self.current is None
-                or self.depth or self.temporaries
+                or self.temporaries
                 or self.inline_depth >= MAX_INLINE_DEPTH
                 or expression.name == self.current.name):
             return None

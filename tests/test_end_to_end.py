@@ -978,3 +978,29 @@ class SameNameInPlaceValueTest(EndToEndTest):
         completed = self.execute(SAME_NAME_IN_PLACE)
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "81\n121\n169\n30\n14\n8\n")
+
+
+FRAME_PATH_INLINE = (
+    "fn twice(v: i64) -> i64 { return v + v; }"
+    "fn mix(a: i64, b: i64, c: i64) -> i64 { return a * b + c; }"
+    "fn main() -> i64 { "
+    + " ".join(f"var a{i}: i64 = {i};" for i in range(6))
+    + " var g: i64 = 0; var i: i64 = 0;"
+    " while i < 3 { g = g + twice(g + a1); i = i + 1; }"
+    " print(g);"
+    " print(mix(a0, a1, a2));"
+    " print(mix(a5, a4, a3));"
+    " print(twice(a3) + twice(a4) + a5);"
+    " return 0; }")
+
+
+@WINDOWS_ONLY
+class FramePathInlineValueTest(EndToEndTest):
+    """A 7+-slot main that foreign-copies its callees prints the leaf-path answers."""
+
+    def test_frame_path_copies_preserve_output(self) -> None:
+        completed = self.execute(FRAME_PATH_INLINE)
+        self.assertEqual(completed.returncode, 0)
+        # g + 2*(g + a1) = 3g + 2 per iteration (a1 = 1): 0 -> 2 -> 8 -> 26
+        # mix(0,1,2)=2; mix(5,4,3)=23; twice(3)+twice(4)+5 = 6+8+5 = 19
+        self.assertEqual(completed.stdout, "26\n2\n23\n19\n")

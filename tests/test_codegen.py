@@ -1308,3 +1308,59 @@ class MultiplyHomeFastPathTest(unittest.TestCase):
 imul_rax_rax = b"\x48\x0f\xaf\xc0"  # imul rax, rax
 imul_rax_rcx = b"\x48\x0f\xaf\xc1"  # imul rax, rcx
 imul_rax_rbx = b"\x48\x0f\xaf\xc3"  # imul rax, rbx
+
+
+FRAME_MAIN_CHAIN = (
+    "fn twice(v: i64) -> i64 { return v + v; }"
+    "fn main() -> i64 { "
+    + " ".join(f"var a{i}: i64 = {i};" for i in range(6))
+    + " var g: i64 = 0; var i: i64 = 0;"
+    " while i < 3 { g = g + 1; i = i + 1; }"
+    " return twice(g) + twice(2) + twice(a0) + g; }")
+
+
+class FramePathInlineTest(unittest.TestCase):
+    """A frame-path function (more slots than homes) still foreign-copies its callees.
+
+    The rbp prologue never entered `current` into the generator state, so
+    `_foreign_inline_target` refused every copy inside a 7+-slot function and left
+    real calls behind where a leaf main of the same source shape inline-copies.
+    """
+
+    def test_a_frame_main_copies_a_call_free_callee(self) -> None:
+        program = sema.analyze(parser.parse(FRAME_MAIN_CHAIN))
+        self.assertGreater(program.functions[-1].slots, len(HOME_REGISTERS))
+        self.assertEqual(calls_of(FRAME_MAIN_CHAIN, "main", "twice"), 0)
+
+    def test_a_frame_main_copies_inside_a_loop_body_too(self) -> None:
+        looped = (
+            "fn twice(v: i64) -> i64 { return v + v; }"
+            "fn main() -> i64 { "
+            + " ".join(f"var a{i}: i64 = {i};" for i in range(6))
+            + " var g: i64 = 0; var i: i64 = 0;"
+            " while i < 3 { g = g + twice(g + a0); i = i + 1; }"
+            " return g + a0 + a1 + a2 + a3 + a4 + a5; }")
+        program = sema.analyze(parser.parse(looped))
+        self.assertGreater(program.functions[-1].slots, len(HOME_REGISTERS))
+        self.assertEqual(calls_of(looped, "main", "twice"), 0)
+
+
+# A callee whose body calls another function (not copy-free) keeps its call inside a
+# frame function (fallback parity), exactly as from a leaf function.
+FRAME_MAIN_REBINDING = (
+    "fn twice(v: i64) -> i64 { return v + v; }"
+    "fn wrap(v: i64) -> i64 { return twice(v) + twice(v); }"
+    "fn main() -> i64 { "
+    + " ".join(f"var a{i}: i64 = {i};" for i in range(6))
+    + " var g: i64 = 0; var i: i64 = 0;"
+    " while i < 3 { g = g + 1; i = i + 1; }"
+    " return wrap(g) + wrap(4) + g; }")
+
+
+class FramePathRebindFallbackTest(unittest.TestCase):
+    """A callee whose body calls another function keeps the real call from a frame function."""
+
+    def test_the_calling_callee_stays_a_call(self) -> None:
+        program = sema.analyze(parser.parse(FRAME_MAIN_REBINDING))
+        self.assertGreater(program.functions[-1].slots, len(HOME_REGISTERS))
+        self.assertEqual(calls_of(FRAME_MAIN_REBINDING, "main", "wrap"), 2)
