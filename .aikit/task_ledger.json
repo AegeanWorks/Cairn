@@ -3,26 +3,17 @@
   "active_task": {
     "task_id": "cairn-string-exit",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794868151.467163,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794868221.6925406,
+    "completed_head": "fca3f7683659ee699840e623ab2e85d5fd13878c",
+    "completed_tree": "cab2f0464c87a8fbf9eff268c8a16f9e1205b741"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-magic-hoist",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/1] Hoisted forms landed, gate exit 0",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794835879.723295,
-      "timestamp_str": "2026-11-16 16:31:19",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-magic-hoist",
       "phase": "completed",
@@ -299,6 +290,23 @@
       "timestamp_str": "2026-11-17 01:29:11",
       "agent": "mistral:vibe",
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-string-exit",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-string-exit' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794868221.7302587,
+      "timestamp_str": "2026-11-17 01:30:21",
+      "agent": "mistral:vibe",
+      "head": "fca3f7683659ee699840e623ab2e85d5fd13878c",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
