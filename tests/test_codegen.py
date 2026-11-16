@@ -1080,21 +1080,22 @@ class InsideACopyTest(unittest.TestCase):
 
     def test_a_tail_returning_copy_skips_the_implicit_return_zero(self) -> None:
         # mix3's shape: the body ends in a return, so no path falls off the copy's end.
-        # The ten-byte zero move has no reason to run once per iteration; only main's own
-        # prologue (once per function entry) keeps one.
+        # The ten-byte zero move has no reason to run once per iteration; since the
+        # prologue-slim gate (ADR-050) main's own implicit zero drops too, so only
+        # main's tail `return 0` keeps one.
         body = region_bytes(TAIL_RETURN_COPIES, "main")
         zero = b"\x48\xb8\x00\x00\x00\x00\x00\x00\x00\x00"
-        self.assertEqual(body.count(zero), 2)  # main's implicit zero + its tail `return 0`
+        self.assertEqual(body.count(zero), 1)  # main's tail `return 0`
 
     def test_a_copy_whose_last_statement_is_not_a_return_keeps_the_implicit_zero(self) -> None:
         # Both branches of the tail if return, so the copy cannot fall off its end either —
         # but the last statement is an If, so the guard stays: one zero per copy remains
-        # (main's implicit zero and its tail `return 0` are the other two).
+        # (main's tail `return 0` is the other; its implicit zero drops per ADR-050).
         source = TAIL_RETURN_COPIES.replace(
             "return t; } ", "if t > 3 { return t - 1; } else { return t + 1; } } ")
         body = region_bytes(source, "main")
         zero = b"\x48\xb8\x00\x00\x00\x00\x00\x00\x00\x00"
-        self.assertEqual(body.count(zero), 3)
+        self.assertEqual(body.count(zero), 2)
 
     def test_two_homed_names_compare_in_place(self) -> None:
         body = region_bytes(HOMED_CONDITION, "main")
@@ -1680,3 +1681,45 @@ class ShiftThroughFusionTest(unittest.TestCase):
     def test_a_twice_used_parameter_keeps_its_bind(self) -> None:
         blob = region_bytes(self.REFUSED_DOUBLE, "main")
         self.assertIn(b"\xc1\xfa\x02", blob, "a twice-read parameter must keep its sar bind")
+
+
+class PrologueSlimTest(unittest.TestCase):
+    """The entry prologue carries only what the body leaves undefined.
+
+    A body whose last statement returns reaches the epilogue with rax already
+    holding the value, so the implicit return zero is dead; a slot whose first
+    top-level touch assigns it needs no prologue clear; and `name = 0` lowers
+    as the xor zero-idiom rather than a ten-byte move of a zero constant.
+    """
+
+    RETURNING = ("fn f(a: i64) -> i64 { return a + 1; }"
+                 " fn main() -> i64 { print(f(2)); return 0; }")
+
+    BRANCHED = ("fn f(a: i64) -> i64 { if a > 4 { return 5; } else { return 9; } }"
+                " fn main() -> i64 { print(f(9)); return 0; }")
+
+    LOCAL_ZERO = ("fn f(a: i64) -> i64 { var t: i64 = 0; var u: i64 = t + a;"
+                  " print(u + t); return 0; }"
+                  " fn main() -> i64 { print(f(2)); return 0; }")
+
+    XOR_IDIOMS = {bytes([rex, 0x31, 0xC0 | ((code & 7) << 3) | (code & 7)])
+                  for rex in (0x40, 0x45)
+                  for code in range(16)}
+
+    def test_a_final_return_skips_the_implicit_zero(self) -> None:
+        blob = region_bytes(self.RETURNING, "f")
+        self.assertNotIn(b"\x48\xb8" + b"\x00" * 8, blob,
+                         "mov rax, 0 still runs on entry of a final-return body")
+
+    def test_a_body_without_a_final_return_keeps_the_implicit_zero(self) -> None:
+        blob = region_bytes(self.BRANCHED, "f")
+        self.assertIn(b"\x48\xb8" + b"\x00" * 8, blob,
+                      "a fall-through margin must keep the implicit return zero")
+
+    def test_a_zero_provenance_region_emits_exactly_one_xor(self) -> None:
+        # f clears t and u today (2 xor idioms); after the change `var t = 0` is
+        # itself the one xor and u's first Let needs no clear.
+        blob = region_bytes(self.LOCAL_ZERO, "f")
+        count = sum(blob.count(pattern) for pattern in self.XOR_IDIOMS)
+        self.assertEqual(count, 1,
+                         "the zero provenance region should carry exactly one xor idiom")

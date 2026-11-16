@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `136`
+- **Total Classes**: `137`
 - **Total Top-Level Functions**: `169`
-- **Total Class Methods**: `753`
-- **Total Source Lines**: `13783`
+- **Total Class Methods**: `756`
+- **Total Source Lines**: `13843`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3463` lines (`174709` bytes)
+**Size**: `3480` lines (`175843` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -818,7 +818,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1682` lines (`82515` bytes)
+**Size**: `1725` lines (`84620` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -997,6 +997,10 @@
   - Method `.test_unequal_shift_counts_stay_two_instructions()`
   - Method `.test_a_forwarded_parameter_leaves_no_sar_behind()`
   - Method `.test_a_twice_used_parameter_keeps_its_bind()`
+- `class PrologueSlimTest` - *The entry prologue carries only what the body leaves undefined.*
+  - Method `.test_a_final_return_skips_the_implicit_zero()`
+  - Method `.test_a_body_without_a_final_return_keeps_the_implicit_zero()`
+  - Method `.test_a_zero_provenance_region_emits_exactly_one_xor()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*

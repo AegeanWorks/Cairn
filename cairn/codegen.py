@@ -315,9 +315,12 @@ class CodeGenerator:
             self.depth = 0
             self.temporaries = 0
             self.left_hold = None
-            # The implicit-return-zero runs once at entry: explicit returns overwrite it,
-            # and a final `return` can fall through into the epilogue label ungated.
-            asm.mov_imm64("rax", 0)
+            # The implicit-return-zero guards only the fall-off-the-end path, so it
+            # runs when the body does not end in a `return`: a final `return` falls
+            # through into the epilogue with rax already set (the copy gate, proven
+            # in _emit_foreign_inline, drops the move exactly the same way).
+            if not self._ends_in_return(function.body):
+                asm.mov_imm64("rax", 0)
             self._emit_block(function.body, tail=True)
             asm.label(self.epilogue)
             if hold_units:
@@ -369,7 +372,9 @@ class CodeGenerator:
         self.depth = 0
         self.temporaries = 0
         self.left_hold = None
-        asm.mov_imm64("rax", 0)
+        if not self._ends_in_return(function.body):
+            # Same gate as the home-frame path: a final `return` sets rax itself.
+            asm.mov_imm64("rax", 0)
         self._emit_block(function.body, tail=True)
         asm.label(self.epilogue)
         self._restore_homes()
@@ -392,16 +397,21 @@ class CodeGenerator:
 
         Cairn has one flat function scope, so a name declared inside an `if` is visible after it.
         A home is cleared in its register; a stack slot is cleared in the frame. A parameter needs
-        neither, because the argument register is stored over it before the body runs.
+        neither, because the argument register is stored over it before the body runs. The copy
+        path's `_cleared_before_use` gate drops the clear for a slot whose first top-level touch
+        already assigns it — recursion-heavy callers pay the prologue on every entry.
         """
         asm = self.assembler
-        frame_slots = [slot for slot in range(function.slots) if slot not in self.home_of]
+        assigned = {slot for slot in range(function.slots)
+                    if self._cleared_before_use(function.body, slot)}
+        frame_slots = [slot for slot in range(function.slots)
+                       if slot not in self.home_of and slot not in assigned]
         if frame_slots:
             asm.xor_zero("rax")
             for slot in frame_slots:
                 asm.mov_store_rbp(slot_offset(slot), "rax")
         for slot, home in self.home_of.items():
-            if slot >= len(function.parameters):
+            if slot >= len(function.parameters) and slot not in assigned:
                 asm.xor_zero(home)
 
     def _home_slots(self, function: syntax.Function) -> list:
@@ -569,6 +579,13 @@ class CodeGenerator:
         if home is not None and self._emit_binary_into(expression, home):
             if not self._update_keeps_nonneg(slot, expression):
                 self.nonnegative_slots.discard(slot)
+            return
+        if (home is not None and isinstance(expression, syntax.IntLiteral)
+                and expression.value == 0):
+            # A ten-byte move of a zero constant is two instructions plus the store;
+            # the xor zero-idiom writes zero in one 3-byte instruction.
+            self.assembler.xor_zero(home)
+            self.nonnegative_slots.discard(slot)
             return
         self._emit_expression(expression)
         self._store_slot(slot)
