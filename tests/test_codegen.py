@@ -1451,3 +1451,25 @@ class FrameInPlaceUpdateTest(unittest.TestCase):
         # a16 = slot 16, [rbp-136]: disp32 form add [rbp+disp32], rbx (a0's home).
         expected = bytes([0x48, 0x01, 0x9D]) + ((-136) & 0xFFFFFFFF).to_bytes(4, "little")
         self.assertIn(expected, blob)
+
+
+class HomeMapContractTest(unittest.TestCase):
+    """`_home` reads the slot-to-home map, not the positional register list.
+
+    The map is the assignment policy's surface: `homes` stays the ordered register list
+    the save area iterates, and the map decides which slot owns it.
+    """
+
+    def test_a_slot_loses_its_home_when_the_map_does_not_grant_it(self) -> None:
+        generator = CodeGenerator()
+        generator.homes = ("rbx", "r12")
+        generator.home_of = {1: "r12"}
+        self.assertEqual(generator._home(1), "r12")
+        self.assertIsNone(generator._home(0))
+
+    def test_the_map_grants_homes_beyond_the_positional_default(self) -> None:
+        generator = CodeGenerator()
+        generator.homes = ("r13",)
+        generator.home_of = {7: "r13"}
+        self.assertEqual(generator._home(7), "r13")
+        self.assertIsNone(generator._home(0))

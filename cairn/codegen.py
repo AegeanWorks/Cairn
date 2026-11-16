@@ -177,6 +177,11 @@ class CodeGenerator:
     continue_targets: List[str] = field(default_factory=list)
     counter: int = 0
     homes: Tuple[str, ...] = ()
+    # Which slots keep a register home, per live function context (the function, a
+    # foreign copy's guest, or a self-call's shadow): slot -> register. `homes` stays
+    # the ordered register list the save area and the plans iterate; `_home` reads
+    # this map. Identity-ordered today; assignment policy decides the keys' owners.
+    home_of: dict = field(default_factory=dict)
     save_base: int = 0
     epilogue: str = ""
     current: Optional[syntax.Function] = None
@@ -235,6 +240,7 @@ class CodeGenerator:
         """
         asm = self.assembler
         self.homes = HOME_REGISTERS[:min(function.slots, len(HOME_REGISTERS))]
+        self.home_of = {slot: home for slot, home in enumerate(self.homes)}
         self.save_base = function.slots
         self.epilogue = f"{function_label(function.name)}.epilogue"
         frame = align16((function.slots + len(self.homes)) * 8)
@@ -382,8 +388,8 @@ class CodeGenerator:
             asm.xor_zero("rax")
             for slot in range(len(self.homes), function.slots):
                 asm.mov_store_rbp(slot_offset(slot), "rax")
-        for index, home in enumerate(self.homes):
-            if index >= len(function.parameters):
+        for slot, home in self.home_of.items():
+            if slot >= len(function.parameters):
                 asm.xor_zero(home)
 
     def _home(self, slot: int) -> Optional[str]:
@@ -395,9 +401,7 @@ class CodeGenerator:
         """
         if self.copy_alias and slot in self.copy_alias:
             return self.copy_alias[slot]
-        if 0 <= slot < len(self.homes):
-            return self.homes[slot]
-        return None
+        return self.home_of.get(slot)
 
     def _emit_loop_head(self, label: str) -> None:
         """Pad onto a 16-byte boundary, then bind the loop's backedge target.
@@ -2705,6 +2709,7 @@ class CodeGenerator:
         """
         asm = self.assembler
         saved_homes = self.homes
+        saved_home_of = self.home_of
         saved_epilogue = self.epilogue
         saved_pads = self.pad_slots
         saved_holds = self.holds
@@ -2722,6 +2727,7 @@ class CodeGenerator:
             # the pad keeps every call inside the copy free of on-the-spot alignment shifts.
             asm.sub_rsp(8)
         self.homes = tuple(shadow)
+        self.home_of = {slot: home for slot, home in enumerate(shadow)}
         self.pad_slots = saved_pads + (own_pad,)
         self.holds = saved_holds + (hold,)
         self.epilogue = self._fresh(f"{function_label(self.current.name)}.inline")
@@ -2735,6 +2741,7 @@ class CodeGenerator:
         for register in reversed(slots):
             asm.pop(register)
         self.homes = saved_homes
+        self.home_of = saved_home_of
         self.pad_slots = saved_pads
         self.holds = saved_holds
         self.epilogue = saved_epilogue
@@ -2861,10 +2868,10 @@ class CodeGenerator:
         its clear.
         """
         asm = self.assembler
-        saved = (self.homes, self.current, self.epilogue, self.pad_slots, self.holds,
-                 self.delta_slot, self.delta_value, self.value_slot, self.hold_units,
-                 self.chain_loop_depth, self.temporaries, self.nonnegative_slots,
-                 self.copy_alias, self.copy_return)
+        saved = (self.homes, self.home_of, self.current, self.epilogue, self.pad_slots,
+                 self.holds, self.delta_slot, self.delta_value, self.value_slot,
+                 self.hold_units, self.chain_loop_depth, self.temporaries,
+                 self.nonnegative_slots, self.copy_alias, self.copy_return)
         alias = dict(alias or {})
         parameters = len(callee.parameters)
         rebinds, guest, spill = self._plan_foreign_copy(callee)
@@ -2876,6 +2883,7 @@ class CodeGenerator:
         for home in spill:
             asm.push(home)
         self.homes = guest
+        self.home_of = {slot: home for slot, home in enumerate(guest)}
         self.current = callee
         self.epilogue = self._fresh(f"{function_label(callee.name)}.copy")
         self.pad_slots = ()
@@ -2893,16 +2901,16 @@ class CodeGenerator:
         self.copy_return = copy_home
         for index, parameter in enumerate(callee.parameters[:len(ARGUMENT_REGISTERS)]):
             if rebinds:
-                asm.mov_reg_reg(self.homes[index], ARGUMENT_REGISTERS[index])
+                asm.mov_reg_reg(self.home_of[index], ARGUMENT_REGISTERS[index])
         for index in range(len(ARGUMENT_REGISTERS), len(callee.parameters)):
             # A five-or-six-parameter copy's extra arguments arrived in the temporary
             # registers; an aliased one already reads the caller's own home.
             if index not in self.copy_alias:
-                asm.mov_reg_reg(self.homes[index],
+                asm.mov_reg_reg(self.home_of[index],
                                 TEMPORARY_REGISTERS[index - len(ARGUMENT_REGISTERS)])
         for index in range(parameters, callee.slots):
             if not self._cleared_before_use(callee.body, index):
-                asm.xor_zero(self.homes[index])
+                asm.xor_zero(self.home_of[index])
         self.nonnegative_slots = set()
         statements = callee.body.statements
         if not (statements and isinstance(statements[-1], syntax.Return)):
@@ -2915,10 +2923,10 @@ class CodeGenerator:
         self.inline_depth -= 1
         for home in reversed(spill):
             asm.pop(home)
-        (self.homes, self.current, self.epilogue, self.pad_slots, self.holds,
-         self.delta_slot, self.delta_value, self.value_slot, self.hold_units,
-         self.chain_loop_depth, self.temporaries, self.nonnegative_slots,
-         self.copy_alias, self.copy_return) = saved
+        (self.homes, self.home_of, self.current, self.epilogue, self.pad_slots,
+         self.holds, self.delta_slot, self.delta_value, self.value_slot,
+         self.hold_units, self.chain_loop_depth, self.temporaries,
+         self.nonnegative_slots, self.copy_alias, self.copy_return) = saved
 
     def _rebinds_parameters(self, body: Optional[syntax.Block], count: int) -> bool:
         """Whether any statement assigns a parameter slot."""

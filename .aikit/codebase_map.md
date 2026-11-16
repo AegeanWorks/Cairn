@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `122`
+- **Total Classes**: `123`
 - **Total Top-Level Functions**: `165`
-- **Total Class Methods**: `711`
-- **Total Source Lines**: `12802`
+- **Total Class Methods**: `713`
+- **Total Source Lines**: `12832`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3059` lines (`153427` bytes)
+**Size**: `3067` lines (`154077` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -806,7 +806,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1453` lines (`69818` bytes)
+**Size**: `1475` lines (`70692` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -960,6 +960,9 @@
   - Method `.test_a_frame_counter_adds_in_place()`
   - Method `.test_a_frame_add_of_a_frame_name_folds_into_the_store()`
   - Method `.test_updates_beyond_disp8_take_the_four_byte_displacement()`
+- `class HomeMapContractTest` - *`_home` reads the slot-to-home map, not the positional register list.*
+  - Method `.test_a_slot_loses_its_home_when_the_map_does_not_grant_it()`
+  - Method `.test_the_map_grants_homes_beyond_the_positional_default()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
