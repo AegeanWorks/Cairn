@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `123`
+- **Total Classes**: `125`
 - **Total Top-Level Functions**: `165`
-- **Total Class Methods**: `713`
-- **Total Source Lines**: `12832`
+- **Total Class Methods**: `718`
+- **Total Source Lines**: `12969`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3067` lines (`154077` bytes)
+**Size**: `3127` lines (`157103` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -145,6 +145,7 @@
   - Method `._save_homes()` - *Keep the caller's values for every callee-saved register this function uses.*
   - Method `._restore_homes()` - *Put the caller's values back before returning.*
   - Method `._clear_frame(function)` - *Clear every slot so a binding declared in a branch that never ran reads as zero.*
+  - Method `._home_slots(function)` - *The slots that keep a register home, in register order.*
   - Method `._home(slot)` - *The register that holds `slot`, or None when the slot stays in the frame.*
   - Method `._emit_loop_head(label)` - *Pad onto a 16-byte boundary, then bind the loop's backedge target.*
   - Method `._load_slot(slot, destination)` - *Move one slot into `destination` from its register or its frame slot.*
@@ -806,7 +807,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1475` lines (`70692` bytes)
+**Size**: `1525` lines (`73493` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -826,7 +827,7 @@
 - `class SlotHomeTest` - *A slot with a home register must not be read from or written to the stack.*
   - Method `.test_two_hot_locals_never_touch_their_frame_slots()`
   - Method `.test_used_homes_are_saved_and_restored()`
-  - Method `.test_the_seventh_slot_keeps_the_stack_fallback()`
+  - Method `.test_the_displaced_slot_keeps_the_stack_fallback()`
 - `class ArgumentPathTest` - *Arguments and shifts by literals must not pay for registers they do not need.*
   - Method `.test_a_literal_subtrahend_uses_the_immediate_form()`
   - Method `.test_a_single_argument_moves_into_rcx_without_the_stack()`
@@ -957,12 +958,16 @@
   - Method `.test_a_six_parameter_rebinding_callee_takes_the_bind_once_copy()`
   - Method `.test_a_six_parameter_calling_callee_keeps_the_stack_call()`
 - `class FrameInPlaceUpdateTest` - *A frame slot's `slot = slot op value` is one memory-operand instruction.*
-  - Method `.test_a_frame_counter_adds_in_place()`
+  - Method `.test_a_displaced_counter_adds_in_place()`
   - Method `.test_a_frame_add_of_a_frame_name_folds_into_the_store()`
   - Method `.test_updates_beyond_disp8_take_the_four_byte_displacement()`
 - `class HomeMapContractTest` - *`_home` reads the slot-to-home map, not the positional register list.*
   - Method `.test_a_slot_loses_its_home_when_the_map_does_not_grant_it()`
   - Method `.test_the_map_grants_homes_beyond_the_positional_default()`
+- `class HomePreferenceTest` - *A frame function grants the registers to its deepest-loop slots, not its first six.*
+  - Method `.test_a_loop_slot_beyond_the_identity_prefix_homes_as_a_register()`
+  - Method `.test_a_displaced_depth_zero_slot_takes_the_memory_form()`
+  - Method `.test_a_leaf_function_keeps_its_declaration_order()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
@@ -984,7 +989,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1056` lines (`37623` bytes)
+**Size**: `1083` lines (`38674` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1080,6 +1085,8 @@
   - Method `.test_six_parameter_copies_preserve_output()`
 - `class FrameInPlaceValueTest` - *In-place frame updates print the answers hand arithmetic agrees with.*
   - Method `.test_in_place_updates_preserve_output()`
+- `class HomePreferenceValueTest` - *Preference reshuffles which slots sit in registers without changing answers.*
+  - Method `.test_preference_preserves_output()`
 
 **Functions:**
 - `def _wrap(value)`

@@ -239,8 +239,9 @@ class CodeGenerator:
         Every `return` jumps to the single epilogue, so a home is restored on every path out.
         """
         asm = self.assembler
-        self.homes = HOME_REGISTERS[:min(function.slots, len(HOME_REGISTERS))]
-        self.home_of = {slot: home for slot, home in enumerate(self.homes)}
+        homed = self._home_slots(function)
+        self.homes = HOME_REGISTERS[:len(homed)]
+        self.home_of = dict(zip(homed, self.homes))
         self.save_base = function.slots
         self.epilogue = f"{function_label(function.name)}.epilogue"
         frame = align16((function.slots + len(self.homes)) * 8)
@@ -384,13 +385,72 @@ class CodeGenerator:
         neither, because the argument register is stored over it before the body runs.
         """
         asm = self.assembler
-        if len(self.homes) < function.slots:
+        frame_slots = [slot for slot in range(function.slots) if slot not in self.home_of]
+        if frame_slots:
             asm.xor_zero("rax")
-            for slot in range(len(self.homes), function.slots):
+            for slot in frame_slots:
                 asm.mov_store_rbp(slot_offset(slot), "rax")
         for slot, home in self.home_of.items():
             if slot >= len(function.parameters):
                 asm.xor_zero(home)
+
+    def _home_slots(self, function: syntax.Function) -> list:
+        """The slots that keep a register home, in register order.
+
+        Functions whose slots all fit keep declaration order — the leaf shapes are
+        byte-calibrated. A frame function grants the registers to its deepest-loop
+        slots: a slot's rank is the deepest loop nesting any read or write of it
+        sits in, and ties break by descending slot (later bindings first), so an
+        inner loop's working set beats an outer loop's re-initialized bindings.
+        A parameter can lose its home this way; its store drops to the frame.
+        """
+        if function.slots <= len(HOME_REGISTERS):
+            return list(range(function.slots))
+        ranks: dict = {}
+
+        def touch(slot, depth):
+            if slot is not None and slot >= 0:
+                ranks[slot] = max(ranks.get(slot, 0), depth)
+
+        def rank_expression(expression, depth):
+            if isinstance(expression, syntax.Name):
+                touch(expression.slot, depth)
+            elif isinstance(expression, syntax.Unary):
+                rank_expression(expression.operand, depth)
+            elif isinstance(expression, syntax.Binary):
+                rank_expression(expression.left, depth)
+                rank_expression(expression.right, depth)
+            elif isinstance(expression, syntax.Parens):
+                rank_expression(expression.inner, depth)
+            elif isinstance(expression, syntax.Call):
+                for argument in expression.arguments:
+                    rank_expression(argument, depth)
+
+        def rank_block(block, depth):
+            for statement in block.statements:
+                if (isinstance(statement, (syntax.Let, syntax.Assign))
+                        and statement.value is not None):
+                    rank_expression(statement.value, depth)
+                    touch(statement.slot, depth)
+                elif isinstance(statement, syntax.If):
+                    rank_expression(statement.condition, depth)
+                    if statement.then_block is not None:
+                        rank_block(statement.then_block, depth)
+                    if statement.else_block is not None:
+                        rank_block(statement.else_block, depth)
+                elif isinstance(statement, syntax.While):
+                    rank_expression(statement.condition, depth)
+                    if statement.body is not None:
+                        rank_block(statement.body, depth + 1)
+                elif isinstance(statement, (syntax.Return, syntax.ExprStmt)):
+                    rank_expression(statement.value if
+                                    isinstance(statement, syntax.Return)
+                                    else statement.expression, depth)
+
+        rank_block(function.body, 0)
+        ranked = sorted(range(function.slots),
+                        key=lambda slot: (-ranks.get(slot, 0), -slot))
+        return ranked[:len(HOME_REGISTERS)]
 
     def _home(self, slot: int) -> Optional[str]:
         """The register that holds `slot`, or None when the slot stays in the frame.

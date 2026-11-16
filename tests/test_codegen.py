@@ -141,11 +141,14 @@ class SlotHomeTest(unittest.TestCase):
         self.assertNotIn("rbp", saved)
         self.assertEqual(restored, list(reversed(saved)))
 
-    def test_the_seventh_slot_keeps_the_stack_fallback(self) -> None:
+    def test_the_displaced_slot_keeps_the_stack_fallback(self) -> None:
         program, assembler = lower(SEVEN_LOCALS)
         main = function_label(program.functions[0].name)
         self.assertEqual(program.functions[0].slots, 7)
-        self.assertIn(-56, assembler.loads_of(main))
+        # Depth-zero ties break by descending slot, so v6 keeps a home and the
+        # earliest-declared local (slot 0, [rbp-8]) falls to the frame instead.
+        self.assertIn(-8, assembler.stores_of(main))
+        self.assertNotIn(-56, assembler.loads_of(main))
 
 
 def body_text(source: str, name: str) -> bytes:
@@ -1407,19 +1410,23 @@ class StackParamCopyTest(unittest.TestCase):
         self.assertEqual(calls_of(SIX_PARAM_CALLING, "main", "mix"), 1)
 
 
-# The frame-function shape the in-place memory forms fire on: the mutated slots sit
-# past the six home registers, so their updates previously paid load-store pairs.
+# The frame-function shape the in-place memory forms fire on: the loop reads and
+# updates the six fillers plus t and i, so all eight slots tie at depth 1 and the
+# ties go to the later bindings, displacing a0/a1 ([rbp-8]/[rbp-16]) to the frame.
 FRAME_IN_PLACE_MAIN = (
     "fn main() -> i64 { "
     + " ".join(f"var a{i}: i64 = {i};" for i in range(6))
     + " var t: i64 = 0; var i: i64 = 0;"
-    " while i < 3 { t = t + 1; i = i + 1; }"
+    " while i < 3 { t = t + a0 + a1 + a2 + a3 + a4 + a5; i = i + 1; }"
+    " a0 = a0 + 2;"
+    " a1 = a1 + 3;"
     " return t; }")
 
 FRAME_IN_PLACE_TRIPLE = (
     "fn main() -> i64 { "
     + " ".join(f"var a{i}: i64 = {i};" for i in range(6))
     + " var t: i64 = 0; var u: i64 = 0; var i: i64 = 0;"
+    " while i < 2 { i = i + a0 + a1 + a2 + a3 + a4; }"
     " u = u + 2;"
     " t = t + u;"
     " u = u - t;"
@@ -1429,12 +1436,15 @@ FRAME_IN_PLACE_TRIPLE = (
 class FrameInPlaceUpdateTest(unittest.TestCase):
     """A frame slot's `slot = slot op value` is one memory-operand instruction."""
 
-    def test_a_frame_counter_adds_in_place(self) -> None:
+    def test_a_displaced_counter_adds_in_place(self) -> None:
         blob = region_bytes(FRAME_IN_PLACE_MAIN, "main")
-        # t = slot 6 ([rbp-56]), i = slot 7 ([rbp-64]); the imm8 add replaces the
-        # load/add/store triple the general frame path emitted before.
-        self.assertIn(bytes([0x48, 0x83, 0x45, (-56) & 0xFF, 0x01]), blob)
-        self.assertIn(bytes([0x48, 0x83, 0x45, (-64) & 0xFF, 0x01]), blob)
+        # The loop-hot ties go to i (rbx) and t (r12): i's update folds into its
+        # register and t accumulates into r12 straight from the displaced names'
+        # rax loads; a0/a1 update in the one-instruction memory forms.
+        self.assertIn(bytes([0x48, 0x83, 0xC3, 0x01]), blob)    # add rbx, 1
+        self.assertIn(bytes([0x49, 0x01, 0xC4]), blob)          # add r12, rax
+        self.assertIn(bytes([0x48, 0x83, 0x45, (-8) & 0xFF, 0x02]), blob)   # add [rbp-8], 2
+        self.assertIn(bytes([0x48, 0x83, 0x45, (-16) & 0xFF, 0x03]), blob)  # add [rbp-16], 3
 
     def test_a_frame_add_of_a_frame_name_folds_into_the_store(self) -> None:
         blob = region_bytes(FRAME_IN_PLACE_TRIPLE, "main")
@@ -1446,10 +1456,14 @@ class FrameInPlaceUpdateTest(unittest.TestCase):
     def test_updates_beyond_disp8_take_the_four_byte_displacement(self) -> None:
         deep = ("fn main() -> i64 { "
                 + " ".join(f"var a{i}: i64 = {i};" for i in range(17))
-                + " a16 = a16 + a0; return a16; }")
+                + " var i: i64 = 0;"
+                " while i < 2 { i = i + a5 + a6 + a7 + a8 + a9 + a10; }"
+                " a16 = a16 + a0; return a16; }")
         blob = region_bytes(deep, "main")
-        # a16 = slot 16, [rbp-136]: disp32 form add [rbp+disp32], rbx (a0's home).
-        expected = bytes([0x48, 0x01, 0x9D]) + ((-136) & 0xFFFFFFFF).to_bytes(4, "little")
+        # The loop makes slots 5..10 and i the homed set, so a16 (slot 16,
+        # [rbp-136]) and a0 both stay frame-resident: a0 routes through rax and
+        # a16's fold takes the disp32 form add [rbp+disp32], rax.
+        expected = bytes([0x48, 0x01, 0x85]) + ((-136) & 0xFFFFFFFF).to_bytes(4, "little")
         self.assertIn(expected, blob)
 
 
@@ -1473,3 +1487,39 @@ class HomeMapContractTest(unittest.TestCase):
         generator.home_of = {7: "r13"}
         self.assertEqual(generator._home(7), "r13")
         self.assertIsNone(generator._home(0))
+
+
+# A frame main where the loop slots (i, s) sit at HIGHER slot indices than the dead
+# fillers: identity assignment leaves i in the frame, preference homes it.
+PREFERENCE_MAIN = (
+    "fn main() -> i64 { "
+    " var a0: i64 = 7; var f1: i64 = 1; var f2: i64 = 1; var f3: i64 = 1;"
+    " var f4: i64 = 1; var s: i64 = 0; var i: i64 = 0;"
+    " while i < 3 { s = s + 5; i = i + 1; }"
+    " a0 = a0 + 2;"
+    " print(s); print(a0); print(f1 + f2 + f3 + f4);"
+    " return 0; }")
+
+
+class HomePreferenceTest(unittest.TestCase):
+    """A frame function grants the registers to its deepest-loop slots, not its first six."""
+
+    def test_a_loop_slot_beyond_the_identity_prefix_homes_as_a_register(self) -> None:
+        blob = region_bytes(PREFERENCE_MAIN, "main")
+        # i = slot 6, s = slot 5, both rank 1; preference homes them first (rbx, r12),
+        # so their self-updates fold in place: add rbx, 1 and add r12, 5.
+        self.assertIn(bytes([0x48, 0x83, 0xC3, 0x01]), blob)   # add rbx, 1
+        self.assertIn(bytes([0x49, 0x83, 0xC4, 0x05]), blob)   # add r12, 5
+
+    def test_a_displaced_depth_zero_slot_takes_the_memory_form(self) -> None:
+        blob = region_bytes(PREFERENCE_MAIN, "main")
+        # a0 = slot 0: all six registers outrank it, so `a0 = a0 + 2` becomes one
+        # memory add instead of the register fold identity assignment gave it.
+        self.assertIn(bytes([0x48, 0x83, 0x45, (-8) & 0xFF, 0x02]), blob)
+
+    def test_a_leaf_function_keeps_its_declaration_order(self) -> None:
+        leaf = ("fn main() -> i64 { var a: i64 = 1; var b: i64 = 2; var c: i64 = 0;"
+                " while c < 3 { a = a + b; c = c + 1; } return a; }")
+        blob = region_bytes(leaf, "main")
+        # a = slot 0 keeps rbx; the fold adds b's home directly: add rbx, r12.
+        self.assertIn(bytes([0x4C, 0x01, 0xE3]), blob)   # add rbx, r12

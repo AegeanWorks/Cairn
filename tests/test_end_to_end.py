@@ -1054,3 +1054,30 @@ class FrameInPlaceValueTest(EndToEndTest):
         # u = -7 - 15 = -22; v = (255 + 25) + 5 = 285
         # w = (240 & 5) ^ a1 | a2 = 0 ^ 6 | 7 = 7
         self.assertEqual(completed.stdout, "-65\n-22\n285\n7\n")
+
+
+# Loop-depth preference: the inner working set homes, outer or displaced bindings
+# fall to the frame, and the answers match hand arithmetic.
+PREFERENCE_VALUES = (
+    "fn main() -> i64 { "
+    " var a0: i64 = 10; var a1: i64 = 20; var a2: i64 = 30; var a3: i64 = 0;"
+    " var a4: i64 = 0; var a5: i64 = 0; var s: i64 = 0; var i: i64 = 0;"
+    " while i < 5 { s = s + a0; i = i + 1; }"
+    " a0 = a0 + a1;"
+    " while i < 7 { s = s + a0; i = i + 1; }"
+    " a2 = a2 + s;"
+    " a1 = a1 - 4;"
+    " print(s); print(a0); print(a1); print(a2);"
+    " return 0; }")
+
+
+@WINDOWS_ONLY
+class HomePreferenceValueTest(EndToEndTest):
+    """Preference reshuffles which slots sit in registers without changing answers."""
+
+    def test_preference_preserves_output(self) -> None:
+        completed = self.execute(PREFERENCE_VALUES)
+        self.assertEqual(completed.returncode, 0)
+        # loop 1: s = 5 * 10 = 50; a0 = 30; loop 2: s = 50 + 2 * 30 = 110
+        # a2 = 30 + 110 = 140; a1 = 16
+        self.assertEqual(completed.stdout, "110\n30\n16\n140\n")
