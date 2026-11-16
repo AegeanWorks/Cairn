@@ -3,26 +3,17 @@
   "active_task": {
     "task_id": "cairn-loop-copies",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794843843.4297907,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794843876.0074923,
+    "completed_head": "b21d2749d9056ac63117afb5454aa11fbb9979b3",
+    "completed_tree": "f1daa8e62a950bec6e6b20136539b5fc2d6131b8"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-remaining-losses",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "All three milestones delivered and committed (e9f84e4 call-site round trips, 9126db4 commutative in-place + ZF branch, 1d5e76f same-name load-once + imul fast path); final suites green (662 -> 692 -> 723 + 39 subtests); benchmark gates exit 0 every run with regression flags shown as machine noise; ADR-037/038/039 recorded; README unchanged (no language-surface change); KB check green; secrets scans clean",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794806820.2877927,
-      "timestamp_str": "2026-11-16 08:27:00",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-remaining-losses",
       "phase": "completed",
@@ -322,6 +313,23 @@
       "timestamp_str": "2026-11-16 18:44:03",
       "agent": "mistral:vibe",
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-loop-copies",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-loop-copies' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794843876.0468857,
+      "timestamp_str": "2026-11-16 18:44:36",
+      "agent": "mistral:vibe",
+      "head": "b21d2749d9056ac63117afb5454aa11fbb9979b3",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
