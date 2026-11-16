@@ -1405,3 +1405,49 @@ class StackParamCopyTest(unittest.TestCase):
     def test_a_six_parameter_calling_callee_keeps_the_stack_call(self) -> None:
         program = sema.analyze(parser.parse(SIX_PARAM_CALLING))
         self.assertEqual(calls_of(SIX_PARAM_CALLING, "main", "mix"), 1)
+
+
+# The frame-function shape the in-place memory forms fire on: the mutated slots sit
+# past the six home registers, so their updates previously paid load-store pairs.
+FRAME_IN_PLACE_MAIN = (
+    "fn main() -> i64 { "
+    + " ".join(f"var a{i}: i64 = {i};" for i in range(6))
+    + " var t: i64 = 0; var i: i64 = 0;"
+    " while i < 3 { t = t + 1; i = i + 1; }"
+    " return t; }")
+
+FRAME_IN_PLACE_TRIPLE = (
+    "fn main() -> i64 { "
+    + " ".join(f"var a{i}: i64 = {i};" for i in range(6))
+    + " var t: i64 = 0; var u: i64 = 0; var i: i64 = 0;"
+    " u = u + 2;"
+    " t = t + u;"
+    " u = u - t;"
+    " return t + u; }")
+
+
+class FrameInPlaceUpdateTest(unittest.TestCase):
+    """A frame slot's `slot = slot op value` is one memory-operand instruction."""
+
+    def test_a_frame_counter_adds_in_place(self) -> None:
+        blob = region_bytes(FRAME_IN_PLACE_MAIN, "main")
+        # t = slot 6 ([rbp-56]), i = slot 7 ([rbp-64]); the imm8 add replaces the
+        # load/add/store triple the general frame path emitted before.
+        self.assertIn(bytes([0x48, 0x83, 0x45, (-56) & 0xFF, 0x01]), blob)
+        self.assertIn(bytes([0x48, 0x83, 0x45, (-64) & 0xFF, 0x01]), blob)
+
+    def test_a_frame_add_of_a_frame_name_folds_into_the_store(self) -> None:
+        blob = region_bytes(FRAME_IN_PLACE_TRIPLE, "main")
+        # t = t + u with u frame-resident: u loads into rax, then one memory add.
+        self.assertIn(bytes([0x48, 0x01, 0x45, (-56) & 0xFF]), blob)
+        # u = u - t, also frame-resident: the rax route's sub form.
+        self.assertIn(bytes([0x48, 0x29, 0x45, (-64) & 0xFF]), blob)
+
+    def test_updates_beyond_disp8_take_the_four_byte_displacement(self) -> None:
+        deep = ("fn main() -> i64 { "
+                + " ".join(f"var a{i}: i64 = {i};" for i in range(17))
+                + " a16 = a16 + a0; return a16; }")
+        blob = region_bytes(deep, "main")
+        # a16 = slot 16, [rbp-136]: disp32 form add [rbp+disp32], rbx (a0's home).
+        expected = bytes([0x48, 0x01, 0x9D]) + ((-136) & 0xFFFFFFFF).to_bytes(4, "little")
+        self.assertIn(expected, blob)

@@ -217,6 +217,26 @@ class Assembler:
         src = REGISTERS[source]
         self.emit(bytes([_rex(True, src >> 3, 0, 0), 0x89]), _rbp_displacement(src, offset))
 
+    def binary_store_rbp(self, opcode: int, offset: int, source: str) -> None:
+        """`op [rbp+disp], r64` for an in-place frame update (add, sub, and, or, xor).
+
+        The memory form sets ZF from the memory operand, which no register names, so the
+        flag summary stays cleared — a following zero-branch keeps its own compare.
+        """
+        src = REGISTERS[source]
+        self.emit(bytes([_rex(True, src >> 3, 0, 0), opcode]), _rbp_displacement(src, offset))
+
+    def group1_store_rbp_imm(self, extension: int, offset: int, value: int) -> None:
+        """`op [rbp+disp], imm8/imm32` sign-extended, in the register form's group-1 style."""
+        if not -0x80000000 <= value <= 0x7FFFFFFF:
+            raise ValueError("immediate does not fit in 32 signed bits")
+        if -128 <= value <= 127:
+            self.emit(bytes([_rex(True, 0, 0, 0), 0x83]), _rbp_displacement(extension, offset),
+                      bytes([value & 0xFF]))
+        else:
+            self.emit(bytes([_rex(True, 0, 0, 0), 0x81]), _rbp_displacement(extension, offset),
+                      (value & 0xFFFFFFFF).to_bytes(4, "little"))
+
     def mov_store_rsp_imm32(self, offset: int, value: int) -> None:
         """`mov qword ptr [rsp+disp32], imm32` for outgoing ABI slots."""
         self.emit(b"\x48\xC7\x84\x24", offset.to_bytes(4, "little"),

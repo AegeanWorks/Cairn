@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `119`
+- **Total Classes**: `122`
 - **Total Top-Level Functions**: `165`
-- **Total Class Methods**: `699`
-- **Total Source Lines**: `12635`
+- **Total Class Methods**: `711`
+- **Total Source Lines**: `12802`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3015` lines (`151122` bytes)
+**Size**: `3059` lines (`153427` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -153,6 +153,7 @@
   - Method `._emit_value(slot, expression)` - *Assign an expression to a slot, folding `slot = slot op value` in place.*
   - Method `._update_keeps_nonneg(slot, expression)` - *Whether an in-place update provably keeps the slot's value non-negative.*
   - Method `._fold_update(home, slot, expression)` - *Emit `home = home op value` when the expression updates its own slot.*
+  - Method `._fold_frame_update(slot, expression)` - *Emit `slot = slot op value` as one memory-operand instruction on a frame slot.*
   - Method `._emit_home_offset(destination, expression)` - *Lower `homed name ± literal` as one `lea`, or return False when the shape differs.*
   - Method `._emit_into(expression, destination)` - *Lower an expression, using `destination` directly when it is a leaf.*
   - Method `._emit_binary_into(expression, destination)` - *Lower a call-free, trap-free binary expression with its result in `destination`.*
@@ -366,7 +367,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `473` lines (`21545` bytes)
+**Size**: `493` lines (`22682` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -388,6 +389,8 @@
   - Method `.mov_imm32(reg, value)` - *`mov r32, imm32`; writes zero-extend into the 64-bit register.*
   - Method `.mov_load_rbp(destination, offset)` - *`mov r64, [rbp+disp]` for a frame slot; disp8 shrinks the encoding where it fits.*
   - Method `.mov_store_rbp(offset, source)` - *`mov [rbp+disp], r64` for a frame slot.*
+  - Method `.binary_store_rbp(opcode, offset, source)` - *`op [rbp+disp], r64` for an in-place frame update (add, sub, and, or, xor).*
+  - Method `.group1_store_rbp_imm(extension, offset, value)` - *`op [rbp+disp], imm8/imm32` sign-extended, in the register form's group-1 style.*
   - Method `.mov_store_rsp_imm32(offset, value)` - *`mov qword ptr [rsp+disp32], imm32` for outgoing ABI slots.*
   - Method `.mov_store_rsp(source)` - *`mov [rsp], r64`: a store into the topmost pad slot.*
   - Method `.mov_load_rsp(destination)` - *`mov r64, [rsp]`: a load from the topmost pad slot.*
@@ -803,7 +806,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1407` lines (`67715` bytes)
+**Size**: `1453` lines (`69818` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -953,6 +956,10 @@
   - Method `.test_a_six_parameter_callee_copies()`
   - Method `.test_a_six_parameter_rebinding_callee_takes_the_bind_once_copy()`
   - Method `.test_a_six_parameter_calling_callee_keeps_the_stack_call()`
+- `class FrameInPlaceUpdateTest` - *A frame slot's `slot = slot op value` is one memory-operand instruction.*
+  - Method `.test_a_frame_counter_adds_in_place()`
+  - Method `.test_a_frame_add_of_a_frame_name_folds_into_the_store()`
+  - Method `.test_updates_beyond_disp8_take_the_four_byte_displacement()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
@@ -974,7 +981,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1030` lines (`36503` bytes)
+**Size**: `1056` lines (`37623` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1068,6 +1075,8 @@
   - Method `.test_frame_path_copies_preserve_output()`
 - `class StackParamCopyValueTest` - *Six-parameter copies print the same answers the call form computes.*
   - Method `.test_six_parameter_copies_preserve_output()`
+- `class FrameInPlaceValueTest` - *In-place frame updates print the answers hand arithmetic agrees with.*
+  - Method `.test_in_place_updates_preserve_output()`
 
 **Functions:**
 - `def _wrap(value)`
@@ -1155,9 +1164,15 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `120` lines (`5661` bytes)
+**Size**: `151` lines (`7132` bytes)
 
 **Classes:**
+- `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
+  - Method `.code(build)`
+  - Method `.test_frame_slot_binary_in_place()`
+  - Method `.test_frame_slot_binary_in_place_beyond_disp8()`
+  - Method `.test_frame_slot_group1_imm_in_place()`
+  - Method `.test_frame_slot_group1_imm_rejects_wide_literals()`
 - `class EncodingTest` - *Each test names one encoding and its expected bytes.*
   - Method `.code(build)` - *Run a builder function against a fresh assembler and return its bytes.*
   - Method `.test_push_and_pop_extended_registers_mask_the_register_bits()`

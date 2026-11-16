@@ -275,6 +275,7 @@ Three rewrites then remove the copies those homes would otherwise need:
 | a comparison against a 32-bit literal | `cmp r64, imm32` instead of materialising the literal in `rcx` |
 
 | a dead-counter `while v < C` loop (ADR-023) | hoisted zero-trip guard, then one `sub` and one conditional jump at the loop's bottom — gcc's countdown latch shape |
+| a frame slot's `x = x op e` with `op` in `+ - & \| ^` and `e` a small literal or register (ADR-042) | one memory-operand instruction into the slot; no load/store pair |
 
 These are backend rewrites, not language changes. `--no-optimize` still skips only the folding
 pass; the differential end-to-end test runs both build modes against the same expected output.
@@ -312,7 +313,7 @@ a spread:
 | `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.1-16.1 ms | 11.1-13.3 ms | 10.9-13.4 ms | 12.0-14.4 ms | 2,560 bytes |
 | `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 94.3-96.7 ms | 92.5-101.5 ms | 96.4-102.9 ms | 105.9-113.5 ms | 2,560 bytes |
 | `hex_io` | 400,000 hex-format-then-print values | 612-645 ms | 4,764-5,095 ms | 397-467 ms | 677-723 ms | 2,560 bytes |
-| `many_params` | 10,000,000 six-argument mix calls | 28.9-34.6 ms | 7.8-11.1 ms | 9.7-13.0 ms | 8.4-11.6 ms | 2,560 bytes |
+| `many_params` | 10,000,000 six-argument mix calls | 24.2-34.6 ms | 7.8-11.1 ms | 9.7-13.0 ms | 8.4-11.6 ms | 2,560 bytes |
 
 Standings per case (Cairn vs the fastest baseline on that case): `collatz`, `ackermann`, `tak`,
 `folded_math` and `splitmix` are won outright against all three baselines; `hex_io` wins against

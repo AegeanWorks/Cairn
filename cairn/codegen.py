@@ -480,6 +480,10 @@ class CodeGenerator:
             if not self._update_keeps_nonneg(slot, expression):
                 self.nonnegative_slots.discard(slot)
             return
+        if home is None and self._fold_frame_update(slot, expression):
+            if not self._update_keeps_nonneg(slot, expression):
+                self.nonnegative_slots.discard(slot)
+            return
         if (home is not None and isinstance(expression, syntax.Call)
                 and self._foreign_inline_target(expression) is not None):
             # A copyable call stores its result directly into the slot's home register;
@@ -622,6 +626,46 @@ class CodeGenerator:
             self.assembler.imul(home, "rax")
         else:
             self.assembler.binary(UPDATE_OPCODES[operator], home, "rax")
+        return True
+
+    FRAME_IMMEDIATE_EXTENSIONS = {"+": 0, "-": 5}  # group-1 verbs for the memory form
+
+    def _fold_frame_update(self, slot: int, expression: Optional[syntax.Expr]) -> bool:
+        """Emit `slot = slot op value` as one memory-operand instruction on a frame slot.
+
+        The same contract as `_fold_update`, which register homes take: no globals or
+        pointers, so the other side cannot observe the slot mid-update, and the memory
+        instruction is the same wrapping arithmetic the general path emits. The right
+        side lowers first, so a trapping or calling right side keeps the general path's
+        ordering exactly — the update reads the slot only when the instruction executes.
+        """
+        if (not isinstance(expression, syntax.Binary)
+                or expression.op not in UPDATE_OPCODES):
+            return False
+        operator = expression.op
+        other = None
+        if operator in COMMUTATIVE_UPDATES:
+            if slot_of(expression.left) == slot:
+                other = expression.right
+            elif slot_of(expression.right) == slot:
+                other = expression.left
+        elif operator == "-" and slot_of(expression.left) == slot:
+            other = expression.right
+        if other is None:
+            return False
+        offset = slot_offset(slot)
+        if (operator in IMMEDIATE_UPDATES and isinstance(other, syntax.IntLiteral)
+                and IMMEDIATE_MIN <= other.value <= IMMEDIATE_MAX):
+            self.assembler.group1_store_rbp_imm(
+                self.FRAME_IMMEDIATE_EXTENSIONS[operator], offset, other.value)
+            return True
+        if (isinstance(other, syntax.Name) and self._home(other.slot) is not None
+                and not (other.slot == self.delta_slot and self.delta_value)):
+            self.assembler.binary_store_rbp(UPDATE_OPCODES[operator], offset,
+                                            self._home(other.slot))
+            return True
+        self._emit_into(other, "rax")
+        self.assembler.binary_store_rbp(UPDATE_OPCODES[operator], offset, "rax")
         return True
 
     def _emit_home_offset(self, destination: str,

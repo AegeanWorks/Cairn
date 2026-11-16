@@ -9,6 +9,37 @@ import unittest
 from cairn.machine import Assembler
 
 
+
+class FrameInPlaceEncodingTest(unittest.TestCase):
+    """A frame slot's in-place update encodes as one memory-operand instruction."""
+
+    def code(self, build: object) -> bytes:
+        assembler = Assembler()
+        build(assembler)
+        return bytes(assembler.code)
+
+    def test_frame_slot_binary_in_place(self) -> None:
+        self.assertEqual(self.code(lambda a: a.binary_store_rbp(0x01, -8, "rax")),
+                         b"\x48\x01\x45\xf8")
+        self.assertEqual(self.code(lambda a: a.binary_store_rbp(0x29, -8, "r8")),
+                         b"\x4c\x29\x45\xf8")
+
+    def test_frame_slot_binary_in_place_beyond_disp8(self) -> None:
+        self.assertEqual(self.code(lambda a: a.binary_store_rbp(0x01, -200, "rbx")),
+                         b"\x48\x01\x9d\x38\xff\xff\xff")
+
+    def test_frame_slot_group1_imm_in_place(self) -> None:
+        self.assertEqual(self.code(lambda a: a.group1_store_rbp_imm(0, -8, 1)),
+                         b"\x48\x83\x45\xf8\x01")
+        self.assertEqual(self.code(lambda a: a.group1_store_rbp_imm(5, -16, -1)),
+                         b"\x48\x83\x6d\xf0\xff")
+        self.assertEqual(self.code(lambda a: a.group1_store_rbp_imm(0, -200, 1000)),
+                         b"\x48\x81\x85\x38\xff\xff\xff\xe8\x03\x00\x00")
+
+    def test_frame_slot_group1_imm_rejects_wide_literals(self) -> None:
+        with self.assertRaises(ValueError):
+            self.code(lambda a: a.group1_store_rbp_imm(0, -8, 1 << 32))
+
 class EncodingTest(unittest.TestCase):
     """Each test names one encoding and its expected bytes."""
 

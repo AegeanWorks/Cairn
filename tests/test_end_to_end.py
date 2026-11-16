@@ -1028,3 +1028,29 @@ class StackParamCopyValueTest(EndToEndTest):
         completed = self.execute(SIX_PARAM_VALUES)
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "953\n6025\n")
+
+
+# The in-place frame forms across +, -, &, |, ^, immediate and register right sides,
+# with the negative and wrap values the slot arithmetic must reproduce.
+FRAME_IN_PLACE_VALUES = (
+    "fn main() -> i64 { "
+    + " ".join(f"var a{i}: i64 = {i + 5};" for i in range(6))
+    + " var t: i64 = 0; var u: i64 = -7; var v: i64 = 255; var w: i64 = 240;"
+    " var i: i64 = 0;"
+    " while i < 5 { t = t + u; u = u - 3; v = v + a0; v = v + 1; i = i + 1; }"
+    " w = w & a0; w = w ^ a1; w = w | a2;"
+    " print(t); print(u); print(v); print(w);"
+    " return 0; }")
+
+
+@WINDOWS_ONLY
+class FrameInPlaceValueTest(EndToEndTest):
+    """In-place frame updates print the answers hand arithmetic agrees with."""
+
+    def test_in_place_updates_preserve_output(self) -> None:
+        completed = self.execute(FRAME_IN_PLACE_VALUES)
+        self.assertEqual(completed.returncode, 0)
+        # a0..a5 = 5..10: t sums u across the five trips (-7-10-13-16-19 = -65);
+        # u = -7 - 15 = -22; v = (255 + 25) + 5 = 285
+        # w = (240 & 5) ^ a1 | a2 = 0 ^ 6 | 7 = 7
+        self.assertEqual(completed.stdout, "-65\n-22\n285\n7\n")

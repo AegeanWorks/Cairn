@@ -5,34 +5,18 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1794812926.2711325,
+    "updated_at": 1794817011.134417,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": [],
     "impact_assessment": {
-      "why": "many_params measured 42-44 ms against C 7.8 ms: the biggest board loss traces to the foreign-copy form refusing >4-argument callees, so every call paid callee home saves plus caller outgoing-area churn",
-      "benefits": "six-argument helper calls inline like gcc's -O2 shapes; measured -34.5% on many_params; machinery general (rebinds form included), fallback preserved",
-      "risks": "contract: copy form now covers 5-6 params,  pins moved to a calling callee; dependency: none (standard library only); concurrency: none; state: benchmark history append-only, ledger checkpoint appended",
-      "mitigation": "failing-first calls_of + e2e value twins; full suite; gate twice-tolerant noise discharge per ADR-031; stack-call machinery still pinned and reachable by non-copyable callees"
+      "why": "frame-resident counters, accumulators and latches paid a load-compute-store triple that register homes do not pay; mandelbrot's listing showed the triple in its 27-instruction inner loop",
+      "benefits": "one memory-operand instruction per frame self-update, shape-generic across all programs; correctness preserved by construction for calling/trapping right sides",
+      "risks": "contract: memory forms never assert ZF for a register; dependency: none; concurrency: none; state: none beyond append-only history",
+      "mitigation": "failing-first machine encodings, byte-shape tests and an e2e twin; full suite; gate noise discharge per ADR-031"
     }
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-cpp-baseline",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-cpp-baseline' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794769718.496116,
-      "timestamp_str": "2026-11-15 22:08:38",
-      "agent": "mistral:vibe",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-remaining-losses",
       "phase": "planning",
@@ -282,6 +266,24 @@
         "benefits": "six-argument helper calls inline like gcc's -O2 shapes; measured -34.5% on many_params; machinery general (rebinds form included), fallback preserved",
         "risks": "contract: copy form now covers 5-6 params,  pins moved to a calling callee; dependency: none (standard library only); concurrency: none; state: benchmark history append-only, ledger checkpoint appended",
         "mitigation": "failing-first calls_of + e2e value twins; full suite; gate twice-tolerant noise discharge per ADR-031; stack-call machinery still pinned and reachable by non-copyable callees"
+      },
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-structural-losses",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[3/3] Frame-slot in-place updates: a frame slot's slot = slot op value with + - & | ^ folds into one memory-operand instruction (imm, register, or rax right side), mirroring the register-home fold; mandelbrot inner loop 108 -> 101 bytes, count update 3 -> 1 instr; 820 tests OK; gate exit 0 no regressions, many_params new best 24.2 ms. ADR-042. Allocation ceiling recorded as the proposed next task cairn-allocation; README rows updated.",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794817011.134417,
+      "timestamp_str": "2026-11-16 11:16:51",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "frame-resident counters, accumulators and latches paid a load-compute-store triple that register homes do not pay; mandelbrot's listing showed the triple in its 27-instruction inner loop",
+        "benefits": "one memory-operand instruction per frame self-update, shape-generic across all programs; correctness preserved by construction for calling/trapping right sides",
+        "risks": "contract: memory forms never assert ZF for a register; dependency: none; concurrency: none; state: none beyond append-only history",
+        "mitigation": "failing-first machine encodings, byte-shape tests and an e2e twin; full suite; gate noise discharge per ADR-031"
       },
       "checklists": "passed"
     }
