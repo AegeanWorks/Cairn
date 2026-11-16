@@ -109,6 +109,8 @@ CASES: Tuple[Case, ...] = (
     Case("char_stream", "benchmarks/char_stream.crn", "benchmarks/char_stream.c",
          "benchmarks/char_stream.rs", "benchmarks/char_stream.cpp", 4_194_304, "bytes",
          bytes(range(256)) * 16_384),
+    Case("str_scan", "benchmarks/str_scan.crn", "benchmarks/str_scan.c",
+         "benchmarks/str_scan.rs", "benchmarks/str_scan.cpp", 12_800_000, "reads"),
 )
 
 

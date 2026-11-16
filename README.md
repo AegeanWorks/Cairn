@@ -99,6 +99,10 @@ fn main() -> i64 {
   `arg_byte(i, j)` is byte `j` (zero-indexed) of argument `i`'s content with quotes
   stripped, or -1 past the token; `read_char()` is the next stdin byte, or -1 at end
   of stream. All three return their answer as an `i64`.
+  Strings: `"text"` is a NUL-terminated literal in `.rodata`; `print_str(s)` writes it
+  raw (no newline) and returns `s`; `str_len(s)` is its byte count; `str_byte(s, j)` is
+  byte `j`, or -1 for a negative or at-or-past-terminator index.
+  Control: `exit(code)` ends the process with `code` at once (statement only, never a value).
 - **Comments**: `//` to the end of the line.
 
 Defined semantics a C programmer would have to look up:
@@ -147,6 +151,7 @@ python -m cairn check broken.crn --json
 | Code | Meaning |
 |---|---|
 | E1001 | Unexpected character |
+| E1004 | Unterminated string literal or unknown escape sequence |
 | E1003 | Integer literal does not fit in `i64` |
 | E2001 | Grammar expected a specific token |
 | E2002 | Unknown type |
@@ -164,6 +169,7 @@ python -m cairn check broken.crn --json
 | E3010 | More than eight parameters |
 | E3011 | Missing or ill-formed `main` |
 | E3012 | Builtin redefined or used as a value |
+| E3013 | `exit(...)` used inside an expression instead of as a statement |
 
 `E1002` and `E3002` are reserved for future stages and must not be reused.
 

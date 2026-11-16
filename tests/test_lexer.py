@@ -4,6 +4,7 @@ import unittest
 
 from cairn.diagnostics import DiagnosticError
 from cairn.lexer import tokenize
+from cairn.parser import parse
 
 
 class LexerTest(unittest.TestCase):
@@ -57,6 +58,34 @@ class LexerTest(unittest.TestCase):
         tokens = tokenize("")
         self.assertEqual(len(tokens), 1)
         self.assertEqual(tokens[0].kind, "eof")
+
+    def test_a_string_literal_lexes_with_its_escapes_decoded(self) -> None:
+        tokens = [token for token in tokenize('print_str("a\\tb\\"c\\\\d\\n");')
+                  if token.kind == "str"]
+        self.assertEqual(tokens[0].text, 'a\tb"c\\d\n')
+
+    def test_an_unterminated_string_is_a_positioned_error(self) -> None:
+        with self.assertRaises(DiagnosticError) as caught:
+            tokenize('let x: i64 = 0; print_str("open')
+        diagnostic = caught.exception.diagnostics[0]
+        self.assertEqual(diagnostic.code, "E1004")
+        self.assertIn("quote", diagnostic.fix.lower())
+
+    def test_an_unknown_escape_is_a_positioned_error(self) -> None:
+        with self.assertRaises(DiagnosticError) as caught:
+            tokenize('print_str("bad\\q");')
+        diagnostic = caught.exception.diagnostics[0]
+        self.assertEqual(diagnostic.code, "E1004")
+
+    def test_a_string_token_carries_its_column(self) -> None:
+        tokens = [token for token in tokenize('let s: i64 = "hi";')
+                  if token.kind == "str"]
+        self.assertEqual((tokens[0].span.line, tokens[0].span.column), (1, 14))
+
+    def test_the_full_pipeline_places_a_string_on_its_span(self) -> None:
+        module = parse("fn main() -> i64 { let s: i64 = \"hi\"; return 0; }")
+        literal = module.functions[0].body.statements[0].value
+        self.assertEqual((literal.span.line, literal.span.column), (1, 33))
 
     def test_non_ascii_identifier_is_rejected_as_unexpected_character(self) -> None:
         with self.assertRaises(DiagnosticError) as caught:

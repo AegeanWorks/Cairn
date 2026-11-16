@@ -263,11 +263,14 @@ class Parser:
         return self._parse_primary()
 
     def _parse_primary(self) -> syntax.Expr:
-        """An integer, a name, a call, a parenthesised expression, or `true`/`false`."""
+        """An integer, a string, a name, a call, a parenthesised expression, or `true`/`false`."""
         token = self._peek()
         if token.kind == "int":
             self._advance()
             return syntax.IntLiteral(span=token.span, value=token.value)
+        if token.kind == "str":
+            self._advance()
+            return syntax.StrLiteral(span=token.span, text=token.text)
         if token.kind == "keyword" and token.text in ("true", "false"):
             self._advance()
             return syntax.IntLiteral(span=token.span, value=1 if token.text == "true" else 0)

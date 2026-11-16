@@ -31,6 +31,19 @@ class IntLiteral(Expr):
 
 
 @dataclass
+class StrLiteral(Expr):
+    """A quoted string literal: read-only bytes in .rodata, NUL-terminated.
+
+    Its value is the address of its first byte as an `i64` (a C-programmer's string
+    decay), shared with any other literal of the same content; `label` is filled in
+    by code generation.
+    """
+
+    text: str = ""
+    label: str = ""
+
+
+@dataclass
 class Name(Expr):
     """A reference to a parameter or a local; `slot` is filled in by semantic analysis."""
 

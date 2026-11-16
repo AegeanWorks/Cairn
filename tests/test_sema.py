@@ -105,6 +105,36 @@ class SemaTest(unittest.TestCase):
         self.assertEqual(codes("fn main() -> i64 { return read_char; }"), ["E3012"])
         self.assertEqual(codes("fn main() -> i64 { return argc; }"), ["E3012"])
 
+    def test_string_builtins_have_their_arities(self) -> None:
+        analyze(parse(
+            "fn main() -> i64 { print_str(\"hi\"); var n: i64 = str_len(\"hi\");"
+            " var b: i64 = str_byte(\"hi\", 0); return n + b; }"))
+        self.assertEqual(codes("fn main() -> i64 { return str_len(\"hi\", 1); }"),
+                         ["E3004"])
+        self.assertEqual(codes("fn main() -> i64 { return print_str(); }"), ["E3004"])
+        self.assertEqual(codes("fn main() -> i64 { return str_byte(\"hi\"); }"),
+                         ["E3004"])
+
+    def test_exit_takes_one_code_and_stops_the_program(self) -> None:
+        analyze(parse(
+            "fn f(c: i64) -> i64 { if c < 0 { exit(1); } return 0; }"
+            "fn main() -> i64 { return f(-3); }"))
+        self.assertEqual(codes("fn main() -> i64 { exit(); }"), ["E3004"])
+        self.assertEqual(codes("fn main() -> i64 { exit(1, 2); }"), ["E3004"])
+
+    def test_exit_is_never_a_value(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { return exit(1); }"), ["E3013"])
+        self.assertEqual(codes(
+            "fn main() -> i64 { var x: i64 = exit(1); return 0; }"), ["E3013"])
+        self.assertEqual(codes("fn main() -> i64 { if exit(1) == 0 { return 0; } return 1; }"),
+                         ["E3013"])
+        analyze(parse("fn main() -> i64 { exit(0); }"))
+
+    def test_an_exit_statement_ends_the_return_path(self) -> None:
+        analyze(parse(
+            "fn f(c: i64) -> i64 { if c == 0 { exit(3); } else { return 1; } }"
+            "fn main() -> i64 { return f(0); }"))
+
     def test_literal_above_max_plus_one_is_refused(self) -> None:
         self.assertEqual(codes("fn main() -> i64 { return 9223372036854775809; }"),
                           ["E1003"])

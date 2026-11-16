@@ -25,6 +25,7 @@ class Code:
 
 REGISTRY: Tuple[Code, ...] = (
     Code("E1001", "lexer", "Unexpected character"),
+    Code("E1004", "lexer", "Unterminated string or unknown escape"),
     Code("E1003", "lexer", "Integer literal does not fit in i64"),
     Code("E2001", "parser", "Grammar expected a specific token"),
     Code("E2002", "parser", "Unknown type"),
@@ -42,6 +43,7 @@ REGISTRY: Tuple[Code, ...] = (
     Code("E3010", "semantics", "More than eight parameters"),
     Code("E3011", "semantics", "Missing or ill-formed main"),
     Code("E3012", "semantics", "Builtin redefined or used as a value"),
+    Code("E3013", "semantics", "exit used inside an expression instead of as a statement"),
     Code("V0001", "verify", "DOS or PE signature is missing"),
     Code("V0002", "verify", "COFF header does not describe an amd64 image"),
     Code("V0003", "verify", "Optional header is not PE32+ console"),

@@ -18,6 +18,9 @@ DIV_ZERO_LABEL = "cairn.runtime.div_zero"
 ARGC_LABEL = "cairn.runtime.argc"
 ARG_BYTE_LABEL = "cairn.runtime.arg_byte"
 READ_CHAR_LABEL = "cairn.runtime.read_char"
+PRINT_STR_LABEL = "cairn.runtime.print_str"
+STR_LEN_LABEL = "cairn.runtime.str_len"
+STR_BYTE_LABEL = "cairn.runtime.str_byte"
 ARG_FILL_LABEL = "cairn.runtime.arg_fill"
 ARGV_CACHE_LABEL = "cairn.runtime.argv_cache"
 ARGV_ARENA_LABEL = "cairn.runtime.argv_arena"
@@ -30,6 +33,8 @@ DIV_ZERO_DATA_LABEL = "cairn.runtime.div_zero_text"
 FRAME_SIZE = 96
 SHELL_FRAME = 32
 READ_FRAME = 48
+STR_FRAME = 48
+PTR_SLOT = -48
 BUFFER_TOP = -1
 WRITTEN_SLOT = -40
 BUFFER_SLOT = -48
@@ -405,6 +410,78 @@ def emit_print_hex(assembler: Assembler) -> None:
     assembler.ret()
 
 
+def emit_print_str(assembler: Assembler) -> None:
+    """Emit `print_str`: write the NUL-terminated text at rax to stdout, no newline.
+
+    The length comes from one scan to the terminator, so no byte is written past the
+    literal's end and the scan costs no call — the `WriteFile` is the only clobber.
+    The pointer returns in rax, kept in a frame slot across the call.
+    """
+    assembler.label(PRINT_STR_LABEL)
+    assembler.push("rbp")
+    assembler.mov_reg_reg("rbp", "rsp")
+    assembler.sub_rsp(STR_FRAME)
+    assembler.mov_store_rbp(PTR_SLOT, "rax")
+    assembler.mov_reg_reg("rcx", "rax")
+    assembler.xor_zero("r8")
+    assembler.label("print_str.scan")
+    assembler.movzx_load8("rdx", "rcx")
+    assembler.test("rdx")
+    assembler.jcc("z", "print_str.write")
+    assembler.step("rcx", decrement=False)
+    assembler.step("r8", decrement=False)
+    assembler.jmp("print_str.scan")
+    assembler.label("print_str.write")
+    assembler.mov_imm32("rcx", -11)
+    assembler.call_indirect(iat_label("GetStdHandle"))
+    assembler.mov_reg_reg("rcx", "rax")
+    assembler.mov_load_rbp("rdx", PTR_SLOT)
+    assembler.lea_rbp("r9", WRITTEN_SLOT)
+    assembler.mov_store_rsp_imm32(32, 0)
+    assembler.call_indirect(iat_label("WriteFile"))
+    assembler.mov_load_rbp("rax", PTR_SLOT)
+    assembler.add_rsp(STR_FRAME)
+    assembler.pop("rbp")
+    assembler.ret()
+
+
+def emit_str_len(assembler: Assembler) -> None:
+    """Emit `str_len`: the number of bytes in the NUL-terminated text at rax."""
+    assembler.label(STR_LEN_LABEL)
+    assembler.mov_reg_reg("rcx", "rax")
+    assembler.xor_zero("rdx")
+    assembler.label("str_len.scan")
+    assembler.movzx_load8("r8", "rcx")
+    assembler.test("r8")
+    assembler.jcc("z", "str_len.done")
+    assembler.step("rcx", decrement=False)
+    assembler.step("rdx", decrement=False)
+    assembler.jmp("str_len.scan")
+    assembler.label("str_len.done")
+    assembler.mov_reg_reg("rax", "rdx")
+    assembler.ret()
+
+
+def emit_str_byte(assembler: Assembler) -> None:
+    """Emit `str_byte(s, j)`: byte j of the text at rcx, or -1.
+
+    A negative index and the terminator position all answer -1, so a caller that
+    counts with `str_len` first never reads past the literal.
+    """
+    asm = assembler
+    asm.label(STR_BYTE_LABEL)
+    asm.test("rdx")
+    asm.jcc("s", "str_byte.miss")
+    asm.lea_scale("r8", "rcx", "rdx", 0, 0)
+    asm.movzx_load8("rax", "r8")
+    asm.test("rax")
+    asm.jcc("z", "str_byte.miss")
+    asm.ret()
+    asm.label("str_byte.miss")
+    asm.mov_imm64("rax", -1)
+    asm.ret()
+
+
 def emit_div_zero(assembler: Assembler, rodata: ReadOnlyData) -> None:
     """Emit the trap taken when a divisor is zero: message on stderr, exit code 3."""
     assembler.label(DIV_ZERO_LABEL)
@@ -438,6 +515,9 @@ def emit_runtime(assembler: Assembler, rodata: ReadOnlyData,
     emit_print_i64(assembler)
     emit_print_char(assembler)
     emit_print_hex(assembler)
+    emit_print_str(assembler)
+    emit_str_len(assembler)
+    emit_str_byte(assembler)
     emit_div_zero(assembler, rodata)
     emit_arg_fill(assembler)
     emit_argc(assembler)
@@ -449,7 +529,9 @@ __all__ = [
     "ARGC_LABEL", "ARG_BYTE_LABEL", "ARG_FILL_LABEL", "ARGV_ARENA_LABEL",
     "ARGV_CACHE_LABEL", "DIV_ZERO_DATA_LABEL", "DIV_ZERO_LABEL", "DIV_ZERO_MESSAGE",
     "NEWLINE_LABEL", "PRINT_CHAR_LABEL", "PRINT_HEX_LABEL", "PRINT_LABEL",
-    "READ_CHAR_LABEL", "STDIN_BUFFER_LABEL", "STDIN_COUNT_LABEL", "STDIN_CURSOR_LABEL",
+    "PRINT_STR_LABEL", "READ_CHAR_LABEL", "STDIN_BUFFER_LABEL", "STDIN_COUNT_LABEL",
+    "STDIN_CURSOR_LABEL", "STR_BYTE_LABEL", "STR_LEN_LABEL",
     "emit_arg_fill", "emit_arg_byte", "emit_argc", "emit_div_zero", "emit_print_char",
-    "emit_print_hex", "emit_print_i64", "emit_read_char", "emit_runtime",
+    "emit_print_hex", "emit_print_i64", "emit_print_str", "emit_read_char",
+    "emit_runtime", "emit_str_byte", "emit_str_len",
 ]

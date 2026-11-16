@@ -13,7 +13,11 @@ from cairn.diagnostics import Diagnostic, DiagnosticError
 from cairn.optimize import INT64_MAX
 
 BUILTINS = {"print": 1, "print_char": 1, "print_hex": 1,
-            "argc": 0, "arg_byte": 2, "read_char": 0}
+            "argc": 0, "arg_byte": 2, "read_char": 0, "exit": 1,
+            "print_str": 1, "str_len": 1, "str_byte": 2}
+# `exit(code)` stops the program, so it has no value: it may sit only as its own
+# statement, like a `return`, and any other position is refused (E3013).
+STOPS_PROGRAM = frozenset({"exit"})
 MAX_PARAMETERS = 8
 
 
@@ -151,7 +155,14 @@ class Analyzer:
         elif isinstance(statement, syntax.Block):
             self._check_block(statement)
         elif isinstance(statement, syntax.ExprStmt):
-            self._check_expression(statement.expression)
+            expression = statement.expression
+            while isinstance(expression, syntax.Parens):
+                expression = expression.inner
+            if (isinstance(expression, syntax.Call)
+                    and expression.name in STOPS_PROGRAM):
+                self._check_call(expression, allow_stop=True)
+            else:
+                self._check_expression(statement.expression)
 
     def _check_for(self, statement: syntax.For) -> None:
         """A `for` declares one scoped, mutable loop variable for its body, then restores.
@@ -224,6 +235,8 @@ class Analyzer:
                              "Write a value between -9223372036854775808 and 9223372036854775807.",
                              expression.span)
             return
+        if isinstance(expression, syntax.StrLiteral):
+            return
         if isinstance(expression, syntax.Parens):
             self._check_expression(expression.inner)
         elif isinstance(expression, syntax.Name):
@@ -250,8 +263,19 @@ class Analyzer:
             return
         expression.slot = binding.slot
 
-    def _check_call(self, expression: syntax.Call) -> None:
-        """A call names a function (or the builtin) and passes exactly its arity of arguments."""
+    def _check_call(self, expression: syntax.Call,
+                    allow_stop: bool = False) -> None:
+        """A call names a function (or the builtin) and passes exactly its arity of arguments.
+
+        A stop-program builtin carries no value, so it passes only where a statement walks
+        it in directly (`allow_stop`); every value position, including other calls'
+        arguments, refuses it.
+        """
+        if expression.name in STOPS_PROGRAM and not allow_stop:
+            self._report("E3013",
+                         f"'{expression.name}(...)' stops the program and has no value",
+                         "Call it as its own statement, not inside another expression.",
+                         expression.span)
         for argument in expression.arguments:
             self._check_expression(argument)
         expected = BUILTINS.get(expression.name)
@@ -271,12 +295,18 @@ class Analyzer:
 
 
 def emitted_return(block: Optional[syntax.Block]) -> bool:
-    """Whether every path through `block` ends in a `return` statement."""
+    """Whether every path through `block` ends in a `return` or an `exit` statement."""
     if block is None or not block.statements:
         return False
     last = block.statements[-1]
     if isinstance(last, syntax.Return):
         return True
+    if isinstance(last, syntax.ExprStmt):
+        expression = last.expression
+        while isinstance(expression, syntax.Parens):
+            expression = expression.inner
+        if isinstance(expression, syntax.Call) and expression.name in STOPS_PROGRAM:
+            return True
     if isinstance(last, syntax.Block):
         return emitted_return(last)
     if isinstance(last, syntax.If) and last.else_block is not None:

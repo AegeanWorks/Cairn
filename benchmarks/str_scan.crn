@@ -1,0 +1,19 @@
+// String-literal byte scan, Cairn twin of str_scan.c, str_scan.cpp and str_scan.rs:
+// 200,000 passes of one str_byte() call per byte over a 66-byte rodata literal,
+// 12.8M dependent reads. All four twins print the identical total.
+fn main() -> i64 {
+    let s: i64 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-*/";
+    let len: i64 = str_len(s);
+    var total: i64 = 0;
+    var r: i64 = 0;
+    while r < 200000 {
+        var j: i64 = 0;
+        while j < len {
+            total = total + str_byte(s, j);
+            j = j + 1;
+        }
+        r = r + 1;
+    }
+    print(total);
+    return 0;
+}

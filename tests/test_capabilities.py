@@ -43,7 +43,7 @@ class RegistryTest(unittest.TestCase):
 
     def test_codes_group_by_stage_in_registry_order(self) -> None:
         grouped = codes.codes_by_stage()
-        self.assertEqual(list(grouped["lexer"]), ["E1001", "E1003"])
+        self.assertEqual(list(grouped["lexer"]), ["E1001", "E1004", "E1003"])
         self.assertEqual(grouped["verify"][0], "V0001")
 
     def test_codes_found_regardless_of_quote_style(self) -> None:

@@ -1262,3 +1262,84 @@ class InputSystemTest(EndToEndTest):
             stdin=bytes(10_240) + b"Z" * 512)
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, f"{90 * 512}\n")
+
+
+@WINDOWS_ONLY
+class ExitValueTest(EndToEndTest):
+    """`exit(code)` stops the machine at once, from main's body and from any helper.
+
+    The code becomes the process exit code (Windows keeps its low 32 bits); nothing
+    after the call runs, so output printed before the call is all the run ever shows.
+    This is the primitive every assert-style Cairn test helper is built on.
+    """
+
+    def test_exit_stops_with_the_given_code(self) -> None:
+        completed = self.execute(
+            "fn main() -> i64 { print(7); exit(42); print(8); return 0; }")
+        self.assertEqual(completed.returncode, 42)
+        self.assertEqual(completed.stdout, "7\n")
+
+    def test_exit_from_a_helper_stops_a_loop(self) -> None:
+        completed = self.execute(
+            "fn check(actual: i64, expected: i64) -> i64 {"
+            " if actual != expected { exit(3); } return 0; }"
+            "fn main() -> i64 { var i: i64 = 0;"
+            " while i < 5 { check(i, i); i = i + 1; } check(1, 2); print(9); return 0; }")
+        self.assertEqual(completed.returncode, 3)
+        self.assertEqual(completed.stdout, "")
+
+
+@WINDOWS_ONLY
+class StringBuiltinsTest(EndToEndTest):
+    """String literals, `print_str`, `str_len` and `str_byte`, end to end.
+
+    A literal is a pointer into `.rodata`; `print_str` writes it raw, `str_len`
+    counts to its terminator, and `str_byte` reads one byte or -1 outside the
+    text. Together with `exit` they are the assert-helper vocabulary.
+    """
+
+    def test_print_str_writes_the_literal_raw(self) -> None:
+        completed = self.execute(
+            "fn main() -> i64 { print_str(\"hello world\"); print_char(10); return 0; }")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "hello world\n")
+
+    def test_escapes_decode_into_the_output(self) -> None:
+        completed = self.execute(
+            "fn main() -> i64 { print_str(\"a\\tb\\\"c\\\\d\\n\"); return 0; }")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "a\tb\"c\\d\n")
+
+    def test_str_len_counts_to_the_terminator(self) -> None:
+        completed = self.execute(
+            "fn main() -> i64 { print(str_len(\"hello\")); print(str_len(\"\"));"
+            " print_str(\"done\"); return 0; }")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "5\n0\ndone")
+
+    def test_str_byte_reads_inside_and_reports_outside(self) -> None:
+        completed = self.execute(
+            "fn main() -> i64 { var s: i64 = \"hi\";"
+            " print(str_byte(s, 0)); print(str_byte(s, 1));"
+            " print(str_byte(s, 2)); print(str_byte(s, -1)); return 0; }")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "104\n105\n-1\n-1\n")
+
+    def test_equal_literals_share_one_blob(self) -> None:
+        # Two mentions of the same text must land on one rodata blob; reading both
+        # pointers' bytes proves the second mention still names live data.
+        completed = self.execute(
+            "fn main() -> i64 { print(str_len(\"twin\")); print_str(\"twin\");"
+            " print_char(10); return 0; }")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "4\ntwin\n")
+
+    def test_an_assert_helper_prints_and_exits_on_mismatch(self) -> None:
+        completed = self.execute(
+            "fn check(actual: i64, expected: i64) -> i64 {"
+            " if actual != expected { print_str(\"fail\"); print_char(10); exit(1); }"
+            " return 0; }"
+            "fn main() -> i64 { check(str_len(\"abc\"), 3);"
+            " check(str_byte(\"abc\", 2), 99); check(str_len(\"abc\"), 9); return 0; }")
+        self.assertEqual(completed.returncode, 1)
+        self.assertEqual(completed.stdout, "fail\n")

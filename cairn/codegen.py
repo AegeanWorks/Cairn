@@ -21,7 +21,8 @@ from cairn.machine import ARGUMENT_REGISTERS, Assembler
 from cairn.optimize import INT64_MIN, has_call, _contains_break_or_continue
 from cairn.image import WritableData
 from cairn.runtime import (ARG_BYTE_LABEL, ARGC_LABEL, DIV_ZERO_LABEL, PRINT_CHAR_LABEL,
-                           PRINT_HEX_LABEL, PRINT_LABEL, READ_CHAR_LABEL, emit_runtime)
+                           PRINT_HEX_LABEL, PRINT_LABEL, PRINT_STR_LABEL, READ_CHAR_LABEL,
+                           STR_BYTE_LABEL, STR_LEN_LABEL, emit_runtime)
 
 COMPARISON_CONDITIONS = {
     "==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge",
@@ -119,7 +120,7 @@ def is_leaf(expression: Optional[syntax.Expr]) -> bool:
     """Whether evaluating the expression is a load or a literal move and nothing else."""
     while isinstance(expression, syntax.Parens):
         expression = expression.inner
-    return isinstance(expression, (syntax.IntLiteral, syntax.Name))
+    return isinstance(expression, (syntax.IntLiteral, syntax.Name, syntax.StrLiteral))
 
 
 def magic_division_parameters(divisor: int) -> Optional[tuple]:
@@ -201,6 +202,8 @@ class CodeGenerator:
     hoist_plans: dict = field(default_factory=dict)
     hoist_imm: dict = field(default_factory=dict)
     hoist_homes: Tuple[str, ...] = ()
+    # String literals: text -> .rodata label, so equal literals share one blob.
+    str_labels: dict = field(default_factory=dict)
     # A foreign-inline copy whose bare-name arguments skip their binds maps the copy's
     # parameter slots to the caller's home registers through copy_alias. copy_return,
     # when set, is the register the copy's single return stores into, replacing the
@@ -232,6 +235,15 @@ class CodeGenerator:
         """A label name no other construct uses."""
         self.counter += 1
         return f"{stem}.{self.counter}"
+
+    def _string_label(self, text: str) -> str:
+        """The .rodata label holding `text` NUL-terminated, creating it once."""
+        label = self.str_labels.get(text)
+        if label is None:
+            label = f"cairn.str.{len(self.str_labels)}"
+            self.rodata.add(label, text.encode("utf-8") + b"\0")
+            self.str_labels[text] = label
+        return label
 
     def _emit_entry(self) -> None:
         """The PE entry point: call main, then exit with main's return value."""
@@ -814,6 +826,8 @@ class CodeGenerator:
                 self.assembler.mov_reg_reg(destination, hoisted)
         elif isinstance(expression, syntax.Name):
             self._load_slot(expression.slot, destination)
+        elif isinstance(expression, syntax.StrLiteral):
+            self.assembler.lea_rip(destination, self._string_label(expression.text))
         elif self._emit_binary_into(expression, destination):
             pass
         else:
@@ -1914,6 +1928,8 @@ class CodeGenerator:
             self._emit_expression(expression.inner)
         elif isinstance(expression, syntax.Name):
             self._load_slot(expression.slot)
+        elif isinstance(expression, syntax.StrLiteral):
+            asm.lea_rip("rax", self._string_label(expression.text))
         elif isinstance(expression, syntax.Unary):
             self._emit_unary(expression)
         elif isinstance(expression, syntax.Binary):
@@ -2324,6 +2340,35 @@ class CodeGenerator:
             asm.pop("rcx")
             self.depth -= 8
             self._emit_call_site(ARG_BYTE_LABEL)
+            return
+        if expression.name == "exit":
+            # `exit(code)` is the one statement-shaped builtin: the code lands in rcx,
+            # ExitProcess takes over, and nothing after this point runs or returns.
+            self._emit_expression(expression.arguments[0])
+            asm.mov_reg_reg("rcx", "rax")
+            self._emit_direct_indirect_call("ExitProcess")
+            return
+        if expression.name == "print_str":
+            self._emit_expression(expression.arguments[0])
+            asm.push("rax")
+            self.depth += 8
+            self._emit_call_site(PRINT_STR_LABEL)
+            asm.pop("rax")
+            self.depth -= 8
+            return
+        if expression.name == "str_len":
+            self._emit_expression(expression.arguments[0])
+            self._emit_call_site(STR_LEN_LABEL)
+            return
+        if expression.name == "str_byte":
+            self._emit_expression(expression.arguments[0])
+            asm.push("rax")
+            self.depth += 8
+            self._emit_expression(expression.arguments[1])
+            asm.mov_reg_reg("rdx", "rax")
+            asm.pop("rcx")
+            self.depth -= 8
+            self._emit_call_site(STR_BYTE_LABEL)
             return
         if expression.name == "print":
             self._emit_expression(expression.arguments[0])
@@ -3488,6 +3533,15 @@ class CodeGenerator:
         if padding:
             self.assembler.sub_rsp(padding)
         self.assembler.call(target)
+        if padding:
+            self.assembler.add_rsp(padding)
+
+    def _emit_direct_indirect_call(self, import_name: str) -> None:
+        """An indirect call through the IAT, padded like `_emit_call_site`."""
+        padding = 8 if self.depth % 16 else 0
+        if padding:
+            self.assembler.sub_rsp(padding)
+        self.assembler.call_indirect(iat_label(import_name))
         if padding:
             self.assembler.add_rsp(padding)
 

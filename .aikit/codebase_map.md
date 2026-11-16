@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `139`
-- **Total Top-Level Functions**: `173`
-- **Total Class Methods**: `770`
-- **Total Source Lines**: `14318`
+- **Total Classes**: `142`
+- **Total Top-Level Functions**: `176`
+- **Total Class Methods**: `790`
+- **Total Source Lines**: `14682`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
-- **Not indexed by this map**: cpp (`32` file(s)), rust (`16` file(s))
+- **Not indexed by this map**: cpp (`34` file(s)), rust (`17` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -32,7 +32,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `563` lines (`26928` bytes)
+**Size**: `565` lines (`27085` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -134,12 +134,13 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3501` lines (`176798` bytes)
+**Size**: `3555` lines (`179270` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
   - Method `.generate(program)` - *Emit the entry stub, every function, then the runtime helpers.*
   - Method `._fresh(stem)` - *A label name no other construct uses.*
+  - Method `._string_label(text)` - *The .rodata label holding `text` NUL-terminated, creating it once.*
   - Method `._emit_entry()` - *The PE entry point: call main, then exit with main's return value.*
   - Method `._emit_function(function)` - *Prologue, saved homes, cleared frame, parameter spills, body, and one epilogue.*
   - Method `._save_homes()` - *Keep the caller's values for every callee-saved register this function uses.*
@@ -243,6 +244,7 @@
   - Method `._cleared_before_use(body, slot)` - *Whether a top-level assignment to `slot` comes before anything can touch it.*
   - Method `._body_may_hold(body)` - *Whether any merge in this body keeps its left value across a right operand that calls.*
   - Method `._emit_call_site(target)` - *A call, padded so rsp is 16-byte aligned as the ABI requires.*
+  - Method `._emit_direct_indirect_call(import_name)` - *An indirect call through the IAT, padded like `_emit_call_site`.*
 
 **Functions:**
 - `def function_label(name)` - *The assembler label of a Cairn function.*
@@ -259,7 +261,7 @@
 ### [`cairn/codes.py`](cairn/codes.py)
 > *The diagnostic code registry: one record per code the compiler can emit.*
 
-**Size**: `78` lines (`3479` bytes)
+**Size**: `80` lines (`3640` bytes)
 
 **Classes:**
 - `class Code` - *One diagnostic code: its stage family and a one-line statement of what it means.*
@@ -344,7 +346,7 @@
 ### [`cairn/lexer.py`](cairn/lexer.py)
 > *Lexer: source text to a flat token list.*
 
-**Size**: `157` lines (`6427` bytes)
+**Size**: `195` lines (`8329` bytes)
 
 **Classes:**
 - `class Token` - *One lexical unit: its kind, its text, its value when it is an integer, and its span.*
@@ -356,6 +358,7 @@
   - Method `._skip_blank()` - *Consume whitespace and `//` comments.*
   - Method `._advance(char)` - *Move one character forward, keeping the line and column accurate.*
   - Method `._next_token()` - *Scan one token that is not whitespace or a comment.*
+  - Method `._string(start)` - *A quoted literal with `\\`, `\"`, `\n` and `\t` escapes; its text is decoded.*
   - Method `._consume(count)` - *Advance over `count` characters, tracking a newline inside the run.*
   - Method `._span_from(start)` - *The span between `start` and the current position.*
   - Method `._number(start)` - *A decimal integer literal that must fit in a signed 64-bit integer.*
@@ -512,7 +515,7 @@
 ### [`cairn/parser.py`](cairn/parser.py)
 > *Parser: recursive descent over the token list.*
 
-**Size**: `349` lines (`14649` bytes)
+**Size**: `352` lines (`14790` bytes)
 
 **Classes:**
 - `class Parser` - *A cursor over one token list; every parse method consumes what it matches.*
@@ -530,7 +533,7 @@
   - Method `._parse_expression_statement()` - *An assignment to a name, or a call whose value is discarded.*
   - Method `._parse_expression(minimum)` - *Precedence climbing: parse operators at least as tight as `minimum`.*
   - Method `._parse_unary()` - *`-x`, `!x`, `~x`, otherwise a primary expression.*
-  - Method `._parse_primary()` - *An integer, a name, a call, a parenthesised expression, or `true`/`false`.*
+  - Method `._parse_primary()` - *An integer, a string, a name, a call, a parenthesised expression, or `true`/`false`.*
   - Method `._parse_call(name)` - *`name(arg, ...)`; the opening parenthesis is already the current token.*
   - Method `._peek()` - *The current token without consuming it.*
   - Method `._advance()` - *Consume and return the current token; `eof` stays put.*
@@ -565,7 +568,7 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `455` lines (`17918` bytes)
+**Size**: `537` lines (`20830` bytes)
 
 **Functions:**
 - `def emit_arg_fill(assembler)` - *Emit `arg_fill`: tokenize the ANSI command line into the static table once.*
@@ -575,6 +578,9 @@
 - `def emit_print_i64(assembler)` - *Emit `print_i64`: write rax in decimal plus a newline.*
 - `def emit_print_char(assembler)` - *Emit `print_char`: write the low byte of rax to stdout, no newline.*
 - `def emit_print_hex(assembler)` - *Emit `print_hex`: write rax in lowercase hex, no newline, no leading zeros.*
+- `def emit_print_str(assembler)` - *Emit `print_str`: write the NUL-terminated text at rax to stdout, no newline.*
+- `def emit_str_len(assembler)` - *Emit `str_len`: the number of bytes in the NUL-terminated text at rax.*
+- `def emit_str_byte(assembler)` - *Emit `str_byte(s, j)`: byte j of the text at rcx, or -1.*
 - `def emit_div_zero(assembler, rodata)` - *Emit the trap taken when a divisor is zero: message on stderr, exit code 3.*
 - `def emit_runtime(assembler, rodata, writable)` - *Emit every helper routine and the data they reference, in a stable order.*
 
@@ -583,7 +589,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `292` lines (`13769` bytes)
+**Size**: `322` lines (`15320` bytes)
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -601,10 +607,10 @@
   - Method `._check_assign(statement)` - *Assignment requires an existing `var` binding.*
   - Method `._check_expression(expression)` - *Dispatch one expression to its checker.*
   - Method `._check_name(expression)` - *A name must be a declared local; `print` is callable but not a value.*
-  - Method `._check_call(expression)` - *A call names a function (or the builtin) and passes exactly its arity of arguments.*
+  - Method `._check_call(expression, allow_stop)` - *A call names a function (or the builtin) and passes exactly its arity of arguments.*
 
 **Functions:**
-- `def emitted_return(block)` - *Whether every path through `block` ends in a `return` statement.*
+- `def emitted_return(block)` - *Whether every path through `block` ends in a `return` or an `exit` statement.*
 - `def analyze(program, path)` - *Run semantic analysis over one parsed program.*
 
 ---
@@ -612,12 +618,13 @@
 ### [`cairn/syntax.py`](cairn/syntax.py)
 > *Syntax tree: one dataclass per construct, each carrying its source span.*
 
-**Size**: `194` lines (`4258` bytes)
+**Size**: `207` lines (`4612` bytes)
 
 **Classes:**
 - `class Node` - *Every node carries the span it was parsed from.*
 - `class Expr` - *Base class for value-producing nodes.*
 - `class IntLiteral` - *A decimal integer literal, already range-checked by the lexer.*
+- `class StrLiteral` - *A quoted string literal: read-only bytes in .rodata, NUL-terminated.*
 - `class Name` - *A reference to a parameter or a local; `slot` is filled in by semantic analysis.*
 - `class Unary` - *`-x`, `!x` or `~x`.*
 - `class Binary` - *A binary operator; `op` is the source spelling.*
@@ -698,7 +705,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `465` lines (`26139` bytes)
+**Size**: `465` lines (`26151` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -755,7 +762,7 @@
 ### [`tests/test_capabilities.py`](tests/test_capabilities.py)
 > *The machine-checkable core: registry, manifest, listing and the stdlib-only proof.*
 
-**Size**: `115` lines (`5052` bytes)
+**Size**: `115` lines (`5061` bytes)
 
 **Classes:**
 - `class RegistryTest` - *ADR-003 makes codes a contract, so all three directions are asserted.*
@@ -1033,7 +1040,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1264` lines (`46247` bytes)
+**Size**: `1345` lines (`50072` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1145,6 +1152,16 @@
   - Method `.test_read_char_streams_stdin_bytes_then_eof()`
   - Method `.test_read_char_without_stdin_reports_eof_at_once()`
   - Method `.test_read_char_wraps_a_large_piped_stream()`
+- `class ExitValueTest` - *`exit(code)` stops the machine at once, from main's body and from any helper.*
+  - Method `.test_exit_stops_with_the_given_code()`
+  - Method `.test_exit_from_a_helper_stops_a_loop()`
+- `class StringBuiltinsTest` - *String literals, `print_str`, `str_len` and `str_byte`, end to end.*
+  - Method `.test_print_str_writes_the_literal_raw()`
+  - Method `.test_escapes_decode_into_the_output()`
+  - Method `.test_str_len_counts_to_the_terminator()`
+  - Method `.test_str_byte_reads_inside_and_reports_outside()`
+  - Method `.test_equal_literals_share_one_blob()`
+  - Method `.test_an_assert_helper_prints_and_exits_on_mismatch()`
 
 **Functions:**
 - `def _wrap(value)`
@@ -1185,7 +1202,7 @@
 ### [`tests/test_lexer.py`](tests/test_lexer.py)
 > *Lexer tests: token shape, spans, comments and the two literal failures.*
 
-**Size**: `79` lines (`3490` bytes)
+**Size**: `108` lines (`4947` bytes)
 
 **Classes:**
 - `class LexerTest` - *The scanner is the first stage an agent's source touches, so its reports must be exact.*
@@ -1197,6 +1214,11 @@
   - Method `.test_two_to_the_63_lexes_so_unary_minus_can_fold_it()`
   - Method `.test_unexpected_character_names_the_fix()`
   - Method `.test_tokenize_reports_eof_at_the_end()`
+  - Method `.test_a_string_literal_lexes_with_its_escapes_decoded()`
+  - Method `.test_an_unterminated_string_is_a_positioned_error()`
+  - Method `.test_an_unknown_escape_is_a_positioned_error()`
+  - Method `.test_a_string_token_carries_its_column()`
+  - Method `.test_the_full_pipeline_places_a_string_on_its_span()`
   - Method `.test_non_ascii_identifier_is_rejected_as_unexpected_character()`
   - Method `.test_long_digit_run_is_E1003_not_ValueError()`
   - Method `.test_zero_padded_literal_fits_when_value_fits()`
@@ -1438,7 +1460,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `173` lines (`8602` bytes)
+**Size**: `203` lines (`10185` bytes)
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -1461,6 +1483,10 @@
   - Method `.test_new_builtins_are_callable_not_values_redefinable()`
   - Method `.test_input_builtins_have_their_arities()`
   - Method `.test_input_builtins_are_not_values()`
+  - Method `.test_string_builtins_have_their_arities()`
+  - Method `.test_exit_takes_one_code_and_stops_the_program()`
+  - Method `.test_exit_is_never_a_value()`
+  - Method `.test_an_exit_statement_ends_the_return_path()`
   - Method `.test_literal_above_max_plus_one_is_refused()`
   - Method `.test_break_outside_a_loop()`
   - Method `.test_function_must_return_on_every_path()`

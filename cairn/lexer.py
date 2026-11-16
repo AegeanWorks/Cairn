@@ -89,6 +89,8 @@ class Lexer:
             return self._number(start)
         if char.isascii() and (char.isalpha() or char == "_"):
             return self._identifier(start)
+        if char == '"':
+            return self._string(start)
         for symbol in MULTI_CHAR_SYMBOLS:
             if self.source.startswith(symbol, self.offset):
                 self._consume(len(symbol))
@@ -100,6 +102,42 @@ class Lexer:
                    "Cairn source is ASCII: use a letter, a digit, or one of (){}:,;=+-*/%<>!&|^~.",
                    Span(start.start, start.start + 1, start.line, start.column,
                         start.line, start.column + 1), self.path)
+
+    def _string(self, start: Span) -> Token:
+        """A quoted literal with `\\\\`, `\\"`, `\\n` and `\\t` escapes; its text is decoded.
+
+        The carrier stops at the closing quote; a newline reached first or an unknown
+        escape is an error, because a test's expected bytes must be exactly what the
+        source says.
+        """
+        self._advance('"')
+        pieces = []
+        while True:
+            if self.offset >= len(self.source) or self.source[self.offset] == "\n":
+                raise fail("E1004", "unterminated string literal",
+                           "Close the string with the matching double quote on the same line.",
+                           self._span_from(start), self.path)
+            char = self.source[self.offset]
+            if char == '"':
+                self._advance(char)
+                return Token("str", "".join(pieces), self._span_from(start))
+            if char == "\\":
+                self._advance(char)
+                if self.offset >= len(self.source):
+                    raise fail("E1004", "unterminated string literal",
+                               "Close the string with the matching double quote on the same line.",
+                               self._span_from(start), self.path)
+                escaped = self.source[self.offset]
+                decoded = {"\\": "\\", '"': '"', "n": "\n", "t": "\t"}.get(escaped)
+                if decoded is None:
+                    raise fail("E1004", f"unknown escape sequence '\\{escaped}'",
+                               "Use one of \\\\, \\\", \\n or \\t inside a string literal.",
+                               self._span_from(start), self.path)
+                self._advance(escaped)
+                pieces.append(decoded)
+                continue
+            pieces.append(char)
+            self._advance(char)
 
     def _consume(self, count: int) -> None:
         """Advance over `count` characters, tracking a newline inside the run."""
