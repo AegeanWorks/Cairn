@@ -924,3 +924,30 @@ class LoopConstantHoistValueTest(EndToEndTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+COMMUTATIVE_PEEPHOLE = """
+fn main() -> i64 {
+    var a: i64 = 240;
+    var b: i64 = 15;
+    var c: i64 = 0;
+    if (a & a) != 0 { print(7); }
+    if (a & b) != 0 { print(1); }
+    if (a & b) == 0 { print(2); }
+    print(a + b);
+    print(b | c);
+    print(a ^ c);
+    return 0;
+}
+"""
+
+
+@WINDOWS_ONLY
+class CommutativePeepholeValueTest(EndToEndTest):
+    """The commutative-home fast path and its ZF-fed branch print identical results."""
+
+    def test_the_peephole_functions_preserve_output(self) -> None:
+        completed = self.execute(COMMUTATIVE_PEEPHOLE)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "7\n2\n255\n15\n240\n")

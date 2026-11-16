@@ -22,6 +22,10 @@ EIGHT_BIT = {
 
 ARGUMENT_REGISTERS = ("rcx", "rdx", "r8", "r9")
 
+# group-1 immediate extensions whose result sets ZF = (register == 0)
+ZF_IMM_EXTENSIONS = (0, 1, 4, 5, 6)
+
+
 CONDITIONS = {
     "e": 0x4, "ne": 0x5, "l": 0xC, "le": 0xE, "g": 0xF, "ge": 0xD,
     "z": 0x4, "nz": 0x5, "s": 0x8, "ns": 0x9, "c": 0x2, "nc": 0x3,
@@ -60,13 +64,17 @@ class Assembler:
     code: bytearray = field(default_factory=bytearray)
     labels: Dict[str, int] = field(default_factory=dict)
     fixups: List[Tuple[int, str]] = field(default_factory=list)
+    # ZF after the last emitted instruction: a register name when ZF compares that
+    # register's CURRENT value against zero, None when the flags say nothing usable.
+    zf_status: Optional[str] = None
 
     def here(self) -> int:
         """The current offset in the code buffer."""
         return len(self.code)
 
     def emit(self, *parts: bytes) -> None:
-        """Append raw bytes."""
+        """Append raw bytes; any such append invalidates the flag summary."""
+        self.zf_status = None
         for part in parts:
             self.code.extend(part)
 
@@ -74,6 +82,7 @@ class Assembler:
         """Bind `name` to the current offset; a duplicate name is a compiler bug."""
         if name in self.labels:
             raise ValueError(f"duplicate label {name!r}: a label may be bound once")
+        self.zf_status = None
         self.labels[name] = self.here()
 
     def rel32(self, target: str) -> None:
@@ -269,10 +278,14 @@ class Assembler:
         code = REGISTERS[reg]
         self.emit(bytes([_rex(False, code >> 3, 0, code >> 3), 0x31] + list(_modrm(3, code, code))))
 
+    ZF_SETTERS = (0x01, 0x09, 0x21, 0x29, 0x31)  # add, or, and, sub, xor: ZF = (result == 0)
+
     def binary(self, opcode: int, destination: str, source: str) -> None:
         """A 64-bit `op r/m64, r64` form: add, sub, and, or, xor and cmp share it."""
         dst, src = REGISTERS[destination], REGISTERS[source]
         self.emit(bytes([_rex(True, src >> 3, 0, dst >> 3), opcode, *_modrm(3, src, dst)]))
+        if opcode in self.ZF_SETTERS:
+            self.zf_status = destination
 
     def cmp_reg_reg(self, left: str, right: str) -> None:
         """`cmp r64, r64`: compare `left` against `right` (G-002 named wrapper)."""
@@ -325,6 +338,8 @@ class Assembler:
     def arith_imm(self, extension: int, reg: str, value: int) -> None:
         """`op r64, imm` by group-1 extension: add (0), or (1), and (4), sub (5), xor (6)."""
         self._group1_imm(extension, reg, value)
+        if extension in ZF_IMM_EXTENSIONS:
+            self.zf_status = reg
 
     def imul(self, destination: str, source: str) -> None:
         """`imul r64, r/m64`: two-operand signed multiply."""
@@ -346,6 +361,7 @@ class Assembler:
         """`test r64, r64`, setting flags from a value without changing it."""
         code = REGISTERS[reg]
         self.emit(bytes([_rex(True, code >> 3, 0, code >> 3), 0x85] + list(_modrm(3, code, code))))
+        self.zf_status = reg
 
     def test_imm(self, reg: str, value: int) -> None:
         """`test r/m8, imm8` (F6 /0) for a small positive mask: flags only, value kept.

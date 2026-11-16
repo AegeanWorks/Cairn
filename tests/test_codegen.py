@@ -1220,3 +1220,47 @@ class PureArgumentSubstitutionTest(unittest.TestCase):
         # the copy's guest must borrow caller homes and the aliased reads refuse
         # where a borrow would erase them (correctness is the e2e twin).
         self.assertEqual(calls_of(REUSED_HOME_CHAIN, "main", "mix4"), 0)
+
+
+class CommutativeHomePeepholeTest(unittest.TestCase):
+    """A commutative binary whose left operand already lives in a register skips its copy.
+
+    `x & y` lowerd as `mov rcx, x; mov rax, y; and rax, rcx` pays two moves for one
+    register-register op; when the left operand's home is a register and the right operand
+    cannot call, `and rax, home` is equivalent and shorter. The same fact decides a
+    `cmp rax, 0` that immediately follows a ZF-setting op on rax: the flags already
+    compare the result against zero.
+    """
+
+    def test_an_and_of_a_homed_left_operand_skips_the_rcx_copy(self) -> None:
+        blob = region_bytes(
+            "fn probe(a: i64, b: i64) -> i64 { return a & b; }"
+            " fn main() -> i64 { return probe(15, 3); }", "probe")
+        self.assertIn(and_rax_rbx, blob)          # and rax, rbx -- the left home directly
+        self.assertNotIn(and_rax_rcx, blob)       # no via-rcx form
+        self.assertNotIn(mov_rcx_rbx, blob)       # no left-operand copy into rcx
+
+    def test_an_add_of_a_homed_left_operand_skips_the_rcx_copy(self) -> None:
+        blob = region_bytes(
+            "fn probe(a: i64, b: i64) -> i64 { return a + b; }"
+            " fn main() -> i64 { return probe(15, 3); }", "probe")
+        self.assertIn(add_rax_rbx, blob)          # add rax, rbx
+        self.assertNotIn(add_rax_rcx, blob)       # no via-rcx form
+        self.assertNotIn(mov_rcx_rbx, blob)       # no left-operand copy into rcx
+
+    def test_a_zero_branch_after_an_and_skips_the_redundant_compare(self) -> None:
+        blob = region_bytes(
+            "fn check(a: i64, b: i64) -> i64 { if (a & b) != 0 { return 7; } return 0; }"
+            " fn main() -> i64 { return check(240, 240); }", "check")
+        self.assertIn(and_rax_rbx, blob)          # the op still computes into rax
+        self.assertNotIn(and_rax_rcx, blob)
+        self.assertNotIn(cmp_rax_zero, blob)      # ZF already compares rax against zero
+
+
+# Commutative-home peephole reference encodings.
+and_rax_rbx = b"\x48\x21\xd8"       # and rax, rbx
+and_rax_rcx = b"\x48\x21\xc8"       # and rax, rcx
+add_rax_rbx = b"\x48\x01\xd8"       # add rax, rbx
+add_rax_rcx = b"\x48\x01\xc8"       # add rax, rcx
+cmp_rax_zero = b"\x48\x83\xf8\x00"  # cmp rax, 0
+mov_rcx_rbx = b"\x48\x89\xd9"       # mov rcx, rbx

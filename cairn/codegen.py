@@ -1575,7 +1575,10 @@ class CodeGenerator:
         if (isinstance(right, syntax.IntLiteral)
                 and IMMEDIATE_MIN <= right.value <= IMMEDIATE_MAX):
             self._emit_into(expression.left, "rax")
-            asm.cmp_imm("rax", right.value)
+            # The flags already compare rax against zero when the last emitted
+            # instruction was an add/or/and/sub/xor whose destination is rax.
+            if right.value != 0 or self.assembler.zf_status != "rax":
+                asm.cmp_imm("rax", right.value)
         else:
             self._emit_left_operand(expression.left, expression.right)
             asm.cmp_reg_reg("rcx", "rax")
@@ -1651,6 +1654,18 @@ class CodeGenerator:
             return
         if expression.op in ("/", "%") and self._emit_magic_division(expression):
             return
+        left = expression.left
+        if (expression.op in ARITHMETIC_OPCODES
+                and isinstance(left, syntax.Name)
+                and not (left.slot == self.delta_slot and self.delta_value)
+                and not has_call(expression.right)):
+            left_home = self._home(left.slot)
+            if left_home is not None:
+                # The left operand already lives in a register: compute in place instead
+                # of parking it in rcx and reading it back from there.
+                self._emit_expression(expression.right)
+                asm.binary(ARITHMETIC_OPCODES[expression.op], "rax", left_home)
+                return
         self._emit_left_operand(expression.left, expression.right)
         if expression.op in ("/", "%"):
             self._emit_division(expression.op)
