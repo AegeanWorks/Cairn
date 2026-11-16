@@ -1264,3 +1264,47 @@ add_rax_rbx = b"\x48\x01\xd8"       # add rax, rbx
 add_rax_rcx = b"\x48\x01\xc8"       # add rax, rcx
 cmp_rax_zero = b"\x48\x83\xf8\x00"  # cmp rax, 0
 mov_rcx_rbx = b"\x48\x89\xd9"       # mov rcx, rbx
+
+
+class SameNameBinaryTest(unittest.TestCase):
+    """`x * x` (and any same-name `+ & | ^`) loads its operand from a frame slot once.
+
+    The two loads of the identical slot back to back buy nothing: one `mov load` into
+    rax followed by `op rax, rax` computes the same value with half the frame traffic,
+    which is most of an inner loop's cost when the operand is frame-resident.
+    """
+
+    def test_a_same_name_product_of_a_frame_slot_loads_once(self) -> None:
+        blob = region_bytes(
+            "fn probe() -> i64 { "
+            + " ".join(f"var v{i}: i64 = {i};" for i in range(6))
+            + " var g: i64 = 0; var i: i64 = 0;"
+            " while i < 3 { g = g + 1; i = i + 1; }"
+            " return g * g; }"
+            " fn main() -> i64 { return probe(); }", "probe")
+        self.assertIn(imul_rax_rax, blob)      # imul rax, rax
+        self.assertNotIn(imul_rax_rcx, blob)   # no two-register product form
+
+    def test_a_same_name_product_of_a_homed_slot_loads_once(self) -> None:
+        blob = region_bytes(
+            "fn probe(a: i64, b: i64) -> i64 { return a * a; }"
+            " fn main() -> i64 { return probe(6, 7); }", "probe")
+        self.assertIn(imul_rax_rax, blob)      # mov rax, rbx; imul rax, rax
+        self.assertNotIn(imul_rax_rcx, blob)
+
+
+class MultiplyHomeFastPathTest(unittest.TestCase):
+    """A homed left operand multiplies in place, exactly like the M2 commutative forms."""
+
+    def test_a_homed_left_operand_imuls_in_its_own_register(self) -> None:
+        blob = region_bytes(
+            "fn probe(a: i64, b: i64) -> i64 { return a * b; }"
+            " fn main() -> i64 { return probe(6, 7); }", "probe")
+        self.assertIn(imul_rax_rbx, blob)      # imul rax, rbx
+        self.assertNotIn(imul_rax_rcx, blob)   # no parking copy into rcx
+
+
+# Same-name and multiply fast-path reference encodings.
+imul_rax_rax = b"\x48\x0f\xaf\xc0"  # imul rax, rax
+imul_rax_rcx = b"\x48\x0f\xaf\xc1"  # imul rax, rcx
+imul_rax_rbx = b"\x48\x0f\xaf\xc3"  # imul rax, rbx

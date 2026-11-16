@@ -951,3 +951,30 @@ class CommutativePeepholeValueTest(EndToEndTest):
         completed = self.execute(COMMUTATIVE_PEEPHOLE)
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "7\n2\n255\n15\n240\n")
+
+
+SAME_NAME_IN_PLACE = """
+fn probe(a: i64, b: i64) -> i64 { return a * a; }
+fn main() -> i64 {
+    print(probe(9, -3));
+    print(probe(-11, 100));
+    var a: i64 = 5; var b: i64 = 6; var c: i64 = 7; var d: i64 = 8;
+    var e: i64 = 9; var f: i64 = 10; var g: i64 = 0;
+    g = 13;
+    print(g * g);
+    print(a * b);
+    print(c + c);
+    print(d & d);
+    return 0;
+}
+"""
+
+
+@WINDOWS_ONLY
+class SameNameInPlaceValueTest(EndToEndTest):
+    """Same-name in-place products and homes-fed multiplies print identical values."""
+
+    def test_same_name_and_multiply_forms_preserve_output(self) -> None:
+        completed = self.execute(SAME_NAME_IN_PLACE)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "81\n121\n169\n30\n14\n8\n")

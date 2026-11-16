@@ -5,35 +5,12 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1794782030.5644512,
+    "updated_at": 1794806722.4592164,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-loop-invariants",
-      "phase": "verification",
-      "phase_num": 4,
-      "description": "[2/3] Phase 4: milestone 2 verified \u2014 full suite 473 tests + 39 subtests green; benchmarks --save --compare exit 0 (splitmix -40 percent vs saved, others byte-identical); Post-Flight checklist passed: tests green, README updated same commit, ADR-031 recorded, KB synced, secrets scan clean, G-004 gate met",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794767000.845117,
-      "timestamp_str": "2026-11-15 21:23:20",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-loop-invariants",
-      "phase": "implementation",
-      "phase_num": 3,
-      "description": "[3/3] Phase 3: loop-invariant big constants hoisted into prologue-saved spare home registers (per-loop plan, peephole-mask skip, copy-context refusals, pad parity extended); 24 tests, suite 497 + 39 subtests green; splitmix 110.0 -> 94.3 ms, now faster than C(98-101) and Rust(110-113); ADR-032; README + KB; G-004 exit 0",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794768276.4833658,
-      "timestamp_str": "2026-11-15 21:44:36",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-loop-invariants",
       "phase": "delivered",
@@ -271,6 +248,28 @@
       "status": "in_progress",
       "timestamp": 1794782030.5644512,
       "timestamp_str": "2026-11-16 01:33:50",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-remaining-losses",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[2/3] Phase 4: milestone 2 verified - frame-path premise disproven (queens is a 6-slot leaf, main 0 slots); delivered commutative-home peephole (+ & | ^ compute op rax,<left home> directly, no rcx parking) and ZF-fed zero-branch elision (no cmp rax,0 right after a ZF setter); failing-first CommutativeHomePeepholeTest + e2e twin; 692 tests + 39 subtests green; gate exit 0 twice (tak/hex_io flags were noise); ADR-038",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794806697.1989737,
+      "timestamp_str": "2026-11-16 08:24:57",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-remaining-losses",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[3/3] Phase 4: milestone 3 verified - mandelbrot analysis: inner loop frame-resident (13 of 25 instrs are rbp traffic, 6-home ceiling by design, rsi=scratch rbp=frame pointer); delivered same-name single-load binaries (x*x -> one load + imul rax,rax) and imul joining the in-place fast path; failing-first SameNameBinaryTest + MultiplyHomeFastPathTest + e2e twin; 723 tests + 39 subtests green; gate exit 0 on all runs, ADR-031/034 regression flags discharged as noise; mandelbrot residual structural (induction vars, home reuse) - deferred to new task; ADR-039",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794806722.4592164,
+      "timestamp_str": "2026-11-16 08:25:22",
       "agent": "mistral:vibe"
     }
   ]

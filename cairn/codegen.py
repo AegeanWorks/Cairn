@@ -33,6 +33,12 @@ ARITHMETIC_OPCODES = {
     "+": 0x01, "&": 0x21, "|": 0x09, "^": 0x31,
 }
 
+# Fall-through binary ops whose register-register lowering can read the left operand's
+# home directly instead of a parked rcx copy: the commutative arithmetic group, plus
+# `*`, whose two-operand form `imul rax, r/m64` takes any second register. `x op x`
+# additionally loads its slot once; `sub` is excluded because it is not commutative.
+IN_PLACE_BINARY_OPS = ("+", "&", "|", "^", "*")
+
 # Group-1 immediate extensions for an arithmetic right operand that is a literal.
 IMMEDIATE_BINARY_EXTENSIONS = {"+": 0, "-": 5, "&": 4, "|": 1, "^": 6}
 # Shift extensions for a literal count: `shl` and `sar`, matching Cairn's `>>` semantics.
@@ -1655,16 +1661,31 @@ class CodeGenerator:
         if expression.op in ("/", "%") and self._emit_magic_division(expression):
             return
         left = expression.left
-        if (expression.op in ARITHMETIC_OPCODES
+        right = expression.right
+        while isinstance(left, syntax.Parens):
+            left = left.inner
+        while isinstance(right, syntax.Parens):
+            right = right.inner
+        if (expression.op in IN_PLACE_BINARY_OPS
                 and isinstance(left, syntax.Name)
-                and not (left.slot == self.delta_slot and self.delta_value)
-                and not has_call(expression.right)):
+                and not (left.slot == self.delta_slot and self.delta_value)):
+            if (isinstance(right, syntax.Name) and right.slot == left.slot):
+                # One load feeds both operands: `x * x` pays half the frame traffic.
+                self._load_slot(left.slot, "rax")
+                if expression.op == "*":
+                    asm.imul("rax", "rax")
+                else:
+                    asm.binary(ARITHMETIC_OPCODES[expression.op], "rax", "rax")
+                return
             left_home = self._home(left.slot)
-            if left_home is not None:
-                # The left operand already lives in a register: compute in place instead
-                # of parking it in rcx and reading it back from there.
+            if left_home is not None and not has_call(expression.right):
+                # The left operand already lives in a register: compute in place
+                # instead of parking it in rcx and reading it back from there.
                 self._emit_expression(expression.right)
-                asm.binary(ARITHMETIC_OPCODES[expression.op], "rax", left_home)
+                if expression.op == "*":
+                    asm.imul("rax", left_home)
+                else:
+                    asm.binary(ARITHMETIC_OPCODES[expression.op], "rax", left_home)
                 return
         self._emit_left_operand(expression.left, expression.right)
         if expression.op in ("/", "%"):
