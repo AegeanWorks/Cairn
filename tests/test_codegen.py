@@ -1581,3 +1581,20 @@ class ParkedCopyArgumentTest(unittest.TestCase):
         blob = region_bytes(self.SOURCE, "mix")
         self.assertNotIn(bytes([0x4D, 0x89, 0xDD]), blob)      # no mov r13, r11
         self.assertNotIn(bytes([0x4D, 0x89, 0xD6]), blob)      # no mov r14, r10
+
+
+class HoistedMagicDivisionTest(unittest.TestCase):
+    """A loop's magic division reads its seed and divisor from hoisted spare homes."""
+
+    def test_a_looped_modulo_hoists_the_divisor_and_seed(self) -> None:
+        blob = region_bytes("fn main() -> i64 { var i: i64 = 0; var t: i64 = 0;"
+                            " while i < 10 { t = t + (i * 48271) % 2147483647;"
+                            " i = i + 1; } print(t); return 0; }", "main")
+        # The divisor and its seed hoist into spare homes; the remainder multiplies
+        # the quotient by the hoisted divisor register instead of reloading it.
+        self.assertIn(bytes([0x49, 0x0F, 0xAF, 0xD5]), blob)    # imul rdx, r13
+        self.assertIn(bytes([0x4C, 0x89, 0xF6]), blob)          # mov rsi, r14 (seed)
+        self.assertNotIn(bytes([0x48, 0xBE, 0xFF, 0xFF, 0xFF, 0x7F]), blob)  # no
+        #                                                            movabs rsi, 0x7fffffff
+        self.assertNotIn(bytes([0x48, 0xBE, 0x03, 0x00, 0x00, 0x00,
+                                0x01, 0x00, 0x00, 0x80]), blob)  # no movabs rsi, seed

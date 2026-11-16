@@ -255,7 +255,10 @@ class CodeGenerator:
             # caller's outgoing area at a fixed offset.
             hold_units = self._delta_hold_units(function)
             pair_mode = hold_units == 0 and self._pair_inline_shape(function)
-            self.hoist_plans.update(self._plan_constant_hoists(function))
+            # A pair or delta machine rebinds r13 across its copies, which would
+            # collide with a hoisted spare home; those frames skip hoisting entirely.
+            self.hoist_plans.update({} if (hold_units or pair_mode)
+                                    else self._plan_constant_hoists(function))
             self.hoist_homes = tuple(home for pairs in
                                      (self.hoist_plans.get(id(loop), [])
                                       for loop in self._loops_within(function.body))
@@ -1292,6 +1295,19 @@ class CodeGenerator:
         elif isinstance(expression, syntax.Call):
             for argument in expression.arguments:
                 self._count_in(argument, counter)
+        else:
+            return
+        # A magic division reloads its seed and its divisor as 64-bit constants even
+        # when the divisor itself fits the immediate range: count both so the loop's
+        # plan hoists them into spare homes, unless a shift fixup already covers it.
+        if (isinstance(expression, syntax.Binary) and expression.op in ("/", "%")):
+            divisor = self._stripped(expression.right)
+            if (isinstance(divisor, syntax.IntLiteral) and divisor.value >= 2
+                    and divisor.value & (divisor.value - 1)):
+                counter[divisor.value] += 1
+                parameters = magic_division_parameters(divisor.value)
+                if parameters is not None:
+                    counter[parameters[0]] += 1
 
     def _emit_while(self, statement: syntax.While) -> None:
         """Load the loop's plan-hoisted constants into their spare homes, then lower."""
@@ -2051,7 +2067,11 @@ class CodeGenerator:
         asm = self.assembler
         self._emit_expression(expression.left)
         asm.mov_reg_reg("rcx", "rax")       # the dividend, for the add-back and remainder
-        asm.mov_imm64(SCRATCH, multiplier)
+        hoisted = self.hoist_imm.get(multiplier)
+        if hoisted is not None:
+            asm.mov_reg_reg(SCRATCH, hoisted)
+        else:
+            asm.mov_imm64(SCRATCH, multiplier)
         asm.imul_high(SCRATCH)              # rdx:rax = rax * multiplier, signed 128-bit
         asm.lea_scale("rax", "rdx", "rcx", 0, 0)  # rax = mulhigh + n (the add-back)
         asm.shift_imm(7, "rax", shift)
@@ -2061,8 +2081,12 @@ class CodeGenerator:
         if expression.op == "/":
             return True
         asm.mov_reg_reg("rdx", "rax")
-        asm.mov_imm64(SCRATCH, right.value)
-        asm.imul("rdx", SCRATCH)            # quotient * divisor
+        hoisted = self.hoist_imm.get(right.value)
+        if hoisted is not None:
+            asm.imul("rdx", hoisted)        # quotient * divisor
+        else:
+            asm.mov_imm64(SCRATCH, right.value)
+            asm.imul("rdx", SCRATCH)        # quotient * divisor
         asm.mov_reg_reg("rax", "rcx")
         asm.binary(0x29, "rax", "rdx")      # n - (n / d) * d keeps the dividend's sign
         return True
@@ -2358,8 +2382,9 @@ class CodeGenerator:
     def _plan_foreign_copy(self, callee: syntax.Function):
         """The copy's guest, spill and rebind decisions, without emitting anything."""
         parameters = len(callee.parameters)
+        reserved = set(self.homes) | set(self.hoist_homes)
         if self._rebinds_parameters(callee.body, parameters):
-            free = [home for home in HOME_REGISTERS if home not in self.homes]
+            free = [home for home in HOME_REGISTERS if home not in reserved]
             guest = tuple((free + list(self.homes))[:callee.slots])
             spill = [home for home in self.homes if home in guest]
             return True, guest, spill
@@ -2368,7 +2393,7 @@ class CodeGenerator:
         # spend the home pool on the callee's locals.
         entry = ARGUMENT_REGISTERS[:parameters]
         spare = [home for home in HOME_REGISTERS
-                 if home not in self.homes and home not in entry]
+                 if home not in reserved and home not in entry]
         shortfall = callee.slots - parameters - len(spare)
         reused = list(self.homes[:shortfall]) if shortfall > 0 else []
         return False, tuple(entry) + tuple(spare + reused), reused

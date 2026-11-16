@@ -1,41 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-immediate-shapes",
-    "last_phase": "post-implementation",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794834411.9285834,
+    "task_id": "cairn-magic-hoist",
+    "last_phase": "in_progress",
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794835879.723295,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794834613.374919,
-    "completed_head": "fb2fd3bf53f0d8a0ed71adcdba08f1e6b5d526c0",
-    "completed_tree": "cf833f947d2d26ba58221ea2de176b6f3cd87143"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-remaining-losses",
-      "phase": "resumed",
-      "phase_num": 2,
-      "description": "Resumed 'cairn-remaining-losses' after a pause",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794777217.081952,
-      "timestamp_str": "2026-11-16 00:13:37",
-      "agent": "mistral:vibe"
-    },
-    {
-      "task_id": "cairn-remaining-losses",
-      "phase": "in_progress",
-      "phase_num": 3,
-      "description": "Milestone 1: pure-argument substitution in foreign-inline copies plus movzx zero-extend masks; call_chain loses 42.5 vs C 32.6ms reproducibly",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794779054.489611,
-      "timestamp_str": "2026-11-16 00:44:14",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-remaining-losses",
       "phase": "in_progress",
@@ -303,6 +278,36 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-magic-hoist",
+      "phase": "planning",
+      "phase_num": 2,
+      "description": "[1/1] Magic division seeds and divisors hoist into spare homes",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794835879.5130281,
+      "timestamp_str": "2026-11-16 16:31:19",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "binary_gcd's main loop reloads four 64-bit constants (two seeds, two divisors) per iteration although the hoisting machinery exists and the loop has spare homes.",
+        "benefits": "Every looped magic division reads its seed and divisor from hoisted registers; the guest planner stops borrowing hoisted homes, which also closes a latent corruption path for any hoisted loop containing a copy.",
+        "risks": "contract: hoist_imm reads must stay guarded to the real body; dependency: only codegen; concurrency: none; state: none.",
+        "mitigation": "Failing-first shape test pins the hoisted forms; pair and delta machine frames skip hoisting so r13 rebinds never collide; full suite plus benchmark gate."
+      },
+      "plan_digest": "bb53cdccaff5b2f7c2a84a007c608a5f1df1701035f9845567da1707db65c920"
+    },
+    {
+      "task_id": "cairn-magic-hoist",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/1] Hoisted forms landed, gate exit 0",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794835879.723295,
+      "timestamp_str": "2026-11-16 16:31:19",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
     }
   ]
 }

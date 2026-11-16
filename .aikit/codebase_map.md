@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `131`
+- **Total Classes**: `132`
 - **Total Top-Level Functions**: `168`
-- **Total Class Methods**: `739`
-- **Total Source Lines**: `13408`
+- **Total Class Methods**: `740`
+- **Total Source Lines**: `13450`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3252` lines (`163872` bytes)
+**Size**: `3277` lines (`165249` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -813,7 +813,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1583` lines (`76986` bytes)
+**Size**: `1600` lines (`78094` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -982,6 +982,8 @@
 - `class ParkedCopyArgumentTest` - *A five-or-six-argument copy binds its spare arguments into their guest homes.*
   - Method `.test_spare_arguments_land_in_their_guest_homes()`
   - Method `.test_the_copy_entry_skips_the_rebind_pair()`
+- `class HoistedMagicDivisionTest` - *A loop's magic division reads its seed and divisor from hoisted spare homes.*
+  - Method `.test_a_looped_modulo_hoists_the_divisor_and_seed()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
