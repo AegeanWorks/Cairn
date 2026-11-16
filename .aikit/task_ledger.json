@@ -3,25 +3,17 @@
   "active_task": {
     "task_id": "cairn-allocation",
     "last_phase": "4",
-    "active_phase": 3,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794823118.386314,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794823212.3923473,
+    "completed_head": "cbf36487a1fed5060ca7162aa84cf15fea1e3684",
+    "completed_tree": "c2526b6f9efd9273bea828905839803abe783200"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-language-surface",
-      "phase": "milestone-boundary",
-      "phase_num": 3,
-      "description": "Milestone 1/3 committed as the tree's for milestone; milestone 2 print_char/print_hex is next",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794772423.250923,
-      "timestamp_str": "2026-11-15 22:53:43",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-language-surface",
       "phase": "implementation",
@@ -286,6 +278,23 @@
       "timestamp_str": "2026-11-16 12:58:38",
       "agent": "mistral:vibe",
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-allocation",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-allocation' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794823212.4786246,
+      "timestamp_str": "2026-11-16 13:00:12",
+      "agent": "mistral:vibe",
+      "head": "cbf36487a1fed5060ca7162aa84cf15fea1e3684",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
