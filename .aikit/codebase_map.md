@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `134`
-- **Total Top-Level Functions**: `168`
-- **Total Class Methods**: `743`
-- **Total Source Lines**: `13505`
+- **Total Classes**: `136`
+- **Total Top-Level Functions**: `169`
+- **Total Class Methods**: `753`
+- **Total Source Lines**: `13783`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3283` lines (`165677` bytes)
+**Size**: `3463` lines (`174709` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -187,6 +187,9 @@
   - Method `._bit_test_operand(expression)` - *`(value, mask)` when the compare is `x % 2**b` or `x & m`, else None.*
   - Method `._logical_shift_shape(expression)` - *The `(operand, shift)` of a `(a >> k) & (2**(64-k) - 1)` tree, or None.*
   - Method `._emit_logical_shift(expression, destination)` - *Lower `(a >> k) & (2**(64-k) - 1)` as one logical `shr`, or refuse.*
+  - Method `._shift_through_target(expression)` - *"direct" (operand expr, m) or "forward" (caller home, m) for `(a >> m) << m`.*
+  - Method `._emit_shift_through_into_rax(expression)` - *Lower `(a >> m) << m` as one load-plus-and-immediate into rax, or refuse.*
+  - Method `._emit_shift_through_into_destination(expression, destination)` - *Lower `(a >> m) << m` as one load-plus-and-immediate into `destination`.*
   - Method `._emit_comparison_branch(expression, target, when_true)` - *Compare two operands and branch, using an immediate form when the right side is small.*
   - Method `._emit_expression(expression)` - *Lower one expression, leaving its value in rax.*
   - Method `._emit_unary(expression)` - *Negate, complement, or compare with zero.*
@@ -229,8 +232,10 @@
   - Method `._foreign_inline_target(expression)` - *The function to copy into this call site, or None when the shape stays a call.*
   - Method `._body_is_copy_free(body)` - *Whether a whole statement tree calls or divides — any refuses a copy.*
   - Method `._substitution_plan(expression, target)` - *Which arguments a foreign-inline copy never binds: the bare names.*
+  - Method `._shift_through_plan(expression, target, spill)` - *Parameter slots whose single `p << m` use forwards their fused argument.*
+  - Method `._parameter_single_shift_use(body, slot, m)` - *Whether `slot` is read exactly once in `body`, and that read is `slot << m`.*
   - Method `._alias_substitution(substitution, borrowed)` - *Keep every alias whose home register the copy leaves intact.*
-  - Method `._emit_foreign_inline(callee, alias, copy_home, bound)` - *Lower a call to another function as one copy of its body, result in rax.*
+  - Method `._emit_foreign_inline(callee, alias, copy_home, bound, shift_through)` - *Lower a call to another function as one copy of its body, result in rax.*
   - Method `._rebinds_parameters(body, count)` - *Whether any statement assigns a parameter slot.*
   - Method `._expression_reads(expression, slot)` - *Whether an expression reads `slot`.*
   - Method `._statement_touches(statement, slot)` - *Whether a statement reads or writes `slot` in any position.*
@@ -813,7 +818,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1624` lines (`79301` bytes)
+**Size**: `1682` lines (`82515` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -987,6 +992,11 @@
   - Method `.test_a_looped_modulo_hoists_the_divisor_and_seed()`
 - `class ForeignLoopCopyTest` - *A foreign callee whose body loops copies in place like any other.*
   - Method `.test_the_callees_loop_lowers_inside_the_caller()`
+- `class ShiftThroughFusionTest` - *`(a >> m) << m` fuses into one and-immediate, across call boundaries too.*
+  - Method `.test_a_direct_shift_pair_lowers_as_one_and()`
+  - Method `.test_unequal_shift_counts_stay_two_instructions()`
+  - Method `.test_a_forwarded_parameter_leaves_no_sar_behind()`
+  - Method `.test_a_twice_used_parameter_keeps_its_bind()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
@@ -1008,7 +1018,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1143` lines (`41239` bytes)
+**Size**: `1183` lines (`42542` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1111,9 +1121,12 @@
   - Method `.test_a_refused_propagation_keeps_the_materialised_value()`
 - `class ForeignLoopCopyValueTest` - *A foreign callee containing loops copies in place and answers identically.*
   - Method `.test_looped_copies_preserve_output()`
+- `class ShiftThroughValueTest` - *The fused drop-then-restore mask keeps signed and wrapping semantics.*
+  - Method `.test_shift_through_values_match_two_complement()`
 
 **Functions:**
 - `def _wrap(value)`
+- `def _wrap64(value)`
 
 ---
 

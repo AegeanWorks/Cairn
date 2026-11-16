@@ -205,6 +205,11 @@ class CodeGenerator:
     # result's rax round trip.
     copy_alias: dict = field(default_factory=dict)
     copy_return: Optional[str] = None
+    # A copy's parameter slots whose single use is `p << m` while the argument was
+    # `x >> m`: slot -> (caller home register, m). Such a parameter never binds into a
+    # guest register at all; its one use lowers as `x & -2**m` read from the caller home,
+    # which keeps the shift fusion `(a >> m) << m -> a & -2**m` across a call boundary.
+    shift_through: dict = field(default_factory=dict)
 
     def generate(self, program: syntax.Program) -> Artifact:
         """Emit the entry stub, every function, then the runtime helpers."""
@@ -882,6 +887,9 @@ class CodeGenerator:
             if (not isinstance(operand, syntax.IntLiteral)
                     or not 0 <= operand.value <= 63):
                 return False
+            if operator == "<<" and self._emit_shift_through_into_destination(
+                    expression, destination):
+                return True
             if not self._emit_left_into(left, destination):
                 return False
             self.assembler.shift_imm(IMMEDIATE_SHIFT_EXTENSIONS[operator],
@@ -1730,6 +1738,72 @@ class CodeGenerator:
         self.assembler.shift_imm(5, destination, shift)   # shr: the logical form
         return True
 
+    def _shift_through_target(self, expression: syntax.Binary) -> Optional[tuple]:
+        """"direct" (operand expr, m) or "forward" (caller home, m) for `(a >> m) << m`.
+
+        The drop-then-restore of m low bits is a pure mask, so the pair only fuses when
+        both counts are equal; a forwarded parameter entry demands its own m match.
+        """
+        count = self._stripped(expression.right)
+        if not (isinstance(count, syntax.IntLiteral) and 1 <= count.value <= 31):
+            return None
+        left = self._stripped(expression.left)
+        if isinstance(left, syntax.Binary) and left.op == ">>":
+            shifted = self._stripped(left.right)
+            if (isinstance(shifted, syntax.IntLiteral)
+                    and shifted.value == count.value):
+                return ("direct", left.left, count.value)
+            return None
+        if (isinstance(left, syntax.Name)
+                and self.shift_through.get(left.slot) is not None):
+            source_home, shifted = self.shift_through[left.slot]
+            if shifted == count.value:
+                return ("forward", source_home, count.value)
+        return None
+
+    def _emit_shift_through_into_rax(self, expression: syntax.Binary) -> bool:
+        """Lower `(a >> m) << m` as one load-plus-and-immediate into rax, or refuse.
+
+        The rax contract carries a pending left value in rcx, so only a leaf operand's
+        load is safe to refactor — the same rule `_emit_logical_shift` applies. A
+        forwarded parameter lowers from the caller's own home register instead of its
+        never-bound guest register.
+        """
+        target = self._shift_through_target(expression)
+        if target is None:
+            return False
+        kind, source, shift = target
+        if kind == "forward":
+            self.assembler.mov_reg_reg("rax", source)
+        elif not isinstance(self._stripped(source), (syntax.Name, syntax.IntLiteral)):
+            # A pending left may sit in rcx; only a leaf load is guaranteed to touch
+            # rax alone.
+            return False
+        else:
+            self._emit_expression(source)
+        self.assembler.arith_imm(IMMEDIATE_BINARY_EXTENSIONS["&"], "rax",
+                                 -(1 << shift))
+        return True
+
+    def _emit_shift_through_into_destination(self, expression: syntax.Binary,
+                                             destination: str) -> bool:
+        """Lower `(a >> m) << m` as one load-plus-and-immediate into `destination`."""
+        target = self._shift_through_target(expression)
+        if target is None:
+            return False
+        kind, source, shift = target
+        if kind == "forward":
+            if source == destination:
+                # The copy borrowed the caller's home as this destination; a fused
+                # read would force it in place and destroy the caller's value.
+                return False
+            self.assembler.mov_reg_reg(destination, source)
+        elif not self._emit_left_into(source, destination):
+            return False
+        self.assembler.arith_imm(IMMEDIATE_BINARY_EXTENSIONS["&"], destination,
+                                 -(1 << shift))
+        return True
+
     def _emit_comparison_branch(self, expression: syntax.Binary, target: str,
                                 when_true: bool) -> None:
         """Compare two operands and branch, using an immediate form when the right side is small."""
@@ -1876,6 +1950,8 @@ class CodeGenerator:
             return
         if isinstance(right, syntax.IntLiteral) and 0 <= right.value <= 63 \
                 and expression.op in IMMEDIATE_SHIFT_EXTENSIONS:
+            if self._emit_shift_through_into_rax(expression):
+                return
             self._emit_expression(expression.left)
             asm.shift_imm(IMMEDIATE_SHIFT_EXTENSIONS[expression.op], "rax", right.value)
             return
@@ -2296,6 +2372,10 @@ class CodeGenerator:
         if not rebinds:
             substitution = self._substitution_plan(expression, target)
             alias, skip = self._alias_substitution(substitution, spill)
+            shift_through = self._shift_through_plan(expression, target, spill)
+            skip = skip | frozenset(shift_through)
+        else:
+            shift_through = {}
         if len(expression.arguments) > len(ARGUMENT_REGISTERS):
             if copy_home is not None and not rebinds:
                 ret_slot = self._return_slot_override(target, guest, alias,
@@ -2307,7 +2387,7 @@ class CodeGenerator:
         else:
             bound = frozenset()
             self._emit_foreign_arguments(expression, skip)
-        self._emit_foreign_inline(target, alias, copy_home, bound)
+        self._emit_foreign_inline(target, alias, copy_home, bound, shift_through)
         return copy_home
 
     def _emit_foreign_arguments(self, expression: syntax.Call, skip: frozenset) -> None:
@@ -3054,6 +3134,99 @@ class CodeGenerator:
                 plan[index] = self._home(argument.slot)
         return plan
 
+    def _shift_through_plan(self, expression: syntax.Call,
+                            target: syntax.Function, spill: list) -> dict:
+        """Parameter slots whose single `p << m` use forwards their fused argument.
+
+        A copy argument of the shape `x >> m` with the parameter read exactly once in
+        the callee, as `p << m`, moves the `(a >> m) << m` fusion across the call
+        boundary: the parameter never binds into a guest register, and its one use
+        lowers `x & -2**m` straight from the caller's own home register. A borrowed
+        (spilled) caller home refuses: the copy restores such registers only at its
+        exit, and the fused read must not observe a clobbered value.
+        """
+        plan: dict = {}
+        for index, argument in enumerate(expression.arguments[:len(target.parameters)]):
+            argument = self._stripped(argument)
+            if not (isinstance(argument, syntax.Binary) and argument.op == ">>"):
+                continue
+            count = self._stripped(argument.right)
+            if not isinstance(count, syntax.IntLiteral) or not 1 <= count.value <= 31:
+                continue
+            operand = self._stripped(argument.left)
+            if not isinstance(operand, syntax.Name):
+                continue
+            if operand.slot in (self.delta_slot, self.value_slot):
+                continue
+            source_home = self._home(operand.slot)
+            if source_home is None or source_home in spill:
+                continue
+            if self._parameter_single_shift_use(target.body, index, count.value):
+                plan[index] = (source_home, count.value)
+        return plan
+
+    def _parameter_single_shift_use(self, body: syntax.Block, slot: int, m: int) -> bool:
+        """Whether `slot` is read exactly once in `body`, and that read is `slot << m`.
+
+        The shape holds when the parameter's sole occurrence sits as the left operand
+        of a `<<` with the literal count `m`, directly or through parentheses. An
+        assignment's target is not a read (the statement carries the slot itself), so
+        only values, conditions and call arguments count toward `uses`.
+        """
+        uses = 0
+        shaped_seen = False
+
+        def visit(expression: Optional[syntax.Expr], inside: bool) -> None:
+            nonlocal uses, shaped_seen
+            if expression is None or uses > 1:
+                return
+            if isinstance(expression, syntax.Name):
+                if expression.slot == slot:
+                    uses += 1
+                    shaped_seen = shaped_seen or inside
+                return
+            if isinstance(expression, syntax.Unary):
+                visit(expression.operand, False)
+                return
+            if isinstance(expression, syntax.Parens):
+                visit(expression.inner, inside)
+                return
+            if isinstance(expression, syntax.Binary):
+                left = self._stripped(expression.left)
+                fused_here = (expression.op == "<<"
+                              and isinstance(left, syntax.Name)
+                              and left.slot == slot
+                              and isinstance(self._stripped(expression.right), syntax.IntLiteral)
+                              and self._stripped(expression.right).value == m)
+                visit(expression.left, inside or fused_here)
+                visit(expression.right, False)
+                return
+            if isinstance(expression, syntax.Call):
+                for argument in expression.arguments:
+                    visit(argument, False)
+
+        def walk(block: syntax.Block) -> None:
+            for statement in block.statements:
+                if uses > 1:
+                    return
+                if isinstance(statement, (syntax.Let, syntax.Assign)):
+                    visit(statement.value, False)
+                elif isinstance(statement, syntax.If):
+                    visit(statement.condition, False)
+                    walk(statement.then_block)
+                    if statement.else_block is not None:
+                        walk(statement.else_block)
+                elif isinstance(statement, syntax.While):
+                    visit(statement.condition, False)
+                    walk(statement.body)
+                elif isinstance(statement, syntax.Return):
+                    visit(statement.value, False)
+                elif isinstance(statement, syntax.ExprStmt):
+                    visit(statement.expression, False)
+
+        walk(body)
+        return uses == 1 and shaped_seen
+
     def _alias_substitution(self, substitution: dict, borrowed: list):
         """Keep every alias whose home register the copy leaves intact.
 
@@ -3070,7 +3243,8 @@ class CodeGenerator:
     def _emit_foreign_inline(self, callee: syntax.Function,
                              alias: Optional[dict] = None,
                              copy_home: Optional[str] = None,
-                             bound: frozenset = frozenset()) -> None:
+                             bound: frozenset = frozenset(),
+                             shift_through: Optional[dict] = None) -> None:
         """Lower a call to another function as one copy of its body, result in rax.
 
         When no statement rebinds a parameter, the argument registers themselves are the
@@ -3086,7 +3260,8 @@ class CodeGenerator:
         saved = (self.homes, self.home_of, self.current, self.epilogue, self.pad_slots,
                  self.holds, self.delta_slot, self.delta_value, self.value_slot,
                  self.hold_units, self.chain_loop_depth, self.temporaries,
-                 self.nonnegative_slots, self.copy_alias, self.copy_return)
+                 self.nonnegative_slots, self.copy_alias, self.copy_return,
+                 self.shift_through)
         alias = dict(alias or {})
         parameters = len(callee.parameters)
         rebinds, guest, spill = self._plan_foreign_copy(callee)
@@ -3112,8 +3287,11 @@ class CodeGenerator:
         self.inline_depth += 1
         # Substituted arguments read the caller's homes through alias slots; a return
         # destination, when honored, receives the copy's result without the rax move.
+        # A forwarded shift-through parameter never binds, so its ABI register or
+        # arriving temporary holds garbage that nothing legitimate may read.
         self.copy_alias = alias
         self.copy_return = copy_home
+        self.shift_through = dict(shift_through or {})
         for index, parameter in enumerate(callee.parameters[:len(ARGUMENT_REGISTERS)]):
             if rebinds:
                 asm.mov_reg_reg(self.home_of[index], ARGUMENT_REGISTERS[index])
@@ -3121,7 +3299,8 @@ class CodeGenerator:
             # A five-or-six-parameter copy's extra arguments arrived in the temporary
             # registers — unless the call site bound one straight into its guest home,
             # or an aliased one already reads the caller's own home.
-            if index not in self.copy_alias and index not in bound:
+            if (index not in self.copy_alias and index not in bound
+                    and index not in self.shift_through):
                 asm.mov_reg_reg(self.home_of[index],
                                 TEMPORARY_REGISTERS[index - len(ARGUMENT_REGISTERS)])
         for index in range(parameters, callee.slots):
@@ -3142,7 +3321,8 @@ class CodeGenerator:
         (self.homes, self.home_of, self.current, self.epilogue, self.pad_slots,
          self.holds, self.delta_slot, self.delta_value, self.value_slot,
          self.hold_units, self.chain_loop_depth, self.temporaries,
-         self.nonnegative_slots, self.copy_alias, self.copy_return) = saved
+         self.nonnegative_slots, self.copy_alias, self.copy_return,
+         self.shift_through) = saved
 
     def _rebinds_parameters(self, body: Optional[syntax.Block], count: int) -> bool:
         """Whether any statement assigns a parameter slot."""

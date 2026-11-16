@@ -1141,3 +1141,43 @@ class ForeignLoopCopyValueTest(EndToEndTest):
         completed = self.execute(LOOP_COPY_PROGRAM)
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "21\n6\n10\n3\n6\n")
+
+
+SHIFT_THROUGH_PROGRAM = (
+    "fn f3(a: i64, b: i64, c: i64) -> i64 {"
+    " var t: i64 = (a * 3) ^ (b << 2);"
+    " if t > c { t = t - c; } else { t = t + c; } return t; }"
+    " fn main() -> i64 {"
+    " var x: i64 = 1;"
+    " var i: i64 = -40;"
+    " while i <= 40 { x = f3(x, i >> 2, i); i = i + 1; }"
+    " print(x);"
+    " var y: i64 = -1234567890123;"
+    " print((y >> 3) << 3);"
+    " print((y >> 5) << 5);"
+    " print((y >> 1) << 31);"
+    " return 0; }")
+
+
+def _wrap64(value: int) -> int:
+    return ((value + 2 ** 63) % 2 ** 64) - 2 ** 63
+
+
+@WINDOWS_ONLY
+class ShiftThroughValueTest(EndToEndTest):
+    """The fused drop-then-restore mask keeps signed and wrapping semantics."""
+
+    def test_shift_through_values_match_two_complement(self) -> None:
+        x = 1
+        for i in range(-40, 41):
+            b = _wrap64(i >> 2)
+            t = _wrap64(_wrap64(x * 3) ^ _wrap64(b << 2))
+            x = _wrap64(t - i) if t > i else _wrap64(t + i)
+        y = -1234567890123
+        expected = "\n".join(str(v) for v in (
+            x, _wrap64((y >> 3) << 3), _wrap64((y >> 5) << 5),
+            _wrap64((y >> 1) << 31))) + "\n"
+        completed = self.execute(SHIFT_THROUGH_PROGRAM)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, expected)
+

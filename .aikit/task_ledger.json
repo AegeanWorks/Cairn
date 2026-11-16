@@ -1,54 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-loop-copies",
+    "task_id": "cairn-shift-fused-args",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794843843.4297907,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794852652.98311,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794843876.0074923,
-    "completed_head": "b21d2749d9056ac63117afb5454aa11fbb9979b3",
-    "completed_tree": "f1daa8e62a950bec6e6b20136539b5fc2d6131b8"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-remaining-losses",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-remaining-losses' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794806820.6010199,
-      "timestamp_str": "2026-11-16 08:27:00",
-      "agent": "mistral:vibe",
-      "head": "1d5e76ff1b947dc957a67674a71519d6798b6913",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-structural-losses",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/3] Close the structural losses recorded in ADR-039: milestone 1 = foreign inlining inside frame-path functions (the rbp prologue never sets self.current, so _foreign_inline_target refuses every copy in a function with more than six slots); milestone 2 = home reuse for frame functions (inner scopes re-register slots whose outer bindings died); milestone 3 = loop-induction strength reduction (mandelbrot's px * 16384 - 4194304 and py * 24576 become running values)",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794808169.8852973,
-      "timestamp_str": "2026-11-16 08:49:29",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "contract: no language-surface change, only codegen lowering; the recorded user rules re-run the full benchmark gate after every compiler change and ship test+benchmark twins for new constructs; dependency: extends the committed foreign-inline machinery (e9f84e4) and the assembler zf summary (9126db4); concurrency: single-threaded codegen, no new shared state beyond the existing assembler fields; state: ledger and decisions.md stay append-only",
-        "benefits": "mandelbrot and any program whose main or workers exceed six home slots currently compile every inner-loop value to frame memory (13 of 25 inner-loop instructions in mandelbrot are rbp traffic); foreign inlining inside frame functions removes call overhead there; strength reduction removes a multiply per row loop; measured targets: mandelbrot 14.6 vs C 10.7 ms and the general case of 7+-slot functions",
-        "risks": "contract: mis-inlining in frame functions must not read stale argument registers (the guarded shapes are call-free, loop-free, trap-free callees with parameters bound to spilled homes); dependency: pushes of spill homes inside a frame body shift rsp, so copy emission must stay push/pop balanced exactly as in leaf callers; concurrency: none; state: benchmark history changes only through the recorded gate",
-        "mitigation": "failing-first byte-shape tests pin when the fallback call stays (rebinds-parameter callees, overshoot slots), e2e twins pin outputs, the full suite and --save --compare gate run before every commit exactly as in the delivered milestones, and ADR-040 records any ab"
-      },
-      "plan_digest": "d0594e4eeb59ec38d33a3953fefc3c6dffbf05fcb214e8e55468a59665d48dc0"
-    },
     {
       "task_id": "cairn-structural-losses",
       "phase": "in_progress",
@@ -330,6 +292,36 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-shift-fused-args",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/3] Shift-through fusion: (a>>m)<<k lowers as and -2^k, and single-use copy args of shape name>>m forward into their use",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794845977.839551,
+      "timestamp_str": "2026-11-16 19:19:37",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "call_chain loses 30 percent to C entirely from the sar+shl chain in the inlined mix3 body (gcc folds (i>>2)<<2 into and -4 via full evaluation); the same shape is the standard floor-to-multiple idiom in real programs and crosses call boundaries in both nqueens and call_chain args",
+        "benefits": "call_chain 44.6 -> target near C 34.5 ms; nqueens argument shuffles slim; a general sound peephole in the language",
+        "risks": "contract: (a>>m)<<k == a & -(2^k) requires k>=m>=1, verified for signed negatives since sar sign-fill shifts out exactly when k>=m; a forwarded arg must only fire when the parameter occurs exactly once in the copy body and the shift user shape is verifiable at emission; dependency: reuses existing _logical_shift_shape machinery, no new deps; concurrency: none; state: provenance lives only inside one copy emission and must not leak across nested copies",
+        "mitigation": "failing-first bytes tests pinning the and-lowering and absence of sar in the copy region, e2e value tests against a Python wrap model with negative operands and k==m plus k>m, full suite + benchmark gate before commit"
+      },
+      "plan_digest": "f6b7ea8eda5e3dacb631ffeff1a8dbc636983049a22805360a019fa8a245915b"
+    },
+    {
+      "task_id": "cairn-shift-fused-args",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[3/3] Verified: 960 tests, 4/4 gates, ADR-049, gate exit 0; call_chain A/B within noise, mechanism recorded as wrong hypothesis",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794852652.98311,
+      "timestamp_str": "2026-11-16 21:10:52",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
     }
   ]
 }

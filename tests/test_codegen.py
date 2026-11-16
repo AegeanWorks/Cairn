@@ -708,6 +708,7 @@ add_rax_rcx = b"\x48\x01\xc8"  # add rax, rcx
 sar_rdx_2 = b"\x48\xc1\xfa\x02"  # sar rdx, 2
 movzx_r8d_bx = b"\x44\x0f\xb7\xc3"  # movzx r8d, bx
 and_r8_65535 = b"\x49\x81\xe0\xff\xff\x00\x00"
+and_rax_neg4 = b"\x48\x83\xe0\xfc"  # and rax, -4: the fused (x >> 2) << 2
 movabs_one = b"\x48\xb8\x01"
 test_rax_rax = b"\x48\x85\xc0"
 cmp_rax_minus1 = b"\x48\x83\xf8\xff"
@@ -740,8 +741,9 @@ class MultiArgumentCallTest(unittest.TestCase):
     def test_mixed_call_free_arguments_bind_reversed_without_the_stack(self) -> None:
         # call_chain's shape: f(x, x >> 2, x & 65535). The bare name aliases onto its
         # home inside the copy, the masked argument binds as one movzx from that home,
-        # and the shifted argument binds rdx and shifts in place. Reverse order costs
-        # nothing observable, and no rax round-trip happens anywhere.
+        # and ADR-049 forwards the shifted argument into its single use: no bind, no
+        # sar, the fused and-immediate lowers at the use site instead. Reverse order
+        # costs nothing observable, and no rax round-trip happens anywhere.
         source = ("fn f(a: i64, b: i64, c: i64) -> i64 { return (a * 3) ^ (b << 2) + c; } "
                   "fn main() -> i64 { var x: i64 = 7; return f(x, x >> 2, x & 65535); }")
         body = body_text(source, "main")
@@ -750,9 +752,16 @@ class MultiArgumentCallTest(unittest.TestCase):
         self.assertNotIn(pop_rcx, body)
         self.assertIn(movzx_r8d_bx, body)  # the mask is the bind
         self.assertNotIn(and_r8_65535, body)
-        self.assertIn(mov_rdx_rbx, body)
-        self.assertIn(sar_rdx_2, body)
-        self.assertLess(body.index(movzx_r8d_bx), body.index(mov_rdx_rbx))
+        self.assertNotIn(sar_rdx_2, body)
+        fused = []
+        for reg in ("rax", "rcx", "rdx", "r8", "r9", *HOME_REGISTERS):
+            probe = Assembler()
+            probe.arith_imm(4, reg, -4)   # and <reg>, -4: the fused use-site mask
+            fused.append(bytes(probe.code))
+        fused_at = min(position for form in fused
+                       if (position := body.find(form)) >= 0)
+        self.assertLess(body.index(movzx_r8d_bx), fused_at)
+
     def test_a_call_inside_an_argument_keeps_the_stack_fallback(self) -> None:
         # A nested call that cannot inline (g calls itself, so no copy is taken)
         # clobbers the caller-saved argument registers, so an already-bound argument
@@ -1209,13 +1218,14 @@ class PureArgumentSubstitutionTest(unittest.TestCase):
     """
 
     def test_the_call_chain_copy_binds_only_what_computes(self) -> None:
+        # ADR-049: the shifted argument now forwards into its single use (the bind
+        # and its sar are gone entirely); the mask and the bare-name alias hold.
         body = region_bytes(SUBSTITUTION_CHAIN, "main")
         probe = Assembler()
         probe.mov_reg_reg("rcx", "rbx")       # bind a := x
         self.assertNotIn(bytes(probe.code), body)
         self.assertIn(b"\x45\x0f\xb7\xc4", body)  # movzx r8d, r12w: the mask is the bind
-        self.assertIn(mov_rdx_r12, body)  # b binds before its shift
-        self.assertIn(sar_rdx_2, body)
+        self.assertNotIn(sar_rdx_2, body)  # the shifted argument fuses at its use site
 
     def test_the_substituted_factor_reads_the_caller_home_directly(self) -> None:
         body = region_bytes(SUBSTITUTION_CHAIN, "main")
@@ -1622,3 +1632,51 @@ class ForeignLoopCopyTest(unittest.TestCase):
         forms = {bytes([rex, 0x83, modrm, 0x03])
                  for rex in (0x48, 0x49) for modrm in range(0xC0, 0xC8)}
         self.assertTrue(any(form in blob for form in forms), "no copied loop fold in main")
+
+
+class ShiftThroughFusionTest(unittest.TestCase):
+    """`(a >> m) << m` fuses into one and-immediate, across call boundaries too."""
+
+    DIRECT = ("fn main() -> i64 { var x: i64 = 1234567890123;"
+              " var y: i64 = (x >> 3) << 3; print(y); return 0; }")
+
+    REFUSED_COUNTS = ("fn main() -> i64 { var x: i64 = 1234567890123;"
+                      " var y: i64 = (x >> 3) << 2; print(y); return 0; }")
+
+    FORWARDED = ("fn f3(a: i64, b: i64, c: i64) -> i64 {"
+                 " var t: i64 = (a * 3) ^ (b << 2);"
+                 " if t > c { t = t - c; } else { t = t + c; } return t; }"
+                 " fn main() -> i64 { var i: i64 = 0; var x: i64 = 1;"
+                 " while i < 8 { x = f3(x, i >> 2, i); i = i + 1; }"
+                 " print(x); return 0; }")
+
+    REFUSED_DOUBLE = ("fn f3(a: i64, b: i64, c: i64) -> i64 {"
+                      " var t: i64 = (a * 3) ^ (b << 2);"
+                      " if t > c { t = t - c; } else { t = (t | (b & 7)) + c; }"
+                      " return t; }"
+                      " fn main() -> i64 { var i: i64 = 0; var x: i64 = 1;"
+                      " while i < 8 { x = f3(x, i >> 2, i); i = i + 1; }"
+                      " print(x); return 0; }")
+
+    def test_a_direct_shift_pair_lowers_as_one_and(self) -> None:
+        blob = region_bytes(self.DIRECT, "main")
+        and_forms = {bytes([rex, 0x83, modrm, 0xf8])
+                     for rex in (0x48, 0x49, 0x4c, 0x4d)
+                     for modrm in range(0xE0, 0xE8)}
+        self.assertTrue(any(form in blob for form in and_forms), "no fused and-immediate -8")
+        self.assertNotIn(b"\xc1\xfc\x03", blob, "sar rax, 3 survived the fusion")
+        self.assertNotIn(b"\xc1\xe4\x03", blob, "shl rax, 3 survived the fusion")
+
+    def test_unequal_shift_counts_stay_two_instructions(self) -> None:
+        blob = region_bytes(self.REFUSED_COUNTS, "main")
+        self.assertIn(b"\xc1\xfc\x03", blob, "sar rax, 3 must survive a k != m pair")
+        self.assertIn(b"\xc1\xe4\x02", blob, "shl rax, 2 must survive a k != m pair")
+
+    def test_a_forwarded_parameter_leaves_no_sar_behind(self) -> None:
+        blob = region_bytes(self.FORWARDED, "main")
+        self.assertNotIn(b"\xc1\xfa\x02", blob, "the forwarded argument still pays sar rdx, 2")
+        self.assertIn(b"\x48\x83\xe0\xfc", blob, "no fused and rax, -4 at the copy's use site")
+
+    def test_a_twice_used_parameter_keeps_its_bind(self) -> None:
+        blob = region_bytes(self.REFUSED_DOUBLE, "main")
+        self.assertIn(b"\xc1\xfa\x02", blob, "a twice-read parameter must keep its sar bind")
