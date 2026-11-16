@@ -1523,3 +1523,61 @@ class HomePreferenceTest(unittest.TestCase):
         blob = region_bytes(leaf, "main")
         # a = slot 0 keeps rbx; the fold adds b's home directly: add rbx, r12.
         self.assertIn(bytes([0x4C, 0x01, 0xE3]), blob)   # add rbx, r12
+
+
+class ImulImmediateShapeTest(unittest.TestCase):
+    """A value-position `homed * literal` emits the imul, not a constant load."""
+
+    def test_a_const_multiplied_home_takes_the_three_operand_form(self) -> None:
+        blob = region_bytes("fn main() -> i64 { var a: i64 = 3; var b: i64 = a * 37;"
+                            " var c: i64 = a * 171; print(b + c + a); return 0; }", "main")
+        # a homes in rbx; both products take the three-operand imul with the
+        # destination register holding the result: no constant re-load, no imul rax.
+        self.assertIn(bytes([0x4C, 0x6B, 0xE3, 0x25]), blob)     # imul r12, rbx, 37
+        self.assertIn(bytes([0x4C, 0x69, 0xEB, 0xAB, 0x00, 0x00, 0x00]), blob)  # 171
+        self.assertNotIn(bytes([0x48, 0xB8, 0x25, 0x00, 0x00, 0x00]), blob)     # no movabs 37
+        self.assertNotIn(bytes([0x4C, 0x0F, 0xAF]), blob)        # no two-operand imul
+
+
+class CommutativeMergeShapeTest(unittest.TestCase):
+    """A commutative chain folds every step into the destination register itself."""
+
+    def test_a_chain_addition_folds_into_the_destination_home(self) -> None:
+        blob = region_bytes("fn main() -> i64 { var m: i64 = 0; var t: i64 = 1;"
+                            " var u: i64 = 2; m = m + t + u; print(m); return 0; }", "main")
+        # m, t, u home in declaration order (rbx, r12, r13): each chain step is one
+        # add into m's home, with no parked rcx copy and no rax round-trip.
+        self.assertIn(bytes([0x4C, 0x01, 0xE3]), blob)   # add rbx, r12
+        self.assertIn(bytes([0x4C, 0x01, 0xEB]), blob)   # add rbx, r13
+
+    def test_a_multiply_accumulate_chain_never_parks_its_accumulator(self) -> None:
+        blob = region_bytes("fn main() -> i64 { var a: i64 = 1; var b: i64 = 2;"
+                            " var c: i64 = 3; var s: i64 = a * 31 + b * 37 + c * 41;"
+                            " print(s); return 0; }", "main")
+        # The chain of homed-times-literal products folds straight into the
+        # destination: one imul per term plus one add, no rcx park and no
+        # temp-to-rax round-trip per step.
+        self.assertIn(bytes([0x49, 0x6B, 0xC4, 0x25]), blob)     # imul rax, r12, 37
+        self.assertNotIn(bytes([0x48, 0x89, 0xD9]), blob)        # no mov rcx, r11
+
+
+class ParkedCopyArgumentTest(unittest.TestCase):
+    """A five-or-six-argument copy binds its spare arguments into their guest homes."""
+
+    SOURCE = ("fn mix(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64 {"
+              " return a + b + c + d + e + f; }"
+              " fn main() -> i64 { var i: i64 = 0; var total: i64 = 0;"
+              " while i < 3 { total = total + mix(i, i + 1, i + 2, i + 3, i + 4, i + 5);"
+              " i = i + 1; } print(total); return 0; }")
+
+    def test_spare_arguments_land_in_their_guest_homes(self) -> None:
+        blob = region_bytes(self.SOURCE, "main")
+        # guest is (rcx, rdx, r8, r9, r13, r14): arguments 4 and 5 compute straight
+        # into r13 and r14 instead of parking in r11/r10 for an entry-time rebind.
+        self.assertIn(bytes([0x4C, 0x8D, 0x6B, 0x04]), blob)   # lea r13, [rbx+4]
+        self.assertIn(bytes([0x4C, 0x8D, 0x73, 0x05]), blob)   # lea r14, [rbx+5]
+
+    def test_the_copy_entry_skips_the_rebind_pair(self) -> None:
+        blob = region_bytes(self.SOURCE, "mix")
+        self.assertNotIn(bytes([0x4D, 0x89, 0xDD]), blob)      # no mov r13, r11
+        self.assertNotIn(bytes([0x4D, 0x89, 0xD6]), blob)      # no mov r14, r10

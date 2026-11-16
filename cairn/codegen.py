@@ -306,6 +306,7 @@ class CodeGenerator:
                 self._store_slot(parameter.slot, ARGUMENT_REGISTERS[index])
             self.depth = 0
             self.temporaries = 0
+            self.left_hold = None
             # The implicit-return-zero runs once at entry: explicit returns overwrite it,
             # and a final `return` can fall through into the epilogue label ungated.
             asm.mov_imm64("rax", 0)
@@ -359,6 +360,7 @@ class CodeGenerator:
             self._store_slot(function.parameters[index].slot, "rax")
         self.depth = 0
         self.temporaries = 0
+        self.left_hold = None
         asm.mov_imm64("rax", 0)
         self._emit_block(function.body, tail=True)
         asm.label(self.epilogue)
@@ -821,6 +823,10 @@ class CodeGenerator:
                        and self._home(stripped_left.slot) == destination)
         if operator in UPDATE_OPCODES:
             if not self._computes_in_rax_only(right, destination, parked_noop):
+                if operator in ARITHMETIC_OPCODES:
+                    if self._emit_commutative_into(operator, left, right,
+                                                   destination):
+                        return True
                 return False
             if not self._emit_left_into(left, destination):
                 return False
@@ -843,6 +849,18 @@ class CodeGenerator:
         if operator == "*":
             if self._emit_scaled_product(expression, destination):
                 return True
+            operand = self._stripped(right)
+            if (isinstance(operand, syntax.IntLiteral)
+                    and -2147483648 <= operand.value <= 2147483647
+                    and isinstance(stripped_left, syntax.Name)
+                    and not (stripped_left.slot == self.delta_slot
+                             and self.delta_value)):
+                home = self._home(stripped_left.slot)
+                if home is not None:
+                    # A homed name times a constant: one imul writes the
+                    # destination and the home survives untouched.
+                    self.assembler.imul_imm(destination, home, operand.value)
+                    return True
             if not self._computes_in_rax_only(right, destination, parked_noop):
                 return False
             if not self._emit_left_into(left, destination):
@@ -865,6 +883,10 @@ class CodeGenerator:
                 return False
             self.assembler.shift_imm(IMMEDIATE_SHIFT_EXTENSIONS[operator],
                                      destination, operand.value)
+            return True
+        if (operator in ARITHMETIC_OPCODES
+                and self._emit_commutative_into(operator, left, right,
+                                                destination)):
             return True
         return False
 
@@ -954,6 +976,63 @@ class CodeGenerator:
             # left operand in rcx — the original merged-park miscompile shape.
             return False
         return False
+
+    def _combines_in_rax_only(self, expression: Optional[syntax.Expr],
+                              destination: str,
+                              parked_noop: bool = False) -> bool:
+        """Whether a commutative right operand lowers into rax alone.
+
+        `_computes_in_rax_only` plus one shape it must refuse to model generically:
+        `homed * literal`, whose value-position lowering is one three-operand imul
+        that touches rax and no destination register.
+        """
+        stripped = self._stripped(expression)
+        if (isinstance(stripped, syntax.Binary) and stripped.op == "*"
+                and isinstance(self._stripped(stripped.left), syntax.Name)
+                and isinstance(self._stripped(stripped.right), syntax.IntLiteral)
+                and not (self._stripped(stripped.left).slot == self.delta_slot
+                         and self.delta_value)):
+            home = self._home(self._stripped(stripped.left).slot)
+            if home is not None and home != destination:
+                return True
+            if home == destination:
+                # That lowering would read `destination`, whose register may now hold
+                # the chain's already-combined left: refuse and keep the generic path.
+                return False
+        return self._computes_in_rax_only(expression, destination, parked_noop)
+
+    def _emit_commutative_into(self, operator: str, left: Optional[syntax.Expr],
+                               right: Optional[syntax.Expr],
+                               destination: str) -> bool:
+        """Fold `left op right` into `destination` for the commutative group.
+
+        The left value is computed or moved into `destination` once; every later chain
+        level adds straight into it, so a multiply-accumulate chain never parks its
+        accumulator in a temporary and never round-trips rax between levels.
+        """
+        if destination == "rax":
+            return False
+        stripped_left = self._stripped(left)
+        if isinstance(stripped_left, syntax.Name):
+            parked_noop = (not (stripped_left.slot == self.delta_slot
+                                and self.delta_value)
+                           and self._home(stripped_left.slot) == destination)
+        else:
+            parked_noop = False
+        if (not self._combines_in_rax_only(right, destination, parked_noop)
+                or not self._emit_left_into(left, destination)):
+            return False
+        right_home = (self._home(right.slot)
+                      if isinstance(self._stripped(right), syntax.Name)
+                      else None)
+        if right_home is not None:
+            self.assembler.binary(ARITHMETIC_OPCODES[operator], destination,
+                                  right_home)
+        else:
+            self._emit_expression(right)
+            self.assembler.binary(ARITHMETIC_OPCODES[operator], destination,
+                                  "rax")
+        return True
 
     def _stripped(self, expression: Optional[syntax.Expr]) -> Optional[syntax.Expr]:
         """The expression without its wrapping parentheses."""
@@ -1761,6 +1840,15 @@ class CodeGenerator:
             return
         if expression.op == "*" and self._emit_scaled_product(expression):
             return
+        if (expression.op == "*" and isinstance(right, syntax.IntLiteral)
+                and isinstance(expression.left, syntax.Name)
+                and not (expression.left.slot == self.delta_slot and self.delta_value)
+                and self._home(expression.left.slot) is not None
+                and -2147483648 <= right.value <= 2147483647):
+            # A homed name times a constant is one three-operand imul: the home
+            # survives and no constant register load rides along.
+            asm.imul_imm("rax", self._home(expression.left.slot), right.value)
+            return
         if (expression.op in ("+", "-") and isinstance(right, syntax.IntLiteral)
                 and -IMMEDIATE_MAX - 1 <= right.value <= IMMEDIATE_MAX
                 and self._emit_home_offset("rax", expression)):
@@ -1807,23 +1895,33 @@ class CodeGenerator:
                     asm.binary(ARITHMETIC_OPCODES[expression.op], "rax", left_home)
                 return
         self._emit_left_operand(expression.left, expression.right)
+        held = self.left_hold
+        self.left_hold = None
         if expression.op in ("/", "%"):
+            if held is not None:
+                asm.mov_reg_reg("rcx", held)
             self._emit_division(expression.op)
         elif expression.op in COMPARISON_CONDITIONS:
-            asm.cmp_reg_reg("rcx", "rax")
+            asm.cmp_reg_reg(held if held is not None else "rcx", "rax")
             asm.setcc(COMPARISON_CONDITIONS[expression.op])
         elif expression.op in ("<<", ">>"):
+            if held is not None:
+                asm.mov_reg_reg("rcx", held)
             asm.mov_reg_reg(SCRATCH, "rax")
             asm.mov_reg_reg("rax", "rcx")
             asm.mov_reg_reg("rcx", SCRATCH)
             asm.shift_cl(4 if expression.op == "<<" else 7)
         elif expression.op == "*":
-            asm.imul("rax", "rcx")
+            if held is not None and held != "rcx":
+                asm.imul("rax", held)
+            else:
+                asm.imul("rax", "rcx")
         elif expression.op == "-":
-            asm.binary(0x29, "rcx", "rax")
-            asm.mov_reg_reg("rax", "rcx")
+            source = held if held is not None else "rcx"
+            asm.binary(0x29, source, "rax")
+            asm.mov_reg_reg("rax", source)
         elif expression.op in ARITHMETIC_OPCODES:
-            asm.binary(ARITHMETIC_OPCODES[expression.op], "rax", "rcx")
+            asm.binary(ARITHMETIC_OPCODES[expression.op], "rax", held if held is not None else "rcx")
 
     def _emit_left_operand(self, left: Optional[syntax.Expr], right: Optional[syntax.Expr]) -> None:
         """Evaluate `left`, keep it across `right`, and leave it in rcx with right in rax.
@@ -1835,6 +1933,7 @@ class CodeGenerator:
         frame, and every nested frame's traffic lives below `rsp`, so the span is exclusive.
         """
         asm = self.assembler
+        self.left_hold = None
         if self.temporaries < len(TEMPORARY_REGISTERS) and not has_call(right):
             if is_leaf(right):
                 self._emit_into(left, "rcx")
@@ -1845,7 +1944,9 @@ class CodeGenerator:
                 self.temporaries += 1
                 self._emit_expression(right)
                 self.temporaries -= 1
-                asm.mov_reg_reg("rcx", temporary)
+                # The left value stays in its temporary when the caller combines
+                # commutatively; non-commutative tails pull it into rcx below.
+                self.left_hold = temporary
             return
         if self.holds and self.holds[-1] is not None:
             # Inside a copy whose entry pushed the hold register, the left value rides in
@@ -2161,7 +2262,7 @@ class CodeGenerator:
             self._emit_foreign_arguments(expression, frozenset())
             self._emit_call_site(function_label(expression.name))
             return None
-        rebinds, _, spill = self._plan_foreign_copy(target)
+        rebinds, guest, spill = self._plan_foreign_copy(target)
         if (copy_home is not None
                 and (rebinds or copy_home in spill
                      or not self._ends_in_return(target.body))):
@@ -2172,10 +2273,17 @@ class CodeGenerator:
             substitution = self._substitution_plan(expression, target)
             alias, skip = self._alias_substitution(substitution, spill)
         if len(expression.arguments) > len(ARGUMENT_REGISTERS):
-            self._emit_parked_copy_arguments(expression, skip)
+            if copy_home is not None and not rebinds:
+                ret_slot = self._return_slot_override(target, guest, alias,
+                                                      copy_home)
+                if ret_slot >= 0:
+                    guest = tuple(copy_home if index == ret_slot else home
+                                  for index, home in enumerate(guest))
+            bound = self._emit_parked_copy_arguments(expression, skip, guest)
         else:
+            bound = frozenset()
             self._emit_foreign_arguments(expression, skip)
-        self._emit_foreign_inline(target, alias, copy_home)
+        self._emit_foreign_inline(target, alias, copy_home, bound)
         return copy_home
 
     def _emit_foreign_arguments(self, expression: syntax.Call, skip: frozenset) -> None:
@@ -2201,25 +2309,39 @@ class CodeGenerator:
             self.depth -= 8
 
     def _emit_parked_copy_arguments(self, expression: syntax.Call,
-                                    skip: frozenset) -> None:
+                                    skip: frozenset,
+                                    guest: tuple = ()) -> frozenset:
         """Bind a copy call with more arguments than the ABI's four registers.
 
         The first four arguments land in the argument registers; the rest compute into
         rax, park on the stack, and pop into the temporary registers, from where the
         copy's entry binds them into their guest homes. No argument ever waits in a
         caller-live register, and no call frame is formed: this is the shape the copy
-        needs to erase a stack-parameter call's prologue tax.
+        needs to erase a stack-parameter call's prologue tax. An argument whose guest
+        home is not a caller home binds straight into that home instead, and the copy
+        entry skips its bind — one `lea` replaces the park plus the rebind pair.
+        Returns the indices bound directly into their guest homes.
         """
         asm = self.assembler
         arguments = expression.arguments
-        registers = (list(ARGUMENT_REGISTERS)
-                     + list(TEMPORARY_REGISTERS[:len(arguments) - len(ARGUMENT_REGISTERS)]))
+        spare = [index for index in range(len(ARGUMENT_REGISTERS), len(arguments))
+                 if index < len(guest) and guest[index] not in self.homes]
+        registers: list = list(ARGUMENT_REGISTERS)
+        next_temporary = 0
+        bound: set = set()
+        for index in range(len(ARGUMENT_REGISTERS), len(arguments)):
+            if index in spare:
+                registers.append(guest[index])
+                bound.add(index)
+            else:
+                registers.append(TEMPORARY_REGISTERS[next_temporary])
+                next_temporary += 1
         if all(not has_call(argument) and not self._contains_division(argument)
                for argument in arguments):
             for index in range(len(arguments) - 1, -1, -1):
                 if index not in skip:
                     self._emit_into(arguments[index], registers[index])
-            return
+            return frozenset(bound)
         for index, argument in enumerate(arguments):
             if index in skip:
                 continue
@@ -2231,6 +2353,7 @@ class CodeGenerator:
                 continue
             asm.pop(registers[index])
             self.depth -= 8
+        return frozenset(bound)
 
     def _plan_foreign_copy(self, callee: syntax.Function):
         """The copy's guest, spill and rebind decisions, without emitting anything."""
@@ -2915,7 +3038,8 @@ class CodeGenerator:
 
     def _emit_foreign_inline(self, callee: syntax.Function,
                              alias: Optional[dict] = None,
-                             copy_home: Optional[str] = None) -> None:
+                             copy_home: Optional[str] = None,
+                             bound: frozenset = frozenset()) -> None:
         """Lower a call to another function as one copy of its body, result in rax.
 
         When no statement rebinds a parameter, the argument registers themselves are the
@@ -2964,8 +3088,9 @@ class CodeGenerator:
                 asm.mov_reg_reg(self.home_of[index], ARGUMENT_REGISTERS[index])
         for index in range(len(ARGUMENT_REGISTERS), len(callee.parameters)):
             # A five-or-six-parameter copy's extra arguments arrived in the temporary
-            # registers; an aliased one already reads the caller's own home.
-            if index not in self.copy_alias:
+            # registers — unless the call site bound one straight into its guest home,
+            # or an aliased one already reads the caller's own home.
+            if index not in self.copy_alias and index not in bound:
                 asm.mov_reg_reg(self.home_of[index],
                                 TEMPORARY_REGISTERS[index - len(ARGUMENT_REGISTERS)])
         for index in range(parameters, callee.slots):

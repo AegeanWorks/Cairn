@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `127`
+- **Total Classes**: `131`
 - **Total Top-Level Functions**: `168`
-- **Total Class Methods**: `727`
-- **Total Source Lines**: `13175`
+- **Total Class Methods**: `739`
+- **Total Source Lines**: `13408`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3127` lines (`157103` bytes)
+**Size**: `3252` lines (`163872` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -160,6 +160,8 @@
   - Method `._emit_binary_into(expression, destination)` - *Lower a call-free, trap-free binary expression with its result in `destination`.*
   - Method `._emit_left_into(expression, destination)` - *Compute the left operand with its value in `destination`, or refuse.*
   - Method `._computes_in_rax_only(expression, destination, parked_noop)` - *Whether a right operand's lowering leaves `destination` untouched.*
+  - Method `._combines_in_rax_only(expression, destination, parked_noop)` - *Whether a commutative right operand lowers into rax alone.*
+  - Method `._emit_commutative_into(operator, left, right, destination)` - *Fold `left op right` into `destination` for the commutative group.*
   - Method `._stripped(expression)` - *The expression without its wrapping parentheses.*
   - Method `._emit_scaled_product(expression, destination)` - *Lower `name * 3|5|9` as one scaled `lea` into `destination`, or refuse.*
   - Method `._emit_block(block, tail)` - *Emit every statement of a block in order.*
@@ -200,7 +202,7 @@
   - Method `._emit_call(expression, copy_home)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
   - Method `._emit_foreign_call(expression, copy_home)` - *Bind or substitute the arguments, then copy the callee or call it for real.*
   - Method `._emit_foreign_arguments(expression, skip)` - *Bind every unsubstituted argument left to right into its ABI register.*
-  - Method `._emit_parked_copy_arguments(expression, skip)` - *Bind a copy call with more arguments than the ABI's four registers.*
+  - Method `._emit_parked_copy_arguments(expression, skip, guest)` - *Bind a copy call with more arguments than the ABI's four registers.*
   - Method `._plan_foreign_copy(callee)` - *The copy's guest, spill and rebind decisions, without emitting anything.*
   - Method `._return_slot_override(callee, guest, alias, copy_home)` - *Whether the copy's final result slot may simply use the return destination.*
   - Method `._ends_in_return(body)` - *Whether a body's last statement returns (the copy honors a return home).*
@@ -228,7 +230,7 @@
   - Method `._body_is_copy_free(body)` - *Whether a whole statement tree calls, divides, loops, or breaks — any refuses a copy.*
   - Method `._substitution_plan(expression, target)` - *Which arguments a foreign-inline copy never binds: the bare names.*
   - Method `._alias_substitution(substitution, borrowed)` - *Keep every alias whose home register the copy leaves intact.*
-  - Method `._emit_foreign_inline(callee, alias, copy_home)` - *Lower a call to another function as one copy of its body, result in rax.*
+  - Method `._emit_foreign_inline(callee, alias, copy_home, bound)` - *Lower a call to another function as one copy of its body, result in rax.*
   - Method `._rebinds_parameters(body, count)` - *Whether any statement assigns a parameter slot.*
   - Method `._expression_reads(expression, slot)` - *Whether an expression reads `slot`.*
   - Method `._statement_touches(statement, slot)` - *Whether a statement reads or writes `slot` in any position.*
@@ -368,7 +370,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `493` lines (`22682` bytes)
+**Size**: `514` lines (`23871` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -413,6 +415,7 @@
   - Method `.cmp_imm(reg, value)` - *`cmp r64, imm`, so a comparison with a small literal needs no second register.*
   - Method `.arith_imm(extension, reg, value)` - *`op r64, imm` by group-1 extension: add (0), or (1), and (4), sub (5), xor (6).*
   - Method `.imul(destination, source)` - *`imul r64, r/m64`: two-operand signed multiply.*
+  - Method `.imul_imm(destination, source, literal)` - *`imul r64, r/m64, imm`: three-operand signed multiply by a constant.*
   - Method `.imul_high(reg)` - *One-operand `imul r64`: the signed 128-bit `rdx:rax = rax * reg`.*
   - Method `.test(reg)` - *`test r64, r64`, setting flags from a value without changing it.*
   - Method `.test_imm(reg, value)` - *`test r/m8, imm8` (F6 /0) for a small positive mask: flags only, value kept.*
@@ -810,7 +813,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1525` lines (`73493` bytes)
+**Size**: `1583` lines (`76986` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -971,6 +974,14 @@
   - Method `.test_a_loop_slot_beyond_the_identity_prefix_homes_as_a_register()`
   - Method `.test_a_displaced_depth_zero_slot_takes_the_memory_form()`
   - Method `.test_a_leaf_function_keeps_its_declaration_order()`
+- `class ImulImmediateShapeTest` - *A value-position `homed * literal` emits the imul, not a constant load.*
+  - Method `.test_a_const_multiplied_home_takes_the_three_operand_form()`
+- `class CommutativeMergeShapeTest` - *A commutative chain folds every step into the destination register itself.*
+  - Method `.test_a_chain_addition_folds_into_the_destination_home()`
+  - Method `.test_a_multiply_accumulate_chain_never_parks_its_accumulator()`
+- `class ParkedCopyArgumentTest` - *A five-or-six-argument copy binds its spare arguments into their guest homes.*
+  - Method `.test_spare_arguments_land_in_their_guest_homes()`
+  - Method `.test_the_copy_entry_skips_the_rebind_pair()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
@@ -1180,7 +1191,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `151` lines (`7132` bytes)
+**Size**: `180` lines (`8340` bytes)
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1211,6 +1222,11 @@
   - Method `.test_cmp_reg_reg_matches_the_cmp_encoding()`
   - Method `.test_movzx_word_selects_the_extended_register_bits()`
   - Method `.test_movzx_byte_selects_the_extended_register_bits()`
+- `class ImulImmediateEncodingTest` - *`x * constant` lowers as one three-operand imul, source kept intact.*
+  - Method `.code(build)`
+  - Method `.test_imul_imm8_selects_the_byte_form()`
+  - Method `.test_imul_imm32_selects_the_long_form()`
+  - Method `.test_imul_imm_rejects_values_beyond_imm32()`
 
 ---
 

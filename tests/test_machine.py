@@ -147,5 +147,34 @@ class EncodingTest(unittest.TestCase):
         self.assertEqual(self.code(lambda a: a.movzx_from8("r15", "r9")),
                          b"\x45\x0f\xb6\xf9")
 
+
+
+class ImulImmediateEncodingTest(unittest.TestCase):
+    """`x * constant` lowers as one three-operand imul, source kept intact."""
+
+    def code(self, build: object) -> bytes:
+        assembler = Assembler()
+        build(assembler)
+        return bytes(assembler.code)
+
+    def test_imul_imm8_selects_the_byte_form(self) -> None:
+        self.assertEqual(self.code(lambda a: a.imul_imm("r11", "rbx", 31)),
+                         b"\x4c\x6b\xdb\x1f")
+        self.assertEqual(self.code(lambda a: a.imul_imm("rax", "r12", 37)),
+                         b"\x49\x6b\xc4\x25")
+
+    def test_imul_imm32_selects_the_long_form(self) -> None:
+        self.assertEqual(self.code(lambda a: a.imul_imm("rax", "rbx", 171)),
+                         b"\x48\x69\xc3\xab\x00\x00\x00")
+        self.assertEqual(self.code(lambda a: a.imul_imm("rax", "rbx", -100000)),
+                         b"\x48\x69\xc3\x60\x79\xfe\xff")
+
+    def test_imul_imm_rejects_values_beyond_imm32(self) -> None:
+        with self.assertRaises(ValueError):
+            self.code(lambda a: a.imul_imm("rax", "rbx", 2 ** 31))
+        with self.assertRaises(ValueError):
+            self.code(lambda a: a.imul_imm("rax", "rbx", -2 ** 31 - 1))
+
+
 if __name__ == "__main__":
     unittest.main()

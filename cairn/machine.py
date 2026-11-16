@@ -367,6 +367,27 @@ class Assembler:
         self.emit(bytes([_rex(True, dst >> 3, 0, src >> 3), 0x0F, 0xAF,
                          *_modrm(3, dst, src)]))
 
+    def imul_imm(self, destination: str, source: str, literal: int) -> None:
+        """`imul r64, r/m64, imm`: three-operand signed multiply by a constant.
+
+        The destination register is written; the source register reads unchanged,
+        so `x * 31` where x keeps a live home pays one instruction instead of a
+        ten-byte constant load feeding the two-operand form. Overflow wraps in
+        the low 64 bits exactly like every other multiply in this surface; ZF is
+        undefined after imul, so a following zero-branch keeps its own compare.
+        """
+        dst, src = REGISTERS[destination], REGISTERS[source]
+        if -2 ** 31 <= literal < 2 ** 31:
+            if -128 <= literal < 128:
+                self.emit(bytes([_rex(True, dst >> 3, 0, src >> 3), 0x6B,
+                                 *_modrm(3, dst, src), literal & 0xFF]))
+            else:
+                self.emit(bytes([_rex(True, dst >> 3, 0, src >> 3), 0x69,
+                                 *_modrm(3, dst, src)]
+                                + list(literal.to_bytes(4, "little", signed=True))))
+            return
+        raise ValueError("literal does not fit the three-operand imul form")
+
     def imul_high(self, reg: str) -> None:
         """One-operand `imul r64`: the signed 128-bit `rdx:rax = rax * reg`.
 

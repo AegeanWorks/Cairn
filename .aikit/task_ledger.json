@@ -1,42 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-allocation",
-    "last_phase": "4",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794823118.386314,
+    "task_id": "cairn-immediate-shapes",
+    "last_phase": "post-implementation",
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794834411.9285834,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794823212.3923473,
-    "completed_head": "cbf36487a1fed5060ca7162aa84cf15fea1e3684",
-    "completed_tree": "c2526b6f9efd9273bea828905839803abe783200"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-language-surface",
-      "phase": "implementation",
-      "phase_num": 3,
-      "description": "[2/3] print_char/print_hex builtins: sema BUILTINS, codegen dispatch with print's stack round-trip, two new runtime emitters, hex_io benchmark case per the third user rule, docs+ADR-035, 616 tests + 39 subtests, gate exit 0 twice",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794774910.9129431,
-      "timestamp_str": "2026-11-15 23:35:10",
-      "agent": "mistral:vibe"
-    },
-    {
-      "task_id": "cairn-language-surface",
-      "phase": "validate",
-      "phase_num": 4,
-      "description": "[3/3] eight parameters with stack passing: MAX_PARAMETERS=8, outgoing-area caller path with left-to-right parking, callee [rbp+16+8j] pulls with frame prologue forced for >4 params, inlining gates to four registers, many_params benchmark per the third rule, SPEC/README/ADR-036, 652 tests + 39 subtests, gate exit 0",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794777056.841593,
-      "timestamp_str": "2026-11-16 00:10:56",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-language-surface",
       "phase": "completed",
@@ -295,6 +269,36 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-immediate-shapes",
+      "phase": "planning",
+      "phase_num": 2,
+      "description": "[1/1] Immediate-form multiplier, commutative chain folding and direct guest binding of spare copy arguments",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794834404.4880035,
+      "timestamp_str": "2026-11-16 16:06:44",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "Board-wide speed gap: many_params pays a constant register load plus two-operand imul for every homed*literal, chains park their accumulator and round-trip rax, and five-or-six-parameter copies park spare arguments in temporaries only to rebind them at copy entry.",
+        "benefits": "Every homed-name-times-constant lowers to one three-operand imul_r,rm,imm; every commutative chain folds into its destination register; spare copy arguments land directly in guest homes with the entry rebinds skipped.",
+        "risks": "contract: imul_imm must refuse imm32 overflow and the chain path must refuse shapes whose right side reads or clobbers the destination; dependency: codegen hooks only wrap existing lowering, no new module; concurrency: none, single-threaded compiler; state: benchmark history appends atomically as before.",
+        "mitigation": "Failing-first byte-level shape tests pin each lowering; full 897-test suite plus ADR-044 leaf-stability pins guard regressions; benchmark gate re-run with noise discharge per ADR-031."
+      },
+      "plan_digest": "37c480538fbac21bcfa99017e73ddda540af11c96f2a01759d564b7d43bd518e"
+    },
+    {
+      "task_id": "cairn-immediate-shapes",
+      "phase": "post-implementation",
+      "phase_num": 4,
+      "description": "[1/1] All three lowerings landed and verified",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794834411.9285834,
+      "timestamp_str": "2026-11-16 16:06:51",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
     }
   ]
 }
