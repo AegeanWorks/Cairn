@@ -3,8 +3,8 @@
   "active_task": {
     "task_id": "cairn-structural-losses",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794817011.134417,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
@@ -14,27 +14,12 @@
       "benefits": "one memory-operand instruction per frame self-update, shape-generic across all programs; correctness preserved by construction for calling/trapping right sides",
       "risks": "contract: memory forms never assert ZF for a register; dependency: none; concurrency: none; state: none beyond append-only history",
       "mitigation": "failing-first machine encodings, byte-shape tests and an e2e twin; full suite; gate noise discharge per ADR-031"
-    }
+    },
+    "completed_at": 1794817243.5358865,
+    "completed_head": "c2d867e71d829489f4f21263c18202a53e3285a5",
+    "completed_tree": "f9ba90d2dd8f76f8c1864626265280ce01c988bd"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-remaining-losses",
-      "phase": "planning",
-      "phase_num": 2,
-      "description": "[1/3] Close the remaining baseline losses: call overhead (call_chain, fib30), nqueens frame work, mandelbrot inner-loop merge pressure",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794769741.80348,
-      "timestamp_str": "2026-11-15 22:09:01",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "persistent standing order: measure faster than C, C++ and Rust on every benchmark case; the recorded losses are the remaining gaps",
-        "benefits": "C++ baseline measured and gated; the remaining loss mechanisms (call overhead, frame pressure, merge scheduling) become failing-first byte tests before any codegen change",
-        "risks": "contract: benchmark twin parity code paths unchanged, no public API changes; dependency: g++/rustc/gcc toolchains already measured and pinned; concurrency: codegen edits single-threaded in one compiler process, no new threads; state: ledger and benchmark history stay append-only with the existing atomic-write discipline",
-        "mitigation": "every change gets a failing-first byte test plus an end-to-end wrap model test; G-004 re-runs all 12 benchmarks after every change with byte-identity proof when no codegen change is claimed; flagged noise is re-run before being treated as regression"
-      },
-      "plan_digest": "57b124c43b5da73b5accb7c101bfbf397799026a9c17f5185f2302bd5aa2b63e"
-    },
     {
       "task_id": "cairn-remaining-losses",
       "phase": "suspended",
@@ -286,6 +271,23 @@
         "mitigation": "failing-first machine encodings, byte-shape tests and an e2e twin; full suite; gate noise discharge per ADR-031"
       },
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-structural-losses",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-structural-losses' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794817243.5773258,
+      "timestamp_str": "2026-11-16 11:20:43",
+      "agent": "mistral:vibe",
+      "head": "c2d867e71d829489f4f21263c18202a53e3285a5",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
