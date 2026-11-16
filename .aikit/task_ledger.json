@@ -1,113 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-stream-input",
-    "last_phase": "4",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794865401.542221,
+    "task_id": "cairn-string-exit",
+    "last_phase": "in_progress",
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794868151.467163,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794865604.7072523,
-    "completed_head": "7c8c5466e705d98a9d9db17c7acf52c65a16420c",
-    "completed_tree": "83df2d5f8d871cc72a5ac5b6ca5692b9eaab8fdd"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-allocation",
-      "phase": "4",
-      "phase_num": 3,
-      "description": "[3/3] Copy propagation of single-read temps (apply_copy_propagation): mandelbrot's next transient eliminated, escape loop down to one frame load, board-wide gains (collatz 95.6, binary_gcd 171.5, call_chain 39.1); 8-home ABI + interval reuse evaluated and recorded as follow-up scope (ADR-045)",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794823118.386314,
-      "timestamp_str": "2026-11-16 12:58:38",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-allocation",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-allocation' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794823212.4786246,
-      "timestamp_str": "2026-11-16 13:00:12",
-      "agent": "mistral:vibe",
-      "head": "cbf36487a1fed5060ca7162aa84cf15fea1e3684",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-immediate-shapes",
-      "phase": "planning",
-      "phase_num": 2,
-      "description": "[1/1] Immediate-form multiplier, commutative chain folding and direct guest binding of spare copy arguments",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794834404.4880035,
-      "timestamp_str": "2026-11-16 16:06:44",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "Board-wide speed gap: many_params pays a constant register load plus two-operand imul for every homed*literal, chains park their accumulator and round-trip rax, and five-or-six-parameter copies park spare arguments in temporaries only to rebind them at copy entry.",
-        "benefits": "Every homed-name-times-constant lowers to one three-operand imul_r,rm,imm; every commutative chain folds into its destination register; spare copy arguments land directly in guest homes with the entry rebinds skipped.",
-        "risks": "contract: imul_imm must refuse imm32 overflow and the chain path must refuse shapes whose right side reads or clobbers the destination; dependency: codegen hooks only wrap existing lowering, no new module; concurrency: none, single-threaded compiler; state: benchmark history appends atomically as before.",
-        "mitigation": "Failing-first byte-level shape tests pin each lowering; full 897-test suite plus ADR-044 leaf-stability pins guard regressions; benchmark gate re-run with noise discharge per ADR-031."
-      },
-      "plan_digest": "37c480538fbac21bcfa99017e73ddda540af11c96f2a01759d564b7d43bd518e"
-    },
-    {
-      "task_id": "cairn-immediate-shapes",
-      "phase": "post-implementation",
-      "phase_num": 4,
-      "description": "[1/1] All three lowerings landed and verified",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794834411.9285834,
-      "timestamp_str": "2026-11-16 16:06:51",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-immediate-shapes",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-immediate-shapes' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794834613.4164813,
-      "timestamp_str": "2026-11-16 16:10:13",
-      "agent": "mistral:vibe",
-      "head": "fb2fd3bf53f0d8a0ed71adcdba08f1e6b5d526c0",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-magic-hoist",
-      "phase": "planning",
-      "phase_num": 2,
-      "description": "[1/1] Magic division seeds and divisors hoist into spare homes",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794835879.5130281,
-      "timestamp_str": "2026-11-16 16:31:19",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "binary_gcd's main loop reloads four 64-bit constants (two seeds, two divisors) per iteration although the hoisting machinery exists and the loop has spare homes.",
-        "benefits": "Every looped magic division reads its seed and divisor from hoisted registers; the guest planner stops borrowing hoisted homes, which also closes a latent corruption path for any hoisted loop containing a copy.",
-        "risks": "contract: hoist_imm reads must stay guarded to the real body; dependency: only codegen; concurrency: none; state: none.",
-        "mitigation": "Failing-first shape test pins the hoisted forms; pair and delta machine frames skip hoisting so r13 rebinds never collide; full suite plus benchmark gate."
-      },
-      "plan_digest": "bb53cdccaff5b2f7c2a84a007c608a5f1df1701035f9845567da1707db65c920"
-    },
     {
       "task_id": "cairn-magic-hoist",
       "phase": "in_progress",
@@ -323,6 +226,79 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-string-exit",
+      "phase": "planning",
+      "phase_num": 2,
+      "description": "[1/3] Plan: M1 exit(code) builtin via the already-linked ExitProcess; M2 string literals (lexed str tokens with \\ \\\" \\n \\t escapes, NUL-terminated deduped .rodata storage, value = literal address as i64) plus str_len, str_byte, print_str builtins; M3 benchmark twin for string reads and delivery.",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794865967.8799963,
+      "timestamp_str": "2026-11-17 00:52:47",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "programs cannot fail with a message or compare text: without exit a check can only return a code upward, and without literals every test fixture is unreachable; both are the smallest steps that make the test suite writable in Cairn",
+        "benefits": "assert-style helpers become writable Cara programs themselves: print_str + str_len + str_byte cover message output, length checks and fixture scanning; exit gives fail-fast semantics with a nonzero exit code",
+        "risks": "contract: a string literal's value is its bytes' address (i64-typed like everything else), str_byte answers -1 only for negative j and callers bound with str_len, reading past the NUL stays inside .rodata and is documented; dependency: none new (WriteFile/ExitProcess already imported), rodata gains NUL-terminated blobs; concurrency: none; state: literals live in the read-only section the loader already maps",
+        "mitigation": "failing-first tests at every layer (lexer escapes, sema arities and the exit-is-not-a-value rule, codegen shape, e2e assert helper and exit propagation); data-dependent benchmark twin so no optimizer may fold the read; keep builtins non-redefinable per the existing E3012 check"
+      },
+      "plan_digest": "5221e58905aba4a7529908738402c353b1eed1808746cb5ef32720d3cf484ad9"
+    },
+    {
+      "task_id": "cairn-string-exit",
+      "phase": "superseded",
+      "phase_num": 2,
+      "description": "Superseded by '[4/4] Delivered: exit(code), string literals with print_str/str_len/str_byte, str_scan twin; 1068 tests OK; gate exit 0, no regressions (mandelbrot -18.6%, argv_walk -26.0%); str_scan cairn 18.5 vs C 12.4 vs C++ 12.4 vs Rust 30.5 ms' without --complete or --reset",
+      "status": "superseded",
+      "timestamp": 1794868083.3685186,
+      "timestamp_str": "2026-11-17 01:28:03",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "[4/4] Delivered: exit(code), string literals with print_str/str_len/str_byte, str_scan twin; 1068 tests OK; gate exit 0, no regressions (mandelbrot -18.6%, argv_walk -26.0%); str_scan cairn 18.5 vs C 12.4 vs C++ 12.4 vs Rust 30.5 ms",
+      "phase": "in_progress",
+      "phase_num": 1,
+      "description": "",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794868083.3685186,
+      "timestamp_str": "2026-11-17 01:28:03",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "[4/4] Delivered: exit(code), string literals with print_str/str_len/str_byte, str_scan twin; 1068 tests OK; gate exit 0, no regressions (mandelbrot -18.6%, argv_walk -26.0%); str_scan cairn 18.5 vs C 12.4 vs C++ 12.4 vs Rust 30.5 ms",
+      "phase": "abandoned",
+      "phase_num": 1,
+      "description": "Task '[4/4] Delivered: exit(code), string literals with print_str/str_len/str_byte, str_scan twin; 1068 tests OK; gate exit 0, no regressions (mandelbrot -18.6%, argv_walk -26.0%); str_scan cairn 18.5 vs C 12.4 vs C++ 12.4 vs Rust 30.5 ms' abandoned: checkpoint recorded under a wrong task id by mistake; the real task cairn-string-exit will be restored",
+      "status": "abandoned",
+      "timestamp": 1794868133.3384774,
+      "timestamp_str": "2026-11-17 01:28:53",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-string-exit",
+      "phase": "resumed",
+      "phase_num": 2,
+      "description": "Resumed 'cairn-string-exit' after a pause",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794868133.5640004,
+      "timestamp_str": "2026-11-17 01:28:53",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-string-exit",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[3/3] Delivered: exit(code), string literals with print_str/str_len/str_byte, str_scan twin; 1068 tests OK; gate exit 0, no regressions (mandelbrot -18.6%, argv_walk -26.0%); str_scan cairn 18.5 vs C 12.4 vs C++ 12.4 vs Rust 30.5 ms",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794868151.467163,
+      "timestamp_str": "2026-11-17 01:29:11",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
     }
   ]
 }
