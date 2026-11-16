@@ -138,6 +138,7 @@ class Optimizer:
         """Optimise every function body, then convert counter loops and fuse odd pairs."""
         for function in program.functions:
             function.body = self._block(function.body)
+        apply_copy_propagation(program)
         apply_countdown_latches(program)
         for _ in range(2):
             if not apply_odd_pair_fusion(program):
@@ -146,6 +147,7 @@ class Optimizer:
             # arithmetic does not survive, then one more fusion round if shapes repeat.
             for function in program.functions:
                 function.body = self._block(function.body)
+        apply_copy_propagation(program)
         return program
 
     def _block(self, block: Optional[syntax.Block]) -> Optional[syntax.Block]:
@@ -549,6 +551,101 @@ def _rewrite_continues(block: Optional[syntax.Block], name: str, slot: int) -> N
             _rewrite_continues(statement, name, slot)
 
 
+def _read_slots(expression, acc: set) -> None:
+    """Add every slot `expression` reads to `acc`."""
+    if isinstance(expression, syntax.Name):
+        acc.add(expression.slot)
+    elif isinstance(expression, syntax.Unary):
+        _read_slots(expression.operand, acc)
+    elif isinstance(expression, syntax.Binary):
+        _read_slots(expression.left, acc)
+        _read_slots(expression.right, acc)
+    elif isinstance(expression, syntax.Parens):
+        _read_slots(expression.inner, acc)
+    elif isinstance(expression, syntax.Call):
+        for argument in expression.arguments:
+            _read_slots(argument, acc)
+
+
+def apply_copy_propagation(program: syntax.Program) -> int:
+    """Replace `x = t` with t's definition when the copy is t's only read.
+
+    A `let` whose value is pure (call-free and trap-free) and whose binding is read
+    exactly once — by an immediate copy assignment in the same block — is deleted and
+    the copy takes the definition. The statements between the two must leave the
+    definition's operand slots untouched, since the definition now evaluates at the
+    copy, and nothing else may even mention the binding. Everything else refuses
+    silently: a branchy span, a second read, a write of the binding in the span,
+    an impure definition.
+    """
+    propagated = 0
+    for function in program.functions:
+        for _ in range(64):
+            if not _propagate_once(function.body, function.body):
+                break
+            propagated += 1
+    return propagated
+
+
+def _propagate_once(root: Optional[syntax.Block], block: Optional[syntax.Block]) -> bool:
+    """Apply at most one copy propagation under `block`; returns whether one applied."""
+    if block is None:
+        return False
+    statements = block.statements
+    for index, statement in enumerate(statements):
+        if isinstance(statement, (syntax.Break, syntax.Continue, syntax.Return,
+                                  syntax.ExprStmt)):
+            continue
+        if isinstance(statement, syntax.If):
+            if (_propagate_once(root, statement.then_block)
+                    or _propagate_once(root, statement.else_block)):
+                return True
+            continue
+        if isinstance(statement, syntax.While):
+            if _propagate_once(root, statement.body):
+                return True
+            continue
+        if isinstance(statement, syntax.Block):
+            if _propagate_once(root, statement):
+                return True
+            continue
+        if not (isinstance(statement, syntax.Let) and statement.value is not None
+                and not has_call(statement.value) and not _may_trap(statement.value)):
+            continue
+        slot = statement.slot
+        if _mentions_slot(statement.value, slot) or _count_reads(root, slot) != 1:
+            continue
+        operands: set = set()
+        _read_slots(statement.value, operands)
+        target = None
+        blocked = False
+        for cursor in range(index + 1, len(statements)):
+            current = statements[cursor]
+            if (isinstance(current, (syntax.Assign, syntax.Let))
+                    and isinstance(current.value, syntax.Name)
+                    and current.value.slot == slot
+                    and current.slot != slot):
+                if target is not None:
+                    blocked = True
+                    break
+                target = cursor
+                continue
+            if _mentions_slot(current, slot):
+                blocked = True
+                break
+            if target is None and any(_mentions_slot(current, operand)
+                                      for operand in operands):
+                blocked = True
+                break
+        if blocked or target is None:
+            continue
+        statements[target].value = statement.value
+        block.statements = [item for pos, item in enumerate(statements)
+                            if pos != index]
+        return True
+    return False
+
+
 def apply_countdown_latches(program: syntax.Program) -> int:
     """Convert `while v < C` loops with a dead counter into countdown latches.
 
@@ -750,6 +847,7 @@ def optimize(program: syntax.Program) -> syntax.Program:
     return Optimizer().run(program)
 
 
-__all__ = ["INT64_MAX", "INT64_MIN", "MASK64", "Optimizer", "apply_countdown_latches",
+__all__ = ["INT64_MAX", "INT64_MIN", "MASK64", "Optimizer", "apply_copy_propagation",
+           "apply_countdown_latches",
            "apply_odd_pair_fusion", "fold_constant", "fold_unary", "has_call",
            "lower_for_loops", "optimize", "truncate_division", "wrap"]

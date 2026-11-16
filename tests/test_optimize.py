@@ -315,5 +315,78 @@ class ForLoweringTest(unittest.TestCase):
         self.assertFalse(walk(lowered))
 
 
+
+
+class CopyPropagationTest(unittest.TestCase):
+    """One read of a temp substitutes the definition; every second use refuses."""
+
+    def test_a_single_read_temp_folds_into_its_reader(self) -> None:
+        block = optimized_body(
+            "var a: i64 = 2; var b: i64 = 3; var next: i64 = a + b;"
+            " var x: i64 = next; x = x + x; print(x);")
+        names = [statement.name for statement in block.statements
+                 if isinstance(statement, syntax.Let)]
+        self.assertNotIn("next", names)
+        x_let = block.statements[2]
+        self.assertIsInstance(x_let, syntax.Let)
+        self.assertEqual(x_let.name, "x")
+        self.assertEqual((x_let.value.left.name, x_let.value.right.name), ("a", "b"))
+
+    def test_a_second_read_refuses(self) -> None:
+        block = optimized_body(
+            "var a: i64 = 2; var b: i64 = 3; var next: i64 = a + b;"
+            " var x: i64 = next; print(next); x = x + next;")
+        names = [statement.name for statement in block.statements
+                 if isinstance(statement, syntax.Let)]
+        self.assertIn("next", names)
+
+    def test_a_reassignment_between_definition_and_copy_refuses(self) -> None:
+        block = optimized_body(
+            "var a: i64 = 2; var b: i64 = 3; var next: i64 = a + b;"
+            " next = next + 1; var x: i64 = next; print(x);")
+        names = [statement.name for statement in block.statements
+                 if isinstance(statement, syntax.Let)]
+        self.assertIn("next", names)
+
+    def test_a_calling_definition_refuses(self) -> None:
+        block = optimized_body(
+            "var a: i64 = 2; var next: i64 = print(a); var x: i64 = next; print(x);")
+        names = [statement.name for statement in block.statements
+                 if isinstance(statement, syntax.Let)]
+        self.assertIn("next", names)
+
+    def test_a_trapping_definition_refuses(self) -> None:
+        block = optimized_body(
+            "var a: i64 = 2; var b: i64 = 0; var next: i64 = a / b;"
+            " var x: i64 = next; print(x);")
+        names = [statement.name for statement in block.statements
+                 if isinstance(statement, syntax.Let)]
+        self.assertIn("next", names)
+
+    def test_a_clobbered_operand_between_definition_and_copy_refuses(self) -> None:
+        block = optimized_body(
+            "var a: i64 = 2; var b: i64 = 3; var next: i64 = a + b;"
+            " b = 9; var x: i64 = next; print(x);")
+        names = [statement.name for statement in block.statements
+                 if isinstance(statement, syntax.Let)]
+        self.assertIn("next", names)
+
+    def test_a_loop_body_temp_propagates_per_iteration(self) -> None:
+        block = optimized_body(
+            "var a: i64 = 5; var x: i64 = 0; var i: i64 = 0;"
+            " while i < 3 { var next: i64 = a + 1; x = next; i = i + 1; }"
+            " print(x);")
+        loop = block.statements[3]
+        self.assertIsInstance(loop, syntax.While)
+        print_stmt = block.statements[4]
+        self.assertIsInstance(print_stmt, syntax.ExprStmt)
+        lets = [statement for statement in loop.body.statements
+                if isinstance(statement, syntax.Let)]
+        self.assertEqual(lets, [])
+        copy = loop.body.statements[0]
+        self.assertEqual(copy.value.op, "+")
+        self.assertEqual(copy.value.right.value, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

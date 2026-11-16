@@ -3,27 +3,14 @@
   "active_task": {
     "task_id": "cairn-allocation",
     "last_phase": "4",
-    "active_phase": 2,
+    "active_phase": 3,
     "status": "in_progress",
-    "updated_at": 1794821605.8337004,
+    "updated_at": 1794823118.386314,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-language-surface",
-      "phase": "verification",
-      "phase_num": 4,
-      "description": "Phase 4 passed for milestone 1: 547 tests + 39 subtests green, dogfood compile tracks ok, 12 benchmark binaries byte-identical proving machine-noise-only gate drift under recorded desktop load; gate re-run deferred to a quiet machine",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794772209.4321682,
-      "timestamp_str": "2026-11-15 22:50:09",
-      "agent": "mistral:vibe",
-      "head": "dd7aff432024fd27f14953d32b94fb35f05280e9",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-language-surface",
       "phase": "milestone-boundary",
@@ -285,6 +272,18 @@
       "status": "in_progress",
       "timestamp": 1794821605.8337004,
       "timestamp_str": "2026-11-16 12:33:25",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-allocation",
+      "phase": "4",
+      "phase_num": 3,
+      "description": "[3/3] Copy propagation of single-read temps (apply_copy_propagation): mandelbrot's next transient eliminated, escape loop down to one frame load, board-wide gains (collatz 95.6, binary_gcd 171.5, call_chain 39.1); 8-home ABI + interval reuse evaluated and recorded as follow-up scope (ADR-045)",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794823118.386314,
+      "timestamp_str": "2026-11-16 12:58:38",
       "agent": "mistral:vibe",
       "checklists": "passed"
     }

@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `125`
-- **Total Top-Level Functions**: `165`
-- **Total Class Methods**: `718`
-- **Total Source Lines**: `12969`
+- **Total Classes**: `127`
+- **Total Top-Level Functions**: `168`
+- **Total Class Methods**: `727`
+- **Total Source Lines**: `13175`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -444,7 +444,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `755` lines (`33782` bytes)
+**Size**: `853` lines (`37885` bytes)
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -477,6 +477,9 @@
 - `def _for_to_while(statement)` - *The two statements a `for` becomes: the mutable initialiser and the counted `while`.*
 - `def _increment(name, slot, span)` - *`name = name + 1` on the loop's own slot.*
 - `def _rewrite_continues(block, name, slot)` - *Prefix every `continue` bound to this loop with the increment, in place.*
+- `def _read_slots(expression, acc)` - *Add every slot `expression` reads to `acc`.*
+- `def apply_copy_propagation(program)` - *Replace `x = t` with t's definition when the copy is t's only read.*
+- `def _propagate_once(root, block)` - *Apply at most one copy propagation under `block`; returns whether one applied.*
 - `def apply_countdown_latches(program)` - *Convert `while v < C` loops with a dead counter into countdown latches.*
 - `def _is_plus_one(statement)` - *Whether the statement is `s = s + 1` (either operand order).*
 - `def _scaled_odd_term(value, slot)` - *The odd multiplier of `slot * m` (either order), or None.*
@@ -989,7 +992,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1083` lines (`38674` bytes)
+**Size**: `1118` lines (`40043` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1087,6 +1090,9 @@
   - Method `.test_in_place_updates_preserve_output()`
 - `class HomePreferenceValueTest` - *Preference reshuffles which slots sit in registers without changing answers.*
   - Method `.test_preference_preserves_output()`
+- `class CopyPropagationValueTest` - *Single-read temps disappear into their readers without changing answers.*
+  - Method `.test_propagated_copies_preserve_output()`
+  - Method `.test_a_refused_propagation_keeps_the_materialised_value()`
 
 **Functions:**
 - `def _wrap(value)`
@@ -1241,7 +1247,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `319` lines (`15359` bytes)
+**Size**: `392` lines (`18699` bytes)
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -1285,6 +1291,14 @@
   - Method `.test_a_continue_in_a_nested_while_is_not_touched()`
   - Method `.test_nested_fors_bind_the_continue_to_the_inner_loop()`
   - Method `.test_no_for_survives_anywhere_in_a_mixed_program()`
+- `class CopyPropagationTest` - *One read of a temp substitutes the definition; every second use refuses.*
+  - Method `.test_a_single_read_temp_folds_into_its_reader()`
+  - Method `.test_a_second_read_refuses()`
+  - Method `.test_a_reassignment_between_definition_and_copy_refuses()`
+  - Method `.test_a_calling_definition_refuses()`
+  - Method `.test_a_trapping_definition_refuses()`
+  - Method `.test_a_clobbered_operand_between_definition_and_copy_refuses()`
+  - Method `.test_a_loop_body_temp_propagates_per_iteration()`
 
 **Functions:**
 - `def folded_value(op, left, right)` - *`fold_constant` for one pair, through the public entry point.*

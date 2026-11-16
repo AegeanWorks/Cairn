@@ -1081,3 +1081,38 @@ class HomePreferenceValueTest(EndToEndTest):
         # loop 1: s = 5 * 10 = 50; a0 = 30; loop 2: s = 50 + 2 * 30 = 110
         # a2 = 30 + 110 = 140; a1 = 16
         self.assertEqual(completed.stdout, "110\n30\n16\n140\n")
+
+
+# Copy propagation: a temp assigned once from a pure definition and read once by an
+# exact copy prints the same numbers with its definition evaluated at the copy.
+COPY_LADDER = (
+    "fn main() -> i64 { "
+    " var a: i64 = 2; var x: i64 = 0; var t: i64 = 0; var i: i64 = 0;"
+    " while i < 3 { var next: i64 = a + i; x = next; t = t + x; i = i + 1; }"
+    " print(t);"
+    " return 0; }")
+
+COPY_CLOBBER = (
+    "fn main() -> i64 { "
+    " var a: i64 = 2; var b: i64 = 3; var next: i64 = a + b;"
+    " b = 9; var x: i64 = next;"
+    " print(x);"
+    " return 0; }")
+
+
+@WINDOWS_ONLY
+class CopyPropagationValueTest(EndToEndTest):
+    """Single-read temps disappear into their readers without changing answers."""
+
+    def test_propagated_copies_preserve_output(self) -> None:
+        completed = self.execute(COPY_LADDER)
+        self.assertEqual(completed.returncode, 0)
+        # trips bind next = 2, 3, 4, so t accumulates 2 + 3 + 4 = 9.
+        self.assertEqual(completed.stdout, "9\n")
+
+    def test_a_refused_propagation_keeps_the_materialised_value(self) -> None:
+        completed = self.execute(COPY_CLOBBER)
+        self.assertEqual(completed.returncode, 0)
+        # The definition runs before `b = 9`, so the copy still sees 5: the
+        # propagation must refuse (its operand is clobbered in between).
+        self.assertEqual(completed.stdout, "5\n")
