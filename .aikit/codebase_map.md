@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `132`
+- **Total Classes**: `134`
 - **Total Top-Level Functions**: `168`
-- **Total Class Methods**: `740`
-- **Total Source Lines**: `13450`
+- **Total Class Methods**: `743`
+- **Total Source Lines**: `13505`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3277` lines (`165249` bytes)
+**Size**: `3283` lines (`165677` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -227,7 +227,7 @@
   - Method `._is_inline_candidate(expression)` - *Whether this call may be lowered as an inline copy of the current function.*
   - Method `._emit_inlined_self_call(expression)` - *Lower a self-call as one inline copy: the argument to a shadow home, the body in place.*
   - Method `._foreign_inline_target(expression)` - *The function to copy into this call site, or None when the shape stays a call.*
-  - Method `._body_is_copy_free(body)` - *Whether a whole statement tree calls, divides, loops, or breaks — any refuses a copy.*
+  - Method `._body_is_copy_free(body)` - *Whether a whole statement tree calls or divides — any refuses a copy.*
   - Method `._substitution_plan(expression, target)` - *Which arguments a foreign-inline copy never binds: the bare names.*
   - Method `._alias_substitution(substitution, borrowed)` - *Keep every alias whose home register the copy leaves intact.*
   - Method `._emit_foreign_inline(callee, alias, copy_home, bound)` - *Lower a call to another function as one copy of its body, result in rax.*
@@ -813,7 +813,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1600` lines (`78094` bytes)
+**Size**: `1624` lines (`79301` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -922,7 +922,8 @@
   - Method `.test_free_homes_absorb_a_two_slot_copy_without_any_push()`
   - Method `.test_parameters_ride_their_argument_registers_through_a_copy()`
   - Method `.test_a_parameter_rebind_falls_back_to_the_bind_once_copy()`
-  - Method `.test_a_looping_callee_stays_a_real_call()`
+  - Method `.test_a_looping_callee_without_breaks_copies()`
+  - Method `.test_a_breaking_looping_callee_copies_too()`
   - Method `.test_a_calling_callee_stays_a_real_call()`
   - Method `.test_a_dividing_callee_stays_a_real_call()`
   - Method `.test_a_printing_callee_stays_a_real_call()`
@@ -984,6 +985,8 @@
   - Method `.test_the_copy_entry_skips_the_rebind_pair()`
 - `class HoistedMagicDivisionTest` - *A loop's magic division reads its seed and divisor from hoisted spare homes.*
   - Method `.test_a_looped_modulo_hoists_the_divisor_and_seed()`
+- `class ForeignLoopCopyTest` - *A foreign callee whose body loops copies in place like any other.*
+  - Method `.test_the_callees_loop_lowers_inside_the_caller()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
@@ -1005,7 +1008,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1118` lines (`40043` bytes)
+**Size**: `1143` lines (`41239` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1106,6 +1109,8 @@
 - `class CopyPropagationValueTest` - *Single-read temps disappear into their readers without changing answers.*
   - Method `.test_propagated_copies_preserve_output()`
   - Method `.test_a_refused_propagation_keeps_the_materialised_value()`
+- `class ForeignLoopCopyValueTest` - *A foreign callee containing loops copies in place and answers identically.*
+  - Method `.test_looped_copies_preserve_output()`
 
 **Functions:**
 - `def _wrap(value)`

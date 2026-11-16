@@ -2960,9 +2960,11 @@ class CodeGenerator:
 
         A copy needs all of the callee's state in home registers (its slots cannot exceed
         the home set, or a slot access would read the caller's frame), and the callee must
-        be completely call-free, trap-free, and loop-free: no nested call can then observe
-        the parameters' register bindings, no division can fire inside a foreign frame,
-        and no loop label or chain counter can outlive the copy. The caller must hold no
+        be completely call-free and trap-free: no nested call can then observe the
+        parameters' register bindings, and no division can fire inside a foreign frame.
+        Loops copy: their labels are fresh per emission and their break or continue
+        targets live only on the emitter's own stacks, with the innermost loop of any
+        break inside the same body. The caller must hold no
         in-flight temporary across the copy, because the copy's lowerings would clobber
         the register that keeps it. A callee with more parameters than the ABI's four
         register arguments stays copyable while every parameter still has a lockable
@@ -2989,7 +2991,7 @@ class CodeGenerator:
         return function
 
     def _body_is_copy_free(self, body: syntax.Block) -> bool:
-        """Whether a whole statement tree calls, divides, loops, or breaks — any refuses a copy."""
+        """Whether a whole statement tree calls or divides — any refuses a copy."""
 
         def visit(expression: Optional[syntax.Expr]) -> bool:
             if expression is None:
@@ -3013,8 +3015,12 @@ class CodeGenerator:
             if isinstance(statement, syntax.If):
                 return (visit(statement.condition) or walk(statement.then_block)
                         or walk(statement.else_block))
-            if isinstance(statement, (syntax.While, syntax.Break, syntax.Continue)):
-                return True
+            elif isinstance(statement, syntax.While):
+                # A loop copies safely: its labels are fresh per emission, the hoist
+                # plans are gated to real bodies, and its break and continue targets
+                # are emission-local stack entries whose innermost loop always lies
+                # inside the same body.
+                return (visit(statement.condition) or walk(statement.body))
             if isinstance(statement, syntax.Return):
                 return visit(statement.value)
             if isinstance(statement, syntax.ExprStmt):

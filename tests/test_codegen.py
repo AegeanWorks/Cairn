@@ -998,10 +998,20 @@ class ForeignInlineTest(unittest.TestCase):
                   if label.startswith("fn.h.copy.")]
         self.assertEqual(len(copies), 1)
 
-    def test_a_looping_callee_stays_a_real_call(self) -> None:
+    def test_a_looping_callee_without_breaks_copies(self) -> None:
         source = ("fn h(a: i64) -> i64 { var t: i64 = 0; while t < a { t = t + 1; } "
                   "return t; } fn main() -> i64 { return h(5); }")
-        self.assertGreater(calls_of(source, "main", "h"), 0)
+        self.assertEqual(calls_of(source, "main", "h"), 0)  # the loop copies now
+        program, assembler = lower(source)
+        copies = [label for label in assembler.labels
+                  if label.startswith("fn.h.copy.")]
+        self.assertEqual(len(copies), 1)
+
+    def test_a_breaking_looping_callee_copies_too(self) -> None:
+        source = ("fn h(a: i64) -> i64 { var t: i64 = 0;"
+                  " while t < a { t = t + 1; if t == 3 { break; } } "
+                  "return t; } fn main() -> i64 { return h(5); }")
+        self.assertEqual(calls_of(source, "main", "h"), 0)  # breaks bind inside the copy
 
     def test_a_calling_callee_stays_a_real_call(self) -> None:
         source = ("fn g(v: i64) -> i64 { return v * 2; } "
@@ -1598,3 +1608,17 @@ class HoistedMagicDivisionTest(unittest.TestCase):
         #                                                            movabs rsi, 0x7fffffff
         self.assertNotIn(bytes([0x48, 0xBE, 0x03, 0x00, 0x00, 0x00,
                                 0x01, 0x00, 0x00, 0x80]), blob)  # no movabs rsi, seed
+
+
+class ForeignLoopCopyTest(unittest.TestCase):
+    """A foreign callee whose body loops copies in place like any other."""
+
+    SOURCE = ("fn loopy(n: i64) -> i64 { var t: i64 = 0;"
+              " while t < n { t = t + 3; } return t; }"
+              " fn main() -> i64 { print(loopy(20)); return 0; }")
+
+    def test_the_callees_loop_lowers_inside_the_caller(self) -> None:
+        blob = region_bytes(self.SOURCE, "main")
+        forms = {bytes([rex, 0x83, modrm, 0x03])
+                 for rex in (0x48, 0x49) for modrm in range(0xC0, 0xC8)}
+        self.assertTrue(any(form in blob for form in forms), "no copied loop fold in main")

@@ -1116,3 +1116,28 @@ class CopyPropagationValueTest(EndToEndTest):
         # The definition runs before `b = 9`, so the copy still sees 5: the
         # propagation must refuse (its operand is clobbered in between).
         self.assertEqual(completed.stdout, "5\n")
+
+
+LOOP_COPY_PROGRAM = (
+    "fn loopy(n: i64) -> i64 { var t: i64 = 0; while t < n { t = t + 3; } return t; }"
+    " fn subgcd(a: i64, b: i64) -> i64 {"
+    " while b != 0 { if a > b { a = a - b; } else { b = b - a; } } return a; }"
+    " fn tri(n: i64) -> i64 { var t: i64 = 0; var i: i64 = 1;"
+    " while i <= n { var j: i64 = 0;"
+    " while j < i { t = t + 1; j = j + 1; } i = i + 1; } return t; }"
+    " fn brk(n: i64) -> i64 { var t: i64 = 0; var i: i64 = 0;"
+    " while i < n { i = i + 1; if i == 3 { break; } t = t + i; } return t; }"
+    " fn cont(n: i64) -> i64 { var t: i64 = 0; var i: i64 = 0;"
+    " while i < n { i = i + 1; if i > 3 { continue; } t = t + i; } return t; }"
+    " fn main() -> i64 { print(loopy(20)); print(subgcd(48, 18));"
+    " print(tri(4)); print(brk(10)); print(cont(10)); return 0; }")
+
+
+@WINDOWS_ONLY
+class ForeignLoopCopyValueTest(EndToEndTest):
+    """A foreign callee containing loops copies in place and answers identically."""
+
+    def test_looped_copies_preserve_output(self) -> None:
+        completed = self.execute(LOOP_COPY_PROGRAM)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "21\n6\n10\n3\n6\n")

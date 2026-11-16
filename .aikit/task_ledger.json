@@ -1,41 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-magic-hoist",
+    "task_id": "cairn-loop-copies",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794835879.723295,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794843843.4297907,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794835983.280964,
-    "completed_head": "a6add3c2903f48510adc10bb7e7fc86af3031706",
-    "completed_tree": "c442e2f4d59c490193149495e764aa3872ab4b0e"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-remaining-losses",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[2/3] Phase 4: milestone 2 verified - frame-path premise disproven (queens is a 6-slot leaf, main 0 slots); delivered commutative-home peephole (+ & | ^ compute op rax,<left home> directly, no rcx parking) and ZF-fed zero-branch elision (no cmp rax,0 right after a ZF setter); failing-first CommutativeHomePeepholeTest + e2e twin; 692 tests + 39 subtests green; gate exit 0 twice (tak/hex_io flags were noise); ADR-038",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794806697.1989737,
-      "timestamp_str": "2026-11-16 08:24:57",
-      "agent": "mistral:vibe"
-    },
-    {
-      "task_id": "cairn-remaining-losses",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[3/3] Phase 4: milestone 3 verified - mandelbrot analysis: inner loop frame-resident (13 of 25 instrs are rbp traffic, 6-home ceiling by design, rsi=scratch rbp=frame pointer); delivered same-name single-load binaries (x*x -> one load + imul rax,rax) and imul joining the in-place fast path; failing-first SameNameBinaryTest + MultiplyHomeFastPathTest + e2e twin; 723 tests + 39 subtests green; gate exit 0 on all runs, ADR-031/034 regression flags discharged as noise; mandelbrot residual structural (induction vars, home reuse) - deferred to new task; ADR-039",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794806722.4592164,
-      "timestamp_str": "2026-11-16 08:25:22",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-remaining-losses",
       "phase": "in_progress",
@@ -317,6 +292,36 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-loop-copies",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/1] Looped foreign callees inline into their caller as full copies",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794843787.6660693,
+      "timestamp_str": "2026-11-16 18:43:07",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "binary_gcd pays a per-iteration call to bgcd; the copy-free gate refused any looping callee, leaving call overhead in the hottest loop",
+        "benefits": "looped callees without calls/divisions become full inline copies; binary_gcd measured 191 -> 173-175 ms (-8.6%), closing on C 165-181",
+        "risks": "contract: copy emission must keep break/continue bound to the innermost loop of the copied body - emission-local stacks already carry them and sema guarantees innermost binding; dependency: none new; concurrency: none; state: hoist plans reserved homes for copies via _plan_foreign_copy homes|hoist_homes, no r13 collision",
+        "mitigation": "failing-first bytes tests (ForeignLoopCopyTest) plus repinned ForeignInlineTest loops-with-breaks cases, LOOP_COPY_PROGRAM end-to-end values, full 928-test suite, --save --compare gate exit 0"
+      },
+      "plan_digest": "165b59da0a3ac6784d6c49918cb9ce1e4e251f432e33e93cc7a404a6030e7470"
+    },
+    {
+      "task_id": "cairn-loop-copies",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/1] Verification complete: 928 tests, 4/4 gates, ADR-048, benchmark gate exit 0",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794843843.4297907,
+      "timestamp_str": "2026-11-16 18:44:03",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
     }
   ]
 }
