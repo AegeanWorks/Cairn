@@ -66,6 +66,7 @@ class CapabilitiesTest(unittest.TestCase):
         self.assertEqual(surface["limits"]["parameters_per_function"], 8)
         self.assertEqual(surface["target"]["imports"],
                          {"GetStdHandle": "kernel32.dll", "WriteFile": "kernel32.dll",
+                          "ReadFile": "kernel32.dll", "GetCommandLineA": "kernel32.dll",
                           "ExitProcess": "kernel32.dll"})
         self.assertIn("wraps", surface["semantics"]["overflow"])
 

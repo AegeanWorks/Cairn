@@ -93,6 +93,18 @@ class SemaTest(unittest.TestCase):
                                "fn main() -> i64 { return f(1); }"), ["E3012"])
         self.assertEqual(codes("fn main() -> i64 { print_hex = 1; return 0; }"), ["E3012"])
 
+    def test_input_builtins_have_their_arities(self) -> None:
+        analyze(parse(
+            "fn main() -> i64 { var n: i64 = argc(); var b: i64 = arg_byte(1, 0);"
+            " var c: i64 = read_char(); return n + b + c; }"))
+        self.assertEqual(codes("fn main() -> i64 { return arg_byte(1); }"), ["E3004"])
+        self.assertEqual(codes("fn main() -> i64 { return argc(1); }"), ["E3004"])
+        self.assertEqual(codes("fn main() -> i64 { return read_char(2); }"), ["E3004"])
+
+    def test_input_builtins_are_not_values(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { return read_char; }"), ["E3012"])
+        self.assertEqual(codes("fn main() -> i64 { return argc; }"), ["E3012"])
+
     def test_literal_above_max_plus_one_is_refused(self) -> None:
         self.assertEqual(codes("fn main() -> i64 { return 9223372036854775809; }"),
                           ["E1003"])
@@ -158,3 +170,4 @@ class ForLoopTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

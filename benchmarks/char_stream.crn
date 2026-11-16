@@ -1,0 +1,17 @@
+// Stdin byte-stream throughput: read_char() over 4 MiB piped in by the harness,
+// one buffered refill per 4096 bytes. The running total is a dependent sum so
+// the loop survives every optimizer, and all four twins read the same pipe, so
+// they print the identical total. Twin of char_stream.c, char_stream.cpp and
+// char_stream.rs.
+fn main() -> i64 {
+    var total: i64 = 0;
+    while true {
+        var c: i64 = read_char();
+        if c < 0 {
+            break;
+        }
+        total = total + c;
+    }
+    print(total);
+    return 0;
+}

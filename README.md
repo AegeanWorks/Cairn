@@ -95,6 +95,10 @@ fn main() -> i64 {
 - **Builtins**: `print(x)` writes the decimal form and a newline, and returns `x`;
   `print_char(c)` writes the low byte of `c` (no newline), `print_hex(x)` writes `x` in
   lowercase hex with no leading zeros (no newline); both return their argument.
+  Input: `argc()` is the token count with the program path included (the C convention);
+  `arg_byte(i, j)` is byte `j` (zero-indexed) of argument `i`'s content with quotes
+  stripped, or -1 past the token; `read_char()` is the next stdin byte, or -1 at end
+  of stream. All three return their answer as an `i64`.
 - **Comments**: `//` to the end of the line.
 
 Defined semantics a C programmer would have to look up:

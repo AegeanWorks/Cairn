@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `137`
-- **Total Top-Level Functions**: `169`
-- **Total Class Methods**: `756`
-- **Total Source Lines**: `13843`
+- **Total Classes**: `139`
+- **Total Top-Level Functions**: `173`
+- **Total Class Methods**: `770`
+- **Total Source Lines**: `14318`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
-- **Not indexed by this map**: cpp (`28` file(s)), rust (`14` file(s))
+- **Not indexed by this map**: cpp (`32` file(s)), rust (`16` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -32,7 +32,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `548` lines (`25899` bytes)
+**Size**: `563` lines (`26928` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -41,13 +41,13 @@
 - `def find_c_compiler()` - *The first C compiler already installed, or None when the machine has none.*
 - `def find_rust_compiler()` - *The first Rust compiler already installed, or None when the machine has none.*
 - `def find_cpp_compiler()` - *The first C++ compiler already installed, or None when the machine has none.*
-- `def run_command(argv, timeout, cwd)` - *Run one command with a hard limit, capturing text.*
+- `def run_command(argv, timeout, cwd, stdin)` - *Run one command with a hard limit, capturing text.*
 - `def cairn_build_command(source, destination, optimise)` - *The exact `cairn build` command for one case, with the folding pass optional.*
 - `def build_cairn(source, destination, optimise)` - *Compile one Cairn case and return the compile time in milliseconds.*
 - `def build_c(compiler, source, destination)` - *Compile one C case; None when this compiler does not produce an executable.*
 - `def build_rust(compiler, source, destination)` - *Compile one Rust case; None when this compiler does not produce an executable.*
 - `def build_cpp(compiler, source, destination)` - *Compile one C++ case; None when this compiler does not produce an executable.*
-- `def measure(executable, rounds)` - *Wall-clock milliseconds for each run of one executable.*
+- `def measure(executable, rounds, stdin)` - *Wall-clock milliseconds for each run of one executable.*
 - `def summarise(samples, iterations)` - *Best, median and per-unit cost from one set of wall-clock samples.*
 - `def verdict(best_cairn, best_c)` - *The measured standing against one baseline: `faster`, `slower`, `tie` or `unavailable`.*
 - `def compare_runs(current, previous, noise)` - *Per-case best-time deltas against a saved run; (readable lines, any regression).*
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3480` lines (`175843` bytes)
+**Size**: `3501` lines (`176798` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -321,13 +321,18 @@
 ### [`cairn/image.py`](cairn/image.py)
 > *Image pieces shared by the backend: read-only data and the linked artifact.*
 
-**Size**: `63` lines (`1994` bytes)
+**Size**: `104` lines (`3604` bytes)
 
 **Classes:**
 - `class ReadOnlyData` - *A byte blob with named offsets, placed in the `.rdata` section.*
   - Method `.__len__()` - *The current size in bytes.*
   - Method `.label(name)` - *Bind `name` to the current offset.*
   - Method `.add(name, payload)` - *Bind `name` and append `payload`.*
+  - Method `.align(boundary)` - *Pad with zero bytes to the next multiple of `boundary`.*
+- `class WritableData` - *A byte blob with named offsets, placed after the IAT in the writable `.data`.*
+  - Method `.__len__()` - *The current size in bytes.*
+  - Method `.label(name)` - *Bind `name` to the current offset.*
+  - Method `.reserve(name, size)` - *Bind `name` to the current offset and append `size` zero bytes of static state.*
   - Method `.align(boundary)` - *Pad with zero bytes to the next multiple of `boundary`.*
 - `class Artifact` - *Everything the PE writer needs: code, fixups, data and the entry label.*
 
@@ -375,7 +380,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `514` lines (`23871` bytes)
+**Size**: `529` lines (`24701` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -406,6 +411,8 @@
   - Method `.mov_load_rsp_disp(offset, destination)` - *`mov r64, [rsp+disp8]`: a load from one of the real frame's hold slots.*
   - Method `.lea_rbp(destination, offset)` - *`lea r64, [rbp+disp]` for a frame address.*
   - Method `.lea_rip(destination, target)` - *`lea r64, [rip+disp32]`, used for read-only data addresses.*
+  - Method `.mov_load(destination, base)` - *`mov r64, [base]`: read a qword through a pointer register.*
+  - Method `.movzx_load8(destination, base)` - *`movzx r32, [base]`: read the byte at a pointer register, zero-extended.*
   - Method `.movzx_from8(destination, source)` - *`movzx r32, r8`: the `& 255` mask of a register's value in one instruction.*
   - Method `.movzx_from16(destination, source)` - *`movzx r32, r16`: the `& 65535` mask of a register's value in one instruction.*
   - Method `._movzx(extension, destination, source)` - *Shared `movzx r32, r/m16|8` register form; REX appears only for r8-r15.*
@@ -541,7 +548,7 @@
 ### [`cairn/pe.py`](cairn/pe.py)
 > *PE writer: link an artifact and emit a Windows PE32+ console executable.*
 
-**Size**: `188` lines (`8339` bytes)
+**Size**: `199` lines (`8992` bytes)
 
 **Functions:**
 - `def align(value, boundary)` - *Round `value` up to the next multiple of `boundary`.*
@@ -558,21 +565,25 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `189` lines (`7192` bytes)
+**Size**: `455` lines (`17918` bytes)
 
 **Functions:**
+- `def emit_arg_fill(assembler)` - *Emit `arg_fill`: tokenize the ANSI command line into the static table once.*
+- `def emit_argc(assembler)` - *Emit `argc()`: the token count, filling and caching the table on the first call.*
+- `def emit_arg_byte(assembler)` - *Emit `arg_byte(i, j)`: byte j (zero-indexed) of argument i's content, or -1.*
+- `def emit_read_char(assembler)` - *Emit `read_char()`: the next stdin byte, or -1 at end of stream.*
 - `def emit_print_i64(assembler)` - *Emit `print_i64`: write rax in decimal plus a newline.*
 - `def emit_print_char(assembler)` - *Emit `print_char`: write the low byte of rax to stdout, no newline.*
 - `def emit_print_hex(assembler)` - *Emit `print_hex`: write rax in lowercase hex, no newline, no leading zeros.*
 - `def emit_div_zero(assembler, rodata)` - *Emit the trap taken when a divisor is zero: message on stderr, exit code 3.*
-- `def emit_runtime(assembler, rodata)` - *Emit every helper routine and the data they reference, in a stable order.*
+- `def emit_runtime(assembler, rodata, writable)` - *Emit every helper routine and the data they reference, in a stable order.*
 
 ---
 
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `291` lines (`13715` bytes)
+**Size**: `292` lines (`13769` bytes)
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -687,7 +698,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `464` lines (`26078` bytes)
+**Size**: `465` lines (`26139` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -744,7 +755,7 @@
 ### [`tests/test_capabilities.py`](tests/test_capabilities.py)
 > *The machine-checkable core: registry, manifest, listing and the stdlib-only proof.*
 
-**Size**: `114` lines (`4963` bytes)
+**Size**: `115` lines (`5052` bytes)
 
 **Classes:**
 - `class RegistryTest` - *ADR-003 makes codes a contract, so all three directions are asserted.*
@@ -1022,7 +1033,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1183` lines (`42542` bytes)
+**Size**: `1264` lines (`46247` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1127,6 +1138,13 @@
   - Method `.test_looped_copies_preserve_output()`
 - `class ShiftThroughValueTest` - *The fused drop-then-restore mask keeps signed and wrapping semantics.*
   - Method `.test_shift_through_values_match_two_complement()`
+- `class InputSystemTest` - *The input builtins: argv walks the ANSI command line, stdin streams bytes.*
+  - Method `.run_with(source, *, arguments, stdin)` - *Run the compiled program with extra arguments and optional stdin bytes.*
+  - Method `.test_argc_counts_the_program_and_its_arguments()`
+  - Method `.test_a_quoted_argument_keeps_its_inner_space()`
+  - Method `.test_read_char_streams_stdin_bytes_then_eof()`
+  - Method `.test_read_char_without_stdin_reports_eof_at_once()`
+  - Method `.test_read_char_wraps_a_large_piped_stream()`
 
 **Functions:**
 - `def _wrap(value)`
@@ -1137,7 +1155,7 @@
 ### [`tests/test_filetable.py`](tests/test_filetable.py)
 > *Scripted exactness proofs for the qwenFS toy file table.*
 
-**Size**: `207` lines (`8479` bytes)
+**Size**: `209` lines (`8625` bytes)
 
 **Classes:**
 - `class ScriptedSessionTest`
@@ -1287,7 +1305,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `392` lines (`18699` bytes)
+**Size**: `398` lines (`19018` bytes)
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -1384,7 +1402,7 @@
 ### [`tests/test_pe.py`](tests/test_pe.py)
 > *Backend and PE tests: labels, fixups, determinism and the produced image's structure.*
 
-**Size**: `164` lines (`7166` bytes)
+**Size**: `165` lines (`7296` bytes)
 
 **Classes:**
 - `class CodegenTest` - *The backend is checked through the artifact it produces.*
@@ -1420,7 +1438,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `160` lines (`7887` bytes)
+**Size**: `173` lines (`8602` bytes)
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -1441,6 +1459,8 @@
   - Method `.test_print_char_and_print_hex_are_one_argument_builtins()`
   - Method `.test_new_builtins_take_exactly_one_argument()`
   - Method `.test_new_builtins_are_callable_not_values_redefinable()`
+  - Method `.test_input_builtins_have_their_arities()`
+  - Method `.test_input_builtins_are_not_values()`
   - Method `.test_literal_above_max_plus_one_is_refused()`
   - Method `.test_break_outside_a_loop()`
   - Method `.test_function_must_return_on_every_path()`

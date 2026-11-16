@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Optional, Sequence
 
 from cairn.builder import compile_source, write_executable
 
@@ -1181,3 +1182,83 @@ class ShiftThroughValueTest(EndToEndTest):
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, expected)
 
+
+
+@WINDOWS_ONLY
+class InputSystemTest(EndToEndTest):
+    """The input builtins: argv walks the ANSI command line, stdin streams bytes.
+
+    argv[0] is the program path (the C convention), so a run with three arguments
+    reports argc 4. `arg_byte(i, j)` zero-indexes argument i's bytes and answers
+    -1 past the token; `read_char()` answers the next stdin byte or -1 at EOF.
+    """
+
+    ARGV_PROGRAM = (
+        "fn main() -> i64 {"
+        " print(argc());"
+        " print(arg_byte(1, 0));"
+        " print(arg_byte(2, 3));"
+        " print(arg_byte(3, 0));"
+        " print(arg_byte(1, 3));"
+        " print(arg_byte(9, 0));"
+        " return 0; }"
+    )
+
+    STDIN_PROGRAM = (
+        "fn main() -> i64 {"
+        " print(read_char());"
+        " print(read_char());"
+        " print(read_char());"
+        " print(read_char());"
+        " print(read_char());"
+        " return 0; }"
+    )
+
+    def run_with(self, source: str, *, arguments: Sequence[str] = (),
+                 stdin: Optional[bytes] = None) -> subprocess.CompletedProcess:
+        """Run the compiled program with extra arguments and optional stdin bytes."""
+        executable = self.build(source)
+        completed = subprocess.run([str(executable), *arguments], capture_output=True,
+                                   input=stdin, timeout=TIMEOUT_SECONDS)
+        completed.stdout = completed.stdout.decode("utf-8", errors="replace")
+        completed.stderr = completed.stderr.decode("utf-8", errors="replace")
+        return completed
+
+    def test_argc_counts_the_program_and_its_arguments(self) -> None:
+        with_args = self.run_with(self.ARGV_PROGRAM, arguments=["one", "two three", "xyz"])
+        self.assertEqual(with_args.returncode, 0)
+        self.assertEqual(with_args.stdout.splitlines(),
+                         [str(count) for count in (4, 111, 32, 120, -1, -1)])
+        without_args = self.run_with(self.ARGV_PROGRAM)
+        self.assertEqual(without_args.returncode, 0)
+        self.assertEqual(without_args.stdout.splitlines(),
+                         [str(count) for count in (1, -1, -1, -1, -1, -1)])
+
+    def test_a_quoted_argument_keeps_its_inner_space(self) -> None:
+        # subprocess re-quotes `just one` to `"just one"` on the real command
+        # line; the scanner strips those quotes and keeps the inner space.
+        completed = self.run_with(self.ARGV_PROGRAM, arguments=["just one"])
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout.splitlines(),
+                         [str(count) for count in (2, 106, -1, -1, 116, -1)])
+
+    def test_read_char_streams_stdin_bytes_then_eof(self) -> None:
+        completed = self.run_with(self.STDIN_PROGRAM, stdin=b"hi\n")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout.splitlines(),
+                         [str(code) for code in (104, 105, 10, -1, -1)])
+
+    def test_read_char_without_stdin_reports_eof_at_once(self) -> None:
+        completed = self.run_with(self.STDIN_PROGRAM, stdin=b"")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout.splitlines(),
+                         [str(code) for code in (-1, -1, -1, -1, -1)])
+
+    def test_read_char_wraps_a_large_piped_stream(self) -> None:
+        completed = self.run_with(
+            "fn main() -> i64 { var total: i64 = 0; var c: i64 = read_char();"
+            " while c >= 0 { total = total + c; c = read_char(); }"
+            " print(total); return 0; }",
+            stdin=bytes(10_240) + b"Z" * 512)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, f"{90 * 512}\n")

@@ -5,7 +5,7 @@ import unittest
 
 from cairn import codegen, parser, sema
 from cairn.builder import compile_source
-from cairn.image import ENTRY_LABEL, Artifact, ReadOnlyData
+from cairn.image import ENTRY_LABEL, IMPORTS, Artifact, ReadOnlyData
 from cairn.pe import align, import_blob, link
 
 HELLO = "fn main() -> i64 { print(40 + 2); return 0; }"
@@ -133,10 +133,11 @@ class PeHeaderTest(unittest.TestCase):
         self.assertEqual(descriptor_size, 40)
         descriptor = rva_to_offset(self.image, descriptor_rva)
         first_thunk = struct.unpack_from("<I", self.image, descriptor + 16)[0]
+        slot_count = len(IMPORTS)  # one slot per import, the next is the null terminator
         slots = [struct.unpack_from("<Q", self.image, rva_to_offset(self.image, first_thunk)
-                                    + index * 8)[0] for index in range(4)]
-        self.assertEqual(slots[3], 0)
-        self.assertTrue(all(slot > 0 for slot in slots[:3]))
+                                    + index * 8)[0] for index in range(slot_count + 1)]
+        self.assertEqual(slots[slot_count], 0)
+        self.assertTrue(all(slot > 0 for slot in slots[:slot_count]))
 
     def test_section_raw_pointers_follow_the_headers(self) -> None:
         pointers = [struct.unpack_from("<I", self.image, SECTIONS + index * 40 + 20)[0]

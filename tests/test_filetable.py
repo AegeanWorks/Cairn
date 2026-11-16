@@ -180,7 +180,9 @@ class EmitAdditiveTest(unittest.TestCase):
         artifact = Artifact(text=bytes(generator.assembler.code),
                             text_labels=dict(generator.assembler.labels),
                             fixups=list(generator.assembler.fixups),
-                            rodata=generator.rodata)
+                            rodata=generator.rodata,
+                            writable=bytes(generator.writable.data),
+                            writable_labels=dict(generator.writable.labels))
         self.assertEqual(verify_image(pe.link(artifact)), [])
 
     def test_default_build_path_never_invokes_the_filetable(self) -> None:

@@ -152,8 +152,12 @@ def link(artifact: Artifact) -> bytes:
     rdata_size = rodata_offset + len(artifact.rodata.data)
     rdata_raw = align(rdata_size, FILE_ALIGNMENT)
     data_rva = rdata_rva + align(rdata_size, SECTION_ALIGNMENT)
-    data = _import_address_table(imports, offsets, rdata_rva)
+    iat = _import_address_table(imports, offsets, rdata_rva)
+    # The writable state sits after the IAT: same section, few hundred bytes of
+    # runtime cache and stdin buffer, seeded zero by the file image itself.
+    data = iat + artifact.writable
     data_raw = align(len(data), FILE_ALIGNMENT)
+    writable_base = data_rva + len(iat)
 
     patch_imports(blob, imports, offsets, rdata_rva, data_rva)
     rodata = bytes(blob) + b"\x00" * (rodata_offset - len(blob)) + bytes(artifact.rodata.data)
@@ -163,6 +167,13 @@ def link(artifact: Artifact) -> bytes:
         targets[name] = rdata_rva + rodata_offset + offset
     for index, function in enumerate(imports):
         targets[iat_label(function)] = data_rva + index * 8
+    shared = (set(artifact.text_labels) & set(artifact.rodata.labels)
+              | set(artifact.text_labels) & set(artifact.writable_labels)
+              | set(artifact.rodata.labels) & set(artifact.writable_labels))
+    if shared:
+        raise ValueError(f"label {sorted(shared)[0]!r} is bound in two sections")
+    for name, offset in artifact.writable_labels.items():
+        targets[name] = writable_base + offset
 
     for offset, target in artifact.fixups:
         if target not in targets:

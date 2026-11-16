@@ -71,6 +71,8 @@ class Case:
     cpp_source: str = ""
     iterations: int = 0
     unit: str = ""
+    # Piped stdin for the run, for the cases whose workload is an input stream.
+    stdin: Optional[bytes] = None
 
 
 CASES: Tuple[Case, ...] = (
@@ -102,6 +104,11 @@ CASES: Tuple[Case, ...] = (
          "benchmarks/hex_io.rs", "benchmarks/hex_io.cpp", 400_000, "values"),
     Case("many_params", "benchmarks/many_params.crn", "benchmarks/many_params.c",
          "benchmarks/many_params.rs", "benchmarks/many_params.cpp", 10_000_000, "calls"),
+    Case("argv_walk", "benchmarks/argv_walk.crn", "benchmarks/argv_walk.c",
+         "benchmarks/argv_walk.rs", "benchmarks/argv_walk.cpp", 12_800_000, "reads"),
+    Case("char_stream", "benchmarks/char_stream.crn", "benchmarks/char_stream.c",
+         "benchmarks/char_stream.rs", "benchmarks/char_stream.cpp", 4_194_304, "bytes",
+         bytes(range(256)) * 16_384),
 )
 
 
@@ -130,10 +137,18 @@ def find_cpp_compiler() -> Optional[str]:
 
 
 def run_command(argv: Sequence[str], timeout: float,
-                cwd: Optional[Path] = None) -> subprocess.CompletedProcess:
+                cwd: Optional[Path] = None,
+                stdin: Optional[bytes] = None) -> subprocess.CompletedProcess:
     """Run one command with a hard limit, capturing text."""
-    return subprocess.run(list(argv), capture_output=True, text=True, encoding="utf-8",
-                          errors="replace", timeout=timeout, check=False, cwd=cwd)
+    if stdin is None:
+        return subprocess.run(list(argv), capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=timeout,
+                              check=False, cwd=cwd)
+    raw = subprocess.run(list(argv), capture_output=True, input=stdin,
+                         timeout=timeout, check=False, cwd=cwd)
+    return subprocess.CompletedProcess(raw.args, raw.returncode,
+                                       raw.stdout.decode("utf-8", errors="replace"),
+                                       raw.stderr.decode("utf-8", errors="replace"))
 
 
 def cairn_build_command(source: Path, destination: Path, optimise: bool = True) -> List[str]:
@@ -195,12 +210,12 @@ def build_cpp(compiler: str, source: Path, destination: Path) -> Optional[float]
     return (time.perf_counter() - started) * 1000.0
 
 
-def measure(executable: Path, rounds: int) -> List[float]:
+def measure(executable: Path, rounds: int, stdin: Optional[bytes] = None) -> List[float]:
     """Wall-clock milliseconds for each run of one executable."""
     samples: List[float] = []
     for _ in range(rounds):
         started = time.perf_counter()
-        completed = run_command([str(executable)], RUN_TIMEOUT)
+        completed = run_command([str(executable)], RUN_TIMEOUT, stdin=stdin)
         samples.append((time.perf_counter() - started) * 1000.0)
         if completed.returncode != 0:
             raise RuntimeError(f"{executable.name} exited with {completed.returncode}: "
@@ -337,7 +352,7 @@ def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Pat
     }
     try:
         compile_ms = build_cairn(cairn_source, cairn_exe, optimise)
-        cairn = summarise(measure(cairn_exe, rounds), case.iterations)
+        cairn = summarise(measure(cairn_exe, rounds, case.stdin), case.iterations)
     except (RuntimeError, subprocess.TimeoutExpired, OSError) as failure:
         report["verdict"] = "error"
         report["error"] = str(failure)
@@ -368,7 +383,7 @@ def benchmark_case(case: Case, compiler: Optional[str], rounds: int, folder: Pat
             report["error"] = f"{language}-build-failed"
             return report
         try:
-            baseline = summarise(measure(exe, rounds), case.iterations)
+            baseline = summarise(measure(exe, rounds, case.stdin), case.iterations)
         except (RuntimeError, subprocess.TimeoutExpired, OSError) as failure:
             report[verdict_key] = "error"
             report["error"] = str(failure)

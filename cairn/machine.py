@@ -275,6 +275,21 @@ class Assembler:
         self.emit(bytes([_rex(True, dst >> 3, 0, 0), 0x8D, 0x00 | ((dst & 7) << 3) | 5]))
         self.rel32(target)
 
+    def mov_load(self, destination: str, base: str) -> None:
+        """`mov r64, [base]`: read a qword through a pointer register."""
+        dst, base_code = REGISTERS[destination], REGISTERS[base]
+        assert base_code != REGISTERS["rsp"]
+        self.emit(bytes([_rex(True, dst >> 3, 0, base_code >> 3), 0x8B,
+                         *_modrm(0, dst, base_code)]))
+
+    def movzx_load8(self, destination: str, base: str) -> None:
+        """`movzx r32, [base]`: read the byte at a pointer register, zero-extended."""
+        dst, base_code = REGISTERS[destination], REGISTERS[base]
+        assert base_code != REGISTERS["rsp"]
+        prefix = bytes([_rex(False, dst >> 3, 0, base_code >> 3)]) \
+            if (dst >= 8 or base_code >= 8) else b""
+        self.emit(prefix, b"\x0F\xB6", bytes(_modrm(0, dst, base_code)))
+
     def movzx_from8(self, destination: str, source: str) -> None:
         """`movzx r32, r8`: the `& 255` mask of a register's value in one instruction.
 

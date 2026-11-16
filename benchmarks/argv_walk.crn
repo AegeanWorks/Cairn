@@ -1,0 +1,18 @@
+// Argument-table read throughput: 12.8M arg_byte calls whose index and both
+// branches depend on the byte just read, so neither optimizer may hoist the
+// chain: the path's bytes steer the walk. Twin of argv_walk.c, argv_walk.cpp
+// and argv_walk.rs; the four checksums fold different program-path bytes, so
+// the harness compares times, not totals.
+fn main() -> i64 {
+    var total: i64 = 0;
+    for i in 0..12800000 {
+        var c: i64 = arg_byte(0, (i + total) & 63);
+        if (c & 1) == 0 {
+            total = total + c;
+        } else {
+            total = total + 1;
+        }
+    }
+    print(total);
+    return 0;
+}

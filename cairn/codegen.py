@@ -19,8 +19,9 @@ from cairn import syntax
 from cairn.image import ENTRY_LABEL, Artifact, ReadOnlyData, iat_label
 from cairn.machine import ARGUMENT_REGISTERS, Assembler
 from cairn.optimize import INT64_MIN, has_call, _contains_break_or_continue
-from cairn.runtime import (DIV_ZERO_LABEL, PRINT_CHAR_LABEL, PRINT_HEX_LABEL, PRINT_LABEL,
-                           emit_runtime)
+from cairn.image import WritableData
+from cairn.runtime import (ARG_BYTE_LABEL, ARGC_LABEL, DIV_ZERO_LABEL, PRINT_CHAR_LABEL,
+                           PRINT_HEX_LABEL, PRINT_LABEL, READ_CHAR_LABEL, emit_runtime)
 
 COMPARISON_CONDITIONS = {
     "==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge",
@@ -170,6 +171,7 @@ class CodeGenerator:
 
     assembler: Assembler = field(default_factory=Assembler)
     rodata: ReadOnlyData = field(default_factory=ReadOnlyData)
+    writable: WritableData = field(default_factory=WritableData)
     program: Optional[syntax.Program] = None
     depth: int = 0
     temporaries: int = 0
@@ -217,12 +219,14 @@ class CodeGenerator:
         self._emit_entry()
         for function in program.functions:
             self._emit_function(function)
-        emit_runtime(self.assembler, self.rodata)
+        emit_runtime(self.assembler, self.rodata, self.writable)
         return Artifact(text=bytes(self.assembler.code),
                         text_labels=dict(self.assembler.labels),
                         fixups=list(self.assembler.fixups),
                         rodata=self.rodata,
-                        entry=ENTRY_LABEL)
+                        entry=ENTRY_LABEL,
+                        writable=bytes(self.writable.data),
+                        writable_labels=dict(self.writable.labels))
 
     def _fresh(self, stem: str) -> str:
         """A label name no other construct uses."""
@@ -2304,6 +2308,23 @@ class CodeGenerator:
         printers share that shape, which is what makes them return their argument as a value.
         """
         asm = self.assembler
+        if expression.name == "argc":
+            # No arguments, clobbered rax is the answer value itself.
+            self._emit_call_site(ARGC_LABEL)
+            return
+        if expression.name == "read_char":
+            self._emit_call_site(READ_CHAR_LABEL)
+            return
+        if expression.name == "arg_byte":
+            self._emit_expression(expression.arguments[0])
+            asm.push("rax")
+            self.depth += 8
+            self._emit_expression(expression.arguments[1])
+            asm.mov_reg_reg("rdx", "rax")
+            asm.pop("rcx")
+            self.depth -= 8
+            self._emit_call_site(ARG_BYTE_LABEL)
+            return
         if expression.name == "print":
             self._emit_expression(expression.arguments[0])
             asm.push("rax")

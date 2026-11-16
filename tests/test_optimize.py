@@ -229,10 +229,16 @@ class CountdownLatchTest(unittest.TestCase):
     def test_a_countdown_loop_latches_with_a_bottom_dec_and_jnz(self) -> None:
         source = ("fn main() -> i64 { var i: i64 = 0; var t: i64 = 0;"
                   " while i < 6 { t = t + 3; i = i + 1; } print(t); return 0; }")
-        lowered = codegen.generate(optimize.optimize(analyze(parse(source)))).text
-        self.assertIn(b"\x75", bytes(lowered))     # jnz rel8: the countdown latch, backward
-        self.assertNotIn(b"\x0f\x8d", lowered)  # jge rel32: the count-up guard is gone
-        self.assertNotIn(b"\x49\x83\xc4\x01", lowered)  # add r12,1: the old update fold
+        artifact = codegen.generate(optimize.optimize(analyze(parse(source))))
+        text = bytes(artifact.text)
+        labels = artifact.text_labels
+        main_start = labels[codegen.function_label("main")]
+        runtime_start = min(offset for name, offset in labels.items()
+                            if name.startswith("cairn.runtime."))
+        main_code = text[main_start:runtime_start]
+        self.assertIn(b"\x75", main_code)        # jnz rel8: the countdown latch, backward
+        self.assertNotIn(b"\x0f\x8d", main_code)  # jge rel32: the count-up guard is gone
+        self.assertNotIn(b"\x49\x83\xc4\x01", main_code)  # add r12,1: the old update fold
 
 
 class ForLoweringTest(unittest.TestCase):
