@@ -1,60 +1,22 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-remaining-losses",
+    "task_id": "cairn-structural-losses",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794806820.2877927,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794812926.2711325,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": [],
-    "completed_at": 1794806820.5615618,
-    "completed_head": "1d5e76ff1b947dc957a67674a71519d6798b6913",
-    "completed_tree": "1952d88eceb44bbc42c8c9d3365a735a85dec220"
+    "impact_assessment": {
+      "why": "many_params measured 42-44 ms against C 7.8 ms: the biggest board loss traces to the foreign-copy form refusing >4-argument callees, so every call paid callee home saves plus caller outgoing-area churn",
+      "benefits": "six-argument helper calls inline like gcc's -O2 shapes; measured -34.5% on many_params; machinery general (rebinds form included), fallback preserved",
+      "risks": "contract: copy form now covers 5-6 params,  pins moved to a calling callee; dependency: none (standard library only); concurrency: none; state: benchmark history append-only, ledger checkpoint appended",
+      "mitigation": "failing-first calls_of + e2e value twins; full suite; gate twice-tolerant noise discharge per ADR-031; stack-call machinery still pinned and reachable by non-copyable callees"
+    }
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-cpp-baseline",
-      "phase": "planning",
-      "phase_num": 2,
-      "description": "[1/2] Phase 2 plan",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794768514.6218235,
-      "timestamp_str": "2026-11-15 21:48:34",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "The user's standing goal is that Cairn measures faster than C, C++ and Rust; the scoreboard only measures C (gcc/clang/cl) and Rust (rustc) today, so the claim cannot be tested for C++ at all. contract: additive Case field and new report keys only, existing fields and exit codes unchanged. dependency: C++ compilers already installed (g++ or clang++ or cl) detected the same way as the C row; no new toolchain requirement when absent - C++ verdicts read unavailable. concurrency: single-threaded harness, unchanged. state: history records gain a cpp key; compare_runs reads only the Cairn column, so old records stay comparable.",
-        "benefits": "The goal line gains a third verdict per case; 12 .cpp twins widen the parity gate; any C++-vs-C performance split that gcc's C++ frontend produces becomes visible and optimizable.",
-        "risks": "contract: the TwinParityTest shape changes from triples to quadruples - old tests must keep passing until updated in the same commit. dependency: a broken or exotic C++ installation must degrade to unavailable, never crash the harness. concurrency: none. state: malformed cpp key in history must be skipped like the other baseline keys.",
-        "mitigation": "Additive-only schema change with the C build plumbing mirrored; parity gate run before any scoreboard number is recorded; absence of a C++ compiler returns unavailable verdicts and exit 2 only when no baseline at all exists"
-      },
-      "plan_digest": "d8bff34a358d92a9cad3433ccd83d916065227109376e21cee135ab7b4cce834"
-    },
-    {
-      "task_id": "cairn-cpp-baseline",
-      "phase": "implementation",
-      "phase_num": 3,
-      "description": "C++ baseline measured: 12 cpp twins, harness quadruple column, parity and full suite green, --save --compare gate no Cairn regression",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794769625.8250635,
-      "timestamp_str": "2026-11-15 22:07:05",
-      "agent": "mistral:vibe"
-    },
-    {
-      "task_id": "cairn-cpp-baseline",
-      "phase": "verification",
-      "phase_num": 4,
-      "description": "Phase 4 passed: 505 tests + 39 subtests green, TwinParityTest quadruple parity, --save --compare exit 0, ADR-033 and README updated, KB synced",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794769629.9171722,
-      "timestamp_str": "2026-11-15 22:07:09",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-cpp-baseline",
       "phase": "completed",
@@ -275,6 +237,53 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-structural-losses",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/3] Close the structural losses recorded in ADR-039: milestone 1 = foreign inlining inside frame-path functions (the rbp prologue never sets self.current, so _foreign_inline_target refuses every copy in a function with more than six slots); milestone 2 = home reuse for frame functions (inner scopes re-register slots whose outer bindings died); milestone 3 = loop-induction strength reduction (mandelbrot's px * 16384 - 4194304 and py * 24576 become running values)",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794808169.8852973,
+      "timestamp_str": "2026-11-16 08:49:29",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "contract: no language-surface change, only codegen lowering; the recorded user rules re-run the full benchmark gate after every compiler change and ship test+benchmark twins for new constructs; dependency: extends the committed foreign-inline machinery (e9f84e4) and the assembler zf summary (9126db4); concurrency: single-threaded codegen, no new shared state beyond the existing assembler fields; state: ledger and decisions.md stay append-only",
+        "benefits": "mandelbrot and any program whose main or workers exceed six home slots currently compile every inner-loop value to frame memory (13 of 25 inner-loop instructions in mandelbrot are rbp traffic); foreign inlining inside frame functions removes call overhead there; strength reduction removes a multiply per row loop; measured targets: mandelbrot 14.6 vs C 10.7 ms and the general case of 7+-slot functions",
+        "risks": "contract: mis-inlining in frame functions must not read stale argument registers (the guarded shapes are call-free, loop-free, trap-free callees with parameters bound to spilled homes); dependency: pushes of spill homes inside a frame body shift rsp, so copy emission must stay push/pop balanced exactly as in leaf callers; concurrency: none; state: benchmark history changes only through the recorded gate",
+        "mitigation": "failing-first byte-shape tests pin when the fallback call stays (rebinds-parameter callees, overshoot slots), e2e twins pin outputs, the full suite and --save --compare gate run before every commit exactly as in the delivered milestones, and ADR-040 records any ab"
+      },
+      "plan_digest": "d0594e4eeb59ec38d33a3953fefc3c6dffbf05fcb214e8e55468a59665d48dc0"
+    },
+    {
+      "task_id": "cairn-structural-losses",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/3] Phase 4: milestone 1 verified - frame-path functions raise body state (self.current etc.) so foreign inlining works inside 7+-slot functions, and the copy refusal drops self.depth while keeping self.temporaries (a stack park survives a call-free copy; a register temporary does not); failing-first FramePathInlineTest + FramePathRebindFallbackTest + FramePathInlineValueTest e2e; 754 tests + 39 subtests green; gate exit 0 twice (flags were drift); ADR-040",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794808690.520448,
+      "timestamp_str": "2026-11-16 08:58:10",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-structural-losses",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[2/3] Stack-parameter foreign copies: a six-argument call-free bind-once callee copies instead of paying the stack-call path; args 5-6 park in r11/r10 and bind into guest homes at copy entry; home-reuse-by-scope-death closed (mandelbrot homes all live across the inner loop). 785 tests OK; gate --save --compare exit 0, many_params 44.2->28.9 ms (-34.5%). ADR-041. README rows for hex_io/many_params added.",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794812926.2711325,
+      "timestamp_str": "2026-11-16 10:08:46",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "many_params measured 42-44 ms against C 7.8 ms: the biggest board loss traces to the foreign-copy form refusing >4-argument callees, so every call paid callee home saves plus caller outgoing-area churn",
+        "benefits": "six-argument helper calls inline like gcc's -O2 shapes; measured -34.5% on many_params; machinery general (rebinds form included), fallback preserved",
+        "risks": "contract: copy form now covers 5-6 params,  pins moved to a calling callee; dependency: none (standard library only); concurrency: none; state: benchmark history append-only, ledger checkpoint appended",
+        "mitigation": "failing-first calls_of + e2e value twins; full suite; gate twice-tolerant noise discharge per ADR-031; stack-call machinery still pinned and reachable by non-copyable callees"
+      },
+      "checklists": "passed"
     }
   ]
 }

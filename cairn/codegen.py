@@ -2030,7 +2030,8 @@ class CodeGenerator:
         elif self._is_inline_candidate(expression):
             self._emit_inlined_self_call(expression)
             return
-        if len(expression.arguments) > len(ARGUMENT_REGISTERS):
+        if (len(expression.arguments) > len(ARGUMENT_REGISTERS)
+                and self._foreign_inline_target(expression) is None):
             self._emit_stack_call(expression)
             return
         self._emit_foreign_call(expression, copy_home)
@@ -2062,7 +2063,10 @@ class CodeGenerator:
         if not rebinds:
             substitution = self._substitution_plan(expression, target)
             alias, skip = self._alias_substitution(substitution, spill)
-        self._emit_foreign_arguments(expression, skip)
+        if len(expression.arguments) > len(ARGUMENT_REGISTERS):
+            self._emit_parked_copy_arguments(expression, skip)
+        else:
+            self._emit_foreign_arguments(expression, skip)
         self._emit_foreign_inline(target, alias, copy_home)
         return copy_home
 
@@ -2086,6 +2090,38 @@ class CodeGenerator:
             if index in skip:
                 continue
             asm.pop(ARGUMENT_REGISTERS[index])
+            self.depth -= 8
+
+    def _emit_parked_copy_arguments(self, expression: syntax.Call,
+                                    skip: frozenset) -> None:
+        """Bind a copy call with more arguments than the ABI's four registers.
+
+        The first four arguments land in the argument registers; the rest compute into
+        rax, park on the stack, and pop into the temporary registers, from where the
+        copy's entry binds them into their guest homes. No argument ever waits in a
+        caller-live register, and no call frame is formed: this is the shape the copy
+        needs to erase a stack-parameter call's prologue tax.
+        """
+        asm = self.assembler
+        arguments = expression.arguments
+        registers = (list(ARGUMENT_REGISTERS)
+                     + list(TEMPORARY_REGISTERS[:len(arguments) - len(ARGUMENT_REGISTERS)]))
+        if all(not has_call(argument) and not self._contains_division(argument)
+               for argument in arguments):
+            for index in range(len(arguments) - 1, -1, -1):
+                if index not in skip:
+                    self._emit_into(arguments[index], registers[index])
+            return
+        for index, argument in enumerate(arguments):
+            if index in skip:
+                continue
+            self._emit_expression(argument)
+            asm.push("rax")
+            self.depth += 8
+        for index in reversed(range(len(arguments))):
+            if index in skip:
+                continue
+            asm.pop(registers[index])
             self.depth -= 8
 
     def _plan_foreign_copy(self, callee: syntax.Function):
@@ -2669,7 +2705,10 @@ class CodeGenerator:
         the parameters' register bindings, no division can fire inside a foreign frame,
         and no loop label or chain counter can outlive the copy. The caller must hold no
         in-flight temporary across the copy, because the copy's lowerings would clobber
-        the register that keeps it.
+        the register that keeps it. A callee with more parameters than the ABI's four
+        register arguments stays copyable while every parameter still has a lockable
+        location: the extra arguments park in the temporary registers and their guest
+        homes bind at the copy's entry.
         """
         if (self.program is None or self.current is None
                 or self.temporaries
@@ -2682,7 +2721,8 @@ class CodeGenerator:
         else:
             return None
         if (len(expression.arguments) != len(function.parameters)
-                or not 0 < len(expression.arguments) <= len(ARGUMENT_REGISTERS)
+                or not (0 < len(expression.arguments)
+                        <= len(ARGUMENT_REGISTERS) + len(TEMPORARY_REGISTERS))
                 or function.slots > len(HOME_REGISTERS)):
             return None
         if not self._body_is_copy_free(function.body):
@@ -2810,6 +2850,12 @@ class CodeGenerator:
         for index, parameter in enumerate(callee.parameters[:len(ARGUMENT_REGISTERS)]):
             if rebinds:
                 asm.mov_reg_reg(self.homes[index], ARGUMENT_REGISTERS[index])
+        for index in range(len(ARGUMENT_REGISTERS), len(callee.parameters)):
+            # A five-or-six-parameter copy's extra arguments arrived in the temporary
+            # registers; an aliased one already reads the caller's own home.
+            if index not in self.copy_alias:
+                asm.mov_reg_reg(self.homes[index],
+                                TEMPORARY_REGISTERS[index - len(ARGUMENT_REGISTERS)])
         for index in range(parameters, callee.slots):
             if not self._cleared_before_use(callee.body, index):
                 asm.xor_zero(self.homes[index])

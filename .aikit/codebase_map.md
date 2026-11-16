@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `109`
+- **Total Classes**: `119`
 - **Total Top-Level Functions**: `165`
-- **Total Class Methods**: `682`
-- **Total Source Lines**: `12237`
+- **Total Class Methods**: `699`
+- **Total Source Lines**: `12635`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `2922` lines (`146247` bytes)
+**Size**: `3015` lines (`151122` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -198,6 +198,7 @@
   - Method `._emit_call(expression, copy_home)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
   - Method `._emit_foreign_call(expression, copy_home)` - *Bind or substitute the arguments, then copy the callee or call it for real.*
   - Method `._emit_foreign_arguments(expression, skip)` - *Bind every unsubstituted argument left to right into its ABI register.*
+  - Method `._emit_parked_copy_arguments(expression, skip)` - *Bind a copy call with more arguments than the ABI's four registers.*
   - Method `._plan_foreign_copy(callee)` - *The copy's guest, spill and rebind decisions, without emitting anything.*
   - Method `._return_slot_override(callee, guest, alias, copy_home)` - *Whether the copy's final result slot may simply use the return destination.*
   - Method `._ends_in_return(body)` - *Whether a body's last statement returns (the copy honors a return home).*
@@ -365,12 +366,12 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `457` lines (`20848` bytes)
+**Size**: `473` lines (`21545` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
   - Method `.here()` - *The current offset in the code buffer.*
-  - Method `.emit(*parts)` - *Append raw bytes.*
+  - Method `.emit(*parts)` - *Append raw bytes; any such append invalidates the flag summary.*
   - Method `.label(name)` - *Bind `name` to the current offset; a duplicate name is a compiler bug.*
   - Method `.rel32(target)` - *A placeholder displacement patched when the image is linked.*
   - Method `.call(target)` - *`call rel32` to a label in this image.*
@@ -802,7 +803,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1222` lines (`58858` bytes)
+**Size**: `1407` lines (`67715` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -934,6 +935,24 @@
   - Method `.test_the_substituted_factor_reads_the_caller_home_directly()`
   - Method `.test_a_twice_used_argument_copies_instead_of_calling()`
   - Method `.test_a_copy_whose_guest_borrows_caller_homes_still_copies()`
+- `class CommutativeHomePeepholeTest` - *A commutative binary whose left operand already lives in a register skips its copy.*
+  - Method `.test_an_and_of_a_homed_left_operand_skips_the_rcx_copy()`
+  - Method `.test_an_add_of_a_homed_left_operand_skips_the_rcx_copy()`
+  - Method `.test_a_zero_branch_after_an_and_skips_the_redundant_compare()`
+- `class SameNameBinaryTest` - *`x * x` (and any same-name `+ & | ^`) loads its operand from a frame slot once.*
+  - Method `.test_a_same_name_product_of_a_frame_slot_loads_once()`
+  - Method `.test_a_same_name_product_of_a_homed_slot_loads_once()`
+- `class MultiplyHomeFastPathTest` - *A homed left operand multiplies in place, exactly like the M2 commutative forms.*
+  - Method `.test_a_homed_left_operand_imuls_in_its_own_register()`
+- `class FramePathInlineTest` - *A frame-path function (more slots than homes) still foreign-copies its callees.*
+  - Method `.test_a_frame_main_copies_a_call_free_callee()`
+  - Method `.test_a_frame_main_copies_inside_a_loop_body_too()`
+- `class FramePathRebindFallbackTest` - *A callee whose body calls another function keeps the real call from a frame function.*
+  - Method `.test_the_calling_callee_stays_a_call()`
+- `class StackParamCopyTest` - *A six-parameter callee's copy parks its fifth and sixth arguments, not a call.*
+  - Method `.test_a_six_parameter_callee_copies()`
+  - Method `.test_a_six_parameter_rebinding_callee_takes_the_bind_once_copy()`
+  - Method `.test_a_six_parameter_calling_callee_keeps_the_stack_call()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
@@ -955,7 +974,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `926` lines (`33067` bytes)
+**Size**: `1030` lines (`36503` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1041,6 +1060,14 @@
 - `class LoopConstantHoistValueTest` - *Hoisted big constants must read the loaded value on every loop iteration.*
   - Method `.test_a_countdown_mixer_with_hoisted_constants_wraps_like_the_source()`
   - Method `.test_two_sequential_loops_hoist_their_own_constants()`
+- `class CommutativePeepholeValueTest` - *The commutative-home fast path and its ZF-fed branch print identical results.*
+  - Method `.test_the_peephole_functions_preserve_output()`
+- `class SameNameInPlaceValueTest` - *Same-name in-place products and homes-fed multiplies print identical values.*
+  - Method `.test_same_name_and_multiply_forms_preserve_output()`
+- `class FramePathInlineValueTest` - *A 7+-slot main that foreign-copies its callees prints the leaf-path answers.*
+  - Method `.test_frame_path_copies_preserve_output()`
+- `class StackParamCopyValueTest` - *Six-parameter copies print the same answers the call form computes.*
+  - Method `.test_six_parameter_copies_preserve_output()`
 
 **Functions:**
 - `def _wrap(value)`

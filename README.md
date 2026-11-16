@@ -311,9 +311,12 @@ a spread:
 | `primes` | trial division over 2..300000 | 25.1-27.2 ms | 24.5-27.3 ms | 24.1-26.3 ms | 18.9-23.2 ms | 2,560 bytes |
 | `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.1-16.1 ms | 11.1-13.3 ms | 10.9-13.4 ms | 12.0-14.4 ms | 2,560 bytes |
 | `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 94.3-96.7 ms | 92.5-101.5 ms | 96.4-102.9 ms | 105.9-113.5 ms | 2,560 bytes |
+| `hex_io` | 400,000 hex-format-then-print values | 612-645 ms | 4,764-5,095 ms | 397-467 ms | 677-723 ms | 2,560 bytes |
+| `many_params` | 10,000,000 six-argument mix calls | 28.9-34.6 ms | 7.8-11.1 ms | 9.7-13.0 ms | 8.4-11.6 ms | 2,560 bytes |
 
 Standings per case (Cairn vs the fastest baseline on that case): `collatz`, `ackermann`, `tak`,
-`folded_math` and `splitmix` are won outright against all three baselines; `fib30` sits inside
+`folded_math` and `splitmix` are won outright against all three baselines; `hex_io` wins against
+C and Rust (C++'s formatted write buffers better and stays ahead); `fib30` sits inside
 C/C++'s spread; `xorshift` is a measured tie — the implementations sit within
 about one percent of each other around 300 ms, with the best run flipping between them, which
 is inside every documented spread, so no win is claimed there. The tie is now structural, not
@@ -338,7 +341,8 @@ body copies, and the delta-0 `ack(m, n - 1)` chain site collapses into a counted
 (`R(j) = f**(j+1)(1)`) whose body is a single shifted copy — 10.2-13.9 ms against C's 15.2-19.4 ms,
 C++'s 15.4-18.0 ms and Rust's 55.9-64.5 ms, with the image at 3,072 bytes. `xorshift` remains the
 recorded structural tie at the ISA latency floor, and `folded_math`'s margin is inside run-to-run
-spread in some sessions; `nqueens`, `binary_gcd`, `call_chain`, `primes` and `mandelbrot` remain
+spread in some sessions; `nqueens`, `binary_gcd`, `call_chain`, `primes`, `mandelbrot` and
+`many_params` remain
 the recorded losses, with the mechanisms in the ADR register.
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting

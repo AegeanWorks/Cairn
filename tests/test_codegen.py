@@ -178,8 +178,9 @@ def region_text(source: str, name: str) -> bytes:
 ARGUMENT_IMM = ("fn f(a: i64) -> i64 { return a - 7; } "
                 "fn main() -> i64 { print(f(3)); return 0; }")
 SHIFT_IMM = "fn g(x: i64) -> i64 { return x >> 7; } fn main() -> i64 { print(g(9)); return 0; }"
-STACK_ARGS_CALL = ("fn combine(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64"
-                   " { return a + f; }"
+STACK_ARGS_CALL = ("fn bump(x: i64) -> i64 { return x + 1; }"
+                   "fn combine(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64"
+                   " { return bump(a) + f; }"
                    "fn main() -> i64 { print(combine(1, 2, 3, 4, 5, 6)); return 0; }")
 
 
@@ -785,7 +786,8 @@ class StackParameterTest(unittest.TestCase):
 
     The callee reads stack parameter j at [rbp+16+8j], the slot right above the saved
     return address; the caller reserves pad plus the stack-arg slots in one sub, so the
-    call runs with the register arguments bound and rsp 16-byte aligned.
+    call runs with the register arguments bound and rsp 16-byte aligned. combine calls
+    `bump`, so its call cannot take the foreign-copy path and must keep this shape.
     """
 
     def test_callee_pulls_stack_parameters_from_above_the_return_address(self) -> None:
@@ -1364,3 +1366,42 @@ class FramePathRebindFallbackTest(unittest.TestCase):
         program = sema.analyze(parser.parse(FRAME_MAIN_REBINDING))
         self.assertGreater(program.functions[-1].slots, len(HOME_REGISTERS))
         self.assertEqual(calls_of(FRAME_MAIN_REBINDING, "main", "wrap"), 2)
+
+
+# A six-parameter callee exceeds the ABI's four register parameters: args five and six
+# arrive through the caller's stack area, which is why the shape previously kept its call
+# and paid the call prologue's home tax on every pass.
+SIX_PARAM_CALLEE = (
+    "fn mix(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64"
+    " { return a * 31 + b * 37 + c * 41 + d * 43 + e * 47 + f * 53; }"
+    "fn main() -> i64 { return mix(1, 2, 3, 4, 5, 6); }")
+
+SIX_PARAM_REBINDING = (
+    "fn mix(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64"
+    " { a = a + 1;"
+    " return a * 31 + b * 37 + c * 41 + d * 43 + e * 47 + f * 53; }"
+    "fn main() -> i64 { return mix(1, 2, 3, 4, 5, 6); }")
+
+SIX_PARAM_CALLING = (
+    "fn inner(x: i64) -> i64 { return x + 1; }"
+    "fn mix(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64"
+    " { return inner(a) * 31 + b * 37 + c * 41 + d * 43 + e * 47 + f * 53; }"
+    "fn main() -> i64 { return mix(1, 2, 3, 4, 5, 6); }")
+
+
+class StackParamCopyTest(unittest.TestCase):
+    """A six-parameter callee's copy parks its fifth and sixth arguments, not a call."""
+
+    def test_a_six_parameter_callee_copies(self) -> None:
+        program = sema.analyze(parser.parse(SIX_PARAM_CALLEE))
+        self.assertEqual(program.functions[0].slots, 6)
+        self.assertEqual(calls_of(SIX_PARAM_CALLEE, "main", "mix"), 0)
+
+    def test_a_six_parameter_rebinding_callee_takes_the_bind_once_copy(self) -> None:
+        program = sema.analyze(parser.parse(SIX_PARAM_REBINDING))
+        self.assertEqual(program.functions[0].slots, 6)
+        self.assertEqual(calls_of(SIX_PARAM_REBINDING, "main", "mix"), 0)
+
+    def test_a_six_parameter_calling_callee_keeps_the_stack_call(self) -> None:
+        program = sema.analyze(parser.parse(SIX_PARAM_CALLING))
+        self.assertEqual(calls_of(SIX_PARAM_CALLING, "main", "mix"), 1)

@@ -1004,3 +1004,27 @@ class FramePathInlineValueTest(EndToEndTest):
         # g + 2*(g + a1) = 3g + 2 per iteration (a1 = 1): 0 -> 2 -> 8 -> 26
         # mix(0,1,2)=2; mix(5,4,3)=23; twice(3)+twice(4)+5 = 6+8+5 = 19
         self.assertEqual(completed.stdout, "26\n2\n23\n19\n")
+
+
+# The six-parameter copy path, both bind forms: literal arguments and computed
+# arguments accumulated across a loop. mix under the 31 - 53 weights: 1, 2, 3, 4, 5, 6
+# gives 953; the loop accumulates 252 * i + 701 for i = 0..4, which totals 6025.
+SIX_PARAM_VALUES = (
+    "fn mix(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64"
+    " { return a * 31 + b * 37 + c * 41 + d * 43 + e * 47 + f * 53; }"
+    "fn main() -> i64 { "
+    " print(mix(1, 2, 3, 4, 5, 6));"
+    " var t: i64 = 0; var i: i64 = 0;"
+    " while i < 5 { t = t + mix(i, i + 1, i + 2, i + 3, i + 4, i + 5); i = i + 1; }"
+    " print(t);"
+    " return 0; }")
+
+
+@WINDOWS_ONLY
+class StackParamCopyValueTest(EndToEndTest):
+    """Six-parameter copies print the same answers the call form computes."""
+
+    def test_six_parameter_copies_preserve_output(self) -> None:
+        completed = self.execute(SIX_PARAM_VALUES)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "953\n6025\n")
