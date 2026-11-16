@@ -3,30 +3,17 @@
   "active_task": {
     "task_id": "cairn-immediate-shapes",
     "last_phase": "post-implementation",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794834411.9285834,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794834613.374919,
+    "completed_head": "fb2fd3bf53f0d8a0ed71adcdba08f1e6b5d526c0",
+    "completed_tree": "cf833f947d2d26ba58221ea2de176b6f3cd87143"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-language-surface",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-language-surface' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794777165.915371,
-      "timestamp_str": "2026-11-16 00:12:45",
-      "agent": "mistral:vibe",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-remaining-losses",
       "phase": "resumed",
@@ -299,6 +286,23 @@
       "timestamp_str": "2026-11-16 16:06:51",
       "agent": "mistral:vibe",
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-immediate-shapes",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-immediate-shapes' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794834613.4164813,
+      "timestamp_str": "2026-11-16 16:10:13",
+      "agent": "mistral:vibe",
+      "head": "fb2fd3bf53f0d8a0ed71adcdba08f1e6b5d526c0",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
