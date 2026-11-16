@@ -3,25 +3,17 @@
   "active_task": {
     "task_id": "cairn-shift-fused-args",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794852652.98311,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794853026.1852155,
+    "completed_head": "9a106f70b0711bb9d817d77c52b1942e803a900f",
+    "completed_tree": "246776aa6aa0debb6c434b4abb8f9d54a4699cf5"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-structural-losses",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/3] Phase 4: milestone 1 verified - frame-path functions raise body state (self.current etc.) so foreign inlining works inside 7+-slot functions, and the copy refusal drops self.depth while keeping self.temporaries (a stack park survives a call-free copy; a register temporary does not); failing-first FramePathInlineTest + FramePathRebindFallbackTest + FramePathInlineValueTest e2e; 754 tests + 39 subtests green; gate exit 0 twice (flags were drift); ADR-040",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794808690.520448,
-      "timestamp_str": "2026-11-16 08:58:10",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-structural-losses",
       "phase": "in_progress",
@@ -322,6 +314,23 @@
       "timestamp_str": "2026-11-16 21:10:52",
       "agent": "mistral:vibe",
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-shift-fused-args",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-shift-fused-args' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794853026.232315,
+      "timestamp_str": "2026-11-16 21:17:06",
+      "agent": "mistral:vibe",
+      "head": "9a106f70b0711bb9d817d77c52b1942e803a900f",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
