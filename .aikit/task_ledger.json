@@ -1,55 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-prologue-slim",
-    "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794857105.1394749,
+    "task_id": "cairn-stream-input",
+    "last_phase": "4",
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794865401.542221,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794857176.2958207,
-    "completed_head": "fb451b5eedc97e74fb981d72f8986891696700f3",
-    "completed_tree": "389aebc11296d76d1fc7132f613986129bc2f9bd"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-allocation",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/3] Planning: rework the positional slot-to-home mapping (self.homes indexed by slot) into an explicit home_of map so home assignment can follow loop depth and live ranges instead of declaration order; M1 identity refactor (no behavior change), M2 loop-depth preference for frame functions (mandelbrot inner loop), M3 evaluated 8-home ABI vs live-range assignment against measured value; each milestone passes the full suite, the --save --compare gate and its own failing-first tests",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794817613.1941388,
-      "timestamp_str": "2026-11-16 11:26:53",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "mandelbrot's inner loop keeps 5-6 of its 7-11 live values in frame memory purely because the first six DECLARED slots take the six registers; the board records 14.4-14.9 vs C 10.3 and nqueens 25 vs 22 as allocation-bound losses",
-        "benefits": "home assignment becomes a decision the generator makes per function, not a positional default; unlocked levers: loop-depth preference, live-range assignment, and a potential 8-home ABI evaluated on evidence",
-        "risks": "contract: self.homes is positional in ~20 sites (saves, clear-frame, guest tuples, shadow copies, hoist spares, plans) - the map must carry identical ordering semantics at each; dependency: none (stdlib only); concurrency: none; state: benchmark history append-only",
-        "mitigation": "M1 is a pure identity refactor verified byte-identical by the full suite and gate before any preference logic lands; failing-first tests per milestone; noise discharge per ADR-031"
-      },
-      "plan_digest": "bf14731ff8a6f114e814cc621e0d5239f412382899a3de694a210817a49948b2"
-    },
-    {
-      "task_id": "cairn-allocation",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/3] Identity refactor: self.home_of slot-to-register map introduced as _home's surface; homes keeps the ordered register list meaning; three contexts (function, foreign guest, shadow) swap and restore both; binaries md5-identical on 5 shapes; 822 tests OK; gate exit 0 all in band. ADR-043.",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794818150.555064,
-      "timestamp_str": "2026-11-16 11:35:50",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "assignment policy (loop depth, live ranges, 8 homes) needs to own slot-to-register choice without perturbing save-area order semantics",
-        "benefits": "byte-identical no-behavior-change infrastructure milestone; M2 lands on this with preference logic only",
-        "risks": "contract: homes/home_of pairing must swap together at every context or stale maps leak across copies",
-        "mitigation": "both swaps were rewritten to save/restore the map explicitly; HomeMapContractTest pins the map-as-surface reading; byte-identical builds across leaf, frame, guest and shadow shapes"
-      },
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-allocation",
       "phase": "4",
@@ -324,6 +285,36 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-stream-input",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/3] argv builtins: argc() and arg_byte(i, j) over GetCommandLineA; [2/3] stdin read_char() with a 4096-byte buffered static in writable .data; [3/3] dedicated benchmark twins + benchmark gate",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794857705.4040492,
+      "timestamp_str": "2026-11-16 22:35:05",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "the language cannot react to the outside world: no stdin, no args, only print builtins; input is the first step of a usable language per the agreed roadmap",
+        "benefits": "programs can consume argv and stdin; string handling becomes reachable; one import and one writable-data extension",
+        "risks": "contract: argv[0] is the program path (C convention) and read_char returns -1 on EOF; dependency: GetStdHandle and GetCommandLineA join the import table, and .data gains labels after the IAT; concurrency: none; state: static cursor/count live in .data, zero-initialized by the loader",
+        "mitigation": "failing-first sema/codegen/e2e tests per builtin; buffered reads mean one ReadFile per 4096 bytes; benchmark twin set pins throughput equivalence; keep the existing print ABI untouched"
+      },
+      "plan_digest": "459a9fa0d41ce06bb1c283fd4d72069ba5e10fa8022da403bf2d6d9e47770781"
+    },
+    {
+      "task_id": "cairn-stream-input",
+      "phase": "4",
+      "phase_num": 4,
+      "description": "[3/3] Input builtins land: argc, arg_byte and read_char with the static argv cache and 4096-byte stdin buffer, writable .data region after the IAT, benchmark twins argv_walk and char_stream in the harness, 997 tests OK, gate exit 0. ADR-051.",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794865401.542221,
+      "timestamp_str": "2026-11-17 00:43:21",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
     }
   ]
 }
