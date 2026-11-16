@@ -1,72 +1,19 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-shift-fused-args",
+    "task_id": "cairn-prologue-slim",
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1794852652.98311,
+    "updated_at": 1794857105.1394749,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": [],
-    "completed_at": 1794853026.1852155,
-    "completed_head": "9a106f70b0711bb9d817d77c52b1942e803a900f",
-    "completed_tree": "246776aa6aa0debb6c434b4abb8f9d54a4699cf5"
+    "completed_at": 1794857176.2958207,
+    "completed_head": "fb451b5eedc97e74fb981d72f8986891696700f3",
+    "completed_tree": "389aebc11296d76d1fc7132f613986129bc2f9bd"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-structural-losses",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[2/3] Stack-parameter foreign copies: a six-argument call-free bind-once callee copies instead of paying the stack-call path; args 5-6 park in r11/r10 and bind into guest homes at copy entry; home-reuse-by-scope-death closed (mandelbrot homes all live across the inner loop). 785 tests OK; gate --save --compare exit 0, many_params 44.2->28.9 ms (-34.5%). ADR-041. README rows for hex_io/many_params added.",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794812926.2711325,
-      "timestamp_str": "2026-11-16 10:08:46",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "many_params measured 42-44 ms against C 7.8 ms: the biggest board loss traces to the foreign-copy form refusing >4-argument callees, so every call paid callee home saves plus caller outgoing-area churn",
-        "benefits": "six-argument helper calls inline like gcc's -O2 shapes; measured -34.5% on many_params; machinery general (rebinds form included), fallback preserved",
-        "risks": "contract: copy form now covers 5-6 params,  pins moved to a calling callee; dependency: none (standard library only); concurrency: none; state: benchmark history append-only, ledger checkpoint appended",
-        "mitigation": "failing-first calls_of + e2e value twins; full suite; gate twice-tolerant noise discharge per ADR-031; stack-call machinery still pinned and reachable by non-copyable callees"
-      },
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-structural-losses",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[3/3] Frame-slot in-place updates: a frame slot's slot = slot op value with + - & | ^ folds into one memory-operand instruction (imm, register, or rax right side), mirroring the register-home fold; mandelbrot inner loop 108 -> 101 bytes, count update 3 -> 1 instr; 820 tests OK; gate exit 0 no regressions, many_params new best 24.2 ms. ADR-042. Allocation ceiling recorded as the proposed next task cairn-allocation; README rows updated.",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794817011.134417,
-      "timestamp_str": "2026-11-16 11:16:51",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "frame-resident counters, accumulators and latches paid a load-compute-store triple that register homes do not pay; mandelbrot's listing showed the triple in its 27-instruction inner loop",
-        "benefits": "one memory-operand instruction per frame self-update, shape-generic across all programs; correctness preserved by construction for calling/trapping right sides",
-        "risks": "contract: memory forms never assert ZF for a register; dependency: none; concurrency: none; state: none beyond append-only history",
-        "mitigation": "failing-first machine encodings, byte-shape tests and an e2e twin; full suite; gate noise discharge per ADR-031"
-      },
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-structural-losses",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-structural-losses' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794817243.5773258,
-      "timestamp_str": "2026-11-16 11:20:43",
-      "agent": "mistral:vibe",
-      "head": "c2d867e71d829489f4f21263c18202a53e3285a5",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-allocation",
       "phase": "in_progress",
@@ -325,6 +272,52 @@
       "timestamp_str": "2026-11-16 21:17:06",
       "agent": "mistral:vibe",
       "head": "9a106f70b0711bb9d817d77c52b1942e803a900f",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-prologue-slim",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/1] slim per-call prologues: skip implicit return-zero when the body ends in return, clear only slots cleared_before_use cannot prove assigned, lower let/assign zero into a home as xor",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794854657.8664021,
+      "timestamp_str": "2026-11-16 21:44:17",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "recursion-heavy nqueens pays a 6-7 instruction prologue per call; the copy path already proved both gates safe",
+        "benefits": "nqueens 25 ms toward C 22.6; every recursive call shrinks",
+        "risks": "contract: implicit zero guards fall-through margins; dependency: _cleared_before_use must stay a pure AST walk; concurrency: none; state: none",
+        "mitigation": "zero kept whenever the last statement is no Return; only proven mechanisms ported; failing-first tests + full suite + benchmark gate"
+      },
+      "plan_digest": "371174890802185aecdd3ca3abaa29ef443a202e4e87dab89964fa5e8d25251f"
+    },
+    {
+      "task_id": "cairn-prologue-slim",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/1] delivered: 963 tests OK, checklists: passed (check exit 3 only for uncommitted work), benchmark gate exit 0, nqueens 25.0 to 23.4 ms same-window",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794857105.1394749,
+      "timestamp_str": "2026-11-16 22:25:05",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-prologue-slim",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-prologue-slim' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794857176.3404906,
+      "timestamp_str": "2026-11-16 22:26:16",
+      "agent": "mistral:vibe",
+      "head": "fb451b5eedc97e74fb981d72f8986891696700f3",
       "delivery": {
         "roots": [
           "."
