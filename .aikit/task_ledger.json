@@ -1,112 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-call-speed",
-    "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794892711.3198195,
+    "task_id": "cairn-loop-speed",
+    "last_phase": "delivery",
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794896126.5715895,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794892812.8853178,
-    "completed_head": "ffb2b979699ed8be620018650ad802d5bebaade8",
-    "completed_tree": "b68af07e32b62866a1101d8dbdf32e0fe6f40dec"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-loop-copies",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-loop-copies' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794843876.0468857,
-      "timestamp_str": "2026-11-16 18:44:36",
-      "agent": "mistral:vibe",
-      "head": "b21d2749d9056ac63117afb5454aa11fbb9979b3",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-shift-fused-args",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/3] Shift-through fusion: (a>>m)<<k lowers as and -2^k, and single-use copy args of shape name>>m forward into their use",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794845977.839551,
-      "timestamp_str": "2026-11-16 19:19:37",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "call_chain loses 30 percent to C entirely from the sar+shl chain in the inlined mix3 body (gcc folds (i>>2)<<2 into and -4 via full evaluation); the same shape is the standard floor-to-multiple idiom in real programs and crosses call boundaries in both nqueens and call_chain args",
-        "benefits": "call_chain 44.6 -> target near C 34.5 ms; nqueens argument shuffles slim; a general sound peephole in the language",
-        "risks": "contract: (a>>m)<<k == a & -(2^k) requires k>=m>=1, verified for signed negatives since sar sign-fill shifts out exactly when k>=m; a forwarded arg must only fire when the parameter occurs exactly once in the copy body and the shift user shape is verifiable at emission; dependency: reuses existing _logical_shift_shape machinery, no new deps; concurrency: none; state: provenance lives only inside one copy emission and must not leak across nested copies",
-        "mitigation": "failing-first bytes tests pinning the and-lowering and absence of sar in the copy region, e2e value tests against a Python wrap model with negative operands and k==m plus k>m, full suite + benchmark gate before commit"
-      },
-      "plan_digest": "f6b7ea8eda5e3dacb631ffeff1a8dbc636983049a22805360a019fa8a245915b"
-    },
-    {
-      "task_id": "cairn-shift-fused-args",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[3/3] Verified: 960 tests, 4/4 gates, ADR-049, gate exit 0; call_chain A/B within noise, mechanism recorded as wrong hypothesis",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794852652.98311,
-      "timestamp_str": "2026-11-16 21:10:52",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-shift-fused-args",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-shift-fused-args' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794853026.232315,
-      "timestamp_str": "2026-11-16 21:17:06",
-      "agent": "mistral:vibe",
-      "head": "9a106f70b0711bb9d817d77c52b1942e803a900f",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-prologue-slim",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/1] slim per-call prologues: skip implicit return-zero when the body ends in return, clear only slots cleared_before_use cannot prove assigned, lower let/assign zero into a home as xor",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794854657.8664021,
-      "timestamp_str": "2026-11-16 21:44:17",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "recursion-heavy nqueens pays a 6-7 instruction prologue per call; the copy path already proved both gates safe",
-        "benefits": "nqueens 25 ms toward C 22.6; every recursive call shrinks",
-        "risks": "contract: implicit zero guards fall-through margins; dependency: _cleared_before_use must stay a pure AST walk; concurrency: none; state: none",
-        "mitigation": "zero kept whenever the last statement is no Return; only proven mechanisms ported; failing-first tests + full suite + benchmark gate"
-      },
-      "plan_digest": "371174890802185aecdd3ca3abaa29ef443a202e4e87dab89964fa5e8d25251f"
-    },
-    {
-      "task_id": "cairn-prologue-slim",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/1] delivered: 963 tests OK, checklists: passed (check exit 3 only for uncommitted work), benchmark gate exit 0, nqueens 25.0 to 23.4 ms same-window",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794857105.1394749,
-      "timestamp_str": "2026-11-16 22:25:05",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-prologue-slim",
       "phase": "completed",
@@ -307,6 +211,77 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-loop-speed",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/4] Plan: close the remaining loop gaps. M1 binary_gcd (187 vs C 164 / Rust 139): diff the disassembly, find the per-iteration slack, fix; M2 nqueens (23.7 vs C 21.7 / Rust 17.6): try the recorded countdown-scan idea and any branching slack; M3 primes (24.1 vs Rust 18.4) and xorshift (287 vs C 278) peepholes as the gate data directs; M4 gate + delivery. Every fix ships a failing-first shape test; every change re-runs the --save --compare gate.",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794893668.3674073,
+      "timestamp_str": "2026-11-17 08:34:28",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "the scoreboard still shows cairn behind C on binary_gcd, nqueens, primes, mandelbrot, xorshift and many_params; these are the same hot-loop constructs every real Cairn program leans on, so closing them raises the whole language",
+        "benefits": "contract: no source semantics change, only lowerings; identical results pinned by existing twin parity tests and e2e; dependency: machine.py helpers only; concurrency: none; state: codegen only, no new static data",
+        "risks": "contract: reordered or fused instructions must keep exact i64 wrap and flag semantics, or the parity tests catch it; dependency: low, existing encodings; concurrency: none; state: inline expansion may grow .text, bounded",
+        "mitigation": "contract: failing-first shape tests plus the 1073-suite and twin-parity after each milestone; the --save --compare gate must exit 0 before any commit; measured A/B against builds from the stashed tree; dependency: no hand-rolled bytes; concurrency: n/a; state: gate reports sizes"
+      },
+      "plan_digest": "09c36595bb195abb486ca34f81aa8bfbd58e2c046ba56f863d998595c899aae4"
+    },
+    {
+      "task_id": "cairn-loop-speed",
+      "phase": "superseded",
+      "phase_num": 2,
+      "description": "Superseded by 'M1 done: direct var-to-var copy lowering (_emit_value loads into the home, kill the rax round trip) - binary_gcd 187->168 ad-hoc, now C parity. M2 done: (a & b) != 0 lowers as test home,home in _emit_comparison_branch - nqueens 23.7->21.1, C parity. Gate exit 0 in a loaded window (many_params/argv_walk inflation is ambient; paths untouched). Suite 1076 OK. Next M3 primes/xorshift, M4 gate on a quiet window.' without --complete or --reset",
+      "status": "superseded",
+      "timestamp": 1794894755.0994506,
+      "timestamp_str": "2026-11-17 08:52:35",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "M1 done: direct var-to-var copy lowering (_emit_value loads into the home, kill the rax round trip) - binary_gcd 187->168 ad-hoc, now C parity. M2 done: (a & b) != 0 lowers as test home,home in _emit_comparison_branch - nqueens 23.7->21.1, C parity. Gate exit 0 in a loaded window (many_params/argv_walk inflation is ambient; paths untouched). Suite 1076 OK. Next M3 primes/xorshift, M4 gate on a quiet window.",
+      "phase": "in_progress",
+      "phase_num": 1,
+      "description": "",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794894755.0994506,
+      "timestamp_str": "2026-11-17 08:52:35",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-loop-speed",
+      "phase": "implementation",
+      "phase_num": 3,
+      "description": "M1 done: direct var-to-var copy lowering in _emit_value (rax round trip killed), binary_gcd 187->168 ad-hoc, C parity. M2 done: (a & b) != 0 lowers as test home,home in _emit_comparison_branch, nqueens 23.7->21.1, C parity. Gate exit 0 (loaded window inflated many_params/argv_walk; those paths untouched). Suite 1076 OK. Next M3 primes/xorshift, M4 gate on a quiet window.",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794894778.6499393,
+      "timestamp_str": "2026-11-17 08:52:58",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "M1 done: direct var-to-var copy lowering (_emit_value loads into the home, kill the rax round trip) - binary_gcd 187->168 ad-hoc, now C parity. M2 done: (a & b) != 0 lowers as test home,home in _emit_comparison_branch - nqueens 23.7->21.1, C parity. Gate exit 0 in a loaded window (many_params/argv_walk inflation is ambient; paths untouched). Suite 1076 OK. Next M3 primes/xorshift, M4 gate on a quiet window.",
+      "phase": "superseded",
+      "phase_num": 1,
+      "description": "Superseded by 'cairn-loop-speed' without --complete or --reset",
+      "status": "superseded",
+      "timestamp": 1794894778.6499393,
+      "timestamp_str": "2026-11-17 08:52:58",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-loop-speed",
+      "phase": "delivery",
+      "phase_num": 4,
+      "description": "Phase 4: aikit.py check cairn 4/4 gates passed, checklists: passed; suite 1079 OK; gate --save --compare exit 0. Same-window A/B: binary_gcd 192.6->184.1 (-4.4%), primes 22.4->21.7 (-3.4%); interim ackermann/tak flags proven noise (-0.2% A/B, byte-identical tak code). Ready to commit as feat [milestone 4/4].",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794896126.5715895,
+      "timestamp_str": "2026-11-17 09:15:26",
+      "agent": "mistral:vibe"
     }
   ]
 }
