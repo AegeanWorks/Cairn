@@ -5,6 +5,10 @@ of the program output: a promoted slot must never touch its old frame slot, and 
 function uses must be saved and restored around its body.
 """
 
+import os
+import subprocess
+import sys
+import tempfile
 import unittest
 
 from cairn import parser, sema
@@ -2161,3 +2165,50 @@ class ScanIndexSignGuardTest(unittest.TestCase):
         body = region_text(self.SIGNED, "probe")
         self.assertIn(bytes([0x0F, 0x88]), body,
                       "a parameter index may be negative, the miss route stays")
+
+
+class TrueLoopBranchTest(unittest.TestCase):
+    """A literal-true loop condition branches with one jmp, never by testing 1.
+
+    char_stream (a `while true` with break) paid a 10-byte `movabs $1,%rax`
+    plus `test` and `jne` on every byte's back edge. A literal's truth is a
+    compile-time fact: match the requested branch polarity and the condition
+    is a bare `jmp` (a mismatched polarity emits nothing and falls through),
+    so no iteration decodes an immediate that only exists to be tested.
+    """
+
+    STREAM = ("fn main() -> i64 {"
+              "  var total: i64 = 0;"
+              "  while true {"
+              "    var c: i64 = 5;"
+              "    if c < 0 { break; }"
+              "    total = total + c;"
+              "  }"
+              "  print(total); return 0; }")
+
+    def test_a_while_true_back_edge_is_a_bare_branch(self) -> None:
+        body = region_text(self.STREAM, "main")
+        movabs_one = bytes([0x48, 0xB8, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self.assertNotIn(movabs_one, body,
+                         "but the guard materialised the literal true as movabs")
+        self.assertNotIn(bytes([0x48, 0x85, 0xC0]), body,
+                         "and re-tested that immediate")
+        self.assertIn(bytes([0xE9]), body,
+                      "the latch now reaches its start with a direct near jmp")
+
+    FALSE_HOLDER = ("fn main() -> i64 {"
+                    "  var total: i64 = 0;"
+                    "  while false { total = total + 1; }"
+                    "  print(total); return 0; }")
+
+    def test_a_while_false_body_never_runs(self) -> None:
+        # The head jump-to-end must be a real branch, not a silent fall-through,
+        # or the do-while rotation would execute an unreachable body once.
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "probe.crn")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(self.FALSE_HOLDER)
+            completed = subprocess.run([sys.executable, "-m", "cairn", "run", path],
+                                       capture_output=True, timeout=30)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, b"0\n")

@@ -1727,6 +1727,12 @@ class CodeGenerator:
         """
         while isinstance(expression, syntax.Parens):
             expression = expression.inner
+        if isinstance(expression, syntax.IntLiteral) and expression.value in (0, 1):
+            # A literal's truth is a compile-time fact: match the polarity and the
+            # condition is a bare jmp; mismatch and fall through (never jump).
+            if (expression.value != 0) == when_true:
+                self.assembler.jmp(target)
+            return
         if isinstance(expression, syntax.Unary) and expression.op == "!":
             self._emit_condition(expression.operand, target, not when_true)
             return

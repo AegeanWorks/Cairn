@@ -41,5 +41,29 @@ class StdinRefillTest(unittest.TestCase):
                       "the refill loads the cached handle rip-relative")
 
 
+
+class ReadCharPrologueTest(unittest.TestCase):
+    """read_char's state loads stay lea+mov; the rip-direct rewrite loses here.
+
+    A measured alternative: loading cursor/count as `mov r64,[rip+disp32]`
+    (12 bytes versus 20) ran 1.22-1.42x SLOWER on char_stream over four
+    interleaved same-window A/Bs (15.07->15.55, 15.73->19.16, 14.87->21.18,
+    12.32->12.01 in the mixed window). The address-register round-trip
+    pins the data addresses before the compare and the hot loop's fetch
+    aligns better with it. The shape stays until a real workload shifts
+    the balance; this test guards against an unmeasured 'cleanup'.
+    """
+
+    def test_the_prologue_keeps_its_address_registers(self) -> None:
+        assembler = Assembler()
+        runtime.emit_runtime(assembler, ReadOnlyData(), WritableData())
+        start = assembler.labels[runtime.READ_CHAR_LABEL]
+        prologue = assembler.code[start:start + 20]
+        # lea r10,[rip+d32]; mov rax,[r10]; lea r11,[rip+d32]; mov rdx,[r11].
+        self.assertEqual(prologue[0:3], bytes([0x4C, 0x8D, 0x15]),
+                         "the cursor address is lea r10,[rip+disp32]")
+        self.assertEqual(prologue[10:13], bytes([0x4C, 0x8D, 0x1D]),
+                         "the count address is lea r11,[rip+disp32]")
+
 if __name__ == "__main__":
     unittest.main()
