@@ -1,41 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-argvbyte-inline",
+    "task_id": "cairn-bgcd-flags",
     "last_phase": "verify",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794912499.4873157,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794919398.3080573,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794912608.2543917,
-    "completed_head": "bd6d3f9eda16ea2beec414f0016fe05c9cb11361",
-    "completed_tree": "f4e65aac83275fa04fe056f3f599336186c42b02"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "M1 done: direct var-to-var copy lowering (_emit_value loads into the home, kill the rax round trip) - binary_gcd 187->168 ad-hoc, now C parity. M2 done: (a & b) != 0 lowers as test home,home in _emit_comparison_branch - nqueens 23.7->21.1, C parity. Gate exit 0 in a loaded window (many_params/argv_walk inflation is ambient; paths untouched). Suite 1076 OK. Next M3 primes/xorshift, M4 gate on a quiet window.",
-      "phase": "in_progress",
-      "phase_num": 1,
-      "description": "",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794894755.0994506,
-      "timestamp_str": "2026-11-17 08:52:35",
-      "agent": "mistral:vibe"
-    },
-    {
-      "task_id": "cairn-loop-speed",
-      "phase": "implementation",
-      "phase_num": 3,
-      "description": "M1 done: direct var-to-var copy lowering in _emit_value (rax round trip killed), binary_gcd 187->168 ad-hoc, C parity. M2 done: (a & b) != 0 lowers as test home,home in _emit_comparison_branch, nqueens 23.7->21.1, C parity. Gate exit 0 (loaded window inflated many_params/argv_walk; those paths untouched). Suite 1076 OK. Next M3 primes/xorshift, M4 gate on a quiet window.",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794894778.6499393,
-      "timestamp_str": "2026-11-17 08:52:58",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "M1 done: direct var-to-var copy lowering (_emit_value loads into the home, kill the rax round trip) - binary_gcd 187->168 ad-hoc, now C parity. M2 done: (a & b) != 0 lowers as test home,home in _emit_comparison_branch - nqueens 23.7->21.1, C parity. Gate exit 0 in a loaded window (many_params/argv_walk inflation is ambient; paths untouched). Suite 1076 OK. Next M3 primes/xorshift, M4 gate on a quiet window.",
       "phase": "superseded",
@@ -302,6 +277,35 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-bgcd-flags",
+      "phase": "plan",
+      "phase_num": 2,
+      "description": "[1/2] plan: reuse sub ZF for homed zero compares and multi-byte loop-head nop pads against the binary_gcd gap",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794918116.408638,
+      "timestamp_str": "2026-11-17 15:21:56",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "contract: _emit_comparison_branch's homed-name zero compare may skip cmp_imm when Assembler.zf_status names the same home, ZF semantics identical for je/jne, signed conditions still force the cmp; dependency: zf_status set by binary()/arith_imm() ZF setters and test(), cleared by emit/label, no new machine helpers; concurrency: single-threaded compile session, nothing shares the assembler; state: codegen.py and two CRLF test files change, benchmarks scoreboard saved after the gate",
+        "benefits": "contract: binary_gcd loses one uop per subtraction-loop iteration and the canonical multi-byte nop pads cut decode waste at loop heads; dependency: no benchmark harness or runtime change, pure codegen output; concurrency: none; state: expected -3 to 5 percent on binary_gcd with other cases in noise",
+        "risks": "contract: reusing a stale flag through an intervening label or store would miscompile equality branches; dependency: mov_reg_reg and every other assembler op clear zf_status via emit so only adjacent setter cases fire; concurrency: none; state: miscompiled released binaries or gate regressions misread as improvements",
+        "mitigation": "contract: reuse gated on expression.op in == / !=, right literal value 0, zf_status == the exact home, and label() clearing; dependency: failing-first shape tests assert cmp imm zero absence and byte patterns before implementation; concurrency: none; state: 3-way disassembly value parity probe plus high-priority full benchmark gate with --compare exit 0 before each commit"
+      },
+      "plan_digest": "38965595f46a979d393af5cb7e2c2f04a205f855300cd75d5272f4e83fb0a5e9"
+    },
+    {
+      "task_id": "cairn-bgcd-flags",
+      "phase": "verify",
+      "phase_num": 4,
+      "description": "[2/2] verify: zf reuse ships two commits (ec37041, 3f052bd); 1099 tests OK; combined high-priority gate exit 0, all 17 cases within noise with no regression, binary_gcd 182.5 -> 160.8 best_ms; outputs value-identical old vs new; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794919398.3080573,
+      "timestamp_str": "2026-11-17 15:43:18",
+      "agent": "mistral:vibe"
     }
   ]
 }
