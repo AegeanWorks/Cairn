@@ -30,6 +30,12 @@ STDIN_BUFFER_LABEL = "cairn.runtime.stdin_buffer"
 STDIN_CURSOR_LABEL = "cairn.runtime.stdin_cursor"
 STDIN_COUNT_LABEL = "cairn.runtime.stdin_count"
 STDIN_HANDLE_LABEL = "cairn.runtime.stdin_handle"
+STDOUT_BUFFER_LABEL = "cairn.runtime.stdout_buffer"
+STDOUT_CURSOR_LABEL = "cairn.runtime.stdout_cursor"
+STDOUT_HANDLE_LABEL = "cairn.runtime.stdout_handle"
+OUT_FLUSH_LABEL = "cairn.runtime.out_flush"
+OUT_FLUSH_WORK_LABEL = "cairn.runtime.out_flush_work"
+OUT_APPEND_LABEL = "cairn.runtime.out_append"
 NEWLINE_LABEL = "cairn.runtime.newline"
 DIV_ZERO_DATA_LABEL = "cairn.runtime.div_zero_text"
 
@@ -39,7 +45,6 @@ READ_FRAME = 48
 STR_FRAME = 48
 PTR_SLOT = -48
 BUFFER_TOP = -1
-WRITTEN_SLOT = -40
 BUFFER_SLOT = -48
 COUNT_SLOT = -56
 BYTE_SLOT = -8
@@ -57,6 +62,13 @@ ARGV_ARENA_SIZE = 1024
 # historic 4096: a 4 MiB piped stdin refills 64 times instead of 1024, and the
 # matching cache slot for the stdin handle rides at the image's end.
 STDIN_BUFFER_SIZE = 65536
+# The shared stdout buffer: every printer appends into it and one WriteFile
+# drains it when it fills, on exit(code) and at normal termination, so a
+# benchmark that prints one value and a newline per loop iteration costs one
+# syscall per 64 KiB instead of two per value. flush() drains it early and
+# answers the byte count. State rides after the stdin cache for the same
+# reason ARGV_PTR0/ARGV_LEN0 do: appended last, no existing layout shifts.
+STDOUT_BUFFER_SIZE = 65536
 
 
 def emit_arg_fill(assembler: Assembler) -> None:
@@ -320,11 +332,137 @@ def emit_read_char(assembler: Assembler) -> None:
     asm.ret()
 
 
+def emit_out_flush(assembler: Assembler) -> None:
+    """Emit `flush()`: drain the shared stdout buffer, answering the drained count.
+
+    The public entry frames a 16-aligned call into the shared drain work; the
+    work itself (`out_flush.work`) is also the internal entry `out_append` uses
+    when the buffer fills, with rax and rdx parked on the stack across it.
+    """
+    asm = assembler
+    asm.label(OUT_FLUSH_LABEL)
+    asm.push("rbp")
+    asm.mov_reg_reg("rbp", "rsp")
+    asm.sub_rsp(32)
+    asm.call(OUT_FLUSH_WORK_LABEL)
+    asm.add_rsp(32)
+    asm.pop("rbp")
+    asm.ret()
+
+
+def emit_out_append(assembler: Assembler) -> None:
+    """Emit `out_append`: rax carries the source bytes, rdx their count.
+
+    The append copies what fits under the 64 KiB cap, advances the cursor and
+    repeats while bytes remain; when the buffer is full the pending bytes drain
+    through the flush work (rax and rdx cross it on the stack). Order follows
+    the call sequence because every printer steps through the same cursor.
+    Clobbers rax, rcx, rdx and r8-r11 per the runtime call contract; rbx, rbp,
+    rdi and rsi are untouched.
+    """
+    asm = assembler
+    asm.label(OUT_APPEND_LABEL)
+    asm.push("rbp")
+    asm.mov_reg_reg("rbp", "rsp")
+    asm.sub_rsp(32)
+    asm.test("rdx")
+    asm.jcc("z", "out_append.done")
+    asm.label("out_append.top")
+    asm.lea_rip("r10", STDOUT_CURSOR_LABEL)
+    asm.mov_load("r9", "r10")                # the cursor
+    asm.mov_imm32("rcx", STDOUT_BUFFER_SIZE)
+    asm.binary(0x29, "rcx", "r9")            # the spare capacity
+    asm.jcc("nz", "out_append.space")
+    asm.push("rax")                          # src and len cross the drain
+    asm.push("rdx")
+    asm.call(OUT_FLUSH_WORK_LABEL)
+    asm.pop("rdx")
+    asm.pop("rax")
+    asm.jmp("out_append.top")
+    asm.label("out_append.space")
+    asm.mov_reg_reg("r11", "rdx")
+    asm.cmp_reg_reg("r11", "rcx")
+    asm.jcc("le", "out_append.copy")         # everything left fits now
+    asm.mov_reg_reg("r11", "rcx")            # the chunk is what fits
+    asm.label("out_append.copy")
+    asm.lea_rip("r8", STDOUT_BUFFER_LABEL)
+    asm.lea_scale("r8", "r8", "r9", 0, 0)    # dest = buffer + cursor
+    asm.mov_reg_reg("r10", "r11")            # the countdown
+    asm.label("out_append.byte")
+    asm.movzx_load8("rcx", "rax")
+    asm.store_byte("r8", "cl")
+    asm.step("rax", decrement=False)
+    asm.step("r8", decrement=False)
+    asm.step("r10", decrement=True)
+    asm.jcc("nz", "out_append.byte")
+    asm.binary(0x01, "r9", "r11")            # cursor += copied bytes
+    asm.lea_rip("rcx", STDOUT_CURSOR_LABEL)
+    asm.store_qword("rcx", "r9")
+    asm.binary(0x29, "rdx", "r11")           # count -= copied bytes
+    asm.test("rdx")
+    asm.jcc("nz", "out_append.top")
+    asm.label("out_append.done")
+    asm.add_rsp(32)
+    asm.pop("rbp")
+    asm.ret()
+
+
+def emit_out_flush_work(assembler: Assembler) -> None:
+    """Emit `out_flush.work`: one WriteFile for everything the cursor holds.
+
+    The stdout handle is cached in static state exactly like the stdin handle:
+    the loader seeds it zero, the first drain fetches it, later drains reuse it.
+    An empty buffer answers zero without a syscall. The cursor resets after the
+    write (best-effort, like every plain conout path here), and the drained
+    count is the answer in rax.
+    """
+    asm = assembler
+    asm.label(OUT_FLUSH_WORK_LABEL)
+    asm.push("rbp")
+    asm.mov_reg_reg("rbp", "rsp")
+    asm.sub_rsp(64)
+    asm.lea_rip("r10", STDOUT_CURSOR_LABEL)
+    asm.mov_load("r8", "r10")                # the pending byte count
+    asm.lea_rip("rcx", STDOUT_HANDLE_LABEL)
+    asm.mov_load("rcx", "rcx")
+    asm.test("rcx")
+    asm.jcc("nz", "out_flush.handle")
+    asm.mov_imm32("rcx", -11)
+    asm.call_indirect(iat_label("GetStdHandle"))
+    asm.mov_reg_reg("rcx", "rax")
+    asm.lea_rip("rax", STDOUT_HANDLE_LABEL)
+    asm.store_qword("rax", "rcx")
+    asm.label("out_flush.handle")
+    asm.test("r8")
+    asm.jcc("z", "out_flush.fresh")
+    # The drained count parks in [rbp-24]: the call's shadow reaches [rbp-64,
+    # rbp-32), the 5th argument rides [rsp+32] = [rbp-32], and the out slot at
+    # [rbp-8] — the park stays clear of every window WriteFile may scribble.
+    asm.mov_store_rbp(-24, "r8")
+    asm.lea_rip("rdx", STDOUT_BUFFER_LABEL)
+    asm.lea_rbp("r9", -8)                    # the bytes-written out slot
+    asm.mov_store_rsp_imm32(32, 0)
+    asm.call_indirect(iat_label("WriteFile"))
+    asm.mov_load_rbp("rax", -24)
+    asm.lea_rip("r10", STDOUT_CURSOR_LABEL)
+    asm.xor_zero("rdx")
+    asm.store_qword("r10", "rdx")            # the cursor resets, drained or not
+    asm.jmp("out_flush.ret")
+    asm.label("out_flush.fresh")
+    asm.xor_zero("rax")
+    asm.label("out_flush.ret")
+    asm.add_rsp(64)
+    asm.pop("rbp")
+    asm.ret()
+
+
 def emit_print_i64(assembler: Assembler) -> None:
     """Emit `print_i64`: write rax in decimal plus a newline.
 
-    The digits are produced right-to-left in a 32-byte frame buffer and written with one
-    `WriteFile` call, so printing costs one syscall for the number and one for the newline.
+    The digits are produced right-to-left in a 32-byte frame buffer and appended
+    to the shared stdout buffer, so batching — not the WriteFile — is the syscall
+    boundary: flush dates are decided by the buffer's 64 KiB cap, exit and the
+    program's end.
     """
     assembler.label(PRINT_LABEL)
     assembler.push("rbp")
@@ -355,22 +493,12 @@ def emit_print_i64(assembler: Assembler) -> None:
     assembler.label("print.write")
     assembler.mov_store_rbp(BUFFER_SLOT, "rcx")
     assembler.mov_store_rbp(COUNT_SLOT, "r11")
-    assembler.mov_imm32("rcx", -11)
-    assembler.call_indirect(iat_label("GetStdHandle"))
-    assembler.mov_reg_reg("rcx", "rax")
-    assembler.mov_load_rbp("rdx", BUFFER_SLOT)
-    assembler.mov_load_rbp("r8", COUNT_SLOT)
-    assembler.lea_rbp("r9", WRITTEN_SLOT)
-    assembler.mov_store_rsp_imm32(32, 0)
-    assembler.call_indirect(iat_label("WriteFile"))
-    assembler.mov_imm32("rcx", -11)
-    assembler.call_indirect(iat_label("GetStdHandle"))
-    assembler.mov_reg_reg("rcx", "rax")
-    assembler.lea_rip("rdx", NEWLINE_LABEL)
-    assembler.mov_imm32("r8", 1)
-    assembler.lea_rbp("r9", WRITTEN_SLOT)
-    assembler.mov_store_rsp_imm32(32, 0)
-    assembler.call_indirect(iat_label("WriteFile"))
+    assembler.mov_load_rbp("rax", BUFFER_SLOT)
+    assembler.mov_load_rbp("rdx", COUNT_SLOT)
+    assembler.call(OUT_APPEND_LABEL)
+    assembler.lea_rip("rax", NEWLINE_LABEL)
+    assembler.mov_imm32("rdx", 1)
+    assembler.call(OUT_APPEND_LABEL)
     assembler.add_rsp(FRAME_SIZE)
     assembler.pop("rbp")
     assembler.ret()
@@ -380,8 +508,8 @@ def emit_print_char(assembler: Assembler) -> None:
     """Emit `print_char`: write the low byte of rax to stdout, no newline.
 
     The byte is isolated by an unsigned division by 256 (the remainder is `rax & 0xFF`) and
-    written from a one-byte frame buffer, exactly one `WriteFile` call. The clobbered `rax`
-    never escapes: the code generator pops the caller's saved value after the call.
+    appended to the shared stdout buffer as one byte. The clobbered `rax` never escapes: the
+    code generator pops the caller's saved value after the call.
     """
     assembler.label(PRINT_CHAR_LABEL)
     assembler.push("rbp")
@@ -392,14 +520,9 @@ def emit_print_char(assembler: Assembler) -> None:
     assembler.mov_imm32("r10", 256)
     assembler.divide("r10", signed=False)
     assembler.store_byte("rcx", "dl")
-    assembler.mov_imm32("rcx", -11)
-    assembler.call_indirect(iat_label("GetStdHandle"))
-    assembler.mov_reg_reg("rcx", "rax")
-    assembler.lea_rbp("rdx", BYTE_SLOT)
-    assembler.mov_imm32("r8", 1)
-    assembler.lea_rbp("r9", WRITTEN_SLOT)
-    assembler.mov_store_rsp_imm32(32, 0)
-    assembler.call_indirect(iat_label("WriteFile"))
+    assembler.lea_rbp("rax", BYTE_SLOT)
+    assembler.mov_imm32("rdx", 1)
+    assembler.call(OUT_APPEND_LABEL)
     assembler.add_rsp(FRAME_SIZE)
     assembler.pop("rbp")
     assembler.ret()
@@ -410,7 +533,7 @@ def emit_print_hex(assembler: Assembler) -> None:
 
     The nibbles fall out right-to-left of unsigned divisions by 16 (remainder and shift in
     one `div`), each turned into ASCII by a conditional move — `+ 0x30`, or `+ 0x57` when the
-    nibble cleared 10 — and written with one `WriteFile` call. Zero prints as a single `0`.
+    nibble cleared 10 — and appended to the shared stdout buffer. Zero prints as a single `0`.
     """
     assembler.label(PRINT_HEX_LABEL)
     assembler.push("rbp")
@@ -432,16 +555,9 @@ def emit_print_hex(assembler: Assembler) -> None:
     assembler.step("r11", decrement=False)
     assembler.test("rax")
     assembler.jcc("nz", "print_hex.digits")
-    assembler.mov_store_rbp(BUFFER_SLOT, "rcx")
-    assembler.mov_store_rbp(COUNT_SLOT, "r11")
-    assembler.mov_imm32("rcx", -11)
-    assembler.call_indirect(iat_label("GetStdHandle"))
-    assembler.mov_reg_reg("rcx", "rax")
-    assembler.mov_load_rbp("rdx", BUFFER_SLOT)
-    assembler.mov_load_rbp("r8", COUNT_SLOT)
-    assembler.lea_rbp("r9", WRITTEN_SLOT)
-    assembler.mov_store_rsp_imm32(32, 0)
-    assembler.call_indirect(iat_label("WriteFile"))
+    assembler.mov_reg_reg("rax", "rcx")
+    assembler.mov_reg_reg("rdx", "r11")
+    assembler.call(OUT_APPEND_LABEL)
     assembler.add_rsp(FRAME_SIZE)
     assembler.pop("rbp")
     assembler.ret()
@@ -451,8 +567,9 @@ def emit_print_str(assembler: Assembler) -> None:
     """Emit `print_str`: write the NUL-terminated text at rax to stdout, no newline.
 
     The length comes from one scan to the terminator, so no byte is written past the
-    literal's end and the scan costs no call — the `WriteFile` is the only clobber.
-    The pointer returns in rax, kept in a frame slot across the call.
+    literal's end and the scan costs no call — the append copies those bytes into
+    the shared stdout buffer. The pointer returns in rax, kept in a frame slot
+    across the call, so `print_str(s)` still answers `s` as a value.
     """
     assembler.label(PRINT_STR_LABEL)
     assembler.push("rbp")
@@ -469,13 +586,8 @@ def emit_print_str(assembler: Assembler) -> None:
     assembler.step("r8", decrement=False)
     assembler.jmp("print_str.scan")
     assembler.label("print_str.write")
-    assembler.mov_imm32("rcx", -11)
-    assembler.call_indirect(iat_label("GetStdHandle"))
-    assembler.mov_reg_reg("rcx", "rax")
-    assembler.mov_load_rbp("rdx", PTR_SLOT)
-    assembler.lea_rbp("r9", WRITTEN_SLOT)
-    assembler.mov_store_rsp_imm32(32, 0)
-    assembler.call_indirect(iat_label("WriteFile"))
+    assembler.mov_reg_reg("rdx", "r8")
+    assembler.call(OUT_APPEND_LABEL)
     assembler.mov_load_rbp("rax", PTR_SLOT)
     assembler.add_rsp(STR_FRAME)
     assembler.pop("rbp")
@@ -557,6 +669,15 @@ def emit_runtime(assembler: Assembler, rodata: ReadOnlyData,
     writable.reserve(ARGV_PTR0_LABEL, 8)
     writable.reserve(ARGV_LEN0_LABEL, 8)
     writable.reserve(STDIN_HANDLE_LABEL, 8)
+    # The shared stdout buffer, its cursor and the cached console handle, in
+    # that order: appended after the stdin and argv state so existing labels
+    # keep their image offsets and no hot layout shifts because of the batcher.
+    writable.reserve(STDOUT_BUFFER_LABEL, STDOUT_BUFFER_SIZE)
+    writable.reserve(STDOUT_CURSOR_LABEL, 8)
+    writable.reserve(STDOUT_HANDLE_LABEL, 8)
+    emit_out_flush(assembler)
+    emit_out_append(assembler)
+    emit_out_flush_work(assembler)
     emit_print_i64(assembler)
     emit_print_char(assembler)
     emit_print_hex(assembler)
@@ -577,7 +698,11 @@ __all__ = [
     "NEWLINE_LABEL", "PRINT_CHAR_LABEL", "PRINT_HEX_LABEL", "PRINT_LABEL",
     "PRINT_STR_LABEL", "READ_CHAR_LABEL", "STDIN_BUFFER_LABEL", "STDIN_COUNT_LABEL",
     "STDIN_CURSOR_LABEL", "STR_BYTE_LABEL", "STR_LEN_LABEL",
-    "emit_arg_fill", "emit_arg_byte", "emit_argc", "emit_div_zero", "emit_print_char",
-    "emit_print_hex", "emit_print_i64", "emit_print_str", "emit_read_char",
-    "emit_runtime", "emit_str_byte", "emit_str_len",
+    "OUT_APPEND_LABEL", "OUT_FLUSH_LABEL", "OUT_FLUSH_WORK_LABEL",
+    "STDOUT_BUFFER_LABEL", "STDOUT_CURSOR_LABEL", "STDOUT_HANDLE_LABEL",
+    "STDOUT_BUFFER_SIZE",
+    "emit_arg_fill", "emit_arg_byte", "emit_argc", "emit_div_zero",
+    "emit_out_append", "emit_out_flush", "emit_out_flush_work",
+    "emit_print_char", "emit_print_hex", "emit_print_i64", "emit_print_str",
+    "emit_read_char", "emit_runtime", "emit_str_byte", "emit_str_len",
 ]

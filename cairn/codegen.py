@@ -21,9 +21,10 @@ from cairn.machine import ARGUMENT_REGISTERS, Assembler
 from cairn.optimize import INT64_MIN, has_call, _contains_break_or_continue
 from cairn.image import WritableData
 from cairn.runtime import (ARG_BYTE_LABEL, ARGC_LABEL, ARGV_LEN0_LABEL,
-                           ARGV_PTR0_LABEL, DIV_ZERO_LABEL, PRINT_CHAR_LABEL,
-                           PRINT_HEX_LABEL, PRINT_LABEL, PRINT_STR_LABEL, READ_CHAR_LABEL,
-                           STR_BYTE_LABEL, STR_LEN_LABEL, emit_runtime)
+                           ARGV_PTR0_LABEL, DIV_ZERO_LABEL, OUT_FLUSH_LABEL,
+                           PRINT_CHAR_LABEL, PRINT_HEX_LABEL, PRINT_LABEL,
+                           PRINT_STR_LABEL, READ_CHAR_LABEL, STR_BYTE_LABEL,
+                           STR_LEN_LABEL, emit_runtime)
 
 COMPARISON_CONDITIONS = {
     "==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge",
@@ -253,11 +254,16 @@ class CodeGenerator:
         return label
 
     def _emit_entry(self) -> None:
-        """The PE entry point: call main, then exit with main's return value."""
+        """The PE entry point: call main, drain stdout, then exit with main's return."""
         self.assembler.label(ENTRY_LABEL)
         self.assembler.sub_rsp(40)
         self.assembler.call(function_label("main"))
         self.assembler.mov_reg_reg("rcx", "rax")
+        self.assembler.push("rcx")
+        self.depth += 8
+        self._emit_call_site(OUT_FLUSH_LABEL)
+        self.depth -= 8
+        self.assembler.pop("rcx")
         self.assembler.call_indirect(iat_label("ExitProcess"))
         self.assembler.hlt()
 
@@ -2464,6 +2470,10 @@ class CodeGenerator:
             # No arguments, clobbered rax is the answer value itself.
             self._emit_call_site(ARGC_LABEL)
             return
+        if expression.name == "flush":
+            # Same shape: the drained byte count lands in rax, the only answer value.
+            self._emit_call_site(OUT_FLUSH_LABEL)
+            return
         if expression.name == "read_char":
             self._emit_call_site(READ_CHAR_LABEL)
             return
@@ -2516,9 +2526,15 @@ class CodeGenerator:
             return
         if expression.name == "exit":
             # `exit(code)` is the one statement-shaped builtin: the code lands in rcx,
-            # ExitProcess takes over, and nothing after this point runs or returns.
+            # the stdout buffer drains first, and ExitProcess takes over — nothing
+            # after this point runs or returns, and no pending byte is left behind.
             self._emit_expression(expression.arguments[0])
             asm.mov_reg_reg("rcx", "rax")
+            asm.push("rcx")
+            self.depth += 8
+            self._emit_call_site(OUT_FLUSH_LABEL)
+            self.depth -= 8
+            asm.pop("rcx")
             self._emit_direct_indirect_call("ExitProcess")
             return
         if expression.name == "print_str":

@@ -41,7 +41,9 @@ scope, every slot zeroed on entry.
 hex; `print_str(s)` raw literal bytes; `argc()` token count; `arg_byte(i, j)`
 byte `j` of token `i` (`-1` past any bound); `read_char()` next stdin byte or
 `-1` at end; `str_len(s)` NUL-terminated length; `str_byte(s, j)` byte or `-1`
-past the terminator. All return their argument (or the value answered) except
+past the terminator; `flush()` drains stdout at once, answers bytes written.
+Printers share one 64 KiB stdout buffer (drained on exit, on `main`'s return,
+and when full). All return their argument (or the value answered) except
 `exit(code)`, which stops the process at once and is a statement, never a value
 (`E3013` elsewhere). A builtin's bare name is never a value (`E3012`).
 

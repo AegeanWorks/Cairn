@@ -638,3 +638,37 @@ documents and now pass; 1118 tests OK. Doc-law changes carry no byte
 changes, so they need the contract suite, not a benchmark gate. Full
 generation of the card from the manifest remains available if it drifts
 again, but the binding tests make that measurably unlikely first.
+
+## ADR-065: stdout is one shared 64 KiB buffer, drained by exit, main's return and flush()
+
+Date: task cairn-buffered-stdout. Accepted.
+
+Context. Every printer ended in its own WriteFile: hex_io paid two syscalls
+per loop iteration (~800k for the benchmark) and measured 630-1600 ms
+against C++'s buffered formatting. The adopted roadmap named a shared
+output buffer its second milestone.
+
+Decision. The runtime gains one 64 KiB stdout buffer whose cursor and
+cached console handle ride static state, appended after the stdin and
+argv caches so no existing image offset moves. out_append (rax = source,
+rdx = length) copies in chunks under the cap and drains through
+out_flush_work when the buffer fills; print_i64, print_char, print_hex
+and print_str all append there, `exit(code)` drains before ExitProcess,
+the entry stub drains after main returns, and the new `flush()` builtin
+drains early and answers the byte count. The runtime clobber contract
+grows nothing: append and flush touch only rax, rcx, rdx and r8-r11, keep
+rbp and rbx intact, and interleaved order follows the call sequence
+through a single cursor. stderr (the divide-by-zero trap) stays
+unbuffered on purpose.
+
+Consequences. Interleaved same-window A/B, 21 pairs, outputs byte-identical
+on all 13 cases re-measured: hex_io 772 -> 42 ms best (912 -> 50 median),
+about 18x; the compute cases land in the recorded noise band (top5-mean
+0.96-1.04 over a second 31-pair run). Two traps worth remembering: a
+stack park below the flush work's frame sits inside WriteFile's 32-byte
+shadow window and gets destroyed (the drained count lives in an rbp slot
+above it), and print_hex's digit pointer rides rcx/r11, so the append
+call takes them directly instead of frame slots. New PE bytes change the
+layout, so sub-4% best-of swings in both directions accompany it; the
+regression rule stays: decide on interleaved best-of/median, never on
+one window.

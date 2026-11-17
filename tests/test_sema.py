@@ -201,3 +201,15 @@ class ForLoopTest(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+
+class FlushBuiltinTest(unittest.TestCase):
+    """flush() drains the shared stdout buffer: zero arguments, a real value."""
+
+    def test_flush_takes_no_arguments_and_runs_as_a_statement(self) -> None:
+        analyze(parse("fn main() -> i64 { flush(); return 0; }"))
+        self.assertEqual(codes("fn main() -> i64 { flush(1); return 0; }"), ["E3004"])
+
+    def test_flush_is_a_value_builtin_that_cannot_be_renamed(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { return flush; }"), ["E3012"])
+        self.assertEqual(codes("fn main() -> i64 { flush = 1; return 0; }"), ["E3012"])

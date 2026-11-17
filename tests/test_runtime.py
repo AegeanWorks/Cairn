@@ -2,7 +2,7 @@
 import unittest
 
 from cairn import runtime
-from cairn.image import ReadOnlyData, WritableData
+from cairn.image import ReadOnlyData, WritableData, iat_label
 from cairn.machine import Assembler
 
 
@@ -64,6 +64,56 @@ class ReadCharPrologueTest(unittest.TestCase):
                          "the cursor address is lea r10,[rip+disp32]")
         self.assertEqual(prologue[10:13], bytes([0x4C, 0x8D, 0x1D]),
                          "the count address is lea r11,[rip+disp32]")
+
+
+
+class StdoutBufferTest(unittest.TestCase):
+    """The stdout buffer is static writable state the print family shares.
+
+    The buffer, its cursor and the cached stdout handle ride the writable blob
+    after the argv and stdin state, so the cold layout's offsets stay put.
+    Every printer routes through out_append, and out_flush carries the cached
+    handle plus the WriteFile that drains the buffer.
+    """
+
+    def test_the_stdout_buffer_holds_sixty_four_kib(self) -> None:
+        self.assertEqual(runtime.STDOUT_BUFFER_SIZE, 65536)
+
+    def test_the_stdout_state_rides_the_writable_blob(self) -> None:
+        writable = WritableData()
+        assembler = Assembler()
+        runtime.emit_runtime(assembler, ReadOnlyData(), writable)
+        for label in (runtime.STDOUT_BUFFER_LABEL, runtime.STDOUT_CURSOR_LABEL,
+                      runtime.STDOUT_HANDLE_LABEL):
+            self.assertIn(label, writable.labels,
+                          "the stdout buffer, cursor and handle are reserved state")
+        self.assertGreaterEqual(len(writable.data), 65536 * 2 + 8,
+                                "buffer plus cursor plus handle is layered state")
+
+    def test_every_printer_routes_through_out_append(self) -> None:
+        assembler = Assembler()
+        runtime.emit_runtime(assembler, ReadOnlyData(), WritableData())
+        # Internal loop labels share each routine's range, so the boundaries are
+        # the public `cairn.` labels only.
+        bounds = sorted((offset for name, offset in assembler.labels.items()
+                         if name.startswith("cairn.")))
+        fixups = list(assembler.fixups)
+        for label in (runtime.PRINT_LABEL, runtime.PRINT_CHAR_LABEL,
+                      runtime.PRINT_HEX_LABEL, runtime.PRINT_STR_LABEL):
+            start = assembler.labels[label]
+            end = next(offset for offset in bounds if offset > start)
+            inside = [target for offset, target in fixups if start <= offset < end]
+            self.assertIn(runtime.OUT_APPEND_LABEL, inside,
+                          f"{label} appends to the shared buffer")
+
+    def test_out_flush_carries_a_cached_handle_and_the_write(self) -> None:
+        assembler = Assembler()
+        runtime.emit_runtime(assembler, ReadOnlyData(), WritableData())
+        referenced = {target for _, target in assembler.fixups}
+        self.assertIn(runtime.STDOUT_HANDLE_LABEL, referenced,
+                      "the flush fetches or reuses the cached stdout handle")
+        self.assertIn(iat_label("WriteFile"), referenced,
+                      "the flush drains the buffer with WriteFile")
 
 if __name__ == "__main__":
     unittest.main()

@@ -153,6 +153,8 @@ code generation never sees a `for`.
 | `exit(code)` | Stops the machine at once with process exit code `code`; usable only as its own statement, exactly like a `return` (`E3013` anywhere else); nothing after it runs |
 | `str_len(s)` | The byte count of the NUL-terminated literal `s`, terminator excluded |
 | `str_byte(s, j)` | The byte at `j`, or `-1` at or past the NUL terminator, or for a negative `j` |
+| Output buffering | Every printer appends to one shared 64 KiB stdout buffer, drained at once when it fills, when `exit(code)` runs and when `main` returns; inter-source byte order is preserved either way |
+| `flush()` | Writes out everything the shared buffer holds through one `WriteFile` and answers how many bytes went out; `0` on an empty buffer |
 | Right shift | Arithmetic (`>>` keeps the sign); shift counts mask to 63 in folding and hardware |
 | Uninitialised reads | Impossible: initializers are mandatory and every frame slot is zeroed on entry |
 | Branch never taken | A binding declared inside it reads as `0` |
@@ -197,6 +199,7 @@ prints one. (Divergence from Alloy SPEC §§9–10, recorded deliberately.)
   - `exit(code: i64)` — stops the process with process exit code `code`; statement-only (`E3013`).
   - `str_len(s: i64) -> i64` — NUL-terminated byte count.
   - `str_byte(s: i64, j: i64) -> i64` — byte `j`, `-1` at or past the terminator.
+  - `flush() -> i64` — drains the shared stdout buffer with one `WriteFile`; answers the byte count.
 - Comments: `//` to end of line.
 - Limits: 8 parameters (the first four in registers, the rest in the caller's outgoing
   stack area); `i64` range `-9223372036854775808..9223372036854775807`; ASCII identifiers,

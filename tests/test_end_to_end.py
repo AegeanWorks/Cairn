@@ -1381,3 +1381,46 @@ class StringBuiltinsTest(EndToEndTest):
             " check(str_byte(\"abc\", 2), 99); check(str_len(\"abc\"), 9); return 0; }")
         self.assertEqual(completed.returncode, 1)
         self.assertEqual(completed.stdout, "fail\n")
+
+
+@WINDOWS_ONLY
+class StdoutBufferTest(EndToEndTest):
+    """The shared stdout buffer changes the syscall count, never the bytes.
+
+    print, print_char, print_hex and print_str append to one 64 KiB buffer that
+    WriteFile drains when it fills, on exit(code) and at normal termination;
+    flush() drains it early and answers how many bytes went out. The tests pin
+    the exact byte stream the buffer must preserve.
+    """
+
+    def test_exit_flushes_the_shared_buffer(self) -> None:
+        completed = self.execute("fn main() -> i64 { print(7); exit(0); return 0; }")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "7\n")
+
+    def test_flush_returns_the_pending_byte_count(self) -> None:
+        completed = self.execute(
+            'fn main() -> i64 { print_str("abc"); print(flush()); return 0; }')
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "abc3\n")
+
+    def test_a_fresh_buffer_flushes_zero_bytes(self) -> None:
+        completed = self.execute("fn main() -> i64 { print(flush()); return 0; }")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "0\n")
+
+    def test_flush_keeps_the_stream_in_order(self) -> None:
+        completed = self.execute(
+            'fn main() -> i64 { print_char(65); print_hex(255); print_str("zz");'
+            " print(flush()); return 0; }")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "Affzz5\n")
+
+    def test_two_hundred_kib_of_print_char_survive_the_buffer(self) -> None:
+        source = ("fn main() -> i64 { var i: i64 = 0;"
+                  " while i < 200000 { print_char(97); i = i + 1; }"
+                  " exit(0); return 0; }")
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "a" * 200000)
+
