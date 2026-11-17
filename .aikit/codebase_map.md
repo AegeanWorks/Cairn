@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `148`
+- **Total Classes**: `149`
 - **Total Top-Level Functions**: `176`
-- **Total Class Methods**: `804`
-- **Total Source Lines**: `14988`
+- **Total Class Methods**: `807`
+- **Total Source Lines**: `15084`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3659` lines (`185148` bytes)
+**Size**: `3714` lines (`187892` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -146,8 +146,9 @@
   - Method `._save_homes()` - *Keep the caller's values for every callee-saved register this function uses.*
   - Method `._restore_homes()` - *Put the caller's values back before returning.*
   - Method `._clear_frame(function)` - *Clear every slot so a binding declared in a branch that never ran reads as zero.*
-  - Method `._home_slots(function)` - *The slots that keep a register home, in register order.*
+  - Method `._home_slots(function, limit)` - *The slots that keep a register home, in register order.*
   - Method `._home(slot)` - *The register that holds `slot`, or None when the slot stays in the frame.*
+  - Method `._temp_pool()` - *The spare registers a left operand may hold across a nested expression.*
   - Method `._emit_loop_head(label)` - *Pad onto a 16-byte boundary, then bind the loop's backedge target.*
   - Method `._load_slot(slot, destination)` - *Move one slot into `destination` from its register or its frame slot.*
   - Method `._store_slot(slot, source)` - *Write `source` into one slot's register or frame slot.*
@@ -837,7 +838,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1917` lines (`93884` bytes)
+**Size**: `1958` lines (`96236` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1038,6 +1039,9 @@
   - Method `.test_a_negative_divisor_keeps_both_guards()`
 - `class HomeSumLeaTest` - *`a + b` with both names homed is one lea, not a load plus an add.*
   - Method `.test_a_two_home_sum_is_one_lea_with_no_add()`
+- `class ExtraHomeFrameTest` - *A frame function grants its seventh and eighth hot slots r10/r11.*
+  - Method `.test_a_call_site_pushes_and_pops_the_extra_homes()`
+  - Method `.test_str_byte_inline_bails_when_r10_is_a_home()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*

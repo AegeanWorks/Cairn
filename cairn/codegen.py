@@ -70,6 +70,9 @@ SCRATCH = "rsi"
 # Callee-saved registers that can hold a function's slots, in allocation order. `rsi` is the
 # division scratch and `rbp` is the frame pointer, so neither can be a home.
 HOME_REGISTERS = ("rbx", "r12", "r13", "r14", "r15", "rdi")
+# Frame functions may borrow these caller-saved registers as seventh/eighth homes. Every
+# machine call clobbers them, so `_emit_call_site` push/pops them around each call.
+EXTRA_HOME_REGISTERS = ("r10", "r11")
 ZERO_EXTEND_MASKS = {255: 8, 65535: 16}
 
 
@@ -180,6 +183,9 @@ class CodeGenerator:
     continue_targets: List[str] = field(default_factory=list)
     counter: int = 0
     homes: Tuple[str, ...] = ()
+    # Caller-saved registers borrowed as homes beyond HOME_REGISTERS (frame functions
+    # only): they survive every call only because the call sites push/pop them.
+    extra_homes: Tuple[str, ...] = ()
     # Which slots keep a register home, per live function context (the function, a
     # foreign copy's guest, or a self-call's shadow): slot -> register. `homes` stays
     # the ordered register list the save area and the plans iterate; `_home` reads
@@ -260,9 +266,16 @@ class CodeGenerator:
         Every `return` jumps to the single epilogue, so a home is restored on every path out.
         """
         asm = self.assembler
-        homed = self._home_slots(function)
+        ranked = self._home_slots(function,
+                                  len(HOME_REGISTERS) + len(EXTRA_HOME_REGISTERS))
+        homed = ranked[:len(HOME_REGISTERS)]
         self.homes = HOME_REGISTERS[:len(homed)]
+        extra_slots = ranked[len(HOME_REGISTERS):]
+        self.extra_homes = EXTRA_HOME_REGISTERS[:len(extra_slots)]
+        # Only frame functions can have spare slots: the frameless prologue needs
+        # slots <= len(HOME_REGISTERS), so every extra slot here is a frame slot.
         self.home_of = dict(zip(homed, self.homes))
+        self.home_of.update(zip(extra_slots, self.extra_homes))
         self.save_base = function.slots
         self.epilogue = f"{function_label(function.name)}.epilogue"
         frame = align16((function.slots + len(self.homes)) * 8)
@@ -430,7 +443,8 @@ class CodeGenerator:
             if slot >= len(function.parameters) and slot not in assigned:
                 asm.xor_zero(home)
 
-    def _home_slots(self, function: syntax.Function) -> list:
+    def _home_slots(self, function: syntax.Function,
+                    limit: Optional[int] = None) -> list:
         """The slots that keep a register home, in register order.
 
         Functions whose slots all fit keep declaration order — the leaf shapes are
@@ -440,8 +454,9 @@ class CodeGenerator:
         inner loop's working set beats an outer loop's re-initialized bindings.
         A parameter can lose its home this way; its store drops to the frame.
         """
+        limit = len(HOME_REGISTERS) if limit is None else limit
         if function.slots <= len(HOME_REGISTERS):
-            return list(range(function.slots))
+            return list(range(function.slots))[:limit]
         ranks: dict = {}
 
         def touch(slot, depth):
@@ -486,7 +501,7 @@ class CodeGenerator:
         rank_block(function.body, 0)
         ranked = sorted(range(function.slots),
                         key=lambda slot: (-ranks.get(slot, 0), -slot))
-        return ranked[:len(HOME_REGISTERS)]
+        return ranked[:limit]
 
     def _home(self, slot: int) -> Optional[str]:
         """The register that holds `slot`, or None when the slot stays in the frame.
@@ -498,6 +513,16 @@ class CodeGenerator:
         if self.copy_alias and slot in self.copy_alias:
             return self.copy_alias[slot]
         return self.home_of.get(slot)
+
+    def _temp_pool(self) -> Tuple[str, ...]:
+        """The spare registers a left operand may hold across a nested expression.
+
+        An extra home made r10/r11 live across the whole function, so the pool
+        shrinks by whatever the frame function borrowed; a call-free right operand
+        still cannot land in a register the home slots read.
+        """
+        return tuple(register for register in TEMPORARY_REGISTERS
+                     if register not in self.extra_homes)
 
     def _emit_loop_head(self, label: str) -> None:
         """Pad onto a 16-byte boundary, then bind the loop's backedge target.
@@ -2116,12 +2141,13 @@ class CodeGenerator:
         """
         asm = self.assembler
         self.left_hold = None
-        if self.temporaries < len(TEMPORARY_REGISTERS) and not has_call(right):
+        pool = self._temp_pool()
+        if self.temporaries < len(pool) and not has_call(right):
             if is_leaf(right):
                 self._emit_into(left, "rcx")
                 self._emit_expression(right)
             else:
-                temporary = TEMPORARY_REGISTERS[self.temporaries]
+                temporary = pool[self.temporaries]
                 self._emit_into(left, temporary)
                 self.temporaries += 1
                 self._emit_expression(right)
@@ -2449,7 +2475,8 @@ class CodeGenerator:
             # argument stays in r10 across the leaf load; complex arguments or a
             # nested call fall back to the runtime helper below.
             if (self.temporaries == 0 and not has_call(expression.arguments[0])
-                    and is_leaf(expression.arguments[1])):
+                    and is_leaf(expression.arguments[1])
+                    and "r10" not in self.extra_homes):
                 miss = self._fresh("str_byte.inline.miss")
                 done = self._fresh("str_byte.inline.done")
                 self._emit_expression(expression.arguments[0])
@@ -2527,7 +2554,11 @@ class CodeGenerator:
             self._emit_inlined_self_call(expression)
             return
         if (len(expression.arguments) > len(ARGUMENT_REGISTERS)
-                and self._foreign_inline_target(expression) is None):
+                and (self._foreign_inline_target(expression) is None
+                     or len(expression.arguments) - len(ARGUMENT_REGISTERS)
+                     > len(self._temp_pool()))):
+            # With the temp pool shrunken by extra homes, a parked copy with no
+            # spare registry slot cannot bind its overflow arguments at all.
             self._emit_stack_call(expression)
             return
         self._emit_foreign_call(expression, copy_home)
@@ -2615,6 +2646,7 @@ class CodeGenerator:
         """
         asm = self.assembler
         arguments = expression.arguments
+        pool = self._temp_pool()
         spare = [index for index in range(len(ARGUMENT_REGISTERS), len(arguments))
                  if index < len(guest) and guest[index] not in self.homes]
         registers: list = list(ARGUMENT_REGISTERS)
@@ -2625,7 +2657,7 @@ class CodeGenerator:
                 registers.append(guest[index])
                 bound.add(index)
             else:
-                registers.append(TEMPORARY_REGISTERS[next_temporary])
+                registers.append(pool[next_temporary])
                 next_temporary += 1
         if all(not has_call(argument) and not self._contains_division(argument)
                for argument in arguments):
@@ -2725,6 +2757,10 @@ class CodeGenerator:
         asm = self.assembler
         arguments = expression.arguments
         stack_count = len(arguments) - len(ARGUMENT_REGISTERS)
+        # The single call here clobbers r10/r11 like any call site would.
+        for register in self.extra_homes:
+            asm.push(register)
+            self.depth += 8
         reserve = 8 * stack_count + (8 if (self.depth + 8 * stack_count) % 16 else 0)
         asm.sub_rsp(reserve)
         self.depth += reserve
@@ -2743,6 +2779,9 @@ class CodeGenerator:
         asm.call(function_label(expression.name))
         asm.add_rsp(reserve)
         self.depth -= reserve
+        for register in reversed(self.extra_homes):
+            self.depth -= 8
+            asm.pop(register)
 
     def _is_pure_argument(self, expression: Optional[syntax.Expr]) -> bool:
         """Whether an argument can bind straight into its ABI register.
@@ -3250,7 +3289,7 @@ class CodeGenerator:
             return None
         if (len(expression.arguments) != len(function.parameters)
                 or not (0 < len(expression.arguments)
-                        <= len(ARGUMENT_REGISTERS) + len(TEMPORARY_REGISTERS))
+                        <= len(ARGUMENT_REGISTERS) + len(self._temp_pool()))
                 or function.slots > len(HOME_REGISTERS)):
             return None
         if not self._body_is_copy_free(function.body):
@@ -3489,7 +3528,7 @@ class CodeGenerator:
             if (index not in self.copy_alias and index not in bound
                     and index not in self.shift_through):
                 asm.mov_reg_reg(self.home_of[index],
-                                TEMPORARY_REGISTERS[index - len(ARGUMENT_REGISTERS)])
+                                self._temp_pool()[index - len(ARGUMENT_REGISTERS)])
         for index in range(parameters, callee.slots):
             if not self._cleared_before_use(callee.body, index):
                 asm.xor_zero(self.home_of[index])
@@ -3633,21 +3672,37 @@ class CodeGenerator:
 
     def _emit_call_site(self, target: str) -> None:
         """A call, padded so rsp is 16-byte aligned as the ABI requires."""
+        asm = self.assembler
+        # An extra home is caller-saved: every machine call clobbers r10/r11, so
+        # the borrowed values cross each call on the stack.
+        for register in self.extra_homes:
+            asm.push(register)
+            self.depth += 8
         padding = 8 if self.depth % 16 else 0
         if padding:
             self.assembler.sub_rsp(padding)
         self.assembler.call(target)
         if padding:
             self.assembler.add_rsp(padding)
+        for register in reversed(self.extra_homes):
+            self.depth -= 8
+            asm.pop(register)
 
     def _emit_direct_indirect_call(self, import_name: str) -> None:
         """An indirect call through the IAT, padded like `_emit_call_site`."""
+        asm = self.assembler
+        for register in self.extra_homes:
+            asm.push(register)
+            self.depth += 8
         padding = 8 if self.depth % 16 else 0
         if padding:
             self.assembler.sub_rsp(padding)
         self.assembler.call_indirect(iat_label(import_name))
         if padding:
             self.assembler.add_rsp(padding)
+        for register in reversed(self.extra_homes):
+            self.depth -= 8
+            asm.pop(register)
 
 
 def generate(program: syntax.Program) -> Artifact:
