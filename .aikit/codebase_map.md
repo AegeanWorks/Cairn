@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `147`
+- **Total Classes**: `148`
 - **Total Top-Level Functions**: `176`
-- **Total Class Methods**: `802`
-- **Total Source Lines**: `14938`
+- **Total Class Methods**: `804`
+- **Total Source Lines**: `14988`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3632` lines (`183843` bytes)
+**Size**: `3659` lines (`185148` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -200,6 +200,7 @@
   - Method `._emit_magic_division(expression)` - *Lower `x / d` or `x % d` for a positive literal `d` as a magic multiply.*
   - Method `._scaled_sum_terms(expression)` - *The scaled-item pattern of a `+` expression: `(Name, scale_log2, addend, with_base)`.*
   - Method `._emit_scaled_sum(expression)` - *Lower `c1 + k*c2` (either operand order) as one scaled `lea`; True when emitted.*
+  - Method `._emit_home_sum(expression)` - *Lower `a + b` with both names homed as one `lea rax, [a + b]`; True when emitted.*
   - Method `._emit_division(operator, nonnegative_divisor)` - *Signed division with an explicit zero-divisor trap, quotient or remainder.*
   - Method `._emit_and(expression)` - *`&&`: the right side is evaluated only when the left side is non-zero.*
   - Method `._emit_or(expression)` - *`||`: the right side is evaluated only when the left side is zero.*
@@ -836,7 +837,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1894` lines (`92724` bytes)
+**Size**: `1917` lines (`93884` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1035,6 +1036,8 @@
 - `class DivisorNoOverflowGuardTest` - *A proven non-negative divisor skips idiv's minus-one overflow guards.*
   - Method `.test_a_nonnegative_divisor_keeps_only_the_zero_trap()`
   - Method `.test_a_negative_divisor_keeps_both_guards()`
+- `class HomeSumLeaTest` - *`a + b` with both names homed is one lea, not a load plus an add.*
+  - Method `.test_a_two_home_sum_is_one_lea_with_no_add()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*

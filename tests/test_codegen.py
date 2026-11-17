@@ -711,6 +711,7 @@ pop_rcx = b"\x59"
 pop_rdx = b"\x5a"
 call_op = b"\xe8"
 lea_rcx = b"\x48\x8d\x4b\xff"  # lea rcx, [rbx-1]
+lea_rax_rbx_r12 = b"\x4a\x8d\x44\x21\x00"  # lea rax, [rcx + r12*1]
 mov_rdx_r12 = b"\x4c\x89\xe2"  # mov rdx, r12
 mov_rax_r12 = b"\x4c\x89\xe0"  # mov rax, r12
 mov_rdx_rbx = b"\x48\x89\xda"  # mov rdx, rbx
@@ -742,8 +743,8 @@ class MultiArgumentCallTest(unittest.TestCase):
         body = body_text(TWO_ARG_CALL, "f")
         self.assertIn(lea_rcx, body)
         self.assertNotIn(mov_rdx_r12, body)  # d aliases its home: no bind
-        self.assertIn(mov_rax_r12, body)  # the copy reads d's home r12
-        self.assertIn(add_rax_rcx, body)
+        self.assertIn(lea_rax_rbx_r12, body)  # the sum is one lea over both homes
+        self.assertNotIn(add_rax_rcx, body)
         self.assertNotIn(push_rax, body)  # f's only pushes are prologue home saves
         self.assertNotIn(pop_rcx, body)
         self.assertNotIn(movabs_one, body)  # no 10-byte movabs for a small literal
@@ -1146,6 +1147,7 @@ pop_rcx = b"\x59"
 pop_rdx = b"\x5a"
 call_op = b"\xe8"
 lea_rcx = b"\x48\x8d\x4b\xff"  # lea rcx, [rbx-1]
+lea_rax_rbx_r12 = b"\x4a\x8d\x44\x21\x00"  # lea rax, [rcx + r12*1]
 mov_rdx_r12 = b"\x4c\x89\xe2"  # mov rdx, r12
 mov_rax_r12 = b"\x4c\x89\xe0"  # mov rax, r12
 mov_rdx_rbx = b"\x48\x89\xda"  # mov rdx, rbx
@@ -1280,8 +1282,10 @@ class CommutativeHomePeepholeTest(unittest.TestCase):
         blob = region_bytes(
             "fn probe(a: i64, b: i64) -> i64 { return a + b; }"
             " fn main() -> i64 { return probe(15, 3); }", "probe")
-        self.assertIn(add_rax_rbx, blob)          # add rax, rbx
-        self.assertNotIn(add_rax_rcx, blob)       # no via-rcx form
+        self.assertTrue(any(blob[i] in range(0x48, 0x50) and blob[i + 1] == 0x8d
+                            for i in range(len(blob) - 1)),
+                        "a two-home sum must be one lea over both homes")
+        self.assertNotIn(and_rax_rcx, blob)       # no via-rcx form
         self.assertNotIn(mov_rcx_rbx, blob)       # no left-operand copy into rcx
 
     def test_a_zero_branch_after_an_and_skips_the_redundant_compare(self) -> None:
@@ -1892,3 +1896,22 @@ class DivisorNoOverflowGuardTest(unittest.TestCase):
             "fn main() -> i64 { print(probe(30)); return 0; }", "probe")
         self.assertIn(b"\x48\x83\xf8\xff", body,
                       "cmp rax, -1 must stay for an unchecked divisor")
+
+
+class HomeSumLeaTest(unittest.TestCase):
+    """`a + b` with both names homed is one lea, not a load plus an add.
+
+    The mandelbrot escape guard computes `x2 + y2` every iteration, and every
+    register-bound loop sums values; the general path pays a move plus an add
+    where `lea rax, [home + home]` reads both homes in one instruction.
+    """
+
+    SUM = ("fn probe(a: i64, b: i64) -> i64 { return a + b; }"
+           "fn main() -> i64 { print(probe(2, 3)); return 0; }")
+
+    def test_a_two_home_sum_is_one_lea_with_no_add(self) -> None:
+        body = body_text(self.SUM, "probe")
+        self.assertTrue(any(body[i] in range(0x48, 0x50) and body[i + 1] == 0x8d
+                            for i in range(len(body) - 1)),
+                        "the sum must use a lea")
+        self.assertNotIn(b"\x48\x01", body, "no add when both homes exist")

@@ -2011,6 +2011,8 @@ class CodeGenerator:
             return
         if expression.op == "+" and self._emit_scaled_sum(expression):
             return
+        if expression.op == "+" and self._emit_home_sum(expression):
+            return
         if expression.op == "*" and self._emit_scaled_product(expression):
             return
         if (expression.op == "*" and isinstance(right, syntax.IntLiteral)
@@ -2309,6 +2311,31 @@ class CodeGenerator:
             asm.lea_scale("rax", home, home, scale_log2, addend)
         else:
             asm.lea_index("rax", home, scale_log2, addend)
+        return True
+
+    def _emit_home_sum(self, expression: syntax.Binary) -> bool:
+        """Lower `a + b` with both names homed as one `lea rax, [a + b]`; True when emitted.
+
+        The sum of the two home registers needs no intermediate: the general path pays
+        a move into rax plus an add, and every register-bound loop sums values. `lea`
+        wraps at 64 bits exactly like the add and sets no flags, so a consumer that
+        read the add's zero flag still sees its own compare.
+        """
+        left = expression.left
+        right = expression.right
+        while isinstance(left, syntax.Parens):
+            left = left.inner
+        while isinstance(right, syntax.Parens):
+            right = right.inner
+        if (not isinstance(left, syntax.Name) or not isinstance(right, syntax.Name)
+                or (left.slot == self.delta_slot and self.delta_value)
+                or (right.slot == self.delta_slot and self.delta_value)):
+            return False
+        left_home = self._home(left.slot)
+        right_home = self._home(right.slot)
+        if left_home is None or right_home is None:
+            return False
+        self.assembler.lea_scale("rax", left_home, right_home, 0, 0)
         return True
 
     def _emit_division(self, operator: str, nonnegative_divisor: bool = False) -> None:
