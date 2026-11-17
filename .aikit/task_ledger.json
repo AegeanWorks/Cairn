@@ -1,47 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-bgcd-flags",
+    "task_id": "cairn-nonzero-facts",
     "last_phase": "verify",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794919398.3080573,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794928114.5108368,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794919434.5900536,
-    "completed_head": "dc3b72d431a99b985fb686d0e39e545497d114e6",
-    "completed_tree": "4c61a41a9db78162a4360b4a7663f9555dd62bcb"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-loop-speed",
-      "phase": "delivery",
-      "phase_num": 4,
-      "description": "Phase 4: aikit.py check cairn 4/4 gates passed, checklists: passed; suite 1079 OK; gate --save --compare exit 0. Same-window A/B: binary_gcd 192.6->184.1 (-4.4%), primes 22.4->21.7 (-3.4%); interim ackermann/tak flags proven noise (-0.2% A/B, byte-identical tak code). Ready to commit as feat [milestone 4/4].",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794896126.5715895,
-      "timestamp_str": "2026-11-17 09:15:26",
-      "agent": "mistral:vibe"
-    },
-    {
-      "task_id": "cairn-loop-speed",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-loop-speed' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794896185.2185497,
-      "timestamp_str": "2026-11-17 09:16:25",
-      "agent": "mistral:vibe",
-      "head": "f883097c5017116324ac94d14a884755caa52428",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-sum-speed",
       "phase": "planning",
@@ -316,6 +285,35 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-nonzero-facts",
+      "phase": "plan",
+      "phase_num": 2,
+      "description": "[1/1] plan: record the non-negative fact on xor-zero stores so scan loops lose the index sign guard",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794927366.3685355,
+      "timestamp_str": "2026-11-17 17:56:06",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "contract: _emit_value's xor-zero fast path records slot in nonnegative_slots (zero is non-negative) alongside the existing IntLiteral >= 0 path, delta-slot copies stay excluded; dependency: no machine.py change, only the fact set discipline in codegen; concurrency: single-threaded session; state: codegen.py one path plus failing-first shape test, gate history refresh after",
+        "benefits": "contract: str_byte and arg_byte inlines skip the sign test of an index proven non-negative (j = 0 then j = j + 1 loops), str_scan drops two of nine per-byte instructions; dependency: identical inline selection conditions otherwise; concurrency: none; state: str_scan expected -4 to -8 percent, argv_walk and char_stream possible small gains, everything else in noise",
+        "risks": "contract: a wrongly recorded fact would let a negative index reach movzbl address math; dependency: the fact is only for the literal zero store, the store cannot make the register negative; concurrency: none; state: misaddressed loads or lost fact benefits going unnoticed",
+        "mitigation": "contract: fact gated on IntLiteral value 0 and not the delta view, exactly like the existing literal >= 0 add at the general store; dependency: shape test asserts the folded movzbl plus the js absence and a signed-index control keeps the js; concurrency: none; state: full 3,700 test suite plus high-priority gate with byte-identical outputs before commit"
+      },
+      "plan_digest": "f04d3a83efb16e8eb236255e43ff51d2e93f04277e75c65cdb4e860fedaa4d8b"
+    },
+    {
+      "task_id": "cairn-nonzero-facts",
+      "phase": "verify",
+      "phase_num": 4,
+      "description": "[1/1] verify: xor-zero nonnegative fact ships in cd93a03; 1101 tests OK; gate run twice (first window showed nqueens/splitmix regressions), clean rerun exit 0 with no regressions; same-window A/B: str_scan 16.12 -> 13.96 best, nqueens and splitmix level, outputs identical; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794928114.5108368,
+      "timestamp_str": "2026-11-17 18:08:34",
+      "agent": "mistral:vibe"
     }
   ]
 }
