@@ -1234,6 +1234,20 @@ class InputSystemTest(EndToEndTest):
         self.assertEqual(without_args.stdout.splitlines(),
                          [str(count) for count in (1, -1, -1, -1, -1, -1)])
 
+    def test_the_first_arg_byte_call_fills_the_cache_without_losing_its_arguments(self) -> None:
+        # The first `arg_byte` call pays the fill, and the fill clobbers the
+        # argument registers; the answer must still come from the call's own
+        # token and byte index, not from the fill's scratch registers.
+        source = ("fn main() -> i64 { print(arg_byte(1, 0));"
+                  " print(arg_byte(0, 0)); return 0; }")
+        executable = self.build(source)
+        completed = subprocess.run([str(executable), "xyz"], capture_output=True,
+                                   timeout=TIMEOUT_SECONDS)
+        completed.stdout = completed.stdout.decode("utf-8", errors="replace")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout.splitlines(),
+                         [str(count) for count in (120, ord(str(executable)[0]))])
+
     def test_a_quoted_argument_keeps_its_inner_space(self) -> None:
         # subprocess re-quotes `just one` to `"just one"` on the real command
         # line; the scanner strips those quotes and keeps the inner space.

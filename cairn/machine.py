@@ -275,6 +275,12 @@ class Assembler:
         self.emit(bytes([_rex(True, dst >> 3, 0, 0), 0x8D, 0x00 | ((dst & 7) << 3) | 5]))
         self.rel32(target)
 
+    def mov_load_rip(self, destination: str, target: str) -> None:
+        """`mov r64, [rip+disp32]`: read a qword of state without an address register."""
+        dst = REGISTERS[destination]
+        self.emit(bytes([_rex(True, dst >> 3, 0, 0), 0x8B, 0x00 | ((dst & 7) << 3) | 5]))
+        self.rel32(target)
+
     def mov_load(self, destination: str, base: str) -> None:
         """`mov r64, [base]`: read a qword through a pointer register."""
         dst, base_code = REGISTERS[destination], REGISTERS[base]

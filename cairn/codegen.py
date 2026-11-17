@@ -20,7 +20,8 @@ from cairn.image import ENTRY_LABEL, Artifact, ReadOnlyData, iat_label
 from cairn.machine import ARGUMENT_REGISTERS, Assembler
 from cairn.optimize import INT64_MIN, has_call, _contains_break_or_continue
 from cairn.image import WritableData
-from cairn.runtime import (ARG_BYTE_LABEL, ARGC_LABEL, DIV_ZERO_LABEL, PRINT_CHAR_LABEL,
+from cairn.runtime import (ARG_BYTE_LABEL, ARGC_LABEL, ARGV_LEN0_LABEL,
+                           ARGV_PTR0_LABEL, DIV_ZERO_LABEL, PRINT_CHAR_LABEL,
                            PRINT_HEX_LABEL, PRINT_LABEL, PRINT_STR_LABEL, READ_CHAR_LABEL,
                            STR_BYTE_LABEL, STR_LEN_LABEL, emit_runtime)
 
@@ -1655,6 +1656,15 @@ class CodeGenerator:
             if terms is not None:
                 operand, _, addend, _ = terms
                 return addend >= 0 and self._is_nonnegative(operand.slot)
+        if isinstance(expr, syntax.Binary) and expr.op == "&":
+            # AND with a positive mask clears the sign bit: the result is
+            # non-negative for every operand sign, no fact on the operand.
+            for side in (expr.left, expr.right):
+                mask = side
+                while isinstance(mask, syntax.Parens):
+                    mask = mask.inner
+                if isinstance(mask, syntax.IntLiteral) and mask.value >= 1:
+                    return True
         return False
 
     def _guard_nonnegative(self, condition: Optional[syntax.Expr]) -> List[int]:
@@ -2440,6 +2450,43 @@ class CodeGenerator:
             self._emit_call_site(READ_CHAR_LABEL)
             return
         if expression.name == "arg_byte":
+            # A literal token 0 (argv[0], the program path) with a leaf index
+            # inlines without any call: the leaf computes its value into rax as
+            # before, so the fast path costs one extra move at most — then the
+            # token's pointer and length ride two rip-relative loads out of the
+            # copies arg_fill makes, the index checks sign and length in
+            # registers, and the byte folds into `movzx eax, [ptr + index]`.
+            # Misses (negative j, j at or past the length, an unfilled table:
+            # len0 is zero until the first fill) pay the runtime helper, which
+            # answers the same -1 wrappers as before — the fast path never
+            # skips its contract, only its call.
+            index = expression.arguments[1]
+            while isinstance(index, syntax.Parens):
+                index = index.inner
+            if (self.temporaries == 0
+                    and isinstance(expression.arguments[0], syntax.IntLiteral)
+                    and expression.arguments[0].value == 0
+                    and not has_call(index)
+                    and "r10" not in self.extra_homes
+                    and "r11" not in self.extra_homes):
+                miss = self._fresh("arg_byte.miss")
+                done = self._fresh("arg_byte.done")
+                self._emit_expression(index)
+                asm.mov_load_rip("r10", ARGV_PTR0_LABEL)
+                asm.mov_load_rip("r11", ARGV_LEN0_LABEL)
+                asm.cmp_reg_reg("rax", "r11")
+                asm.jcc("ge", miss)
+                if not self._expression_nonnegative(index):
+                    asm.test("rax")
+                    asm.jcc("s", miss)
+                asm.movzx_load8_sib("rax", "r10", "rax")
+                asm.jmp(done)
+                asm.label(miss)
+                asm.mov_reg_reg("rdx", "rax")
+                asm.xor_zero("rcx")
+                self._emit_call_site(ARG_BYTE_LABEL)
+                asm.label(done)
+                return
             self._emit_expression(expression.arguments[0])
             asm.push("rax")
             self.depth += 8

@@ -24,6 +24,8 @@ STR_BYTE_LABEL = "cairn.runtime.str_byte"
 ARG_FILL_LABEL = "cairn.runtime.arg_fill"
 ARGV_CACHE_LABEL = "cairn.runtime.argv_cache"
 ARGV_ARENA_LABEL = "cairn.runtime.argv_arena"
+ARGV_PTR0_LABEL = "cairn.runtime.argv_ptr0"
+ARGV_LEN0_LABEL = "cairn.runtime.argv_len0"
 STDIN_BUFFER_LABEL = "cairn.runtime.stdin_buffer"
 STDIN_CURSOR_LABEL = "cairn.runtime.stdin_cursor"
 STDIN_COUNT_LABEL = "cairn.runtime.stdin_count"
@@ -153,6 +155,17 @@ def emit_arg_fill(assembler: Assembler) -> None:
     asm.store_qword("r10", "rax")            # the flag: the table is complete
     asm.lea_imm("r9", "r10", 8)
     asm.store_qword("r9", "r11")
+    # Copy slot 0 out for the call-site arg_byte(0, j) inline: an unfilled or
+    # empty table leaves both qwords zero, so the inline's length check misses
+    # to the helper, which fills first and answers on its own contract.
+    asm.lea_imm("r9", "r10", 16)
+    asm.mov_load("rax", "r9")
+    asm.lea_rip("r8", ARGV_PTR0_LABEL)
+    asm.store_qword("r8", "rax")
+    asm.lea_imm("r9", "r9", 8)
+    asm.mov_load("rax", "r9")
+    asm.lea_rip("r8", ARGV_LEN0_LABEL)
+    asm.store_qword("r8", "rax")
     asm.pop("rbx")
     asm.label("arg_fill.done")
     asm.add_rsp(SHELL_FRAME)
@@ -200,7 +213,14 @@ def emit_arg_byte(assembler: Assembler) -> None:
     asm.jcc("s", "arg_byte.miss")            # arg_fill clobbers rcx/rdx, so the
     asm.test("rdx")                          # index checks run before any fill
     asm.jcc("s", "arg_byte.miss")
+    # The fill walks rcx and squats rdx: both answers pass through the call's
+    # own values, so they cross the fill on the stack (two pushes keep the
+    # rsp distance a multiple of 16 at the call into arg_fill).
+    asm.push("rcx")
+    asm.push("rdx")
     asm.call(ARG_FILL_LABEL)
+    asm.pop("rdx")
+    asm.pop("rcx")
     asm.lea_rip("r10", ARGV_CACHE_LABEL)
     asm.label("arg_byte.ready")
     asm.lea_imm("r9", "r10", 8)
@@ -512,6 +532,12 @@ def emit_runtime(assembler: Assembler, rodata: ReadOnlyData,
     writable.reserve(STDIN_BUFFER_LABEL, STDIN_BUFFER_SIZE)
     writable.reserve(STDIN_CURSOR_LABEL, 8)
     writable.reserve(STDIN_COUNT_LABEL, 8)
+    # Slot 0's pointer and length copied out at fill time, so the literal-token
+    # call-site inline (arg_byte(0, j)) reads them with plain rip-relative loads.
+    # Appended last on purpose: earlier labels keep their image offsets, so no
+    # existing hot layout shifts because of the two extra qwords.
+    writable.reserve(ARGV_PTR0_LABEL, 8)
+    writable.reserve(ARGV_LEN0_LABEL, 8)
     emit_print_i64(assembler)
     emit_print_char(assembler)
     emit_print_hex(assembler)
@@ -527,7 +553,8 @@ def emit_runtime(assembler: Assembler, rodata: ReadOnlyData,
 
 __all__ = [
     "ARGC_LABEL", "ARG_BYTE_LABEL", "ARG_FILL_LABEL", "ARGV_ARENA_LABEL",
-    "ARGV_CACHE_LABEL", "DIV_ZERO_DATA_LABEL", "DIV_ZERO_LABEL", "DIV_ZERO_MESSAGE",
+    "ARGV_CACHE_LABEL", "ARGV_LEN0_LABEL", "ARGV_PTR0_LABEL",
+    "DIV_ZERO_DATA_LABEL", "DIV_ZERO_LABEL", "DIV_ZERO_MESSAGE",
     "NEWLINE_LABEL", "PRINT_CHAR_LABEL", "PRINT_HEX_LABEL", "PRINT_LABEL",
     "PRINT_STR_LABEL", "READ_CHAR_LABEL", "STDIN_BUFFER_LABEL", "STDIN_COUNT_LABEL",
     "STDIN_CURSOR_LABEL", "STR_BYTE_LABEL", "STR_LEN_LABEL",

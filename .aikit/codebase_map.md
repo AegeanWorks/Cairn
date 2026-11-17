@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `150`
+- **Total Classes**: `151`
 - **Total Top-Level Functions**: `176`
-- **Total Class Methods**: `811`
-- **Total Source Lines**: `15175`
+- **Total Class Methods**: `817`
+- **Total Source Lines**: `15318`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3741` lines (`189358` bytes)
+**Size**: `3788` lines (`191912` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -385,7 +385,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `546` lines (`25710` bytes)
+**Size**: `552` lines (`26022` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -416,6 +416,7 @@
   - Method `.mov_load_rsp_disp(offset, destination)` - *`mov r64, [rsp+disp8]`: a load from one of the real frame's hold slots.*
   - Method `.lea_rbp(destination, offset)` - *`lea r64, [rbp+disp]` for a frame address.*
   - Method `.lea_rip(destination, target)` - *`lea r64, [rip+disp32]`, used for read-only data addresses.*
+  - Method `.mov_load_rip(destination, target)` - *`mov r64, [rip+disp32]`: read a qword of state without an address register.*
   - Method `.mov_load(destination, base)` - *`mov r64, [base]`: read a qword through a pointer register.*
   - Method `.movzx_load8(destination, base)` - *`movzx r32, [base]`: read the byte at a pointer register, zero-extended.*
   - Method `.movzx_load8_sib(destination, base, index)` - *`movzx r32, [base + index]`: one byte load off two pointer registers.*
@@ -571,7 +572,7 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `537` lines (`20830` bytes)
+**Size**: `564` lines (`22141` bytes)
 
 **Functions:**
 - `def emit_arg_fill(assembler)` - *Emit `arg_fill`: tokenize the ANSI command line into the static table once.*
@@ -839,7 +840,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2005` lines (`98357` bytes)
+**Size**: `2054` lines (`101140` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1047,6 +1048,11 @@
   - Method `.test_the_byte_load_folds_into_one_sib_movzx()`
   - Method `.test_the_pointer_never_hops_through_rax()`
   - Method `.test_an_unproven_index_keeps_the_sign_test()`
+- `class ArgByteInlineTest` - *arg_byte(0, j) loads its cache slot rip-relative right at the call site.*
+  - Method `.test_the_slot0_blob_binds_rip_relative()`
+  - Method `.test_the_byte_loads_off_the_loaded_pointer()`
+  - Method `.test_a_masked_index_drops_the_sign_test()`
+  - Method `.test_a_negative_index_never_leaves_the_table()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
@@ -1068,7 +1074,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1355` lines (`50636` bytes)
+**Size**: `1369` lines (`51527` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1176,6 +1182,7 @@
 - `class InputSystemTest` - *The input builtins: argv walks the ANSI command line, stdin streams bytes.*
   - Method `.run_with(source, *, arguments, stdin)` - *Run the compiled program with extra arguments and optional stdin bytes.*
   - Method `.test_argc_counts_the_program_and_its_arguments()`
+  - Method `.test_the_first_arg_byte_call_fills_the_cache_without_losing_its_arguments()`
   - Method `.test_a_quoted_argument_keeps_its_inner_space()`
   - Method `.test_read_char_streams_stdin_bytes_then_eof()`
   - Method `.test_read_char_without_stdin_reports_eof_at_once()`

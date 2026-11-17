@@ -2003,3 +2003,52 @@ class StrByteSibLoadTest(unittest.TestCase):
         # (test reg, reg + js) before any byte load in that pass.
         self.assertTrue(b"\x78" in body or b"\x0f\x88" in body,
                         "a negative index possibility keeps the sign test")
+class ArgByteInlineTest(unittest.TestCase):
+    """arg_byte(0, j) loads its cache slot rip-relative right at the call site.
+
+    argv_walk pays a call plus twelve helper instructions for every byte of
+    the program path. With a literal token 0 the slot 0 pointer and length
+    bind as static .data loads, the index home checks sign and length in
+    registers, and the byte folds into movzx eax, [r10 + home]. Misses (a
+    negative j, j at or past the length, an unfilled table) call the runtime
+    helper unchanged, and it answers the same -1 wrappers it always did.
+    """
+
+    WALK = ("fn main() -> i64 { var total: i64 = 0; var j: i64 = 0;"
+            " while j < 64 { var c: i64 = arg_byte(0, j);"
+            " if c >= 0 { total = total + c; } j = j + 1; }"
+            " print(total); return 0; }")
+
+    def test_the_slot0_blob_binds_rip_relative(self) -> None:
+        body = region_text(self.WALK, "main")
+        self.assertIn(bytes([0x4C, 0x8B, 0x15]), body,  # mov r10, [rip+disp32]
+                      "the inlined path reads the slot 0 pointer straight from .data")
+        self.assertIn(bytes([0x4C, 0x8B, 0x1D]), body,  # mov r11, [rip+disp32]
+                      "the inlined path reads the token length straight from .data")
+
+    def test_the_byte_loads_off_the_loaded_pointer(self) -> None:
+        body = region_text(self.WALK, "main")
+        self.assertIn(bytes([0x0F, 0xB6]), body,  # movzx eax, byte [r10 + home]
+                      "the byte load folds the loaded pointer and the index home")
+        self.assertIn(bytes([0x0F, 0x8D]), body,  # jge past-end (rel32)
+                      "the length check branches on the register comparison")
+
+    MASKED = ("fn main() -> i64 { var total: i64 = 0; var j: i64 = 0;"
+             " while j < 64 { var c: i64 = arg_byte(0, (j + 5) & 63);"
+             " if c >= 0 { total = total + c; } j = j + 1; }"
+             " print(total); return 0; }")
+
+    def test_a_masked_index_drops_the_sign_test(self) -> None:
+        # (j + 5) & 63 is non-negative for every j - the AND mask clears the
+        # sign bit - so the fast path keeps only the length check.
+        body = region_text(self.MASKED, "main")
+        self.assertNotIn(bytes([0x0F, 0x88]), body,  # js to the miss route
+                         "the masked index cannot go negative, so no sign test")
+        self.assertIn(bytes([0x0F, 0x8D]), body,  # jge past-end (rel32)
+                      "the mask proves nothing about the length, which still checks")
+
+    def test_a_negative_index_never_leaves_the_table(self) -> None:
+        body = region_text(self.WALK, "main")
+        self.assertIn(bytes([0x0F, 0x88]), body,  # js to the miss route (rel32)
+                      "a negative index still answers -1, through the helper call")
+
