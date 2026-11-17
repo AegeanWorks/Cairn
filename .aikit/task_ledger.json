@@ -3,24 +3,17 @@
   "active_task": {
     "task_id": "cairn-argvbyte-inline",
     "last_phase": "verify",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794912499.4873157,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794912608.2543917,
+    "completed_head": "bd6d3f9eda16ea2beec414f0016fe05c9cb11361",
+    "completed_tree": "f4e65aac83275fa04fe056f3f599336186c42b02"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-loop-speed",
-      "phase": "superseded",
-      "phase_num": 2,
-      "description": "Superseded by 'M1 done: direct var-to-var copy lowering (_emit_value loads into the home, kill the rax round trip) - binary_gcd 187->168 ad-hoc, now C parity. M2 done: (a & b) != 0 lowers as test home,home in _emit_comparison_branch - nqueens 23.7->21.1, C parity. Gate exit 0 in a loaded window (many_params/argv_walk inflation is ambient; paths untouched). Suite 1076 OK. Next M3 primes/xorshift, M4 gate on a quiet window.' without --complete or --reset",
-      "status": "superseded",
-      "timestamp": 1794894755.0994506,
-      "timestamp_str": "2026-11-17 08:52:35",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "M1 done: direct var-to-var copy lowering (_emit_value loads into the home, kill the rax round trip) - binary_gcd 187->168 ad-hoc, now C parity. M2 done: (a & b) != 0 lowers as test home,home in _emit_comparison_branch - nqueens 23.7->21.1, C parity. Gate exit 0 in a loaded window (many_params/argv_walk inflation is ambient; paths untouched). Suite 1076 OK. Next M3 primes/xorshift, M4 gate on a quiet window.",
       "phase": "in_progress",
@@ -292,6 +285,23 @@
       "timestamp": 1794912499.4873157,
       "timestamp_str": "2026-11-17 13:48:19",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-argvbyte-inline",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-argvbyte-inline' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794912608.2937293,
+      "timestamp_str": "2026-11-17 13:50:08",
+      "agent": "mistral:vibe",
+      "head": "bd6d3f9eda16ea2beec414f0016fe05c9cb11361",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
