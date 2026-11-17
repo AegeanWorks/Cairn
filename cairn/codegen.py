@@ -1970,6 +1970,12 @@ class CodeGenerator:
                     return
             elif IMMEDIATE_MIN <= right.value <= IMMEDIATE_MAX:
                 # A homed name compares against the literal in place: no rax load needed.
+                # An equality against zero reads the zero flag the last ZF-setting
+                # arithmetic left on this home, so the re-compare is pure waste.
+                if (right.value == 0 and condition in ("e", "ne")
+                        and self.assembler.zf_status == self._home(left.slot)):
+                    asm.jcc(condition, target)
+                    return
                 asm.cmp_imm(self._home(left.slot), right.value)
                 asm.jcc(condition, target)
                 return
@@ -1987,7 +1993,9 @@ class CodeGenerator:
             self._emit_into(expression.left, "rax")
             # The flags already compare rax against zero when the last emitted
             # instruction was an add/or/and/sub/xor whose destination is rax.
-            if right.value != 0 or self.assembler.zf_status != "rax":
+            # Only an equality test reads that summary: jge/jl need SF and OF.
+            if (right.value != 0 or condition not in ("e", "ne")
+                    or self.assembler.zf_status != "rax"):
                 asm.cmp_imm("rax", right.value)
         else:
             self._emit_left_operand(expression.left, expression.right)

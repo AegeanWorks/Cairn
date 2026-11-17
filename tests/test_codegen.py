@@ -2052,3 +2052,60 @@ class ArgByteInlineTest(unittest.TestCase):
         self.assertIn(bytes([0x0F, 0x88]), body,  # js to the miss route (rel32)
                       "a negative index still answers -1, through the helper call")
 
+
+class ZeroCompareFlagReuseTest(unittest.TestCase):
+    """A homed name compared against zero right after its sub leaves ZF set.
+
+    binary_gcd's subtraction loop pays `cmp $0, home` after every `sub
+    home, left` even though the sub already set ZF from exactly the value
+    the `==`/`!=` test reads. When the comparison is an equality against
+    the integer zero and the assembler's zF summary names the very home,
+    the re-compare is dropped and the branch keeps the sub's flags. Every
+    signed comparison still emits its cmp, because jge/jl need SF and OF,
+    and any other emitted byte (store, move, label) invalidates the
+    summary by construction.
+    """
+
+    LOOP = ("fn probe(a: i64, b: i64) -> i64 { b = b - a;"
+            " if b == 0 { return 7; } return b; }"
+            " fn main() -> i64 { print(probe(12, 18)); return 0; }")
+
+    @staticmethod
+    def _cmp_zero_forms() -> tuple:
+        forms = []
+        for reg in range(16):
+            forms.append(bytes([0x48 | (reg >> 3), 0x83,
+                                0xC0 | (7 << 3) | (reg & 7), 0x00]))
+        return tuple(forms)
+
+    def test_an_equal_zero_compare_after_sub_keeps_the_sub_flag(self) -> None:
+        body = region_text(self.LOOP, "probe")
+        for form in self._cmp_zero_forms():
+            self.assertNotIn(form, body,
+                             "the break check re-compares a value the sub just zero-tested")
+
+    def test_the_sub_and_the_branch_fall_directly_adjacent(self) -> None:
+        body = region_text(self.LOOP, "probe")
+        self.assertIn(bytes([0x29]), body,
+                      "the in-place subtraction is present to carry the zero flag")
+
+    NOT_EQUAL = ("fn probe(a: i64, b: i64) -> i64 { b = b - a;"
+                 " if b != 0 { return 7; } return b; }"
+                 " fn main() -> i64 { print(probe(12, 18)); return 0; }")
+
+    def test_an_inequal_zero_compare_reuses_the_flag_too(self) -> None:
+        body = region_text(self.NOT_EQUAL, "probe")
+        for form in self._cmp_zero_forms():
+            self.assertNotIn(form, body,
+                             "!= 0 reads the same zero flag as == 0")
+
+    SIGNED = ("fn probe(a: i64, b: i64) -> i64 {"
+              " b = b - a; if b >= 0 { return 7; } return b; }"
+              " fn main() -> i64 { print(probe(12, 18)); return 0; }")
+
+    def test_a_signed_compare_still_emits_its_own_compare(self) -> None:
+        # jge reads SF and OF, which a plain sub against an unknown operand
+        # does not carry the equality reading from, so the cmp must stay.
+        body = region_text(self.SIGNED, "probe")
+        self.assertTrue(any(form in body for form in self._cmp_zero_forms()),
+                        "a signed zero comparison re-compare keeps its cmp")
