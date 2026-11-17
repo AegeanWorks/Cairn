@@ -6,14 +6,14 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `44`
-- **Total Classes**: `163`
-- **Total Top-Level Functions**: `181`
-- **Total Class Methods**: `860`
-- **Total Source Lines**: `16024`
+- **Total Python Modules**: `46`
+- **Total Classes**: `173`
+- **Total Top-Level Functions**: `186`
+- **Total Class Methods**: `893`
+- **Total Source Lines**: `16833`
 
 ## 🧭 Map Coverage
-- **Indexed**: python (`44` module(s))
+- **Indexed**: python (`46` module(s))
 - **Not indexed by this map**: cpp (`34` file(s)), rust (`17` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
@@ -342,6 +342,52 @@
 
 **Functions:**
 - `def iat_label(function)` - *The linker name of one import address table slot.*
+
+---
+
+### [`cairn/ir.py`](cairn/ir.py)
+> *A deliberately minimal typed SSA IR between the AST and machine code.*
+
+**Size**: `542` lines (`21763` bytes)
+
+**Classes:**
+- `class DivZeroTrap` - *`/ 0` or `i64.min / -1`: the machine's message plus exit code 3.*
+- `class Op` - *One instruction; the last op of every block is always a terminator.*
+- `class Block` - *One basic block: straight-line ops, then exactly one terminator.*
+- `class Function` - *One lowered function: parameter cells in call order, blocks in emit order.*
+- `class Module` - *Every function of one program, callable by name.*
+- `class _Translator` - *AST to IR: expressions become SSA values, control flow becomes blocks.*
+  - Method `.__init__()`
+  - Method `._fresh_value()`
+  - Method `._fresh_cell()`
+  - Method `._fresh_label(prefix)`
+  - Method `.terminates(block)`
+  - Method `.open_block(label)`
+  - Method `.close_with(op)`
+  - Method `.emit_jump_to(target)`
+  - Method `.emit(op)`
+  - Method `.const(value)`
+  - Method `.value_of(expression)` - *Lower one expression, returning the SSA value id holding its result.*
+  - Method `.short_circuit(expression)` - *`&&`/`||` lower to branches across one result cell; unstored is false.*
+  - Method `.lower_function(function)`
+  - Method `.emit_stmt(statement)`
+- `class Interpret` - *Run a translated module at full machine semantics.*
+  - Method `.__init__(stdin)`
+  - Method `.run(module, start)`
+  - Method `._emit(chunk)` - *Append output bytes the way the runtime's buffer boards them.*
+  - Method `._drain()`
+  - Method `._call(module, name, arguments)`
+  - Method `._builtin(module, op, vals)`
+  - Method `._by_label(function, label)`
+- `class _ProcessExit` - *`exit(code)` called from inside a user function: unwinds the whole walk.*
+  - Method `.__init__(code)`
+
+**Functions:**
+- `def to_signed(raw)` - *The wrapped 64-bit pattern `raw` re-read as a signed integer.*
+- `def trunc_divmod(left, right)` - *C semantics: quotient truncates toward zero, remainder keeps the sign.*
+- `def apply_binop(op, left, right)` - *One `i64` binary operation at machine semantics, signed values in and out.*
+- `def translate(program)` - *Lower one optimized program (for-loops already lowered) into a module.*
+- `def encode_number(value)` - *The runtime's decimal form of one signed `i64` (no newline).*
 
 ---
 
@@ -1281,6 +1327,28 @@
 
 **Functions:**
 - `def scripted_session()` - *One deterministic session every exactness test replays.*
+
+---
+
+### [`tests/test_ir.py`](tests/test_ir.py)
+> *SSA IR foundation tests: differential execution and invariants.*
+
+**Size**: `267` lines (`9279` bytes)
+
+**Classes:**
+- `class DifferentialTest` - *Compiled machine behaviour and interpreted IR behaviour must agree.*
+  - Method `.setUp()`
+  - Method `._cleanup()`
+  - Method `._machine_run(source, stdin)`
+  - Method `.test_corpus_machine_and_interpreter_agree()`
+  - Method `.test_interpreted_str_byte_answers_minus_one_past_the_nul()`
+- `class InvariantTest` - *Shape the translator emits before anything runs.*
+  - Method `._translate(source)`
+  - Method `.test_every_block_ends_with_one_terminator()`
+  - Method `.test_single_assignment_per_destination()`
+  - Method `.test_uses_follow_definitions()`
+  - Method `.test_terminator_ops_carry_no_destination()`
+  - Method `.test_values_do_not_exceed_the_function_budget()`
 
 ---
 

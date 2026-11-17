@@ -672,3 +672,56 @@ call takes them directly instead of frame slots. New PE bytes change the
 layout, so sub-4% best-of swings in both directions accompany it; the
 regression rule stays: decide on interleaved best-of/median, never on
 one window.
+## ADR-066: a typed SSA IR substrate, proven by differential execution
+
+Date: task cairn-ir-foundation. Accepted.
+
+Context. The compiler pipeline ran lexer, parser, semantic analysis and
+AST-ish optimisation straight into the x86-64 emitter, so every future
+optimisation pass would need its own AST-pattern recogniser, coupled to the
+emitter. The adopted roadmap named a minimal IR its third milestone, with
+the production pipeline deliberately untouched.
+
+Decision. `cairn/ir.py` holds a deliberately minimal typed SSA IR: i64
+values, single-assignment temporaries, mutable state (locals, parameters,
+short-circuit results) in zero-defaulted cells, and every block ending in
+exactly one terminator (return, exit, jump, branch). `translate(program)`
+lowers the post-optimisation program; `Interpret` executes the module at
+full machine semantics - wrapping arithmetic, truncating division and
+remainder, the divide-by-zero and i64.min/-1 traps (exit 3, pending output
+abandoned), 63-masked shifts, all eleven builtins, and the runtime's shared
+64 KiB stdout buffer with its pending/drain/flush bookkeeping - so
+`Interpret(translate(p)).run()` must answer exactly what the compiled
+executable answers on exit code and stdout bytes. Differential tests
+(tests/test_ir.py) pin 23 corpus cases including buffer spill past 64 KiB,
+mid-run flush answers, stdin reads, trap-pending loss and exit unwinding,
+plus SSA invariant checks (single terminator per block end, single
+assignment per destination, definition before use, no destination beyond
+the value budget).
+
+Two contract findings surfaced and were fixed. (1) The IR translator's
+`||` lowering inverted the truth table - it stored `right == 0` on the gate
+path and left the zero cell for the taken path - observed failing first in
+the differential smoke (interpreter answered 1 where the machine answered
+11) and fixed with an explicit store of 1 on `||`'s short path. The nested
+`_call` ignored the exit kind from the immediate call site, so exit() in
+main kept running; both are covered. (2) SPEC and LLM_SYSTEM promised
+str_byte answers -1 at or past the terminator, but the machine only tests
+the byte at the index itself and returns adjacent rodata bytes beyond the
+NUL (measured 105 for index 9 of 'hello'). Honoring the doc would cost one
+full-length scan per call - a roughly fifty-fold str_scan regression on a
+12.8M-call benchmark. The documented contract now matches the machine
+(C-style NUL-terminated: -1 for negative j or the NUL at j; past-the-end
+reads undefined), the interpreter models the same defined domain, and the
+differential corpus stays within defined behaviour.
+
+Alternatives. LLVM or a mature framework: rejected - the independent
+backend is a project advantage. Scanning per str_byte call: rejected on
+measured cost. Leaving the over-promising doc: rejected - a spec agents
+read must not promise undefined behaviour.
+
+Consequences. The optimizer passes of the next milestone operate on this
+IR, independent of the emitter, with the differential suite as the
+regression shield. Production codegen is unchanged, so no benchmark gate
+was required for this task; full suite grew 1156 to 1163 tests, all green.
+
