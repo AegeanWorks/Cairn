@@ -3,32 +3,17 @@
   "active_task": {
     "task_id": "cairn-stdin-refill",
     "last_phase": "verify",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794934471.5967133,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794934519.225588,
+    "completed_head": "22c51988f8397fd20a53da607ef13d5a0dd6ea7b",
+    "completed_tree": "58ddfcce1c459c0eb8838c81399d9cac17a3db2f"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-leaf-homes",
-      "phase": "plan",
-      "phase_num": 2,
-      "description": "[1/1] plan: two extra homes r10/r11 for frame functions, per-call push/pop, shrunken temp pool, str_byte guard",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794898711.5829976,
-      "timestamp_str": "2026-11-17 09:58:31",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "contract: hot loop variables in frame functions stay register-resident instead of re-loading [rbp-..] each iteration",
-        "benefits": "contract: mandelbrot/primes/xorshift inner loops gain 1-2 extra live registers, targeting 5-8% on mandelbrot",
-        "risks": "contract: r10/r11 are caller-saved so every call clobbers them; dependency: TEMPORARY_REGISTERS pool indexing must shrink or temps clobber homes; concurrency: none, codegen is single-threaded; state: extras must reset per function or stale mappings leak across emits",
-        "mitigation": "contract: extras push/pop inside _emit_call_site and _emit_direct_indirect_call with self.depth tracking keeps rsp 16-byte aligned; dependency: derive temp_pool = TEMPORARY_REGISTERS minus extras and guard str_byte inline r10 scratch; concurrency: none; state: extras derived only when function.slots>6 so the frameless path stays byte-identical; failing-first shape test pins push/pop of r10/r11 around a call"
-      },
-      "plan_digest": "b9144b7916e0e72366e4128c7068d6c6bf5b2e69ac83ee69569c10112c65233d"
-    },
     {
       "task_id": "cairn-leaf-homes",
       "phase": "verify",
@@ -314,6 +299,23 @@
       "timestamp": 1794934471.5967133,
       "timestamp_str": "2026-11-17 19:54:31",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-stdin-refill",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-stdin-refill' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794934519.275164,
+      "timestamp_str": "2026-11-17 19:55:19",
+      "agent": "mistral:vibe",
+      "head": "22c51988f8397fd20a53da607ef13d5a0dd6ea7b",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
