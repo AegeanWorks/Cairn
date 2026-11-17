@@ -554,3 +554,29 @@ and the js route stays on every index whose proof the codegen cannot
 make. Future work recorded: the subtraction-loop top recheck in
 binary_gcd needs a genuine data-flow pass (sar of even nonzero never
 reaches zero), untouched here.
+
+## ADR-062: The stdin handle lives in static state, refills read 64 KiB
+
+Date: closed by task cairn-stdin-refill (9e6df5b). Accepted.
+
+Context. char_stream held a stable ~4 ms gap against its C twin
+(~12 vs 8.10 best). Reading the refill path showed the drained buffer paid
+two syscalls per refill: a `GetStdHandle` fetch and a 4096-byte
+`ReadFile`, so a 4 MiB stream issued 1024 of each.
+
+Decision. One writable qword (reserved last, so no hot layout shifts)
+caches the stdin handle after the first fetch; drained refills load it
+rip-relative and refill from a 64 KiB buffer, cutting a 4 MiB stream to
+16 `ReadFile` calls and one `GetStdHandle`. The per-byte fast path is
+unchanged, per ADR-058. The first A/B exposed a real bug: the cached
+branch jumped to `handle_ok` with the handle only in rax while
+`ReadFile` reads it from rcx; small-stream tests passed on register
+persistence luck. The fix routes both branches with rcx carrying the
+handle, and test_the_handle_cache_survives_many_refills pins it with a
+70 KiB payload crossing the refill boundary.
+
+Consequences. Same-window A/B over three windows: outputs identical
+every window, new best 12.49 -> 11.98 ms, medians never worse; the quiet
+gate window put char_stream at 12.5 ms against C's 8.50. Most of the old
+gap lived in the per-byte loop, not the refill path, so closing the rest
+needs loop work, not more syscall batching.
