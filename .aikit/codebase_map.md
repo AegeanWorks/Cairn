@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `153`
+- **Total Classes**: `154`
 - **Total Top-Level Functions**: `176`
-- **Total Class Methods**: `829`
-- **Total Source Lines**: `15448`
+- **Total Class Methods**: `831`
+- **Total Source Lines**: `15504`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3796` lines (`192415` bytes)
+**Size**: `3800` lines (`192685` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -841,7 +841,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2111` lines (`103895` bytes)
+**Size**: `2163` lines (`106413` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1060,6 +1060,9 @@
   - Method `.test_the_sub_and_the_branch_fall_directly_adjacent()`
   - Method `.test_an_inequal_zero_compare_reuses_the_flag_too()`
   - Method `.test_a_signed_compare_still_emits_its_own_compare()`
+- `class ScanIndexSignGuardTest` - *A zero-initialized loop index never pays the inline's sign test.*
+  - Method `.test_a_zero_initialized_index_skips_the_sign_test()`
+  - Method `.test_an_unproven_index_keeps_the_sign_test()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
