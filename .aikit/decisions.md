@@ -495,3 +495,36 @@ contract, a dependency, a data format or the architecture; IDs are consecutive a
 - **Decision (M2), the bug the work exposed**: the first `arg_byte` call on an unfilled cache answered from garbage - `arg_fill` clobbers rcx (token) and rdx (byte index), and nothing restored them across the fill. The helper now crosses the fill on the stack (two pushes keep the call distance ABI-aligned). Failing-first: the fresh e2e double-print test printed (-1, -1) before, (x, 120) after; the 72-print parity probe differed from the old build only at j = 0, exactly at the fixed call.
 - **Decision verification**: failing-first `ArgByteInlineTest` (four pinned shapes: the two rip-rel slot loads, the folded movzx, the negative-index sign branch, the masked-index drop), 1090 tests OK. Same-window A/B: 22.30 vs 27.49 ms best (-18.9%), median 23.15 vs 29.35 (-21%). Gate `--save --compare` exit 0 at high priority: every case within noise, argv_walk 32.6 -> 20.3 ms (-37.9%) - level with C's 20.1.
 - **Consequences**: argv-table reads stop paying a call per byte whenever the token is the literal 0; other token indexes keep the helper. The AND-mask non-negative fact also arms any future lowering that needs the same proof. Remaining recorded mechanisms: xorshift reassociation (ADR-054), many_params structural folding (staying behind), char_stream (measured level with C on quiet windows, ADR-058).
+## ADR-060: Reuse the subtraction zero flag and canonical multi-byte loop pads
+
+Date: closed by task cairn-bgcd-flags (milestones 1/2 ec37041, 2/2 3f052bd). Accepted.
+
+Context. The binary_gcd twin paid 182.5 ms against C's 166.6 ms best. A
+head-to-head disassembly of both subtraction loops showed, per steady-state
+iteration: a `cmp $0, home` immediately after `sub home, left` (the sub's
+zero flag already answers the break check), and a fall-through alignment
+pad of 6-13 one-byte nops between the odd test and the shift-loop body,
+entered once per subtraction iteration.
+
+Decision. Two isolated codegen mechanisms, each with a failing-first shape
+test and its own semantics slice:
+
+1. Equality tests of a homed name against zero skip `cmp_imm` and branch on
+   the outstanding ZF summary when the assembler's last ZF-setting op
+   (add/or/and/sub/xor, register or immediate forms) targeted exactly that
+   home. The reuse is gated to je/jne: signed comparisons read SF/OF and
+   keep their cmp. Labels and every other emission invalidate the summary.
+   The previously unreachable rax fallback skip gains the same equality
+   guard, closing a latent signed-compare hazard.
+2. `Assembler.nop_pad` composes the canonical nop family (90, 66 90, the
+   0F 1F set, largest form first) instead of one-byte nop trains.
+
+Consequences. binary_gcd measured 160.8 best in the combined high-priority
+gate (ahead of C's 166.6); all other cases within noise, none regressed;
+1099 tests OK; outputs value-identical. The health of the mechanism rests
+on emit() clearing `zf_status` unconditionally: any future assembler method
+that sets a flag without summarizing stays safe, and every flag-summary
+extension must name its clearing discipline (PRINCIPLE-009, PRINCIPLE-003).
+Known shape kept deliberately: the subtraction loop still re-tests `b != 0`
+at the top; removing that recheck requires a nonadjacency data-flow fact
+(sar of an even nonzero value never reaches zero), recorded as future work.
