@@ -1334,6 +1334,16 @@ class StringBuiltinsTest(EndToEndTest):
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "4\ntwin\n")
 
+    def test_str_byte_with_a_calling_index_takes_the_helper_path(self) -> None:
+        # str_len inside the index argument must leave the inline path and still
+        # answer per contract: the last byte of "abc" is 99.
+        completed = self.execute(
+            "fn main() -> i64 { print(str_byte(\"abc\", str_len(\"abc\") - 1));"
+            " print(str_byte(\"abc\", -2));"
+            " print(str_byte(\"abc\", str_len(\"abc\"))); return 0; }")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "99\n-1\n-1\n")
+
     def test_an_assert_helper_prints_and_exits_on_mismatch(self) -> None:
         completed = self.execute(
             "fn check(actual: i64, expected: i64) -> i64 {"

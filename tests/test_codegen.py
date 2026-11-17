@@ -1723,3 +1723,66 @@ class PrologueSlimTest(unittest.TestCase):
         count = sum(blob.count(pattern) for pattern in self.XOR_IDIOMS)
         self.assertEqual(count, 1,
                          "the zero provenance region should carry exactly one xor idiom")
+
+
+class SelectIfOrderTest(unittest.TestCase):
+    """The select lowering keeps its plus candidate off the critical path.
+
+    `t - c` and `t + c` are both one cycle after `t` only when the plus candidate's
+    `lea` reads `t`'s home *before* the flag-setting `sub` rewrites it. A `lea` that
+    sits between the `sub` and the `cmov` chains the select one cycle deeper, which
+    is a whole serial step on every loop that leans on the select.
+    """
+
+    SELECT = ("fn f(a: i64, c: i64) -> i64 {"
+              " var t: i64 = a * 3;"
+              " if t > c { t = t - c; } else { t = t + c; }"
+              " return t; }"
+              "fn main() -> i64 { print(f(7, 3)); return 0; }")
+
+    CMOV_OPCODES = (b"\x0f\x4e", b"\x0f\x4f")
+
+    def test_the_lowering_selects_branchlessly(self) -> None:
+        body = region_text(self.SELECT, "f")
+        self.assertTrue(any(opcode in body for opcode in self.CMOV_OPCODES),
+                        "the select-if shape must lower to a cmov, not a branch")
+
+    def test_no_lea_between_the_flag_setting_sub_and_the_cmov(self) -> None:
+        body = region_text(self.SELECT, "f")
+        cmov = min(body.index(opcode) for opcode in self.CMOV_OPCODES
+                   if opcode in body)
+        sub = body[:cmov].rindex(b"\x29")          # the last sub before the select
+        between = body[sub + 1:cmov]
+        self.assertNotIn(b"\x8d", between,
+                         "the plus candidate must not chain through the sub's result")
+
+
+class StrByteInlineTest(unittest.TestCase):
+    """`str_byte(s, j)` with a leaf index lowers inside the caller, with no call.
+
+    The scan-loop shape pays the runtime helper's call/ret round trip for a byte;
+    the inlined form runs the same sign and NUL tests in place (r10 holds the
+    pointer across the leaf load, rax both the index and the answer), so a data-
+    dependent byte walk loses its two branch-and-link stalls per byte.
+    """
+
+    SOURCE = ('fn main() -> i64 { let s: i64 = "scan me";'
+              " var i: i64 = 0;"
+              " while i < str_len(s) {"
+              " var b: i64 = str_byte(s, i);"
+              " if b >= 0 { i = i + 1; } else { exit(1); } }"
+              " return str_len(s); }")
+
+    def test_a_leaf_index_loads_inside_the_function_body(self) -> None:
+        body = region_text(self.SOURCE, "main")
+        self.assertIn(b"\x0f\xb6", body,
+                      "the byte load must sit in main's body, not only the runtime")
+
+    def test_the_inline_keeps_the_minus_one_answer(self) -> None:
+        body = region_text(self.SOURCE, "main")
+        # mov rax, -1 (48 c7 c0 ff...) rides the miss label, exactly per contract.
+        mov_minus_one_present = any(b"\xff\xff\xff\xff\xff" in body[i:i + 10]
+                                    for i, byte in enumerate(body)
+                                    if byte == 0xb8)
+        self.assertTrue(mov_minus_one_present,
+                        "the inlined miss path must still answer -1 via mov rax, -1")

@@ -1190,12 +1190,12 @@ class CodeGenerator:
             asm.label(otherwise)
 
     def _emit_select_if(self, statement: syntax.If) -> bool:
-        """Lower `if t > c { t = t - c; } else { t = t + c; }` as sub, lea, cmov — or refuse.
+        """Lower `if t > c { t = t - c; } else { t = t + c; }` as lea, sub, cmov — or refuse.
 
         The subtract sets exactly the flags the comparison would test (`sub` and `cmp`
         of the same operands agree on every input, overflow included), and `t + c` is
-        `(t - c) + 2*c`: one lea. The select then costs two instructions and no branch,
-        where the branchy form pays a data-dependent misprediction every iteration. The
+        one lea that reads `t` *before* the subtract rewrites the home, so both cmov
+        inputs ride one cycle behind `t` and the select adds no serial depth. The
         exact shape required: one assignment to the same slot in each branch, minus and
         plus of that slot and one other homed name, and a comparison of exactly those
         two operands; the comparison's inverted flag selects the cmov.
@@ -1249,8 +1249,12 @@ class CodeGenerator:
         else:
             return False
         self.nonnegative_slots.discard(slot)
+        # The plus candidate's lea rides before the sub on purpose: it reads t's home
+        # while t still holds its incoming value, so both cmov inputs are one cycle
+        # after t instead of the second one waiting on the sub's result. The lea is
+        # `t + c` itself now — the old `(t - c) + 2*c` shape needed the sub first.
+        asm.lea_scale("rax", home, other_home, 0, 0)
         asm.binary(UPDATE_OPCODES["-"], home, other_home)
-        asm.lea_scale("rax", home, other_home, 1, 0)
         asm.cmov(move, home, "rax")
         return True
 
@@ -2361,6 +2365,28 @@ class CodeGenerator:
             self._emit_call_site(STR_LEN_LABEL)
             return
         if expression.name == "str_byte":
+            # A leaf index (the scan-loop shape) inlines without any call or stack
+            # traffic: the -1 answer needs no callee, just the sign test the callee
+            # would run and the NUL test on the byte itself. A call-free pointer
+            # argument stays in r10 across the leaf load; complex arguments or a
+            # nested call fall back to the runtime helper below.
+            if (self.temporaries == 0 and not has_call(expression.arguments[0])
+                    and is_leaf(expression.arguments[1])):
+                miss = self._fresh("str_byte.inline.miss")
+                done = self._fresh("str_byte.inline.done")
+                self._emit_expression(expression.arguments[0])
+                asm.mov_reg_reg("r10", "rax")
+                self._emit_into(expression.arguments[1], "rax")
+                asm.test("rax")
+                asm.jcc("s", miss)
+                asm.lea_scale("r10", "r10", "rax", 0, 0)
+                asm.movzx_load8("rax", "r10")
+                asm.test("rax")
+                asm.jcc("nz", done)
+                asm.label(miss)
+                asm.mov_imm64("rax", -1)
+                asm.label(done)
+                return
             self._emit_expression(expression.arguments[0])
             asm.push("rax")
             self.depth += 8

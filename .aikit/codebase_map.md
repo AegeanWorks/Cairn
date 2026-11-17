@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `142`
+- **Total Classes**: `144`
 - **Total Top-Level Functions**: `176`
-- **Total Class Methods**: `790`
-- **Total Source Lines**: `14682`
+- **Total Class Methods**: `795`
+- **Total Source Lines**: `14781`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3555` lines (`179270` bytes)
+**Size**: `3581` lines (`180790` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -168,7 +168,7 @@
   - Method `._emit_block(block, tail)` - *Emit every statement of a block in order.*
   - Method `._emit_statement(statement, tail)` - *Lower one statement; `tail` only concerns a final `return`.*
   - Method `._emit_if(statement, tail)` - *`if` as a conditional branch and two labelled bodies.*
-  - Method `._emit_select_if(statement)` - *Lower `if t > c { t = t - c; } else { t = t + c; }` as sub, lea, cmov — or refuse.*
+  - Method `._emit_select_if(statement)` - *Lower `if t > c { t = t - c; } else { t = t + c; }` as lea, sub, cmov — or refuse.*
   - Method `._plan_constant_hoists(function)` - *Reserve spare homes for each loop's invariant big literals, or return none.*
   - Method `._loops_within(block)` - *Every While statement at or below `block`, outer loops before nested ones.*
   - Method `._big_literal_counts(loop)` - *Distinct literals outside the immediate range (the movabs-only forms), counted.*
@@ -836,7 +836,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1725` lines (`84620` bytes)
+**Size**: `1788` lines (`87609` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1019,6 +1019,12 @@
   - Method `.test_a_final_return_skips_the_implicit_zero()`
   - Method `.test_a_body_without_a_final_return_keeps_the_implicit_zero()`
   - Method `.test_a_zero_provenance_region_emits_exactly_one_xor()`
+- `class SelectIfOrderTest` - *The select lowering keeps its plus candidate off the critical path.*
+  - Method `.test_the_lowering_selects_branchlessly()`
+  - Method `.test_no_lea_between_the_flag_setting_sub_and_the_cmov()`
+- `class StrByteInlineTest` - *`str_byte(s, j)` with a leaf index lowers inside the caller, with no call.*
+  - Method `.test_a_leaf_index_loads_inside_the_function_body()`
+  - Method `.test_the_inline_keeps_the_minus_one_answer()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
@@ -1040,7 +1046,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1345` lines (`50072` bytes)
+**Size**: `1355` lines (`50636` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1161,6 +1167,7 @@
   - Method `.test_str_len_counts_to_the_terminator()`
   - Method `.test_str_byte_reads_inside_and_reports_outside()`
   - Method `.test_equal_literals_share_one_blob()`
+  - Method `.test_str_byte_with_a_calling_index_takes_the_helper_path()`
   - Method `.test_an_assert_helper_prints_and_exits_on_mismatch()`
 
 **Functions:**
