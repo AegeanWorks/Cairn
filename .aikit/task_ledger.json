@@ -1,54 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-readchar-inline",
+    "task_id": "cairn-argvbyte-inline",
     "last_phase": "verify",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794910581.0490534,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794912499.4873157,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794910607.3658588,
-    "completed_head": "7b9aa313d58c0ca40198d2494d7fc70d233e1eb9",
-    "completed_tree": "5146d07b227f27185b1cc4c61e165f8e39926880"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-call-speed",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-call-speed' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794892812.9226391,
-      "timestamp_str": "2026-11-17 08:20:12",
-      "agent": "mistral:vibe",
-      "head": "ffb2b979699ed8be620018650ad802d5bebaade8",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-loop-speed",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/4] Plan: close the remaining loop gaps. M1 binary_gcd (187 vs C 164 / Rust 139): diff the disassembly, find the per-iteration slack, fix; M2 nqueens (23.7 vs C 21.7 / Rust 17.6): try the recorded countdown-scan idea and any branching slack; M3 primes (24.1 vs Rust 18.4) and xorshift (287 vs C 278) peepholes as the gate data directs; M4 gate + delivery. Every fix ships a failing-first shape test; every change re-runs the --save --compare gate.",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794893668.3674073,
-      "timestamp_str": "2026-11-17 08:34:28",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "the scoreboard still shows cairn behind C on binary_gcd, nqueens, primes, mandelbrot, xorshift and many_params; these are the same hot-loop constructs every real Cairn program leans on, so closing them raises the whole language",
-        "benefits": "contract: no source semantics change, only lowerings; identical results pinned by existing twin parity tests and e2e; dependency: machine.py helpers only; concurrency: none; state: codegen only, no new static data",
-        "risks": "contract: reordered or fused instructions must keep exact i64 wrap and flag semantics, or the parity tests catch it; dependency: low, existing encodings; concurrency: none; state: inline expansion may grow .text, bounded",
-        "mitigation": "contract: failing-first shape tests plus the 1073-suite and twin-parity after each milestone; the --save --compare gate must exit 0 before any commit; measured A/B against builds from the stashed tree; dependency: no hand-rolled bytes; concurrency: n/a; state: gate reports sizes"
-      },
-      "plan_digest": "09c36595bb195abb486ca34f81aa8bfbd58e2c046ba56f863d998595c899aae4"
-    },
     {
       "task_id": "cairn-loop-speed",
       "phase": "superseded",
@@ -301,6 +263,35 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-argvbyte-inline",
+      "phase": "plan",
+      "phase_num": 2,
+      "description": "[1/2] plan: inline a literal-token arg_byte fast path at the call site (rip-relative len + pointer loads from the static argv cache, SIB movzx through [ptr_home+idx_home] for register homes, negative/downed bounds branch and a miss route to the runtime helper) so argv_walk stops paying call+ret plus 12 helper instructions per byte; contract: arg_byte answers -1 for negative token or index, at or past the token length, or for an unadjusted cache - those cases keep the helper; dependency: reintroduces mov_load_rip/cmp_load_rip/mov_store_rip in cairn/machine.py as failed-call-site primitives (ADR-058 lesson: carry a 3-way same-window A/B early, reject fast if lossy); concurrency: none, codegen emissions are single-threaded; state: argv cache flag/count/table layout untouched, no new data labels",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794910704.188197,
+      "timestamp_str": "2026-11-17 13:18:24",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "contract: arg_byte(-1 wrapper) semantics must hold for every token/index pair including negative and out-of-range; dependency: the ADR-058 measurement says inlining can lose to a call on this machine, so the plan ships with an early 3-way same-window A/B gate; concurrency: none, single-threaded emission; state: no change to the argv cache layout or runtime reserves",
+        "benefits": "contract: keeps every arg_byte guarantee while closing the 32.6 vs 20.2 ms gap to C's argv_walk twin; dependency: reuses the existing str_byte inline machinery (nonnegative_slots, movzx_load8_sib) instead of new lowering; concurrency: no risk; state: no migration",
+        "risks": "contract: a mis-clamped inline reads out of the arena on negative or huge indexes; dependency: ADR-058 showed inline-vs-call loses up to 78 percent on byte loops, so this may measure negative and the task may end as another rejection; concurrency: none; state: none",
+        "mitigation": "contract: failing-first tests pin the -1 branches for negative index, past-end index and the negative-token case alongside the fast path; dependency: 3-way same-window A/B (old, runtime-only, inline) before any commit, revert on first negative delta; concurrency: no threads; state: no on-disk or runtime format change"
+      },
+      "plan_digest": "96b43ce6145af42ea142d4bee8435e7d1b334c29b861d8aa3095b8d5986d60a6"
+    },
+    {
+      "task_id": "cairn-argvbyte-inline",
+      "phase": "verify",
+      "phase_num": 4,
+      "description": "[2/2] delivered: arg_byte(0, j) literal-token fast path inlines at the call site (slot-0 pointer/length copied out by arg_fill, rip-relative loads, movzx [ptr+index]; masked indexes drop the sign test via the new AND-mask fact in _expression_nonnegative); fixed a real bug the work exposed: the first arg_byte on an unfilled cache answered garbage because arg_fill clobbers rcx/rdx (save/restore across the fill); 1090 tests OK; value parity old-vs-new over a 72-print probe (identical except j=0, where old answered the buggy -1 and new answers 67); same-window A/B: 22.30 vs 27.49 ms best (-18.9%), median 23.15 vs 29.35 (-21%); gate --save --compare exit 0, all within noise, argv_walk 32.6 -> 20.3 ms (-37.9%), level with C 20.1; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794912499.4873157,
+      "timestamp_str": "2026-11-17 13:48:19",
+      "agent": "mistral:vibe"
     }
   ]
 }
