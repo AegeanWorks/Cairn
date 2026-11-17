@@ -1,49 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-loop-speed",
+    "task_id": "cairn-sum-speed",
     "last_phase": "delivery",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794896126.5715895,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794897550.8681836,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794896185.1743255,
-    "completed_head": "f883097c5017116324ac94d14a884755caa52428",
-    "completed_tree": "746629d9d047002801ca1cae0c98d0a0cf754b18"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-stream-input",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/3] argv builtins: argc() and arg_byte(i, j) over GetCommandLineA; [2/3] stdin read_char() with a 4096-byte buffered static in writable .data; [3/3] dedicated benchmark twins + benchmark gate",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794857705.4040492,
-      "timestamp_str": "2026-11-16 22:35:05",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "the language cannot react to the outside world: no stdin, no args, only print builtins; input is the first step of a usable language per the agreed roadmap",
-        "benefits": "programs can consume argv and stdin; string handling becomes reachable; one import and one writable-data extension",
-        "risks": "contract: argv[0] is the program path (C convention) and read_char returns -1 on EOF; dependency: GetStdHandle and GetCommandLineA join the import table, and .data gains labels after the IAT; concurrency: none; state: static cursor/count live in .data, zero-initialized by the loader",
-        "mitigation": "failing-first sema/codegen/e2e tests per builtin; buffered reads mean one ReadFile per 4096 bytes; benchmark twin set pins throughput equivalence; keep the existing print ABI untouched"
-      },
-      "plan_digest": "459a9fa0d41ce06bb1c283fd4d72069ba5e10fa8022da403bf2d6d9e47770781"
-    },
-    {
-      "task_id": "cairn-stream-input",
-      "phase": "4",
-      "phase_num": 4,
-      "description": "[3/3] Input builtins land: argc, arg_byte and read_char with the static argv cache and 4096-byte stdin buffer, writable .data region after the IAT, benchmark twins argv_walk and char_stream in the harness, 997 tests OK, gate exit 0. ADR-051.",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794865401.542221,
-      "timestamp_str": "2026-11-17 00:43:21",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-stream-input",
       "phase": "completed",
@@ -285,6 +252,35 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-sum-speed",
+      "phase": "planning",
+      "phase_num": 2,
+      "description": "[1/1] plan: (a)+ homed two-name sum lowers as one lea over both homes (mandelbrot gap 14.1 vs C 10.6 traced to instruction count: 25 vs 16 per inner iteration; lea fusion closes most of it, measured -8.5% A/B and -12.8% in the gate); (b) later mechanism recorded, not attempted: leaf functions may home two more slots in r10/r11, the way gcc uses its volatile set when no call exists; (c) xorshift's gcc-only xor reassociation stays recorded from ADR-054.",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794897447.791082,
+      "timestamp_str": "2026-11-17 09:37:27",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "the lea fusion is a mechanical join of the copy and select work; mandelbrot was the largest non-folded C gap left",
+        "benefits": "contract: lea wraps like add, sets no flags, and every consumer still toys its own compare; dependency: one existing lea_scale encoding reused; concurrency: none; state: none, codegen only",
+        "risks": "contract: flag-dependent consumers must not lose the add (all zero-branches re-compare, verified); dependency: alias/delta slots refuse (delta abbreviates only); concurrency: none; state: text shrinks",
+        "mitigation": "contract: failing-first shape tests plus 1080-suite and value parity; gate exit 0 before commits; A/B same-window against a stashed build; dependency: REX/SIB verified by byte tests; concurrency: n/a; state: gate reports sizes"
+      },
+      "plan_digest": "9cd01d24b005b9e94a78b16bc09e20615b87bbf17299719e828f86f4c70a97dd"
+    },
+    {
+      "task_id": "cairn-sum-speed",
+      "phase": "delivery",
+      "phase_num": 4,
+      "description": "Phase 4: aikit.py check cairn 4/4 gates passed, checklists: passed; suite 1080 OK; gate exit 0 (mandelbrot improved -12.8%, no regressions). Ready to commit as feat [1/1].",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794897550.8681836,
+      "timestamp_str": "2026-11-17 09:39:10",
+      "agent": "mistral:vibe"
     }
   ]
 }
