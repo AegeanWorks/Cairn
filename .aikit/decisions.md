@@ -528,3 +528,29 @@ extension must name its clearing discipline (PRINCIPLE-009, PRINCIPLE-003).
 Known shape kept deliberately: the subtraction loop still re-tests `b != 0`
 at the top; removing that recheck requires a nonadjacency data-flow fact
 (sar of an even nonzero value never reaches zero), recorded as future work.
+## ADR-061: The xor-zero store records the non-negative fact
+
+Date: closed by task cairn-nonzero-facts (cd93a03). Accepted.
+
+Context. str_scan paid 15.6 ms against C's 11.8 best while its byte load
+was already inlined. The disassembly showed a `test %r15; js` sign guard
+in front of every per-byte `movzbl`. The scan index is `var j: i64 = 0`
+followed by `j = j + 1`: the zero initialization lowered to the xor-zero
+idiom, whose path discarded the slot's non-negative fact, and only a
+non-negative literal at the general store path records one. `j = j + 1`
+keeps facts; it cannot establish them, so the scan never earned its fact.
+
+Decision. The xor-zero fast path in `_emit_value` records the fact for
+non-delta slots: a compile-time zero store is the strongest non-negative
+evidence a slot can get. The arg_byte negative-route test was re-targeted
+to a parameter index (the only still reachable signed shape) and the
+control keeps the full strength of the old assertion there.
+
+Consequences. str_scan measured 16.12 -> 13.96 best in the same window
+against an unchanged C twin; argv_walk and char_stream over loop-driven
+indices no longer sign-test when their index walked up from zero. Facts
+remain scoped: they die at any other store, never ride the delta view,
+and the js route stays on every index whose proof the codegen cannot
+make. Future work recorded: the subtraction-loop top recheck in
+binary_gcd needs a genuine data-flow pass (sar of even nonzero never
+reaches zero), untouched here.
