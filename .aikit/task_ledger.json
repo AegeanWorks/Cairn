@@ -3,26 +3,17 @@
   "active_task": {
     "task_id": "cairn-call-speed",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794892711.3198195,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794892812.8853178,
+    "completed_head": "ffb2b979699ed8be620018650ad802d5bebaade8",
+    "completed_tree": "b68af07e32b62866a1101d8dbdf32e0fe6f40dec"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-loop-copies",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/1] Verification complete: 928 tests, 4/4 gates, ADR-048, benchmark gate exit 0",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794843843.4297907,
-      "timestamp_str": "2026-11-16 18:44:03",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-loop-copies",
       "phase": "completed",
@@ -299,6 +290,23 @@
       "timestamp_str": "2026-11-17 08:18:31",
       "agent": "mistral:vibe",
       "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-call-speed",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-call-speed' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794892812.9226391,
+      "timestamp_str": "2026-11-17 08:20:12",
+      "agent": "mistral:vibe",
+      "head": "ffb2b979699ed8be620018650ad802d5bebaade8",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
