@@ -3,25 +3,17 @@
   "active_task": {
     "task_id": "cairn-ir-foundation",
     "last_phase": "verification",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794951228.0506463,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794951390.8395715,
+    "completed_head": "aa3546ecbb7c05da151240ce4bec0673c04e3a9a",
+    "completed_tree": "0ddddf57294121ce9d4c1284cafcd07d75b1f81f"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-bgcd-flags",
-      "phase": "verify",
-      "phase_num": 4,
-      "description": "[2/2] verify: zf reuse ships two commits (ec37041, 3f052bd); 1099 tests OK; combined high-priority gate exit 0, all 17 cases within noise with no regression, binary_gcd 182.5 -> 160.8 best_ms; outputs value-identical old vs new; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794919398.3080573,
-      "timestamp_str": "2026-11-17 15:43:18",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-bgcd-flags",
       "phase": "completed",
@@ -310,6 +302,23 @@
       "timestamp_str": "2026-11-18 00:33:48",
       "agent": "mistral:vibe",
       "checklists": "passed: full unittest discover 1163 OK; differential corpus exe-vs-interpreter byte-equal; SSA invariants hold; SPEC+LLM_SYSTEM str_byte entry synced; ADR-066 in decisions.md"
+    },
+    {
+      "task_id": "cairn-ir-foundation",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-ir-foundation' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794951390.880163,
+      "timestamp_str": "2026-11-18 00:36:30",
+      "agent": "mistral:vibe",
+      "head": "aa3546ecbb7c05da151240ce4bec0673c04e3a9a",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
