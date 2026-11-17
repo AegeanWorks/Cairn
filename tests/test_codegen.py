@@ -219,12 +219,22 @@ class PowerOfTwoDivisionTest(unittest.TestCase):
     DIVIDE_BY_TWO = ("fn main() -> i64 { var x: i64 = 9;"
                      " print(x / 2); print(x % 2); return 0; }")
 
+    FIXUP = ("fn probe(x: i64) -> i64 { return x / 2; }"
+             "fn main() -> i64 { print(probe(9)); return 0; }")
+
     def test_division_by_a_power_of_two_literal_never_divides(self) -> None:
         body = region_text(self.DIVIDE_BY_TWO, "main")
         self.assertNotIn(b"\x48\xf7", body)  # neither idiv nor any r64 F7 form
 
-    def test_division_by_two_emits_the_shift_fixup_chain(self) -> None:
+    def test_a_proven_nonnegative_dividend_divides_as_one_shift(self) -> None:
+        # x's literal init proves x non-negative, so a non-negative dividend
+        # truncates like it floors and the whole quotient is one sar.
         body = region_text(self.DIVIDE_BY_TWO, "main")
+        self.assertIn(b"\x48\xd1\xf8", body)       # sar rax, 1
+        self.assertNotIn(b"\x48\xc1\xf9\x3f", body)  # the sign word never loads
+
+    def test_division_by_two_emits_the_shift_fixup_chain(self) -> None:
+        body = region_text(self.FIXUP, "probe")
         self.assertIn(b"\x48\xc1\xf9\x3f", body)  # sar rcx, 63: the sign word
         self.assertIn(b"\x48\xd1\xf8", body)      # sar rax, 1: the final one-count shift
         self.assertIn(b"\x48\xc1\xe9\x3f", body)  # shr rcx, 63 (group /5): sign word to 0/1
@@ -775,14 +785,14 @@ class MultiArgumentCallTest(unittest.TestCase):
         # Division can trap, so it never binds in reverse when a sibling could trap
         # first. Here the substituted names defer every read into the copy, so the
         # division is the only argument bound at the call site: its trap still fires
-        # in the source's order, and the push/pop fallback is not needed.
+        # in the source's order, and the result rides the push/pop fallback across
+        # the bound call while y's proven non-value keeps the overflow guards out.
         source = ("fn f(a: i64, b: i64, c: i64) -> i64 { return a + b + c; } "
                   "fn main() -> i64 { var x: i64 = 7; var y: i64 = 2; "
                   "return f(x, y, x / y); }")
         body = body_text(source, "main")
-        self.assertNotIn(push_rax, body)  # the aliased names defer; only x / y binds
         self.assertIn(test_rax_rax, body)  # the division-by-zero guard
-        self.assertIn(cmp_rax_minus1, body)  # the minint overflow guard
+        self.assertNotIn(cmp_rax_minus1, body)  # y = 2 can never be the -1 divisor
 
 ACKERMANN_SHAPE = (
     "fn ack(m: i64, n: i64) -> i64 { "
@@ -1278,9 +1288,10 @@ class CommutativeHomePeepholeTest(unittest.TestCase):
         blob = region_bytes(
             "fn check(a: i64, b: i64) -> i64 { if (a & b) != 0 { return 7; } return 0; }"
             " fn main() -> i64 { return check(240, 240); }", "check")
-        self.assertIn(and_rax_rbx, blob)          # the op still computes into rax
+        self.assertIn(b"\x4c\x85", blob)          # test <home>, rbx -- flags only
+        self.assertNotIn(and_rax_rbx, blob)       # no dead value computes into rax
         self.assertNotIn(and_rax_rcx, blob)
-        self.assertNotIn(cmp_rax_zero, blob)      # ZF already compares rax against zero
+        self.assertNotIn(cmp_rax_zero, blob)      # the test's ZF decides the branch
 
 
 # Commutative-home peephole reference encodings.
@@ -1786,3 +1797,98 @@ class StrByteInlineTest(unittest.TestCase):
                                     if byte == 0xb8)
         self.assertTrue(mov_minus_one_present,
                         "the inlined miss path must still answer -1 via mov rax, -1")
+
+
+class DirectVarCopyTest(unittest.TestCase):
+    """A variable-to-variable copy moves straight into the target's home register.
+
+    The swap shape `t = a; a = b; b = t` runs inside the hottest loops it feeds
+    (every Stein-gcd iteration round), and the round trip through rax paid two
+    moves per copy where one direct `mov dst_home, src_home` does the same work.
+    The copies are sequential in source order and each reads a value no earlier
+    copy in the run has overwritten, so each one is a single register move.
+    """
+
+    SWAP = ("fn f(a: i64, b: i64) -> i64 {"
+            " var t: i64 = 0; t = a; a = b; b = t;"
+            " return b; }"
+            "fn main() -> i64 { print(f(9, 3)); return 0; }")
+
+    @staticmethod
+    def reg_reg_movs(code: bytes):
+        """Decode 3-byte REX.W register-to-register movs as (dst, src) register numbers."""
+        moves = []
+        for i in range(len(code) - 2):
+            byte0, byte1, byte2 = code[i], code[i + 1], code[i + 2]
+            if (0x40 <= byte0 <= 0x4F and byte0 & 0x08 and byte1 == 0x89
+                    and byte2 >= 0xC0):
+                dst = ((byte2 >> 3) & 7) | (8 if byte0 & 0x04 else 0)
+                src = (byte2 & 7) | (8 if byte0 & 0x01 else 0)
+                moves.append((dst, src))
+        return moves
+
+    def test_no_copy_round_trips_through_rax(self) -> None:
+        body = region_bytes(self.SWAP, "f")
+        moves = self.reg_reg_movs(body)
+        round_trips = sum(1 for i, (dst, _) in enumerate(moves[: -1])
+                          if dst == 0 and moves[i + 1][1] == 0)
+        self.assertEqual(round_trips, 0,
+                         "var-to-var copies must not route through rax")
+
+
+class NameMaskBitTestTest(unittest.TestCase):
+    """`if (free & bit) != 0` branches from `test free_home, bit_home` alone.
+
+    The recursion scans a bitmask column set, so the masked-nonzero test decides
+    every node's fan-out; the general path paid `mov rax, bit` before the `and`
+    that the flags already read, and `test` computes the same ZF with no copy.
+    """
+
+    MASKED = ("fn f(free: i64, bit: i64) -> i64 {"
+              " var c: i64 = 0;"
+              " if (free & bit) != 0 { c = c + 1; }"
+              " return c; }"
+              "fn main() -> i64 { print(f(12, 4)); return 0; }")
+
+    def test_the_masked_nonzero_condition_tests_two_registers(self) -> None:
+        body = region_bytes(self.MASKED, "f")
+        # a two-register test: opcode 0x85 with register operands, not test rax, rax
+        two_register = any(body[i] in range(0x40, 0x50) and body[i + 1] == 0x85
+                           and body[i + 2] >= 0xC0 and body[i + 2] != 0xC0
+                           for i in range(len(body) - 2))
+        self.assertTrue(two_register,
+                        "the masked condition must test the two homes directly")
+
+    def test_the_masked_nonzero_condition_keeps_no_dead_and(self) -> None:
+        body = region_bytes(self.MASKED, "f")
+        dead_ands = any(body[i] in range(0x40, 0x50) and body[i + 1] == 0x21
+                        for i in range(len(body) - 1))
+        self.assertFalse(dead_ands,
+                         "the condition's and must not compute a dead value")
+
+
+class DivisorNoOverflowGuardTest(unittest.TestCase):
+    """A proven non-negative divisor skips idiv's minus-one overflow guards.
+
+    `idiv` faults only on a zero divisor or `INT64_MIN / -1`. When the divisor
+    slot provably holds a non-negative value (a literal init, positive updates),
+    the `-1` divisor test and the `INT64_MIN` dividend probe are unreachable, and
+    the trial-division loop pays five instructions less per division.
+    """
+
+    POSITIVE = ("fn probe(n: i64) -> i64 {"
+                " var d: i64 = 3;"
+                " return n / d; }"
+                "fn main() -> i64 { print(probe(30)); return 0; }")
+
+    def test_a_nonnegative_divisor_keeps_only_the_zero_trap(self) -> None:
+        body = region_bytes(self.POSITIVE, "probe")
+        self.assertNotIn(b"\x48\x83\xf8\xff", body,
+                         "no cmp rax, -1 divisor test when the divisor is non-negative")
+
+    def test_a_negative_divisor_keeps_both_guards(self) -> None:
+        body = region_bytes(
+            "fn probe(n: i64) -> i64 { var d: i64 = -3; return n / d; }"
+            "fn main() -> i64 { print(probe(30)); return 0; }", "probe")
+        self.assertIn(b"\x48\x83\xf8\xff", body,
+                      "cmp rax, -1 must stay for an unchecked divisor")

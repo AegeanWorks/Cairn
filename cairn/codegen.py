@@ -584,6 +584,19 @@ class CodeGenerator:
             if not self._update_keeps_nonneg(slot, expression):
                 self.nonnegative_slots.discard(slot)
             return
+        source = expression
+        while isinstance(source, syntax.Parens):
+            source = source.inner
+        if (home is not None and isinstance(source, syntax.Name)
+                and not (source.slot == slot and self.delta_value)):
+            # A plain copy is one direct move into the slot's home: the rax round
+            # trip bought nothing, and hot loops copy values far more often than
+            # they compute them. `_load_slot` already handles a frame source, an
+            # inlined parameter's delta view, and the self-assign no-op.
+            self._load_slot(source.slot, home)
+            if not self._is_nonnegative(source.slot):
+                self.nonnegative_slots.discard(slot)
+            return
         if (home is not None and isinstance(expression, syntax.Call)
                 and self._foreign_inline_target(expression) is not None):
             # A copyable call stores its result directly into the slot's home register;
@@ -606,6 +619,11 @@ class CodeGenerator:
         self._emit_expression(expression)
         self._store_slot(slot)
         self.nonnegative_slots.discard(slot)
+        if (isinstance(expression, syntax.IntLiteral) and expression.value >= 0
+                and not (slot == self.delta_slot and self.delta_value)):
+            # A non-negative literal stays non-negative, and only a later store can
+            # break the fact; division lowering spends the fact on guard elision.
+            self.nonnegative_slots.add(slot)
 
     def _update_keeps_nonneg(self, slot: int, expression: Optional[syntax.Expr]) -> bool:
         """Whether an in-place update provably keeps the slot's value non-negative.
@@ -1883,6 +1901,30 @@ class CodeGenerator:
                         asm.binary(0x21, "rax", SCRATCH)  # and rax, scratch
                 asm.jcc(parity if when_true else INVERTED_CONDITIONS[parity], target)
                 return
+            masked = expression.left
+            while isinstance(masked, syntax.Parens):
+                masked = masked.inner
+            if isinstance(masked, syntax.Binary) and masked.op == "&":
+                homes = []
+                for side in (masked.left, masked.right):
+                    while isinstance(side, syntax.Parens):
+                        side = side.inner
+                    side_home = (self._home(side.slot)
+                                 if isinstance(side, syntax.Name)
+                                 and not (side.slot == self.delta_slot and self.delta_value)
+                                 else None)
+                    if side_home is None:
+                        homes = None
+                        break
+                    homes.append(side_home)
+                if homes is not None:
+                    # `(free & bit) != 0` reads the same zero flag a real `and` sets,
+                    # but `and` computed a value nothing may consume; `test` of the two
+                    # homes decides the branch with no copy and no destroyed rax.
+                    parity = "ne" if COMPARISON_CONDITIONS[expression.op] == "ne" else "e"
+                    asm.binary(0x85, homes[0], homes[1])
+                    asm.jcc(parity if when_true else INVERTED_CONDITIONS[parity], target)
+                    return
         if isinstance(right, syntax.IntLiteral) and isinstance(left, syntax.Name) and self._home(left.slot) is not None:
             if left.slot == self.delta_slot and self.delta_value:
                 # Inside a copy the parameter is shifted, so the compared value moves too.
@@ -2033,7 +2075,12 @@ class CodeGenerator:
         if expression.op in ("/", "%"):
             if held is not None:
                 asm.mov_reg_reg("rcx", held)
-            self._emit_division(expression.op)
+            divisor = expression.right
+            while isinstance(divisor, syntax.Parens):
+                divisor = divisor.inner
+            nonnegative = (isinstance(divisor, syntax.Name)
+                           and self._is_nonnegative(divisor.slot))
+            self._emit_division(expression.op, nonnegative)
         elif expression.op in COMPARISON_CONDITIONS:
             asm.cmp_reg_reg(held if held is not None else "rcx", "rax")
             asm.setcc(COMPARISON_CONDITIONS[expression.op])
@@ -2264,22 +2311,26 @@ class CodeGenerator:
             asm.lea_index("rax", home, scale_log2, addend)
         return True
 
-    def _emit_division(self, operator: str) -> None:
+    def _emit_division(self, operator: str, nonnegative_divisor: bool = False) -> None:
         """Signed division with an explicit zero-divisor trap, quotient or remainder.
 
         `idiv` faults on `INT64_MIN / -1` as well as on a zero divisor, so both
-        route to the `DIV_ZERO` helper the folding pass already preserves.
+        route to the `DIV_ZERO` helper the folding pass already preserves. When the
+        divisor provably holds a non-negative value (a literal seed kept through
+        positive updates), the `-1` divisor and `INT64_MIN` dividend probes are
+        unreachable and the zero trap alone stands guard.
         """
         asm = self.assembler
         asm.test("rax")
         asm.jcc("z", DIV_ZERO_LABEL)
-        no_overflow = self._fresh("div.no_overflow")
-        asm.cmp_imm("rax", -1)
-        asm.jcc("nz", no_overflow)
-        asm.mov_imm64(SCRATCH, INT64_MIN)
-        asm.cmp_reg_reg("rcx", SCRATCH)
-        asm.jcc("e", DIV_ZERO_LABEL)
-        asm.label(no_overflow)
+        if not nonnegative_divisor:
+            no_overflow = self._fresh("div.no_overflow")
+            asm.cmp_imm("rax", -1)
+            asm.jcc("nz", no_overflow)
+            asm.mov_imm64(SCRATCH, INT64_MIN)
+            asm.cmp_reg_reg("rcx", SCRATCH)
+            asm.jcc("e", DIV_ZERO_LABEL)
+            asm.label(no_overflow)
         asm.mov_reg_reg(SCRATCH, "rax")
         asm.mov_reg_reg("rax", "rcx")
         asm.cqo()

@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `144`
+- **Total Classes**: `147`
 - **Total Top-Level Functions**: `176`
-- **Total Class Methods**: `795`
-- **Total Source Lines**: `14781`
+- **Total Class Methods**: `802`
+- **Total Source Lines**: `14938`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3581` lines (`180790` bytes)
+**Size**: `3632` lines (`183843` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -200,7 +200,7 @@
   - Method `._emit_magic_division(expression)` - *Lower `x / d` or `x % d` for a positive literal `d` as a magic multiply.*
   - Method `._scaled_sum_terms(expression)` - *The scaled-item pattern of a `+` expression: `(Name, scale_log2, addend, with_base)`.*
   - Method `._emit_scaled_sum(expression)` - *Lower `c1 + k*c2` (either operand order) as one scaled `lea`; True when emitted.*
-  - Method `._emit_division(operator)` - *Signed division with an explicit zero-divisor trap, quotient or remainder.*
+  - Method `._emit_division(operator, nonnegative_divisor)` - *Signed division with an explicit zero-divisor trap, quotient or remainder.*
   - Method `._emit_and(expression)` - *`&&`: the right side is evaluated only when the left side is non-zero.*
   - Method `._emit_or(expression)` - *`||`: the right side is evaluated only when the left side is zero.*
   - Method `._emit_call(expression, copy_home)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
@@ -836,7 +836,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1788` lines (`87609` bytes)
+**Size**: `1894` lines (`92724` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -863,6 +863,7 @@
   - Method `.test_a_shift_by_literal_shifts_in_place()`
 - `class PowerOfTwoDivisionTest` - *`x / 2**b` and `x % 2**b` lower as a sar/shr fixup chain, never as `idiv`.*
   - Method `.test_division_by_a_power_of_two_literal_never_divides()`
+  - Method `.test_a_proven_nonnegative_dividend_divides_as_one_shift()`
   - Method `.test_division_by_two_emits_the_shift_fixup_chain()`
   - Method `.test_a_remainder_by_two_masks_instead_of_dividing()`
   - Method `.test_a_non_power_of_two_literal_still_divides()`
@@ -1025,6 +1026,15 @@
 - `class StrByteInlineTest` - *`str_byte(s, j)` with a leaf index lowers inside the caller, with no call.*
   - Method `.test_a_leaf_index_loads_inside_the_function_body()`
   - Method `.test_the_inline_keeps_the_minus_one_answer()`
+- `class DirectVarCopyTest` - *A variable-to-variable copy moves straight into the target's home register.*
+  - Method `.reg_reg_movs(code)` - *Decode 3-byte REX.W register-to-register movs as (dst, src) register numbers.*
+  - Method `.test_no_copy_round_trips_through_rax()`
+- `class NameMaskBitTestTest` - *`if (free & bit) != 0` branches from `test free_home, bit_home` alone.*
+  - Method `.test_the_masked_nonzero_condition_tests_two_registers()`
+  - Method `.test_the_masked_nonzero_condition_keeps_no_dead_and()`
+- `class DivisorNoOverflowGuardTest` - *A proven non-negative divisor skips idiv's minus-one overflow guards.*
+  - Method `.test_a_nonnegative_divisor_keeps_only_the_zero_trap()`
+  - Method `.test_a_negative_divisor_keeps_both_guards()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
