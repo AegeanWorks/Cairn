@@ -6,14 +6,14 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `42`
-- **Total Classes**: `154`
+- **Total Python Modules**: `43`
+- **Total Classes**: `155`
 - **Total Top-Level Functions**: `176`
-- **Total Class Methods**: `831`
-- **Total Source Lines**: `15504`
+- **Total Class Methods**: `836`
+- **Total Source Lines**: `15582`
 
 ## 🧭 Map Coverage
-- **Indexed**: python (`42` module(s))
+- **Indexed**: python (`43` module(s))
 - **Not indexed by this map**: cpp (`34` file(s)), rust (`17` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
@@ -573,7 +573,7 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `564` lines (`22141` bytes)
+**Size**: `583` lines (`23109` bytes)
 
 **Functions:**
 - `def emit_arg_fill(assembler)` - *Emit `arg_fill`: tokenize the ANSI command line into the static table once.*
@@ -1084,7 +1084,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1369` lines (`51527` bytes)
+**Size**: `1383` lines (`52212` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1197,6 +1197,7 @@
   - Method `.test_read_char_streams_stdin_bytes_then_eof()`
   - Method `.test_read_char_without_stdin_reports_eof_at_once()`
   - Method `.test_read_char_wraps_a_large_piped_stream()`
+  - Method `.test_the_handle_cache_survives_many_refills()`
 - `class ExitValueTest` - *`exit(code)` stops the machine at once, from main's body and from any helper.*
   - Method `.test_exit_stops_with_the_given_code()`
   - Method `.test_exit_from_a_helper_stops_a_loop()`
@@ -1507,6 +1508,20 @@
 **Functions:**
 - `def artifact_for(source)` - *The linked artifact for a source, without going through the file writer.*
 - `def rva_to_offset(image, rva)` - *Translate one RVA through the section table.*
+
+---
+
+### [`tests/test_runtime.py`](tests/test_runtime.py)
+> *Tests for the runtime helpers' emitted shape and their static state.*
+
+**Size**: `45` lines (`1906` bytes)
+
+**Classes:**
+- `class StdinRefillTest` - *The stdin refill path pays one cached handle and 64 KiB per syscall.*
+  - Method `.build_runtime()`
+  - Method `.test_the_stdin_buffer_holds_sixty_four_kib()`
+  - Method `.test_the_handle_cache_is_static_state()`
+  - Method `.test_the_refill_path_references_the_handle_cache()`
 
 ---
 
