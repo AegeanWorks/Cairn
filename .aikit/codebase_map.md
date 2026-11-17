@@ -6,14 +6,14 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `43`
-- **Total Classes**: `157`
-- **Total Top-Level Functions**: `176`
-- **Total Class Methods**: `839`
-- **Total Source Lines**: `15663`
+- **Total Python Modules**: `44`
+- **Total Classes**: `160`
+- **Total Top-Level Functions**: `178`
+- **Total Class Methods**: `849`
+- **Total Source Lines**: `15777`
 
 ## 🧭 Map Coverage
-- **Indexed**: python (`43` module(s))
+- **Indexed**: python (`44` module(s))
 - **Not indexed by this map**: cpp (`34` file(s)), rust (`17` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
@@ -1081,6 +1081,32 @@
 - `def _hoisted_movabs_candidates(value)` - *`movabs <home>, value` for every home a hoist could pick.*
 - `def _combine_right_after_shr(region, count)` - *Whether an update combine follows its peephole `shr rax, count` with no park.*
 - `def calls_of(source, caller, callee)` - *How many real `call` sites inside `caller`'s region target `callee`.*
+
+---
+
+### [`tests/test_contract.py`](tests/test_contract.py)
+> *The doc-law contract: SPEC.md, LLM_SYSTEM.md and the manifest describe one language.*
+
+**Size**: `114` lines (`5219` bytes)
+
+**Classes:**
+- `class SpecContractTest` - *SPEC.md names the whole surface: every builtin, limit and import it really has.*
+  - Method `.test_the_standard_surface_lists_every_builtin()`
+  - Method `.test_the_parameter_limit_matches_the_manifest()`
+  - Method `.test_the_target_lists_every_import()`
+  - Method `.test_no_section_forbids_the_legal_for_loop()`
+  - Method `.test_the_trap_exit_and_the_cli_exits_do_not_collide()`
+- `class SystemCardContractTest` - *LLM_SYSTEM.md is the compact face of the same manifest, never an older one.*
+  - Method `.test_the_card_names_every_builtin()`
+  - Method `.test_the_card_carries_the_real_parameter_limit()`
+  - Method `.test_the_card_teaches_the_legal_for_loop()`
+  - Method `.test_the_card_stays_compact()`
+- `class ReadmeContractTest` - *The README publishes the benchmark scoreboard surface: all cases, named.*
+  - Method `.test_the_readme_names_every_benchmark_case()`
+
+**Functions:**
+- `def spec_section(number)` - *One `## N.` section body, up to the next `## ` heading.*
+- `def manifest_builtin_names()`
 
 ---
 
