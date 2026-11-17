@@ -29,6 +29,7 @@ ARGV_LEN0_LABEL = "cairn.runtime.argv_len0"
 STDIN_BUFFER_LABEL = "cairn.runtime.stdin_buffer"
 STDIN_CURSOR_LABEL = "cairn.runtime.stdin_cursor"
 STDIN_COUNT_LABEL = "cairn.runtime.stdin_count"
+STDIN_HANDLE_LABEL = "cairn.runtime.stdin_handle"
 NEWLINE_LABEL = "cairn.runtime.newline"
 DIV_ZERO_DATA_LABEL = "cairn.runtime.div_zero_text"
 
@@ -52,7 +53,10 @@ BYTE_SLOT = -8
 MAX_ARGS = 63
 ARGV_CACHE_SIZE = 16 + 16 * MAX_ARGS
 ARGV_ARENA_SIZE = 1024
-STDIN_BUFFER_SIZE = 4096
+# A 64 KiB refill halves per-byte syscall overhead on long streams versus the
+# historic 4096: a 4 MiB piped stdin refills 64 times instead of 1024, and the
+# matching cache slot for the stdin handle rides at the image's end.
+STDIN_BUFFER_SIZE = 65536
 
 
 def emit_arg_fill(assembler: Assembler) -> None:
@@ -256,7 +260,7 @@ def emit_arg_byte(assembler: Assembler) -> None:
 def emit_read_char(assembler: Assembler) -> None:
     """Emit `read_char()`: the next stdin byte, or -1 at end of stream.
 
-    The fast path answers from the static 4096-byte buffer; an empty buffer refills
+    The fast path answers from the static 64 KiB buffer; an empty buffer refills
     with one `ReadFile`, resets the cursor and falls back into the check, so repeated
     calls at a true end of stream cost exactly one syscall each and keep answering -1.
     """
@@ -268,13 +272,26 @@ def emit_read_char(assembler: Assembler) -> None:
     asm.mov_load("rdx", "r11")
     asm.cmp_reg_reg("rdx", "rax")
     asm.jcc("g", "read_char.have")
-    # The buffer drained: refill once, reset the cursor, then re-check.
+    # The buffer drained: refill once, reset the cursor, then re-check. The
+    # stdin handle is cached in static state (the loader seeds it as zero), so
+    # long streams fetch it once instead of on every drained buffer.
     asm.push("rbp")
     asm.mov_reg_reg("rbp", "rsp")
     asm.sub_rsp(READ_FRAME)
+    asm.lea_rip("rax", STDIN_HANDLE_LABEL)
+    asm.mov_load("rax", "rax")
+    asm.test("rax")
+    asm.jcc("z", "read_char.handle")
+    # The cached handle: every path must land on `handle_ok` with rcx carrying it.
+    asm.mov_reg_reg("rcx", "rax")
+    asm.jmp("read_char.handle_ok")
+    asm.label("read_char.handle")
     asm.mov_imm32("rcx", -10)
     asm.call_indirect(iat_label("GetStdHandle"))
     asm.mov_reg_reg("rcx", "rax")
+    asm.lea_rip("rax", STDIN_HANDLE_LABEL)
+    asm.store_qword("rax", "rcx")
+    asm.label("read_char.handle_ok")
     asm.lea_rip("rdx", STDIN_BUFFER_LABEL)
     asm.mov_imm32("r8", STDIN_BUFFER_SIZE)
     asm.lea_rip("r9", STDIN_COUNT_LABEL)
@@ -535,9 +552,11 @@ def emit_runtime(assembler: Assembler, rodata: ReadOnlyData,
     # Slot 0's pointer and length copied out at fill time, so the literal-token
     # call-site inline (arg_byte(0, j)) reads them with plain rip-relative loads.
     # Appended last on purpose: earlier labels keep their image offsets, so no
-    # existing hot layout shifts because of the two extra qwords.
+    # existing hot layout shifts because of the two extra qwords. The stdin
+    # handle cache stays after them for the same reason.
     writable.reserve(ARGV_PTR0_LABEL, 8)
     writable.reserve(ARGV_LEN0_LABEL, 8)
+    writable.reserve(STDIN_HANDLE_LABEL, 8)
     emit_print_i64(assembler)
     emit_print_char(assembler)
     emit_print_hex(assembler)

@@ -1278,6 +1278,20 @@ class InputSystemTest(EndToEndTest):
         self.assertEqual(completed.stdout, f"{90 * 512}\n")
 
 
+
+    def test_the_handle_cache_survives_many_refills(self) -> None:
+        # 70 KiB crosses the 64 KiB refill boundary: ReadFile's handle
+        # comes from rcx, which the cache branch must set on every
+        # refill, not only on the first fetch.
+        payload = bytes(range(256)) * 274  # 70_144 bytes, no NUL
+        completed = self.run_with(
+            "fn main() -> i64 { var total: i64 = 0; var c: i64 = read_char();"
+            " while c >= 0 { total = total + c; c = read_char(); }"
+            " print(total); return 0; }",
+            stdin=payload)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, f"{sum(payload)}\n")
+
 @WINDOWS_ONLY
 class ExitValueTest(EndToEndTest):
     """`exit(code)` stops the machine at once, from main's body and from any helper.
