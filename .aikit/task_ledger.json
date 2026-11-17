@@ -1,54 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-string-exit",
+    "task_id": "cairn-call-speed",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794868151.467163,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1794892711.3198195,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1794868221.6925406,
-    "completed_head": "fca3f7683659ee699840e623ab2e85d5fd13878c",
-    "completed_tree": "cab2f0464c87a8fbf9eff268c8a16f9e1205b741"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-magic-hoist",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-magic-hoist' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794835983.320187,
-      "timestamp_str": "2026-11-16 16:33:03",
-      "agent": "mistral:vibe",
-      "head": "a6add3c2903f48510adc10bb7e7fc86af3031706",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-loop-copies",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/1] Looped foreign callees inline into their caller as full copies",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794843787.6660693,
-      "timestamp_str": "2026-11-16 18:43:07",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "binary_gcd pays a per-iteration call to bgcd; the copy-free gate refused any looping callee, leaving call overhead in the hottest loop",
-        "benefits": "looped callees without calls/divisions become full inline copies; binary_gcd measured 191 -> 173-175 ms (-8.6%), closing on C 165-181",
-        "risks": "contract: copy emission must keep break/continue bound to the innermost loop of the copied body - emission-local stacks already carry them and sema guarantees innermost binding; dependency: none new; concurrency: none; state: hoist plans reserved homes for copies via _plan_foreign_copy homes|hoist_homes, no r13 collision",
-        "mitigation": "failing-first bytes tests (ForeignLoopCopyTest) plus repinned ForeignInlineTest loops-with-breaks cases, LOOP_COPY_PROGRAM end-to-end values, full 928-test suite, --save --compare gate exit 0"
-      },
-      "plan_digest": "165b59da0a3ac6784d6c49918cb9ce1e4e251f432e33e93cc7a404a6030e7470"
-    },
     {
       "task_id": "cairn-loop-copies",
       "phase": "in_progress",
@@ -307,6 +269,36 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-call-speed",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/4] Plan: close the recorded call-shape gaps. M1 investigate call_chain's unexplained 25% gap to C (42.4 vs 33.8 ms) and fix; M2 inline str_byte when the pointer is a known literal or home (str_scan 18.5 vs C 12.4); M3 improve argv_walk (30.1 vs C 20.1) by inlining arg_byte's bounds/cap checks; M4 gate + delivery. Benchmark gate re-runs after every change; failing-first tests per codegen change.",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794890655.6012938,
+      "timestamp_str": "2026-11-17 07:44:15",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "the standing goal is faster-than-C on its own scoreboard: three cases have known mechanisms and a quarter of the call_chain gap is unexplained overhead that likely taxes every call-bearing program",
+        "benefits": "contract: no source-level semantics change, only lowerings; str_byte/arg_byte inlines keep identical -1 semantics and clobber rules; dependency: no new imports or sections, existing call-site machinery reused; concurrency: none; state: codegen-only, no static data unless an inline spills",
+        "risks": "contract: an inlined str_byte must reproduce NUL-check and -1 answers exactly, and peepholes must not disturb the delta/inline machinery; dependency: instruction encodings reused, low; concurrency: none; state: inline expansion may grow .text, bounded per call site",
+        "mitigation": "contract: codegen shape tests plus the full suite and e2e re-run after each milestone, and the --save --compare gate must exit 0 before any commit; dependency: machine.py helpers only, no hand-rolled bytes; concurrency: n/a; state: gate reports .text sizes for review"
+      },
+      "plan_digest": "7fb739ef5fc946046ea23e220a447fb1bf2459f21e2d05f375d99b79b0ae0b30"
+    },
+    {
+      "task_id": "cairn-call-speed",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[3/3] Delivered: select-if reversed to lea, sub, cmov (call_chain -19.7%) and str_byte leaf-index inline (str_scan -10.1%); arg_byte inline and rcx-binding measured slower, recorded as dead ends; 1073 tests OK; gate exit 0",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794892711.3198195,
+      "timestamp_str": "2026-11-17 08:18:31",
+      "agent": "mistral:vibe",
+      "checklists": "passed"
     }
   ]
 }
