@@ -3,31 +3,17 @@
   "active_task": {
     "task_id": "cairn-charloop-shave",
     "last_phase": "verify",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794941845.497877,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794941892.905242,
+    "completed_head": "eba43d9ec7f47a29ed22a0898c6233befe9ec7bc",
+    "completed_tree": "89883815a20d87367c13746581e2280d144e76e9"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-strbyte-sib",
-      "phase": "plan",
-      "phase_num": 2,
-      "description": "[2/2] plan: M1 pointer binds into r10 + SIB byte load [ptr_home+idx_home]; M2 non-negative index skips the sign test; str_scan target 17.0 -> ~13.5 ms",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794901017.257483,
-      "timestamp_str": "2026-11-17 10:36:57",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "contract: str_byte's inline path pays 3-4 dead instructions per byte; the scan of a fixed literal has both pointer and index homed and an index provably >= 0",
-        "benefits": "contract: str_scan 17.0 vs C 13.0 ms; the same shape serves every string walk; 2 failing-first shape tests",
-        "risks": "contract: SIB load dereferences [base+index] before the sign check is skipped, so a negative index would fault; dependency: movzx lacks a base+index variant; concurrency: none; state: nonnegative_slots facts must still be dropped on any re-assign",
-        "mitigation": "contract: SIB form only when the index slot is provably non-negative at the point of load (fact kept by positive updates, dropped on any other store), otherwise the test/js pair stays; dependency: add movzx_load8_sib(base, index) to machine.py asserting neither rsp nor rbp; concurrency: none; state: nonnegative reuse is the existing divisor-guard mechanism, unchanged"
-      }
-    },
     {
       "task_id": "cairn-strbyte-sib",
       "phase": "verify",
@@ -314,6 +300,23 @@
       "timestamp": 1794941845.497877,
       "timestamp_str": "2026-11-17 21:57:25",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-charloop-shave",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-charloop-shave' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794941892.956477,
+      "timestamp_str": "2026-11-17 21:58:12",
+      "agent": "mistral:vibe",
+      "head": "eba43d9ec7f47a29ed22a0898c6233befe9ec7bc",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }

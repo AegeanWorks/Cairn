@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `43`
-- **Total Classes**: `155`
+- **Total Classes**: `157`
 - **Total Top-Level Functions**: `176`
-- **Total Class Methods**: `836`
-- **Total Source Lines**: `15582`
+- **Total Class Methods**: `839`
+- **Total Source Lines**: `15663`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`43` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3800` lines (`192685` bytes)
+**Size**: `3806` lines (`193047` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -841,7 +841,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2163` lines (`106413` bytes)
+**Size**: `2214` lines (`108722` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1063,6 +1063,9 @@
 - `class ScanIndexSignGuardTest` - *A zero-initialized loop index never pays the inline's sign test.*
   - Method `.test_a_zero_initialized_index_skips_the_sign_test()`
   - Method `.test_an_unproven_index_keeps_the_sign_test()`
+- `class TrueLoopBranchTest` - *A literal-true loop condition branches with one jmp, never by testing 1.*
+  - Method `.test_a_while_true_back_edge_is_a_bare_branch()`
+  - Method `.test_a_while_false_body_never_runs()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
@@ -1514,7 +1517,7 @@
 ### [`tests/test_runtime.py`](tests/test_runtime.py)
 > *Tests for the runtime helpers' emitted shape and their static state.*
 
-**Size**: `45` lines (`1906` bytes)
+**Size**: `69` lines (`3188` bytes)
 
 **Classes:**
 - `class StdinRefillTest` - *The stdin refill path pays one cached handle and 64 KiB per syscall.*
@@ -1522,6 +1525,8 @@
   - Method `.test_the_stdin_buffer_holds_sixty_four_kib()`
   - Method `.test_the_handle_cache_is_static_state()`
   - Method `.test_the_refill_path_references_the_handle_cache()`
+- `class ReadCharPrologueTest` - *read_char's state loads stay lea+mov; the rip-direct rewrite loses here.*
+  - Method `.test_the_prologue_keeps_its_address_registers()`
 
 ---
 
