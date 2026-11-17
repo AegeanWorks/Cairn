@@ -3,31 +3,17 @@
   "active_task": {
     "task_id": "cairn-sum-speed",
     "last_phase": "delivery",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794897550.8681836,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794897567.2498066,
+    "completed_head": "09980a04a55ff81b8f5d91c2b23968f3ab0bca4d",
+    "completed_tree": "7bc700479860aac787155c6e75ca5e8469feda82"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-stream-input",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-stream-input' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794865604.749693,
-      "timestamp_str": "2026-11-17 00:46:44",
-      "agent": "mistral:vibe",
-      "head": "7c8c5466e705d98a9d9db17c7acf52c65a16420c",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-string-exit",
       "phase": "planning",
@@ -281,6 +267,23 @@
       "timestamp": 1794897550.8681836,
       "timestamp_str": "2026-11-17 09:39:10",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-sum-speed",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-sum-speed' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794897567.2900753,
+      "timestamp_str": "2026-11-17 09:39:27",
+      "agent": "mistral:vibe",
+      "head": "09980a04a55ff81b8f5d91c2b23968f3ab0bca4d",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
