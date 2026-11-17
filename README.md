@@ -310,20 +310,25 @@ a spread:
 
 | Case | Work | Cairn best | C best | C++ best | Rust best | Cairn size |
 |---|---|---|---|---|---|---|
-| `xorshift` | 200,000,000 serial xorshift steps | 292-306 ms | 283-306 ms | 287-300 ms | 292-308 ms | 2,048 bytes |
-| `fib30` | 2,692,537 recursive calls | 9.6-11.9 ms | 8.7-11.8 ms | 8.7-10.7 ms | 10.6-13.1 ms | 12,800 bytes |
-| `folded_math` | 20,000,000 bit-mixed constant additions | 18.4-20.4 ms | 18.0-22.0 ms | 18.3-22.1 ms | 19.2-23.1 ms | 2,048 bytes |
-| `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-106 ms | 158-164 ms | 160-164 ms | 140-150 ms | 2,560 bytes |
-| `ackermann` | `A(3,9)`, about 25 million calls | 10.2-13.9 ms | 15.2-19.4 ms | 15.4-18.0 ms | 18.4-64.5 ms | 3,072 bytes |
-| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 24.9-26.7 ms | 22.1-25.1 ms | 22.8-24.9 ms | 18.4-20.4 ms | 2,560 bytes |
-| `binary_gcd` | 1,000,000 Stein-GCD pairs | 182-190 ms | 170-180 ms | 173-181 ms | 148-154 ms | 2,560 bytes |
-| `call_chain` | 20,000,000 three-argument hot-path calls | 45-48 ms | 33-37 ms | 34-37 ms | 74-79 ms | 2,560 bytes |
-| `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 7.8-9.7 ms | 7.7-10.7 ms | 7.7-10.9 ms | 8.6-10.8 ms | 2,048 bytes |
-| `primes` | trial division over 2..300000 | 25.1-27.2 ms | 24.5-27.3 ms | 24.1-26.3 ms | 18.9-23.2 ms | 2,560 bytes |
-| `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.1-16.1 ms | 11.1-13.3 ms | 10.9-13.4 ms | 12.0-14.4 ms | 2,560 bytes |
-| `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 94.3-96.7 ms | 92.5-101.5 ms | 96.4-102.9 ms | 105.9-113.5 ms | 2,560 bytes |
-| `hex_io` | 400,000 hex-format-then-print values | 612-645 ms | 4,764-5,095 ms | 397-467 ms | 677-723 ms | 2,560 bytes |
-| `many_params` | 10,000,000 six-argument mix calls | 24.2-34.6 ms | 7.8-11.1 ms | 9.7-13.0 ms | 8.4-11.6 ms | 2,560 bytes |
+| `xorshift` | 200,000,000 serial xorshift steps | 292-306 ms | 283-306 ms | 287-300 ms | 292-308 ms | 71,168 bytes |
+| `fib30` | 2,692,537 recursive calls | 9.6-11.9 ms | 8.7-11.8 ms | 8.7-10.7 ms | 10.6-13.1 ms | 81,408 bytes |
+| `folded_math` | 20,000,000 bit-mixed constant additions | 18.4-20.4 ms | 18.0-22.0 ms | 18.3-22.1 ms | 19.2-23.1 ms | 71,168 bytes |
+| `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-106 ms | 158-164 ms | 160-164 ms | 140-150 ms | 71,168 bytes |
+| `ackermann` | `A(3,9)`, about 25 million calls | 10.2-13.9 ms | 15.2-19.4 ms | 15.4-18.0 ms | 18.4-64.5 ms | 71,680 bytes |
+| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 24.9-26.7 ms | 22.1-25.1 ms | 22.8-24.9 ms | 18.4-20.4 ms | 71,168 bytes |
+| `binary_gcd` | 1,000,000 Stein-GCD pairs | 182-190 ms | 170-180 ms | 173-181 ms | 148-154 ms | 71,680 bytes |
+| `call_chain` | 20,000,000 three-argument hot-path calls | 45-48 ms | 33-37 ms | 34-37 ms | 74-79 ms | 71,168 bytes |
+| `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 7.8-9.7 ms | 7.7-10.7 ms | 7.7-10.9 ms | 8.6-10.8 ms | 71,168 bytes |
+| `primes` | trial division over 2..300000 | 25.1-27.2 ms | 24.5-27.3 ms | 24.1-26.3 ms | 18.9-23.2 ms | 71,168 bytes |
+| `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.1-16.1 ms | 11.1-13.3 ms | 10.9-13.4 ms | 12.0-14.4 ms | 71,168 bytes |
+| `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 94.3-96.7 ms | 92.5-101.5 ms | 96.4-102.9 ms | 105.9-113.5 ms | 71,168 bytes |
+| `hex_io` | 400,000 hex-format-then-print values | 612-645 ms | 4,764-5,095 ms | 397-467 ms | 677-723 ms | 71,168 bytes |
+| `many_params` | 10,000,000 six-argument mix calls | 24.2-34.6 ms | 7.8-11.1 ms | 9.7-13.0 ms | 8.4-11.6 ms | 71,168 bytes |
+| `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 20.0-23.7 ms | 18.5-24.2 ms | 19.1-22.5 ms | 25.5-28.4 ms | 71,168 bytes |
+| `char_stream` | 4 MiB piped through `read_char()`, summed | 11.1-14.3 ms | 7.7-10.7 ms | 7.4-10.3 ms | 12.9-22.0 ms | 71,168 bytes |
+| `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.9-18.4 ms | 11.8-16.6 ms | 12.2-19.6 ms | 28.2-37.0 ms | 71,168 bytes |
+
+The size column is the executable's `.text` frame at the current revision: the runtime helpers (argv arena, 64 KiB stdin state, printers, divide trap) ride in every program, so most cases share the same 71,168-byte base.
 
 Standings per case (Cairn vs the fastest baseline on that case): `collatz`, `ackermann`, `tak`,
 `folded_math` and `splitmix` are won outright against all three baselines; `hex_io` wins against
@@ -350,11 +355,14 @@ test. `ackermann` is the two-argument pair win (ADR-025): pure arguments bind st
 argument registers with no stack traffic, the two-parameter recursion shape lowers as pure-text
 body copies, and the delta-0 `ack(m, n - 1)` chain site collapses into a counted loop
 (`R(j) = f**(j+1)(1)`) whose body is a single shifted copy — 10.2-13.9 ms against C's 15.2-19.4 ms,
-C++'s 15.4-18.0 ms and Rust's 55.9-64.5 ms, with the image at 3,072 bytes. `xorshift` remains the
+C++'s 15.4-18.0 ms and Rust's 55.9-64.5 ms. `xorshift` remains the
 recorded structural tie at the ISA latency floor, and `folded_math`'s margin is inside run-to-run
-spread in some sessions; `nqueens`, `binary_gcd`, `call_chain`, `primes`, `mandelbrot` and
-`many_params` remain
-the recorded losses, with the mechanisms in the ADR register.
+spread in some sessions; `nqueens`, `binary_gcd`, `call_chain`, `primes`, `mandelbrot`,
+`many_params` (gcc folds the six-argument mix structurally), `argv_walk`, `char_stream` and
+`str_scan` remain
+the recorded losses, with the mechanisms in the ADR register (`argv_walk`: ADR-059's inline;
+`char_stream`: ADR-058/062/063's measured call-vs-inline ledger; `str_scan`: ADR-060/061's
+NUL-test facts).
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 `movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics

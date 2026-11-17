@@ -20,8 +20,12 @@ task re-verifies every claim below against those sources.
 1. One type: `i64`. Every value is a signed 64-bit integer; comparisons yield `0` or `1`.
 2. One binding form per intent: `let` is immutable, `var` is assignable. No shadowing.
 3. One scope: flat and function-wide. A name declared in any block is visible after it.
-4. One function form: `fn name(a: i64, ...) -> i64`. At most four parameters.
-5. One effect: `print(x)` writes the decimal form plus a newline and returns `x`.
+4. One function form: `fn name(a: i64, ...) -> i64`. At most eight parameters.
+5. One effect family: the §10 builtins. Decimal, byte and hex printers write to stdout;
+   `read_char` reads stdin, `argc`/`arg_byte` read the command line, `str_len`/`str_byte`
+   read string literals, `print_str` writes a literal, `exit` stops the process. Each
+   returns its argument (or the value it answered) unless it is `exit`, which returns
+   to no one.
 6. No hidden behaviour: overflow wraps, division by zero traps, every frame slot reads as `0` on entry.
 7. No toolchain: the compiler is Python standard library only; the artifact is a Windows PE32+ console executable needing nothing else.
 
@@ -69,7 +73,7 @@ fn name(a: i64, b: i64) -> i64 { block }
 - Every function declares `-> i64` and every path through its body ends in `return expr;`, else `E3009`.
 - At most eight parameters (`E3010`); the first four travel in registers and the rest in the
   caller's outgoing stack area. Parameters are mutable slots.
-- Redefining any builtin (`print`, `print_char`, `print_hex`) is `E3012`. Duplicating a function is `E3001`.
+- Redefining any §10 builtin is `E3012`. Duplicating a function is `E3001`.
 - `fn main() -> i64` with no parameters is the entry point (`E3011` when missing or ill-formed). Its return value is the process exit code.
 
 ### 5.2 Bindings
@@ -82,7 +86,8 @@ var y: i64 = expr;
 - Every binding names its type (`i64`), has an initializer, and gets one frame slot.
 - `let` cannot be assigned after init (`E3005`). `var` can.
 - A name already declared in the function cannot be redeclared (`E3006`), including parameters. There is no shadowing.
-- Reading an undeclared name is `E3007`. Using a builtin as a value is `E3012`.
+- Reading an undeclared name is `E3007`. A builtin's bare name is never a value (`E3012`): every
+  use is a call.
 
 ## 6. Expressions and statements
 
@@ -104,7 +109,7 @@ name(arg, ...)
 print(x)
 ```
 
-- A call names a declared `fn` or one of the builtins (`print`, `print_char`, `print_hex`).
+- A call names a declared `fn` or one of the builtins (`§10`).
 - Arity must match exactly (`E3004`); unknown callees are `E3003`.
 - Statement position accepts only an assignment or a call; any other bare expression is `E2004`. Only a name is assignable (`E2003`).
 
@@ -141,6 +146,13 @@ code generation never sees a `for`.
 | Division rounding | Truncates toward zero; `%` keeps the dividend's sign |
 | `print_char(c)` | Writes the low byte of `c` (`c & 0xFF`), no newline; returns `c` |
 | `print_hex(x)` | Writes `x` as lowercase hex of its unsigned 64-bit value, no leading zeros, `0` for zero, no newline; returns `x` |
+| `print_str(s)` | Writes the bytes of the string literal `s` with no newline; returns `s` |
+| `argc()` | The command-line token count, the program path included |
+| `arg_byte(i, j)` | Byte `j` (zero-indexed) of command-line token `i`, quotes stripped by tokenization; `-1` for a negative `j`, past the token's end, past `63` tokens, or before the first fill |
+| `read_char()` | The next stdin byte, or `-1` at end of stream (a true end keeps answering `-1`) |
+| `exit(code)` | Stops the machine at once with process exit code `code`; usable only as its own statement, exactly like a `return` (`E3013` anywhere else); nothing after it runs |
+| `str_len(s)` | The byte count of the NUL-terminated literal `s`, terminator excluded |
+| `str_byte(s, j)` | The byte at `j`, or `-1` at or past the NUL terminator, or for a negative `j` |
 | Right shift | Arithmetic (`>>` keeps the sign); shift counts mask to 63 in folding and hardware |
 | Uninitialised reads | Impossible: initializers are mandatory and every frame slot is zeroed on entry |
 | Branch never taken | A binding declared inside it reads as `0` |
@@ -154,8 +166,8 @@ dead-branch selection keep the zeroed-frame rule observable in both build modes.
 
 One target only: Windows x86-64, PE32+ console, sections `.text` (code),
 `.rdata` (import names and string constants), `.data` (import address table).
-Imports are exactly `GetStdHandle`, `WriteFile`, `ExitProcess` from
-`kernel32.dll`. There is no `#if target`, no `extern`, no triple flag.
+Imports are exactly `GetStdHandle`, `WriteFile`, `ReadFile`, `GetCommandLineA`,
+`ExitProcess` from `kernel32.dll`. There is no `#if target`, no `extern`, no triple flag.
 Header timestamps are zero, so identical sources give identical bytes.
 Calls use the Windows x64 register block (`rcx`, `rdx`, `r8`, `r9`) and a private
 contract for the rest: stack parameter `j` rides at `[rbp+16+8j]` in the callee, in
@@ -171,13 +183,28 @@ prints one. (Divergence from Alloy SPEC §§9–10, recorded deliberately.)
 
 ## 10. Standard surface (the whole of it)
 
-- Types: `i64`. Literals: decimal integer; `true`/`false`.
+- Types: `i64`. Literals: decimal integer; `true`/`false`; read-only string literals
+  (`"bytes"`, double-quoted, NUL-terminated, strengthened to an `i64` handle).
 - Statements: `let`, `var`, assignment, `if`/`else`, `while`, `for` (counted range), `return`, `break`, `continue`, block.
-- Builtins: `print(x: i64) -> i64` (decimal plus newline), `print_char(c: i64) -> i64`
-  (single byte, no newline), `print_hex(x: i64) -> i64` (lowercase hex, no newline).
+- Builtins (every name, arity and behaviour the manifest publishes):
+  - `print(x: i64) -> i64` — decimal plus newline.
+  - `print_char(c: i64) -> i64` — single byte, no newline.
+  - `print_hex(x: i64) -> i64` — lowercase hex, no newline.
+  - `print_str(s: i64) -> i64` — the literal's raw bytes, no newline.
+  - `argc() -> i64` — command-line token count, program path included.
+  - `arg_byte(i: i64, j: i64) -> i64` — byte `j` of token `i`, `-1` past any bound.
+  - `read_char() -> i64` — next stdin byte, `-1` at end of stream.
+  - `exit(code: i64)` — stops the process with process exit code `code`; statement-only (`E3013`).
+  - `str_len(s: i64) -> i64` — NUL-terminated byte count.
+  - `str_byte(s: i64, j: i64) -> i64` — byte `j`, `-1` at or past the terminator.
 - Comments: `//` to end of line.
-- Limits: 4 parameters; `i64` range `-9223372036854775808..9223372036854775807`; ASCII identifiers, no shadowing.
-- (Divergence from Alloy SPEC §§4, 6, 10: no strings, pointers, classes, interfaces, `Result`, `match`, closures, or IO interfaces. `print(i64)` replaces `Writer`/`write_str`.)
+- Limits: 8 parameters (the first four in registers, the rest in the caller's outgoing
+  stack area); `i64` range `-9223372036854775808..9223372036854775807`; ASCII identifiers,
+  no shadowing.
+- (Divergence from Alloy SPEC §§4, 6, 10: no floats, pointers, classes, interfaces,
+  `Result`, `match`, closures, or IO interfaces beyond `§10`. `print(i64)` replaces
+  `Writer`/`write_str`; string literals and the read builtins above are the whole
+  standard library.)
 
 ## 11. Programs and entry
 
@@ -239,7 +266,9 @@ An LLM writing Cairn MUST:
 4. Keep one flat scope: never redeclare a name in the same function.
 5. Put `main` as `fn main() -> i64` with no parameters.
 6. Name files `*.crn`.
-7. Never invent strings, imports, modules, generics, closures, classes, traits, lifetimes, `unsafe`, exceptions, or `for`.
+7. Never invent strings-in-variables, imports, modules, generics, closures, classes,
+   traits, lifetimes, `unsafe`, or exceptions. §10 is the whole standard library; a
+   builtin beyond it does not exist.
 
 Illegal (do not emit):
 
@@ -277,15 +306,15 @@ A source file is valid Cairn 0.1 if every box ticks:
 - [ ] Every routine uses `fn` and declares `-> i64`
 - [ ] Every binding is `let name: i64 = expr;` or `var name: i64 = expr;`, never redeclared
 - [ ] No type name besides `i64` appears
-- [ ] Every call has exact arity; `print` is only ever called with one argument
+- [ ] Every call has exact arity per §10 (`exit` sits only as its own statement)
 - [ ] `fn main() -> i64` exists, takes no parameters, and every function ends in `return`
 - [ ] No statement besides assignment or call sits bare; `break`/`continue` are inside a loop (a `while` or a `for`)
 - [ ] `python -m cairn check file.crn --json` reports `ok: true`
 - [ ] `python -m cairn verify file.crn` reports verified (same ten `V####` rules as a built `.exe`)
 - [ ] `python -m cairn run file.crn` prints the expected integers and forwards the expected exit code
 
-Non-goals for 0.1 (explicit): floats, strings, arrays, structs, modules,
+Non-goals for 0.1 (explicit): floats, arrays, structs, modules,
 closures, generics, exceptions, threads, GC, pointers, interfaces, DI,
 conditional compilation, foreign declarations, and any standard library
-beyond `print`. Each is a new specification task with its own ADR, not an
+beyond §10's named builtins. Each is a new specification task with its own ADR, not an
 interpretation of this one.

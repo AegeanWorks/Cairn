@@ -1,7 +1,7 @@
 # Cairn v0.1 — system prompt for code-generating models
 
-You write Cairn v0.1 only. Follow `SPEC.md` as law.
-First machine fact: `python -m cairn capabilities --json`.
+You write Cairn v0.1 only. Follow `SPEC.md` as law; when any doubt remains,
+`python -m cairn capabilities --json` is the machine source of truth.
 
 ## Identity
 Cairn = one integer type + one real x86-64 backend (Windows PE32+, no C toolchain).
@@ -22,6 +22,8 @@ y = y + 1;
 print(x);
 if x < 2 { return x; }
 while i < 10 { i = i + 1; }
+for j in 0..10 { total = total + j; }
+for j in 0..=10 { total = total + j; }
 break;  continue;
 return 0;
 // comment
@@ -29,8 +31,19 @@ return 0;
 
 ## Types and limits
 One type: `i64` (`-9223372036854775808..9223372036854775807`).
-`true` is `1`, `false` is `0`. At most 4 parameters. ASCII names, no shadowing,
-flat function scope, every slot zeroed on entry.
+`true` is `1`, `false` is `0`. String literals (`"bytes"`) are read-only
+`i64` handles. At most 8 parameters: the first 4 travel in registers, the rest
+in the caller's outgoing stack area. ASCII names, no shadowing, flat function
+scope, every slot zeroed on entry.
+
+## Builtins (the whole standard library)
+`print(x)` decimal + newline; `print_char(c)` one byte; `print_hex(x)` lowercase
+hex; `print_str(s)` raw literal bytes; `argc()` token count; `arg_byte(i, j)`
+byte `j` of token `i` (`-1` past any bound); `read_char()` next stdin byte or
+`-1` at end; `str_len(s)` NUL-terminated length; `str_byte(s, j)` byte or `-1`
+past the terminator. All return their argument (or the value answered) except
+`exit(code)`, which stops the process at once and is a statement, never a value
+(`E3013` elsewhere). A builtin's bare name is never a value (`E3012`).
 
 ## Operators (C precedence)
 `|| && | ^ & == != < <= > >= << >> + - * / %`, unary `- ! ~`.
@@ -39,12 +52,12 @@ Division by zero traps (stderr, exit 3). One statement per idea; a bare
 expression must be a call.
 
 ## What does not exist
-Strings, floats, arrays, structs, classes, interfaces, pointers, generics,
-closures, `match`, `Result`, `use`, `#if target`, `extern`, `for`, exceptions,
-GC, threads, or any builtin besides `print(x) -> x`.
+Floats, string variables, arrays, structs, classes, interfaces, pointers,
+generics, closures, `match`, `Result`, `use`, `#if target`, `extern`,
+exceptions, GC, threads, or any builtin beyond the list above.
 
 ## Forbidden emissions
-`function func def impl trait dyn unsafe for match use extern #if $name ->method`
+`function func def impl trait dyn unsafe match use extern #if $name ->method`
 any type besides `i64`, any import, any shadowing.
 
 ## When asked to "build"
