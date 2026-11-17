@@ -176,5 +176,44 @@ class ImulImmediateEncodingTest(unittest.TestCase):
             self.code(lambda a: a.imul_imm("rax", "rbx", -2 ** 31 - 1))
 
 
+
+class NopPadEncodingTest(unittest.TestCase):
+    """Loop-head padding composes canonical multi-byte no-ops, not nop trains.
+
+    A pad of one-byte nops rides the fall-through path straight into hot
+    loop bodies, and this core spends real decode slots on every single
+    byte nop. The canonical table is the standard nop set: one `90`,
+    `66 90`, then the `0F 1F` family generously addressed, largest first.
+    """
+
+    def code(self, build) -> bytes:
+        assembler = Assembler()
+        build(assembler)
+        return bytes(assembler.code)
+
+    NINE = bytes([0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00])
+    SIX = bytes([0x66, 0x0F, 0x1F, 0x44, 0x00, 0x00])
+
+    def test_three_bytes_use_the_compact_nopl_form(self) -> None:
+        self.assertEqual(self.code(lambda a: a.nop_pad(3)),
+                         bytes([0x0F, 0x1F, 0x00]))
+
+    def test_two_bytes_use_xchg_arrays_swap(self) -> None:
+        self.assertEqual(self.code(lambda a: a.nop_pad(2)),
+                         bytes([0x66, 0x90]))
+
+    def test_fifteen_bytes_compose_from_nine_and_six(self) -> None:
+        body = self.code(lambda a: a.nop_pad(15))
+        self.assertEqual(len(body), 15)
+        self.assertEqual(body, self.NINE + self.SIX)
+
+    def test_zero_bytes_pad_nothing(self) -> None:
+        self.assertEqual(self.code(lambda a: a.nop_pad(0)), b"")
+
+    def test_every_size_rounds_to_its_requested_length(self) -> None:
+        for size in range(1, 16):
+            body = self.code(lambda a, s=size: a.nop_pad(s))
+            self.assertEqual(len(body), size, f'size {size}')
+
 if __name__ == "__main__":
     unittest.main()

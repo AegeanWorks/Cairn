@@ -499,6 +499,32 @@ class Assembler:
         self.emit(bytes([_rex(False, 0, 0, code >> 3), 0x80, 0xC0 | (code & 7),
                           value & 0xFF]))
 
+    NOP_PATTERNS = (
+        (9, b"\x66\x0F\x1F\x84\x00\x00\x00\x00\x00"),
+        (8, b"\x0F\x1F\x84\x00\x00\x00\x00\x00"),
+        (7, b"\x0F\x1F\x80\x00\x00\x00\x00"),
+        (6, b"\x66\x0F\x1F\x44\x00\x00"),
+        (5, b"\x0F\x1F\x44\x00\x00"),
+        (4, b"\x0F\x1F\x40\x00"),
+        (3, b"\x0F\x1F\x00"),
+        (2, b"\x66\x90"),
+        (1, b"\x90"),
+    )
+
+    def nop_pad(self, size: int) -> None:
+        """`size` bytes of padding as canonical multi-byte nops.
+
+        A pad of single-byte nops rides the fall-through path straight into
+        hot loop bodies, and this core spends a decode slot on every one-byte
+        nop, so the largest nop form that fits is always preferred.
+        """
+        while size > 0:
+            for length, pattern in self.NOP_PATTERNS:
+                if length <= size:
+                    self.emit(pattern)
+                    size -= length
+                    break
+
     def store_byte(self, base: str, source: str) -> None:
         """`mov [base], r8`."""
         base_code, src_code = REGISTERS[base], EIGHT_BIT[source]

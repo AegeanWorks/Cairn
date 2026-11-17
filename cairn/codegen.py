@@ -535,7 +535,7 @@ class CodeGenerator:
         """
         pad = (16 - self.assembler.here() % 16) % 16
         if pad:
-            self.assembler.code.extend(b"\x90" * pad)
+            self.assembler.nop_pad(pad)
         self.assembler.label(label)
 
     def _load_slot(self, slot: int, destination: str = "rax") -> None:
