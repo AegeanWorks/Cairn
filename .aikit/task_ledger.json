@@ -3,26 +3,17 @@
   "active_task": {
     "task_id": "cairn-readchar-inline",
     "last_phase": "verify",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794910581.0490534,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794910607.3658588,
+    "completed_head": "7b9aa313d58c0ca40198d2494d7fc70d233e1eb9",
+    "completed_tree": "5146d07b227f27185b1cc4c61e165f8e39926880"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-call-speed",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[3/3] Delivered: select-if reversed to lea, sub, cmov (call_chain -19.7%) and str_byte leaf-index inline (str_scan -10.1%); arg_byte inline and rcx-binding measured slower, recorded as dead ends; 1073 tests OK; gate exit 0",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794892711.3198195,
-      "timestamp_str": "2026-11-17 08:18:31",
-      "agent": "mistral:vibe",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-call-speed",
       "phase": "completed",
@@ -293,6 +284,23 @@
       "timestamp": 1794910581.0490534,
       "timestamp_str": "2026-11-17 13:16:21",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-readchar-inline",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-readchar-inline' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794910607.4067743,
+      "timestamp_str": "2026-11-17 13:16:47",
+      "agent": "mistral:vibe",
+      "head": "7b9aa313d58c0ca40198d2494d7fc70d233e1eb9",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
