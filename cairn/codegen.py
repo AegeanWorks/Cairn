@@ -638,9 +638,13 @@ class CodeGenerator:
         if (home is not None and isinstance(expression, syntax.IntLiteral)
                 and expression.value == 0):
             # A ten-byte move of a zero constant is two instructions plus the store;
-            # the xor zero-idiom writes zero in one 3-byte instruction.
+            # the xor zero-idiom writes zero in one 3-byte instruction. Zero is the
+            # strongest non-negative fact there is, so the scanned-index loop shape
+            # (`var j = 0` then `j = j + 1`) keeps the sign guard out of its hot
+            # byte loads.
             self.assembler.xor_zero(home)
-            self.nonnegative_slots.discard(slot)
+            if not (slot == self.delta_slot and self.delta_value):
+                self.nonnegative_slots.add(slot)
             return
         self._emit_expression(expression)
         self._store_slot(slot)

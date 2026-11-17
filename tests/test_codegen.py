@@ -2047,10 +2047,19 @@ class ArgByteInlineTest(unittest.TestCase):
         self.assertIn(bytes([0x0F, 0x8D]), body,  # jge past-end (rel32)
                       "the mask proves nothing about the length, which still checks")
 
+    # j walks 0..63 and cannot go negative, so the fact-holding scan shape
+    # drops the sign test; a parameter index carries no such fact and one
+    # shape must exercise it.
+    PARAM = ("fn probe(k: i64) -> i64 { var c: i64 = arg_byte(0, k);"
+             " if c >= 0 { return c; } return -2; }"
+             " fn main() -> i64 { print(probe(5)); return 0; }")
+
     def test_a_negative_index_never_leaves_the_table(self) -> None:
-        body = region_text(self.WALK, "main")
+        body = region_text(self.PARAM, "probe")
         self.assertIn(bytes([0x0F, 0x88]), body,  # js to the miss route (rel32)
                       "a negative index still answers -1, through the helper call")
+        self.assertIn(bytes([0x4C, 0x8B, 0x15]), body,  # mov r10, [rip+disp32]
+                      "the rip-relative slot 0 pointer binds in the inline too")
 
 
 class ZeroCompareFlagReuseTest(unittest.TestCase):
@@ -2109,3 +2118,46 @@ class ZeroCompareFlagReuseTest(unittest.TestCase):
         body = region_text(self.SIGNED, "probe")
         self.assertTrue(any(form in body for form in self._cmp_zero_forms()),
                         "a signed zero comparison re-compare keeps its cmp")
+
+class ScanIndexSignGuardTest(unittest.TestCase):
+    """A zero-initialized loop index never pays the inline's sign test.
+
+    `var j: i64 = 0` lands as an xor-zero store, and zero is provably
+    non-negative, so the fact must be recorded there like any other
+    non-negative literal store. `j = j + 1` only keeps existing facts,
+    which left every str_byte inline in a `while j < len` scan testing
+    the sign of the own index before the byte - two of the nine
+    instructions per byte in str_scan.
+    """
+
+    SCAN = ("fn main() -> i64 {"
+            ' let s: i64 = "abcde";'
+            " var len: i64 = str_len(s);"
+            " var total: i64 = 0;"
+            " var j: i64 = 0;"
+            " while j < len {"
+            "   var c: i64 = str_byte(s, j);"
+            "   total = total + c; j = j + 1; }"
+            " print(total); return 0; }")
+
+    def test_a_zero_initialized_index_skips_the_sign_test(self) -> None:
+        body = region_text(self.SCAN, "main")
+        self.assertIn(bytes([0x0F, 0xB6]), body,  # movzx byte load folded
+                      "the leaf index loads the byte straight from the pointer")
+        self.assertNotIn(bytes([0x0F, 0x88]), body,  # js rel32 miss route
+                         "the sign test of a proven non-negative index is gone")
+        self.assertNotIn(bytes([0x78]), body,  # short js
+                         "no short-circuit sign branch survives either")
+
+    SIGNED = ("fn probe(s: i64, k: i64) -> i64 {"
+              " return str_byte(s, k); }"
+              " fn main() -> i64 {"
+              ' let s: i64 = "abcde";'
+              " return probe(s, 2); }")
+
+    def test_an_unproven_index_keeps_the_sign_test(self) -> None:
+        # A parameter count is no fact: the inline keeps its miss route
+        # because k may be negative.
+        body = region_text(self.SIGNED, "probe")
+        self.assertIn(bytes([0x0F, 0x88]), body,
+                      "a parameter index may be negative, the miss route stays")
