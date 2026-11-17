@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `44`
-- **Total Classes**: `160`
-- **Total Top-Level Functions**: `178`
-- **Total Class Methods**: `849`
-- **Total Source Lines**: `15777`
+- **Total Classes**: `163`
+- **Total Top-Level Functions**: `181`
+- **Total Class Methods**: `860`
+- **Total Source Lines**: `16024`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`44` module(s))
@@ -134,14 +134,14 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3806` lines (`193047` bytes)
+**Size**: `3822` lines (`193702` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
   - Method `.generate(program)` - *Emit the entry stub, every function, then the runtime helpers.*
   - Method `._fresh(stem)` - *A label name no other construct uses.*
   - Method `._string_label(text)` - *The .rodata label holding `text` NUL-terminated, creating it once.*
-  - Method `._emit_entry()` - *The PE entry point: call main, then exit with main's return value.*
+  - Method `._emit_entry()` - *The PE entry point: call main, drain stdout, then exit with main's return.*
   - Method `._emit_function(function)` - *Prologue, saved homes, cleared frame, parameter spills, body, and one epilogue.*
   - Method `._save_homes()` - *Keep the caller's values for every callee-saved register this function uses.*
   - Method `._restore_homes()` - *Put the caller's values back before returning.*
@@ -573,13 +573,16 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `583` lines (`23109` bytes)
+**Size**: `708` lines (`28300` bytes)
 
 **Functions:**
 - `def emit_arg_fill(assembler)` - *Emit `arg_fill`: tokenize the ANSI command line into the static table once.*
 - `def emit_argc(assembler)` - *Emit `argc()`: the token count, filling and caching the table on the first call.*
 - `def emit_arg_byte(assembler)` - *Emit `arg_byte(i, j)`: byte j (zero-indexed) of argument i's content, or -1.*
 - `def emit_read_char(assembler)` - *Emit `read_char()`: the next stdin byte, or -1 at end of stream.*
+- `def emit_out_flush(assembler)` - *Emit `flush()`: drain the shared stdout buffer, answering the drained count.*
+- `def emit_out_append(assembler)` - *Emit `out_append`: rax carries the source bytes, rdx their count.*
+- `def emit_out_flush_work(assembler)` - *Emit `out_flush.work`: one WriteFile for everything the cursor holds.*
 - `def emit_print_i64(assembler)` - *Emit `print_i64`: write rax in decimal plus a newline.*
 - `def emit_print_char(assembler)` - *Emit `print_char`: write the low byte of rax to stdout, no newline.*
 - `def emit_print_hex(assembler)` - *Emit `print_hex`: write rax in lowercase hex, no newline, no leading zeros.*
@@ -594,7 +597,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `322` lines (`15320` bytes)
+**Size**: `322` lines (`15332` bytes)
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -1113,7 +1116,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1383` lines (`52212` bytes)
+**Size**: `1427` lines (`54135` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1238,6 +1241,12 @@
   - Method `.test_equal_literals_share_one_blob()`
   - Method `.test_str_byte_with_a_calling_index_takes_the_helper_path()`
   - Method `.test_an_assert_helper_prints_and_exits_on_mismatch()`
+- `class StdoutBufferTest` - *The shared stdout buffer changes the syscall count, never the bytes.*
+  - Method `.test_exit_flushes_the_shared_buffer()`
+  - Method `.test_flush_returns_the_pending_byte_count()`
+  - Method `.test_a_fresh_buffer_flushes_zero_bytes()`
+  - Method `.test_flush_keeps_the_stream_in_order()`
+  - Method `.test_two_hundred_kib_of_print_char_survive_the_buffer()`
 
 **Functions:**
 - `def _wrap(value)`
@@ -1543,7 +1552,7 @@
 ### [`tests/test_runtime.py`](tests/test_runtime.py)
 > *Tests for the runtime helpers' emitted shape and their static state.*
 
-**Size**: `69` lines (`3188` bytes)
+**Size**: `119` lines (`5811` bytes)
 
 **Classes:**
 - `class StdinRefillTest` - *The stdin refill path pays one cached handle and 64 KiB per syscall.*
@@ -1553,13 +1562,18 @@
   - Method `.test_the_refill_path_references_the_handle_cache()`
 - `class ReadCharPrologueTest` - *read_char's state loads stay lea+mov; the rip-direct rewrite loses here.*
   - Method `.test_the_prologue_keeps_its_address_registers()`
+- `class StdoutBufferTest` - *The stdout buffer is static writable state the print family shares.*
+  - Method `.test_the_stdout_buffer_holds_sixty_four_kib()`
+  - Method `.test_the_stdout_state_rides_the_writable_blob()`
+  - Method `.test_every_printer_routes_through_out_append()`
+  - Method `.test_out_flush_carries_a_cached_handle_and_the_write()`
 
 ---
 
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `203` lines (`10185` bytes)
+**Size**: `215` lines (`10788` bytes)
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -1600,6 +1614,9 @@
   - Method `.test_the_loop_variable_is_gone_after_the_loop()`
   - Method `.test_continue_and_break_are_valid_inside_a_for()`
   - Method `.test_the_range_bounds_must_be_i64_expressions()`
+- `class FlushBuiltinTest` - *flush() drains the shared stdout buffer: zero arguments, a real value.*
+  - Method `.test_flush_takes_no_arguments_and_runs_as_a_statement()`
+  - Method `.test_flush_is_a_value_builtin_that_cannot_be_renamed()`
 
 **Functions:**
 - `def codes(source)` - *The diagnostic codes a source produces; asserts it is refused.*
