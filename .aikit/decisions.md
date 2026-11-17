@@ -610,3 +610,31 @@ uops and 10 bytes from its back edge; gate windows were load-noisy, so
 the interleaved A/B is the recorded decision evidence. Remaining
 char_stream gap to C lives in call/ret and the compare chain, neither
 addressable without cargo-culting shapes this box already rejected.
+
+## ADR-064: the capabilities manifest is the law; the documents bind to it
+
+Date: closed by task cairn-contract-sync (2354a4f). Accepted.
+
+Context. The agent-facing contract had drifted: SPEC.md claimed four
+parameters where sema enforces eight, documented 3 of 10 builtins and 3
+of 5 PE imports, banned the legal `for` range in its style rules, and
+LLM_SYSTEM.md still described a pre-ADR-051 language ("print is the only
+builtin"). The README's benchmark table omitted three cases and its size
+column predated every runtime helper. An agent trusting any one document
+as law writes rejected code - the exact failure class an agent-first
+language exists to prevent.
+
+Decision. `python -m cairn capabilities --json` is declared the machine
+source of truth, and tests/test_contract.py makes the drift impossible
+to reintroduce: the standard surface, the parameter limit, the import
+set, the for grammar, the trap-3-vs-CLI-exit-code distinction, the
+system card's bounded size and the README's benchmark table all bind to
+the manifest. SPEC.md is the complete human rendering (every builtin
+gets a §7 semantics row and a §10 entry); LLM_SYSTEM.md stays a
+hand-written compact card held under 5,000 bytes by a test.
+
+Consequences. 8 of the 10 contract tests failed against the drifted
+documents and now pass; 1118 tests OK. Doc-law changes carry no byte
+changes, so they need the contract suite, not a benchmark gate. Full
+generation of the card from the manifest remains available if it drifts
+again, but the binding tests make that measurably unlikely first.
