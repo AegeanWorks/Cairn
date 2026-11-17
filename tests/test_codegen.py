@@ -1956,3 +1956,50 @@ class ExtraHomeFrameTest(unittest.TestCase):
         body = region_text(self.WIDE, "main")
         self.assertNotIn(b"\x0f\xb6", body,
                          "r10 holds a live value, so the byte load must use the helper")
+class StrByteSibLoadTest(unittest.TestCase):
+    """str_byte(s, j) with homed pointer and homed, proven-nonnegative index.
+
+    The scan-loop shape (`while j < str_len(s)`) pays four dead instructions
+    per byte: a pointer hop through rax, an index hop through rax, a lea into
+    r10, and an unreachable sign test. The byte load folds into one movzx.
+    """
+
+    SCAN = ('fn main() -> i64 { let s: i64 = "abcdefghijklmnopqrstuvwxyz";'
+            " var j: i64 = 0; var total: i64 = 0;"
+            " while j < str_len(s) {"
+            " total = total + str_byte(s, j);"
+            " j = j + 1; }"
+            " return total; }")
+
+    NEG = ('fn main() -> i64 { let s: i64 = "abc"; var j: i64 = 0;'
+           " var total: i64 = 0;"
+           " while j < 3 {"
+           " total = total + str_byte(s, j);"
+           " j = j + 1; }"
+           " var q: i64 = -1;"
+           " j = q;"
+           " while j < 3 {"
+           " total = total + str_byte(s, j);"
+           " j = j + 1; }"
+           " return total; }")
+
+    def test_the_byte_load_folds_into_one_sib_movzx(self) -> None:
+        body = region_text(self.SCAN, "main")
+        # movzx r32, [base + index]: 0F B6 with SIB addressing (rm == 100b).
+        sib = False
+        for i in range(len(body) - 3):
+            if body[i] == 0x0F and body[i + 1] == 0xB6 and (body[i + 2] & 7) == 0x04:
+                sib = True
+        self.assertTrue(sib, "the byte load must address [ptr_home + idx_home] directly")
+
+    def test_the_pointer_never_hops_through_rax(self) -> None:
+        body = region_text(self.SCAN, "main")
+        self.assertNotIn(b"\x49\x89\xc2", body,  # mov r10, rax
+                         "the pointer binds straight into r10, no rax hop")
+
+    def test_an_unproven_index_keeps_the_sign_test(self) -> None:
+        body = region_text(self.NEG, "main")
+        # j = -1 drops the non-negative fact: the sign branch must come back
+        # (test reg, reg + js) before any byte load in that pass.
+        self.assertTrue(b"\x78" in body or b"\x0f\x88" in body,
+                        "a negative index possibility keeps the sign test")

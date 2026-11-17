@@ -2479,8 +2479,35 @@ class CodeGenerator:
                     and "r10" not in self.extra_homes):
                 miss = self._fresh("str_byte.inline.miss")
                 done = self._fresh("str_byte.inline.done")
-                self._emit_expression(expression.arguments[0])
-                asm.mov_reg_reg("r10", "rax")
+                pointer = expression.arguments[0]
+                while isinstance(pointer, syntax.Parens):
+                    pointer = pointer.inner
+                index = expression.arguments[1]
+                while isinstance(index, syntax.Parens):
+                    index = index.inner
+                base = (self._home(pointer.slot)
+                        if isinstance(pointer, syntax.Name) else None)
+                index_home = (self._home(index.slot)
+                              if isinstance(index, syntax.Name) else None)
+                if base is not None and index_home is not None:
+                    # Both operands are register homes: the address folds into the
+                    # load itself (`movzx [base + index]`), no r10 hop, no lea. The
+                    # sign test stays unless the index is provably non-negative
+                    # (the same fact the division guards ride on) — a negative
+                    # index must never reach the address.
+                    if index.slot in self.nonnegative_slots:
+                        asm.movzx_load8_sib("rax", base, index_home)
+                    else:
+                        asm.test(index_home)
+                        asm.jcc("s", miss)
+                        asm.movzx_load8_sib("rax", base, index_home)
+                    asm.test("rax")
+                    asm.jcc("nz", done)
+                    asm.label(miss)
+                    asm.mov_imm64("rax", -1)
+                    asm.label(done)
+                    return
+                self._emit_into(pointer, "r10")
                 self._emit_into(expression.arguments[1], "rax")
                 asm.test("rax")
                 asm.jcc("s", miss)

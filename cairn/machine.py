@@ -290,6 +290,23 @@ class Assembler:
             if (dst >= 8 or base_code >= 8) else b""
         self.emit(prefix, b"\x0F\xB6", bytes(_modrm(0, dst, base_code)))
 
+    def movzx_load8_sib(self, destination: str, base: str, index: str) -> None:
+        """`movzx r32, [base + index]`: one byte load off two pointer registers.
+
+        The SIB byte covers base+index*1 with no displacement; a pointer and its
+        index both living in homes folds the whole address into one load. Neither
+        base may be `rsp` and base `rbp` needs the disp32-base form no caller here
+        can reach (rbp is the frame pointer, never a home), so both stay asserts.
+        """
+        dst = REGISTERS[destination]
+        base_code, index_code = REGISTERS[base], REGISTERS[index]
+        assert base_code not in (REGISTERS["rsp"], REGISTERS["rbp"])
+        assert index_code != REGISTERS["rsp"]
+        prefix = bytes([_rex(False, dst >> 3, index_code >> 3, base_code >> 3)]) \
+            if (dst >= 8 or index_code >= 8 or base_code >= 8) else b""
+        self.emit(prefix, b"\x0F\xB6", bytes(_modrm(0, dst, 4)),
+                  bytes([(index_code & 7) << 3 | (base_code & 7)]))
+
     def movzx_from8(self, destination: str, source: str) -> None:
         """`movzx r32, r8`: the `& 255` mask of a register's value in one instruction.
 

@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `149`
+- **Total Classes**: `150`
 - **Total Top-Level Functions**: `176`
-- **Total Class Methods**: `807`
-- **Total Source Lines**: `15084`
+- **Total Class Methods**: `811`
+- **Total Source Lines**: `15175`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3714` lines (`187892` bytes)
+**Size**: `3741` lines (`189358` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -385,7 +385,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `529` lines (`24701` bytes)
+**Size**: `546` lines (`25710` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -418,6 +418,7 @@
   - Method `.lea_rip(destination, target)` - *`lea r64, [rip+disp32]`, used for read-only data addresses.*
   - Method `.mov_load(destination, base)` - *`mov r64, [base]`: read a qword through a pointer register.*
   - Method `.movzx_load8(destination, base)` - *`movzx r32, [base]`: read the byte at a pointer register, zero-extended.*
+  - Method `.movzx_load8_sib(destination, base, index)` - *`movzx r32, [base + index]`: one byte load off two pointer registers.*
   - Method `.movzx_from8(destination, source)` - *`movzx r32, r8`: the `& 255` mask of a register's value in one instruction.*
   - Method `.movzx_from16(destination, source)` - *`movzx r32, r16`: the `& 65535` mask of a register's value in one instruction.*
   - Method `._movzx(extension, destination, source)` - *Shared `movzx r32, r/m16|8` register form; REX appears only for r8-r15.*
@@ -838,7 +839,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `1958` lines (`96236` bytes)
+**Size**: `2005` lines (`98357` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1042,6 +1043,10 @@
 - `class ExtraHomeFrameTest` - *A frame function grants its seventh and eighth hot slots r10/r11.*
   - Method `.test_a_call_site_pushes_and_pops_the_extra_homes()`
   - Method `.test_str_byte_inline_bails_when_r10_is_a_home()`
+- `class StrByteSibLoadTest` - *str_byte(s, j) with homed pointer and homed, proven-nonnegative index.*
+  - Method `.test_the_byte_load_folds_into_one_sib_movzx()`
+  - Method `.test_the_pointer_never_hops_through_rax()`
+  - Method `.test_an_unproven_index_keeps_the_sign_test()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
