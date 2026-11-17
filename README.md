@@ -489,6 +489,7 @@ cairn/
 │   ├── lexer.py              <- scanner and token model
 │   ├── parser.py             <- recursive-descent parser
 │   ├── syntax.py             <- the syntax tree
+│   ├── ir.py                 <- typed SSA IR, translator and executable interpreter
 │   ├── sema.py               <- names, slots, arity, mutability, return paths
 │   ├── optimize.py           <- folding, neutral operands, dead branches
 │   ├── codegen.py            <- syntax tree to x86-64
@@ -509,7 +510,7 @@ cairn/
 │   └── __main__.py           <- `python -m cairn`
 ├── benchmarks/               <- three cases, their C and Rust twins, and the harness
 ├── examples/                 <- hello, fibonacci, arithmetic, alloy_probe (Alloy backend probe)
-├── tests/                    <- lexer, parser, sema, optimiser, codegen, emitter, PE, CLI, harness, capabilities, verifier, values, filetable, end-to-end
+├── tests/                    <- lexer, parser, sema, optimiser, codegen, emitter, PE, CLI, harness, capabilities, verifier, values, filetable, end-to-end, IR differential
 └── assets/                   <- generated brand candidates
 ```
 

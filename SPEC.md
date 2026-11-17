@@ -152,7 +152,7 @@ code generation never sees a `for`.
 | `read_char()` | The next stdin byte, or `-1` at end of stream (a true end keeps answering `-1`) |
 | `exit(code)` | Stops the machine at once with process exit code `code`; usable only as its own statement, exactly like a `return` (`E3013` anywhere else); nothing after it runs |
 | `str_len(s)` | The byte count of the NUL-terminated literal `s`, terminator excluded |
-| `str_byte(s, j)` | The byte at `j`, or `-1` at or past the NUL terminator, or for a negative `j` |
+| `str_byte(s, j)` | The byte at `j` into the NUL-terminated literal `s`, or `-1` for a negative `j` or when the byte at `j` is the NUL terminator; reading past the terminator is undefined |
 | Output buffering | Every printer appends to one shared 64 KiB stdout buffer, drained at once when it fills, when `exit(code)` runs and when `main` returns; inter-source byte order is preserved either way |
 | `flush()` | Writes out everything the shared buffer holds through one `WriteFile` and answers how many bytes went out; `0` on an empty buffer |
 | Right shift | Arithmetic (`>>` keeps the sign); shift counts mask to 63 in folding and hardware |
