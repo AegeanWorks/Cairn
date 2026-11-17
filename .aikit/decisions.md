@@ -580,3 +580,33 @@ every window, new best 12.49 -> 11.98 ms, medians never worse; the quiet
 gate window put char_stream at 12.5 ms against C's 8.50. Most of the old
 gap lived in the per-byte loop, not the refill path, so closing the rest
 needs loop work, not more syscall batching.
+
+## ADR-063: literal loop conditions branch; read_char's state loads stay lea+mov
+
+Date: closed by task cairn-charloop-shave (6e6d087, 6e25d87). Accepted
+(both halves decided on measurement, one accepted, one rejected).
+
+Context. char_stream's per-byte loop is the classic mined target: a
+`while true { c = read_char(); if c < 0 break; total += c; }` caller plus
+the read_char helper. The latch emitted `movabs $1,%rax; test; jne`
+per iteration, and the helper's prologue paid two `lea rip` + `mov`
+pairs before the cursor/count compare.
+
+Decision [1/2, accepted]. A 0/1 literal condition matches its requested
+branch polarity: a bare `jmp`, or nothing on the fallback truth. The
+do-while rotation stays correct for `while false` because the mismatched
+case never jumps and the head jump-to-end is a real branch.
+
+Decision [2/2, rejected]. The same prologue rewritten with
+`mov r64,[rip+disp32]` loads (12 bytes instead of 20, a new
+mov_store_rip helper) measured 1.22-1.42x SLOWER over four interleaved
+same-window A/Bs (15.07->15.55, 15.73->19.16, 14.87->21.18,
+12.32->12.01). The address-register round-trip wins here; per ADR-058,
+shorter is not faster on this box. The helper came out; the lea+mov
+shape is pinned by ReadCharPrologueTest.
+
+Consequences. every `while true`/literal-condition loop sheds two dead
+uops and 10 bytes from its back edge; gate windows were load-noisy, so
+the interleaved A/B is the recorded decision evidence. Remaining
+char_stream gap to C lives in call/ret and the compare chain, neither
+addressable without cargo-culting shapes this box already rejected.
