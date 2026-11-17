@@ -3,24 +3,17 @@
   "active_task": {
     "task_id": "cairn-bgcd-flags",
     "last_phase": "verify",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1794919398.3080573,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1794919434.5900536,
+    "completed_head": "dc3b72d431a99b985fb686d0e39e545497d114e6",
+    "completed_tree": "4c61a41a9db78162a4360b4a7663f9555dd62bcb"
   },
   "checkpoints": [
-    {
-      "task_id": "M1 done: direct var-to-var copy lowering (_emit_value loads into the home, kill the rax round trip) - binary_gcd 187->168 ad-hoc, now C parity. M2 done: (a & b) != 0 lowers as test home,home in _emit_comparison_branch - nqueens 23.7->21.1, C parity. Gate exit 0 in a loaded window (many_params/argv_walk inflation is ambient; paths untouched). Suite 1076 OK. Next M3 primes/xorshift, M4 gate on a quiet window.",
-      "phase": "superseded",
-      "phase_num": 1,
-      "description": "Superseded by 'cairn-loop-speed' without --complete or --reset",
-      "status": "superseded",
-      "timestamp": 1794894778.6499393,
-      "timestamp_str": "2026-11-17 08:52:58",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-loop-speed",
       "phase": "delivery",
@@ -306,6 +299,23 @@
       "timestamp": 1794919398.3080573,
       "timestamp_str": "2026-11-17 15:43:18",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-bgcd-flags",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-bgcd-flags' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794919434.6292737,
+      "timestamp_str": "2026-11-17 15:43:54",
+      "agent": "mistral:vibe",
+      "head": "dc3b72d431a99b985fb686d0e39e545497d114e6",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }

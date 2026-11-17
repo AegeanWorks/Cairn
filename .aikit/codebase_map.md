@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `42`
-- **Total Classes**: `151`
+- **Total Classes**: `153`
 - **Total Top-Level Functions**: `176`
-- **Total Class Methods**: `817`
-- **Total Source Lines**: `15318`
+- **Total Class Methods**: `829`
+- **Total Source Lines**: `15448`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`42` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3788` lines (`191912` bytes)
+**Size**: `3796` lines (`192415` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -385,7 +385,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `552` lines (`26022` bytes)
+**Size**: `578` lines (`26948` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -445,6 +445,7 @@
   - Method `.shift_cl(extension)` - *`shl` (4), shr (5) or sar (7) of rax by cl.*
   - Method `.shift_imm(extension, reg, count)` - *`shl` (4) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip.*
   - Method `.add_imm8(reg, value)` - *`add r8, imm8`, used to turn a digit into ASCII.*
+  - Method `.nop_pad(size)` - *`size` bytes of padding as canonical multi-byte nops.*
   - Method `.store_byte(base, source)` - *`mov [base], r8`.*
   - Method `.store_byte_imm(base, value)` - *`mov byte ptr [base], imm8`.*
   - Method `.store_qword(base, source)` - *`mov [base], r64`.*
@@ -840,7 +841,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2054` lines (`101140` bytes)
+**Size**: `2111` lines (`103895` bytes)
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1053,6 +1054,12 @@
   - Method `.test_the_byte_loads_off_the_loaded_pointer()`
   - Method `.test_a_masked_index_drops_the_sign_test()`
   - Method `.test_a_negative_index_never_leaves_the_table()`
+- `class ZeroCompareFlagReuseTest` - *A homed name compared against zero right after its sub leaves ZF set.*
+  - Method `._cmp_zero_forms()`
+  - Method `.test_an_equal_zero_compare_after_sub_keeps_the_sub_flag()`
+  - Method `.test_the_sub_and_the_branch_fall_directly_adjacent()`
+  - Method `.test_an_inequal_zero_compare_reuses_the_flag_too()`
+  - Method `.test_a_signed_compare_still_emits_its_own_compare()`
 
 **Functions:**
 - `def lower(source)` - *Check and lower one source, returning the program and its recording assembler.*
@@ -1291,7 +1298,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `180` lines (`8340` bytes)
+**Size**: `219` lines (`9924` bytes)
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1327,6 +1334,13 @@
   - Method `.test_imul_imm8_selects_the_byte_form()`
   - Method `.test_imul_imm32_selects_the_long_form()`
   - Method `.test_imul_imm_rejects_values_beyond_imm32()`
+- `class NopPadEncodingTest` - *Loop-head padding composes canonical multi-byte no-ops, not nop trains.*
+  - Method `.code(build)`
+  - Method `.test_three_bytes_use_the_compact_nopl_form()`
+  - Method `.test_two_bytes_use_xchg_arrays_swap()`
+  - Method `.test_fifteen_bytes_compose_from_nine_and_six()`
+  - Method `.test_zero_bytes_pad_nothing()`
+  - Method `.test_every_size_rounds_to_its_requested_length()`
 
 ---
 
