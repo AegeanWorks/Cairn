@@ -140,6 +140,28 @@ fn main() -> i64 {
     print(read_char());
     return 0;
 }""", b"quiet"),
+    ("read_loop_eof", """
+fn main() -> i64 {
+    var total: i64 = 0;
+    while true {
+    var c: i64 = read_char();
+    if c < 0 { break; }
+    total = total + c;
+    }
+    print(total);
+    return 0;
+}""", b""),
+    ("read_rollover", """
+fn main() -> i64 {
+    var total: i64 = 0;
+    while true {
+    var c: i64 = read_char();
+    if c < 0 { break; }
+    total = total + c;
+    }
+    print(total);
+    return 0;
+}""", b"xy" * 40000),
     ("array_fill", 'fn main() -> i64 {'
      ' var a: [8]i64 = [0; 8]; var i: i64 = 0;'
      ' while i < 8 { a[i] = i * i; i = i + 1; }'

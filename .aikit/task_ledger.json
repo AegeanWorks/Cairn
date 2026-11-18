@@ -1,63 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-select-generalize",
+    "task_id": "cairn-read-fuse",
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795037736.6478553,
+    "updated_at": 1795039985.3032997,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-ir-foundation",
-      "phase": "planning",
-      "phase_num": 2,
-      "description": "[1/3] cairn/ir.py: typed SSA IR + AST-to-IR translator (locals as cells, temporaries as SSA values); [2/3] IR interpreter + differential corpus proving interpretation equals compiled execution; [3/3] SSA invariant tests, gate, ADR-066",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794949292.370347,
-      "timestamp_str": "2026-11-18 00:01:32",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "the adopted roadmap names a deliberately minimal SSA IR as the substrate for general optimization passes; today every optimization is an AST-special-case in codegen.py and no IR exists",
-        "benefits": "optimizations become dataflow passes independent of the x86-64 emitter; differential interpreter tests catch AST-to-IR semantic drift before the backend consumes the IR",
-        "risks": "contract: none yet (IR is not the production pipeline; no emitted bytes change). dependency: translator must mirror full syntax.py surface (wrap, short-circuit, for r.. and r..=, break/continue, zeroed-frame rule) or differential tests lie. concurrency: interpreter is per-call state, no sharing. state: no ledger/layout impact",
-        "mitigation": "differential corpus mirrors the e2e test semantics (exit codes and stdout both checked); SSA invariant tests pin def-before-use and single-assignment; no production pipeline change so the full suite remains the behavior oracle"
-      },
-      "plan_digest": "9dcff581324e8a8267d55cdbee0984db8f887d14cd36a9968d181249e9e1354e"
-    },
-    {
-      "task_id": "cairn-ir-foundation",
-      "phase": "verification",
-      "phase_num": 4,
-      "description": "[3/3] ir substrate proven: 23-case differential corpus (exit+stdout byte-equal exe vs Interpret), 5 SSA invariant tests, full suite 1156->1163 OK, ADR-066 recorded; string byte contract re-scoped to match the machine; task ends with checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794951228.0506463,
-      "timestamp_str": "2026-11-18 00:33:48",
-      "agent": "mistral:vibe",
-      "checklists": "passed: full unittest discover 1163 OK; differential corpus exe-vs-interpreter byte-equal; SSA invariants hold; SPEC+LLM_SYSTEM str_byte entry synced; ADR-066 in decisions.md"
-    },
-    {
-      "task_id": "cairn-ir-foundation",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-ir-foundation' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794951390.880163,
-      "timestamp_str": "2026-11-18 00:36:30",
-      "agent": "mistral:vibe",
-      "head": "aa3546ecbb7c05da151240ce4bec0673c04e3a9a",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-ir-passes",
       "phase": "planning",
@@ -296,6 +249,53 @@
       "status": "in_progress",
       "timestamp": 1795037736.6478553,
       "timestamp_str": "2026-11-19 00:35:36",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-select-generalize",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-select-generalize' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795038245.7178183,
+      "timestamp_str": "2026-11-19 00:44:05",
+      "agent": "unidentified",
+      "head": "0b82fc37f22fe1ebc329b7c9a3da54a4d0128da6",
+      "continued_from": "mistral:vibe",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-read-fuse",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/3] failing-first tests: read_char fast path fuses into the call site (cursor/count rip loads, movzx from buffer, in-place cursor increment; drain beyond them calls the helper); [2/3] codegen implementation in _emit_call with the helper's exact clobber contract; [3/3] interleaved A/B on char_stream + honest gate + ADR-072 + README sync",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795038256.849054,
+      "timestamp_str": "2026-11-19 00:44:16",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "char_stream is the last large honest gap (12.7 vs C 10.4, -18%): each byte costs a call/ret plus the helper's two rip-lea/load pairs and cursor re-store; ADR-058's full-inline refusal covered the refill path being inline, not the fast path - fusing only the fast path with a drain call keeps refill out of line while cutting the per-byte path from ~15 uops to ~8",
+        "benefits": "general per-call-site win for every read_char loop, not a benchmark special case; expected char_stream -20-35 percent; argv/str paths untouched; the helper stays the drain and EOF path so semantics and byte streams are unchanged",
+        "risks": "contract: emitted rax answer must be byte-identical for have/drain/EOF paths, and the c<0 EOF test must keep hiding -1 (differential corpus + e2e stdout equality bind this); dependency: none new; concurrency: none - single-threaded stdin; state: cursor updates become an in-place memory increment \u0432\u043c\u0435\u0441\u0442\u043e add+store, count/cursor ripples stay static",
+        "mitigation": "failing-first ReadFuseTest (fused site has no call on the hot path, refusals keep it), corpus cases cover fused loop, EOF break, and drain rollover past 64KiB; interleaved A/B old-vs-new same seconds, 9 rounds best-of-3; honest full gate with the 10 percent noise band per G-004; README row + ADR-072 same commit per ADR-064 law"
+      },
+      "plan_digest": "632d945a09d38065a9b6f443a9e2825710effbf95400dfc46f484a74aeace8ac"
+    },
+    {
+      "task_id": "cairn-read-fuse",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/1] implemented: ReadFuseTest 5 tests (fused loop, arg-context fusion, r10-home refusal, break-direct-jump), rip-inc primitive attempted then refused by the linker's fixup contract (imm8 after disp32; reverted to lea+add), corpus read_loop_eof + read_rollover, suite 1247 green ex TwinParity (rustc msvc link env-broken machine-wide, ADR-072 notes it); A/B char_stream -16.7% best -5.8% median, binary_gcd wash, 17/19 registry cases byte-identical; ADR-072 + README rows synced; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795039985.3032997,
+      "timestamp_str": "2026-11-19 01:13:05",
       "agent": "mistral:vibe"
     }
   ]

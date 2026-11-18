@@ -11,9 +11,10 @@ import sys
 import tempfile
 import unittest
 
-from cairn import parser, sema
+from cairn import parser, sema, syntax
 from cairn.codegen import HOME_REGISTERS, CodeGenerator, function_label
 from cairn.machine import ARGUMENT_REGISTERS, Assembler
+from cairn.runtime import READ_CHAR_LABEL
 
 HOLD_REGISTERS = ("r13", "r15")  # the registers a copy's inline merge may hold its left value in
 
@@ -622,6 +623,89 @@ class SwapSelectTest(unittest.TestCase):
                          ' if a > c { var t: i64 = a; a = b; b = t; }'
                          ' print(a); print(b); return 0; }')
         self.assertIn(b"\x0f\x8e", code)
+
+
+class ReadFuseTest(unittest.TestCase):
+    """`read_char()` fuses its buffered fast path into the call site, drain stays in the helper.
+
+    The helper's per-byte cost is a call/ret plus two rip-lea/load pairs and a
+    cursor re-store; ADR-058 measured the refill path inlined as worse, so only
+    the have-path fuses: two rip loads, one compare, one SIB movzx and one
+    in-place memory increment, with the drained-buffer and EOF paths falling to
+    the call. Refusals keep the plain call when the fusion's scratch or the
+    answer register is not free.
+    """
+
+    LOOP = ('fn main() -> i64 {'
+            ' var total: i64 = 0;'
+            ' while true {'
+            '  var c: i64 = read_char();'
+            '  if c < 0 { break; }'
+            '  total = total + c;'
+            ' }'
+            ' print(total); return 0; }')
+
+    def _generate(self, source: str):
+        program = sema.analyze(parser.parse(source))
+        assembler = RecordingAssembler()
+        CodeGenerator(assembler=assembler).generate(program)
+        code = bytes(assembler.code)
+        labels = assembler.labels
+        start = labels[function_label("main")]
+        end = labels[function_label("main") + ".epilogue"]
+        return code[start:end], assembler, start, end
+
+    def _calls_to(self, start: int, end: int, assembler: Assembler, label: str) -> int:
+        """Count `call rel32` fixups inside [start, end) that land on `label`.
+
+        The fixup's offset points at the rel32, one byte after the opcode, and
+        resolves relative to the instruction's end, matching the link rule.
+        """
+        return sum(1 for offset, target in assembler.fixups
+                   if target == label and start <= offset - 1 < end)
+
+    def test_the_read_loop_fuses_the_fast_path_and_keeps_one_drain_call(self) -> None:
+        region, assembler, start, end = self._generate(self.LOOP)
+        self.assertIn(b"\x49\x83\x02\x01", region)   # add qword [r10], 1: cursor bump
+        self.assertEqual(self._calls_to(start, end, assembler, READ_CHAR_LABEL), 1)
+
+    def test_a_read_char_inside_another_call_fuses_too(self) -> None:
+        # The fusion's clobbers (rax, r10, flags) are a subset of the helper
+        # call's own contract, so a call inside another call's argument fuses
+        # the same way: the answer still lands in rax for the argument move.
+        region, assembler, start, end = self._generate(
+            'fn main() -> i64 { print(read_char()); return 0; }')
+        self.assertIn(b"\x49\x83\x02\x01", region)
+        self.assertEqual(self._calls_to(start, end, assembler, READ_CHAR_LABEL), 1)
+
+    def test_r10_borrowed_as_an_extra_home_refuses_the_fusion(self) -> None:
+        # r10 carries a live borrowed value across calls (pushed/popped by every
+        # call site); the fused fast path would clobber it with no crossing.
+        program = sema.analyze(parser.parse(
+            'fn main() -> i64 { read_char(); return 0; }'))
+        generator = CodeGenerator(assembler=RecordingAssembler())
+        call = program.functions[0].body.statements[0].expression
+        assert isinstance(call, syntax.Call), "the extracted node must be the call"
+        generator.current = program.functions[0]
+        generator.extra_homes = ("r10",)
+        generator._emit_call(call)
+        self.assertEqual(self._calls_to(0, 1 << 20, generator.assembler,
+                                        READ_CHAR_LABEL), 1)
+        self.assertNotIn(b"\x49\x83\x02\x01", bytes(generator.assembler.code))
+
+    def test_the_read_loop_keeps_the_branch_out_of_the_fast_path(self) -> None:
+        # The fused cursor bump addresses through a register: the PE linker's
+        # rel32 fixup resolves against the instruction's end, which the
+        # imm8-after-disp32 rip form would violate. The lea+add pair stays.
+        region, _, _, _ = self._generate(self.LOOP)
+        self.assertIn(b"\x49\x83\x02\x01", region)
+        self.assertNotIn(b"\x48\x83\x05", region)
+
+    def test_a_break_only_if_jumps_straight_to_the_break_target(self) -> None:
+        # `if c < 0 { break; }` inverts: one conditional jump to the break
+        # target, no then-label, no fallthrough jmp after it — no fresh label.
+        _, assembler, _, _ = self._generate(self.LOOP)
+        self.assertEqual([name for name in assembler.labels if name.startswith("if.")], [])
 
 
 class MergedMaskMixTest(unittest.TestCase):
@@ -2323,8 +2407,10 @@ class TrueLoopBranchTest(unittest.TestCase):
                          "but the guard materialised the literal true as movabs")
         self.assertNotIn(bytes([0x48, 0x85, 0xC0]), body,
                          "and re-tested that immediate")
-        self.assertIn(bytes([0xE9]), body,
-                      "the latch now reaches its start with a direct near jmp")
+        # A back edge that is a bare branch may encode near (E9) or, once the
+        # break-only if stops padding the distance, short (EB).
+        self.assertTrue(bytes([0xE9]) in body or bytes([0xEB]) in body,
+                        "the latch now reaches its start with a bare jmp")
 
     FALSE_HOLDER = ("fn main() -> i64 {"
                     "  var total: i64 = 0;"

@@ -897,3 +897,30 @@ the loop bound or multiplier from argv under a fixed default, all twins
 altered together), or retire the case's "gaps" from the scoreboard with this
 ADR cited. Until that ADR-covered contract change, many_params claims no
 further codegen work.
+
+## ADR-072: the read_char fast path fuses into its call site; a break-only if jumps directly
+
+Task cairn-read-fuse. `read_char()`'s buffered have-path now answers in the
+caller — two rip loads, one compare, one SIB `movzx` and one in-place cursor
+bump — with the drained-buffer and EOF paths falling to the runtime helper by
+call, so the refill stays out of line (ADR-058's measured refusal is about the
+refill path, not the have path, whose clobbers are a strict subset of the call
+it replaces). A refusal keeps the plain call when `r10` is a borrowed extra
+home. In the same task, `if <cond> { break; }` / `{ continue; }` with no else
+inverts into one conditional branch straight to the loop's target — no fresh
+label, no fallthrough jmp — which also shortens `while true`'s back edge
+enough that its latch becomes a `jmp rel8`.
+
+Byte-identity proof: 17 of the 19 registry cases compile SHA-256-identical;
+only binary_gcd and char_stream change bytes, so any cross-window gate claim of
+a regression elsewhere is window pollution by argument, not just by history.
+The only honest-A/B surfaces: char_stream measured -16.7 percent best and
+-5.8 median interleaved (12 rounds, same seconds; the machine's load flapped
+76-214 ms spikes through every full-suite window, and two gate runs were
+recorded then dropped under the ADR-069 history rule), reading 9.4-11.0 ms
+against C's 7.7-10.7; binary_gcd measured a wash (best -2.0, median +1.9 over
+14 rounds). One machine-level note: rustc's msvc toolchain stopped linking
+mid-session (`where link` resolves only to Git's coreutils `link`), so the
+twin-parity suite and the C/C++/Rust baseline columns are environment-blocked
+until the toolchain's linker is back; Cairn's own pipeline needs no external
+compiler and was verified end to end.

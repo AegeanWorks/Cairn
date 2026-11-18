@@ -329,7 +329,7 @@ a spread:
 | `hex_io` | 400,000 hex-format-then-print values | 612-645 ms | 4,764-5,095 ms | 397-467 ms | 677-723 ms | 71,168 bytes |
 | `many_params` | 10,000,000 six-argument mix calls | 24.2-34.6 ms | 7.8-11.1 ms (startup-only: folded to a constant, ADR-071) | 9.7-13.0 ms (same, ADR-071) | 8.4-11.6 ms (same, ADR-071) | 71,168 bytes |
 | `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 20.0-23.7 ms | 18.5-24.2 ms | 19.1-22.5 ms | 25.5-28.4 ms | 71,168 bytes |
-| `char_stream` | 4 MiB piped through `read_char()`, summed | 11.1-14.3 ms | 7.7-10.7 ms | 7.4-10.3 ms | 12.9-22.0 ms | 71,168 bytes |
+| `char_stream` | 4 MiB piped through `read_char()`, summed | 9.4-13.3 ms (ADR-072 fusion) | 7.7-10.7 ms | 7.4-10.3 ms | 12.9-22.0 ms | 71,168 bytes |
 | `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.9-18.4 ms | 11.8-16.6 ms | 12.2-19.6 ms | 28.2-37.0 ms | 71,168 bytes |
 | `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 11.8-13.7 ms | 10.2-11.9 ms | 10.4-11.9 ms | 11.6-13.0 ms | 137,216 bytes |
 | `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 9.4-9.4 ms | 9.6-10.0 ms | 10.1-10.9 ms | 11.2-11.8 ms | 137,216 bytes |
@@ -367,11 +367,13 @@ spread in some sessions; `nqueens`, `binary_gcd`, `call_chain`, `primes`, `mande
 `many_params` (every baseline folds the six-argument mix to a
 compile-time constant — C/C++/Rust mains are a bare print of 0x2cc3a372e58980,
 so their 7.8-13.0 ms is startup only, while Cairn honestly runs the loop;
-ADR-071 rules out codegen work until the twin contract changes), `argv_walk`,
-`char_stream` and `str_scan` remain
+ADR-071 rules out codegen work until the twin contract changes), `argv_walk`
+and `str_scan` remain
 the recorded losses, with the mechanisms in the ADR register (`argv_walk`: ADR-059's inline;
-`char_stream`: ADR-058/062/063's measured call-vs-inline ledger; `str_scan`: ADR-060/061's
-NUL-test facts).
+`str_scan`: ADR-060/061's
+NUL-test facts); `char_stream` now rides ADR-072's fused `read_char` fast path —
+two rip loads, one compare, one SIB byte read and one in-place cursor bump with no
+call until a buffer rolls over — and reads 9.4-13.3 ms against C's 7.7-10.7 ms.
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 `movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics

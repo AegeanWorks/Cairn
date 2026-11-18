@@ -23,7 +23,8 @@ from cairn.image import WritableData
 from cairn.runtime import (ARG_BYTE_LABEL, ARGC_LABEL, ARGV_LEN0_LABEL,
                            ARGV_PTR0_LABEL, DIV_ZERO_LABEL, OUT_FLUSH_LABEL,
                            PRINT_CHAR_LABEL, PRINT_HEX_LABEL, PRINT_LABEL,
-                           PRINT_STR_LABEL, READ_CHAR_LABEL, STR_BYTE_LABEL,
+                           PRINT_STR_LABEL, READ_CHAR_LABEL, STDIN_BUFFER_LABEL,
+                           STDIN_COUNT_LABEL, STDIN_CURSOR_LABEL, STR_BYTE_LABEL,
                            STR_LEN_LABEL, emit_runtime)
 
 COMPARISON_CONDITIONS = {
@@ -1275,6 +1276,20 @@ class CodeGenerator:
             return
         if self._emit_swap_if(statement):
             return
+        # `if <cond> { break; }` / `{ continue; }` with no else inverts into one
+        # conditional jump straight to the loop's target: the then body emits
+        # nothing, so no then-label is allocated and the untaken path falls
+        # straight through where the general form printed a skip jmp.
+        if (statement.else_block is None
+                and statement.then_block is not None
+                and len(statement.then_block.statements) == 1):
+            only = statement.then_block.statements[0]
+            targets = (self.break_targets if isinstance(only, syntax.Break)
+                       else self.continue_targets if isinstance(only, syntax.Continue)
+                       else None)
+            if targets:
+                self._emit_condition(statement.condition, targets[-1], when_true=True)
+                return
         asm = self.assembler
         if statement.else_block is not None:
             then_label = self._fresh("if.then")
@@ -2837,6 +2852,30 @@ class CodeGenerator:
             self._emit_call_site(OUT_FLUSH_LABEL)
             return
         if expression.name == "read_char":
+            # The buffered have-path fuses into the call site: two rip loads, one
+            # compare, one SIB byte read and one in-place cursor increment answer
+            # with no call. The drained and EOF paths fall to the helper, which
+            # keeps the refill out of line — ADR-058 measured the refill inlined
+            # as worse — and answers byte or -1 through the same rax contract.
+            # Refusals keep the plain call when rax is not free (a live temporary
+            # holds a two-sided expression) or an extra home borrows the fusion's
+            # scratch, whose value the helper call would stack-cross correctly.
+            if self.temporaries == 0 and "r10" not in self.extra_homes:
+                drain = self._fresh("readchar.fuse.drain")
+                have_done = self._fresh("readchar.fuse.done")
+                asm.mov_load_rip("rax", STDIN_CURSOR_LABEL)
+                asm.mov_load_rip("r10", STDIN_COUNT_LABEL)
+                asm.cmp_reg_reg("r10", "rax")
+                asm.jcc("le", drain)
+                asm.lea_rip("r10", STDIN_BUFFER_LABEL)
+                asm.movzx_load8_sib("rax", "r10", "rax")
+                asm.lea_rip("r10", STDIN_CURSOR_LABEL)
+                asm.group1_store_reg_imm(0, "r10", 1)
+                asm.jmp(have_done)
+                asm.label(drain)
+                self._emit_call_site(READ_CHAR_LABEL)
+                asm.label(have_done)
+                return
             self._emit_call_site(READ_CHAR_LABEL)
             return
         if expression.name == "arg_byte":
