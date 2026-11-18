@@ -249,7 +249,45 @@ class Optimizer:
         if isinstance(expression, syntax.Call):
             expression.arguments = [self._expression(argument)
                                     for argument in expression.arguments]
+            folded_string = self._fold_string_builtin(expression)
+            if folded_string is not None:
+                self.folded += 1
+                return folded_string
         return expression
+
+    def _fold_string_builtin(self, expression: syntax.Expr):
+        """Fold `str_len`/`str_byte` of a literal handle into the specified answer.
+
+        The handle's value is the address of the literal's bytes, so a literal
+        argument already knows every answer the runtime helper could give:
+        `str_len` is the byte count, `str_byte` is `text[j]` for `0 <= j < len`
+        and exactly `-1` for a negative index and for `j == len` (the NUL
+        terminator). Everything else — a non-literal handle, a dynamic index,
+        a read past the terminator — stays a call: undefined stays undefined.
+        """
+        if not (isinstance(expression, syntax.Call)
+                and expression.name in ("str_len", "str_byte") and expression.arguments):
+            return None
+        handle = expression.arguments[0]
+        if not isinstance(handle, syntax.StrLiteral):
+            return None
+        text = handle.text
+        if expression.name == "str_len":
+            return syntax.IntLiteral(span=expression.span, value=len(text))
+        if len(expression.arguments) != 2:
+            return None
+        index = expression.arguments[1]
+        if not isinstance(index, syntax.IntLiteral):
+            return None
+        position = index.value
+        if position < 0 or position == len(text):
+            return syntax.IntLiteral(span=expression.span, value=-1)
+        if 0 < position < len(text):
+            return syntax.IntLiteral(span=expression.span, value=ord(text[position]))
+        if position == 0:
+            return syntax.IntLiteral(span=expression.span,
+                                     value=ord(text[0]) if text else -1)
+        return None
 
     def _fold_unary(self, expression: syntax.Unary) -> syntax.Expr:
         """Fold a unary operator applied to a literal."""

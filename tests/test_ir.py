@@ -151,7 +151,10 @@ fn main() -> i64 {
      ' var s: [6]i64 = [0; 6]; var i: i64 = 0;'
      ' while i < 6 { s[i] = i * i; i = i + 1; } return s[3] + s[5]; }'
      ' fn main() -> i64 { print(squares()); return 0; }', b""),
-    ("exit_midstream", """
+    ("str_fold", 'fn main() -> i64 {'
+     ' print(str_len("wxyz")); print(str_byte("wxyz", 0));'
+     ' print(str_byte("wxyz", 3)); print(str_byte("wxyz", 4));'
+     ' print(str_byte("wxyz", -1)); return 0; }', b""),    ("exit_midstream", """
 fn main() -> i64 {
     print(1);
     exit(2);

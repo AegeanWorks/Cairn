@@ -480,6 +480,38 @@ class InliningTest(unittest.TestCase):
         self.assertEqual(statement.value.name, 'probe')
 
 
+class StringFoldTest(unittest.TestCase):
+    """str_len/str_byte of literal handles fold to the exact specified answers."""
+
+    def test_str_len_of_a_literal_folds_to_its_length(self) -> None:
+        body = optimized_body('print(str_len("abcd"));')
+        value = body.statements[0].expression.arguments[0]
+        self.assertIsInstance(value, syntax.IntLiteral)
+        self.assertEqual(value.value, 4)
+
+    def test_str_byte_of_a_literal_index_folds_to_the_byte(self) -> None:
+        body = optimized_body('print(str_byte("A", 0));')
+        self.assertEqual(body.statements[0].expression.arguments[0].value, 65)
+
+    def test_str_byte_at_the_terminator_folds_to_minus_one(self) -> None:
+        body = optimized_body('print(str_byte("abc", 3));')
+        self.assertEqual(body.statements[0].expression.arguments[0].value, -1)
+
+    def test_a_negative_index_folds_to_minus_one(self) -> None:
+        body = optimized_body('print(str_byte("abc", -1));')
+        self.assertEqual(body.statements[0].expression.arguments[0].value, -1)
+
+    def test_str_byte_past_the_terminator_is_never_folded(self) -> None:
+        body = optimized_body('print(str_byte("abc", 9));')
+        isinstance_call = body.statements[0].expression.arguments[0]
+        self.assertIsInstance(isinstance_call, syntax.Call)
+        self.assertEqual(isinstance_call.name, "str_byte")
+
+    def test_a_non_literal_handle_is_never_folded(self) -> None:
+        body = optimized_body('var s: i64 = 77; print(str_len(s));')
+        self.assertIsInstance(body.statements[1].expression.arguments[0], syntax.Call)
+
+
 class AlgebraicTest(unittest.TestCase):
     """Distributive expansion and like-term collection must be ring-exact."""
 
