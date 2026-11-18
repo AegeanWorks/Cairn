@@ -1,36 +1,22 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-ir-foundation",
-    "last_phase": "verification",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1794951228.0506463,
+    "task_id": "cairn-ir-passes",
+    "last_phase": "planning",
+    "active_phase": 2,
+    "status": "in_progress",
+    "updated_at": 1794977959.9134877,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": [],
-    "completed_at": 1794951390.8395715,
-    "completed_head": "aa3546ecbb7c05da151240ce4bec0673c04e3a9a",
-    "completed_tree": "0ddddf57294121ce9d4c1284cafcd07d75b1f81f"
+    "impact_assessment": {
+      "why": "user goal is faster than C/C++/Rust; gcc wins many_params by inlining and folding 31i+37(i+1)+... to 216i+252 while cairn pays six materialized arguments and a call per iteration; the gap is structural, not per-benchmark",
+      "benefits": "benefits: inlining removes call overhead for the general class of pure single-return functions; distributive expansion plus like-term collection folds linear argument algebra; both apply to any program, no benchmark special cases",
+      "risks": "contract: passes reorder nothing observable but multi-use hoisting can permute which of two trapping arguments traps first (same exit 3, same stdout; stderr message order only). dependency: optimizer mutates sema-assigned slots; fresh hoist slots must bump function.slots or the frame misaligns. concurrency: no shared state. state: emitted bytes change, so the benchmark gate returns",
+      "mitigation": "contract: evaluation order preserved by substituting in left-to-right arg order and hoisting before the statement; trapping-only divergence documented in ADR. dependency: fresh slots numbered from the caller's existing slots count, zip-pinned by tests. state: full unittest gate plus python -m benchmarks.run_benchmarks --save --compare before phase 4"
+    }
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-bgcd-flags",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-bgcd-flags' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794919434.6292737,
-      "timestamp_str": "2026-11-17 15:43:54",
-      "agent": "mistral:vibe",
-      "head": "dc3b72d431a99b985fb686d0e39e545497d114e6",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-nonzero-facts",
       "phase": "plan",
@@ -319,6 +305,24 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-ir-passes",
+      "phase": "planning",
+      "phase_num": 2,
+      "description": "[1/3] cairn/optimize.py: pure-function inlining (single-return callees, slot-preserving substitution, multi-use-argument hoisting with slot bumps, recursion and size guards); [2/3] algebraic pass: distributive expansion of constant coefficients over add-chains plus like-term collection (wrapping ring algebra, call-free signature groups); [3/3] pipeline order, full suite, failing-first tests, benchmark --save --compare, ADR-067",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794977959.9134877,
+      "timestamp_str": "2026-11-18 07:59:19",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "user goal is faster than C/C++/Rust; gcc wins many_params by inlining and folding 31i+37(i+1)+... to 216i+252 while cairn pays six materialized arguments and a call per iteration; the gap is structural, not per-benchmark",
+        "benefits": "benefits: inlining removes call overhead for the general class of pure single-return functions; distributive expansion plus like-term collection folds linear argument algebra; both apply to any program, no benchmark special cases",
+        "risks": "contract: passes reorder nothing observable but multi-use hoisting can permute which of two trapping arguments traps first (same exit 3, same stdout; stderr message order only). dependency: optimizer mutates sema-assigned slots; fresh hoist slots must bump function.slots or the frame misaligns. concurrency: no shared state. state: emitted bytes change, so the benchmark gate returns",
+        "mitigation": "contract: evaluation order preserved by substituting in left-to-right arg order and hoisting before the statement; trapping-only divergence documented in ADR. dependency: fresh slots numbered from the caller's existing slots count, zip-pinned by tests. state: full unittest gate plus python -m benchmarks.run_benchmarks --save --compare before phase 4"
+      },
+      "plan_digest": "2c02aeb845b7b779c0784bb284818a3a6505a478496f3546e5ac5f09f6cea094"
     }
   ]
 }
