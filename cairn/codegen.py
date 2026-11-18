@@ -18,7 +18,7 @@ from typing import List, Optional, Tuple
 from cairn import syntax
 from cairn.image import ENTRY_LABEL, Artifact, ReadOnlyData, iat_label
 from cairn.machine import ARGUMENT_REGISTERS, Assembler
-from cairn.optimize import INT64_MIN, has_call, _contains_break_or_continue
+from cairn.optimize import INT64_MIN, has_call, _contains_break_or_continue, _read_slots
 from cairn.image import WritableData
 from cairn.runtime import (ARG_BYTE_LABEL, ARGC_LABEL, ARGV_LEN0_LABEL,
                            ARGV_PTR0_LABEL, DIV_ZERO_LABEL, OUT_FLUSH_LABEL,
@@ -1273,6 +1273,8 @@ class CodeGenerator:
         """
         if self._emit_select_if(statement):
             return
+        if self._emit_swap_if(statement):
+            return
         asm = self.assembler
         if statement.else_block is not None:
             then_label = self._fresh("if.then")
@@ -1357,6 +1359,121 @@ class CodeGenerator:
         asm.binary(UPDATE_OPCODES["-"], home, other_home)
         asm.cmov(move, home, "rax")
         return True
+
+    def _emit_swap_if(self, statement: syntax.If) -> bool:
+        """Lower the swap shape `if a > b { var t = a; a = b; b = t; }` as two cmovs.
+
+        One scratch register keeps the old `a`, and both cmovs select on the same
+        comparison flags, so the data-dependent swap branch — the misprediction
+        cost that dominates a Stein-GCD inner loop — disappears: three moves, no
+        branch. Refusals: an else, a different body, a condition that is not a
+        comparison of exactly the two swapped slots, a frame slot (the cmov form
+        needs a register destination), or the temporary read anywhere outside this
+        if — the language lets a never-taken branch's binding read as zero, which
+        the cmov form cannot answer.
+        """
+        if statement.else_block is not None:
+            return False
+        body = statement.then_block.statements if statement.then_block else []
+        if len(body) != 3:
+            return False
+        let_t, assign_a, assign_b = body
+        if (not isinstance(let_t, syntax.Let) or let_t.value is None
+                or not isinstance(assign_a, syntax.Assign)
+                or not isinstance(assign_b, syntax.Assign)
+                or let_t.slot < 0):
+            return False
+        t_slot = let_t.slot
+        a_slot, b_slot = assign_a.slot, assign_b.slot
+        if t_slot == a_slot or t_slot == b_slot or a_slot == b_slot:
+            return False
+
+        def _name_slot(expression, slot: int) -> bool:
+            while isinstance(expression, syntax.Parens):
+                expression = expression.inner
+            return (isinstance(expression, syntax.Name)
+                    and expression.slot == slot)
+
+        if not (_name_slot(let_t.value, a_slot)
+                and _name_slot(assign_a.value, b_slot)
+                and _name_slot(assign_b.value, t_slot)):
+            return False
+        condition = statement.condition
+        while isinstance(condition, syntax.Parens):
+            condition = condition.inner
+        if not (isinstance(condition, syntax.Binary)
+                and condition.op in COMPARISON_CONDITIONS):
+            return False
+        left, right = condition.left, condition.right
+        while isinstance(left, syntax.Parens):
+            left = left.inner
+        while isinstance(right, syntax.Parens):
+            right = right.inner
+        if not (isinstance(left, syntax.Name) and isinstance(right, syntax.Name)
+                and {left.slot, right.slot} == {a_slot, b_slot}):
+            return False
+        if left.slot == a_slot and right.slot == b_slot:
+            move = COMPARISON_CONDITIONS[condition.op]
+        else:
+            # The same pair named the other way round: b < a is a > b's flags.
+            reversed_op = {">": "<", "<": ">", ">=": "<=", "<=": ">=",
+                           "==": "==", "!=": "!="}[condition.op]
+            move = COMPARISON_CONDITIONS[reversed_op]
+        a_home = self._home(a_slot)
+        b_home = self._home(b_slot)
+        if a_home is None or b_home is None:
+            return False
+        outside: set = set()
+        self._read_slots_outside(self.current.body, statement, outside)
+        if t_slot in outside:
+            return False
+        if not (a_slot in self.nonnegative_slots and b_slot in self.nonnegative_slots):
+            self.nonnegative_slots.discard(a_slot)
+            self.nonnegative_slots.discard(b_slot)
+        if not (a_slot in self.nonnegative_slots and b_slot in self.nonnegative_slots):
+            self.nonnegative_slots.discard(a_slot)
+            self.nonnegative_slots.discard(b_slot)
+        # The scratch keeps the old `a`; both selects read the comparison's flags.
+        flags_left = a_home if left.slot == a_slot else b_home
+        flags_right = b_home if left.slot == a_slot else a_home
+        asm = self.assembler
+        asm.cmp_reg_reg(flags_left, flags_right)
+        asm.mov_reg_reg("rax", a_home)
+        asm.cmov(move, a_home, b_home)
+        asm.cmov(move, b_home, "rax")
+        return True
+
+    def _read_slots_outside(self, block: Optional[syntax.Block],
+                            skip: syntax.Stmt, acc: set) -> None:
+        """Reads of every slot in `block`, ignoring the `skip` statement's subtree."""
+        if block is None:
+            return
+        for statement in block.statements:
+            if statement is skip:
+                continue
+            if isinstance(statement, (syntax.Break, syntax.Continue)):
+                continue
+            if isinstance(statement, syntax.Let):
+                if statement.value is not None:
+                    _read_slots(statement.value, acc)
+            elif isinstance(statement, syntax.Assign):
+                if statement.index is not None:
+                    _read_slots(statement.index, acc)
+                if statement.value is not None:
+                    _read_slots(statement.value, acc)
+            elif isinstance(statement, syntax.If):
+                _read_slots(statement.condition, acc)
+                self._read_slots_outside(statement.then_block, skip, acc)
+                self._read_slots_outside(statement.else_block, skip, acc)
+            elif isinstance(statement, syntax.While):
+                _read_slots(statement.condition, acc)
+                self._read_slots_outside(statement.body, skip, acc)
+            elif isinstance(statement, syntax.Return):
+                _read_slots(statement.value, acc)
+            elif isinstance(statement, syntax.ExprStmt):
+                _read_slots(statement.expression, acc)
+            elif isinstance(statement, syntax.Block):
+                self._read_slots_outside(statement, skip, acc)
 
     def _plan_constant_hoists(self, function: syntax.Function) -> dict:
         """Reserve spare homes for each loop's invariant big literals, or return none.

@@ -154,7 +154,15 @@ fn main() -> i64 {
     ("str_fold", 'fn main() -> i64 {'
      ' print(str_len("wxyz")); print(str_byte("wxyz", 0));'
      ' print(str_byte("wxyz", 3)); print(str_byte("wxyz", 4));'
-     ' print(str_byte("wxyz", -1)); return 0; }', b""),    ("exit_midstream", """
+     ' print(str_byte("wxyz", -1)); return 0; }', b""),    ("swap_fused", 'fn gcd(a: i64, b: i64) -> i64 {'
+     ' while b != 0 { if a > b { var t: i64 = a; a = b; b = t; } b = b - a; }'
+     ' return a; }'
+     ' fn main() -> i64 { print(gcd(48, 18)); print(gcd(7, 13));'
+     ' print(gcd(21, 21)); print(gcd(17, 1)); return 0; }', b""),
+    ("swap_temp_read_after", 'fn main() -> i64 {'
+     ' var a: i64 = 3; var b: i64 = 8;'
+     ' if a > b { var t: i64 = a; a = b; b = t; }'
+     ' print(t); print(a); print(b); return 0; }', b""),    ("exit_midstream", """
 fn main() -> i64 {
     print(1);
     exit(2);

@@ -572,6 +572,58 @@ def _combine_right_after_shr(region: bytes, count: int) -> bool:
                for rm in (3, 4, 5, 6, 7))
 
 
+class SwapSelectTest(unittest.TestCase):
+    """The gcd swap shape `if a > b { var t = a; a = b; b = t; }` lowers branchless.
+
+    One scratch holds the old `a`, and two cmovs on the comparison flags do the
+    exchange; data-dependent swap branches mispredict, which is the whole cost
+    of a Stein-GCD inner loop. Refusals fall back to the branchy path.
+    """
+
+    SWAP = ('fn main() -> i64 {'
+            ' var a: i64 = 3; var b: i64 = 8;'
+            ' if a > b { var t: i64 = a; a = b; b = t; }'
+            ' print(a); print(b); return 0; }')
+
+    def code(self, source: str) -> bytes:
+        """Main's own bytes only: label to label, so runtime helpers never match."""
+        program = sema.analyze(parser.parse(source))
+        assembler = RecordingAssembler()
+        from cairn.codegen import CodeGenerator, function_label
+        CodeGenerator(assembler=assembler).generate(program)
+        code = bytes(assembler.code)
+        labels = assembler.labels
+        start = labels[function_label("main")]
+        end = labels[function_label("main") + ".epilogue"]
+        return code[start:end]
+
+    def test_the_swap_shape_fuses_into_two_cmovs_and_no_branch(self) -> None:
+        code = self.code(self.SWAP)
+        self.assertIn(b"\x0f\x4f", code)   # cmovg
+        self.assertNotIn(b"\x0f\x8e", code)  # jle: the branchy swap is gone
+
+    def test_the_temp_being_read_after_the_if_refuses_the_fusion(self) -> None:
+        code = self.code('fn main() -> i64 {'
+                         ' var a: i64 = 3; var b: i64 = 8;'
+                         ' if a > b { var t: i64 = a; a = b; b = t; }'
+                         ' print(t); print(a); print(b); return 0; }')
+        self.assertIn(b"\x0f\x8e", code)
+
+    def test_a_two_statement_body_refuses_the_fusion(self) -> None:
+        code = self.code('fn main() -> i64 {'
+                         ' var a: i64 = 3; var b: i64 = 8;'
+                         ' if a > b { a = b; b = 0; }'
+                         ' print(a); print(b); return 0; }')
+        self.assertIn(b"\x0f\x8e", code)
+
+    def test_a_condition_on_other_slots_refuses_the_fusion(self) -> None:
+        code = self.code('fn main() -> i64 {'
+                         ' var a: i64 = 3; var b: i64 = 8; var c: i64 = 1;'
+                         ' if a > c { var t: i64 = a; a = b; b = t; }'
+                         ' print(a); print(b); return 0; }')
+        self.assertIn(b"\x0f\x8e", code)
+
+
 class MergedMaskMixTest(unittest.TestCase):
     """A masked xor merged into its home register lowers park-free, in place."""
 

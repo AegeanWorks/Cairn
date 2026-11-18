@@ -879,3 +879,21 @@ A/B (147.3 vs 145.4 quiet-record against 162.5/173.5), closing to -4.7
 percent from the Rust twin; the full honest gate then read zero cases
 beyond the noise band versus 79af21f. The pass refuses whenever any input
 of the shape is off, so a refused swap keeps the exact branchy semantics.
+
+## ADR-071: many_params is an unfair twin — every compiler folds it to a constant
+
+Chasing the many_params gap (Cairn 13.2 ms best vs C 10.58) with codegen work
+started from the disassembly and stopped there: gcc -O2, g++ -O2 and rustc -O
+all compute `total = sum over 10M of mix(...)` at compile time — each twin's
+`main` is a print of the constant 0x2cc3a372e58980 and no loop, no call. The
+baselines' 10.5-11 ms is process startup plus one print; Cairn honestly
+executes the 10M-iteration loop (loop body already folds to the same silver
+rule's constant-folded form, 5-6 uops/iter) and pays a real ~2 ms for it. The
+"gap" therefore measures nothing about parameter passing or call ABI, and no
+Cairn codegen change can honestly close it. Any fix belongs to the benchmark
+contract, not the compiler: either reorder the twins' body so the result
+depends on data the optimizer cannot see across the whole program (e.g. derive
+the loop bound or multiplier from argv under a fixed default, all twins
+altered together), or retire the case's "gaps" from the scoreboard with this
+ADR cited. Until that ADR-covered contract change, many_params claims no
+further codegen work.

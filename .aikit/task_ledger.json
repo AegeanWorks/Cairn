@@ -1,59 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-cmov",
+    "task_id": "cairn-select-generalize",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1795036221.8321815,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1795037736.6478553,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [
-      {
-        "agent": "unidentified",
-        "from": "mistral:vibe",
-        "at": 1795037050.8997235
-      }
-    ],
-    "forced_completion": {
-      "agent": "unidentified",
-      "reason": "same single session after compaction; deliverables committed at bd8f112, dirty files verified as re-committed content plus foreign-session archive append and dropped polluted bench record",
-      "at": 1795037050.8997245
-    },
-    "completed_at": 1795037050.8997252,
-    "completed_head": "bd8f11256d136e368415903ca7031fc43262427d",
-    "completed_tree": "9ef91b299736e322aaa9e566a59363d31e0f570d"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-buffered-stdout",
-      "phase": "verification",
-      "phase_num": 4,
-      "description": "[3/3] gate passed: 1156 tests OK; byte-identical outputs on interleaved A/B (21 pairs, 13 cases); hex_io 772->42ms best (about 18x), compute cases within the sub-4% noise band; docs synced to the manifest per ADR-064; ADR-065 recorded; committed c787cf2. ends with checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794948607.85582,
-      "timestamp_str": "2026-11-17 23:50:07",
-      "agent": "mistral:vibe",
-      "checklists": "passed: 1156 tests OK; interleaved A/B byte-identical on 13 cases, hex_io 18x, no regression beyond noise; staged explicitly, no .tmp_* left, no secrets"
-    },
-    {
-      "task_id": "cairn-buffered-stdout",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-buffered-stdout' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794948632.6444476,
-      "timestamp_str": "2026-11-17 23:50:32",
-      "agent": "mistral:vibe",
-      "head": "c787cf2eba8a767490c38e9265742c329770069c",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-ir-foundation",
       "phase": "planning",
@@ -311,6 +268,35 @@
         ],
         "forced": true
       }
+    },
+    {
+      "task_id": "cairn-select-generalize",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/2] failing-first: generalize branchless select family - single-assignment cmovcc (nqueens leaf shape), swap already landed; [2/2] implementation on 79af21f base + many_params stack-spill probe",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795037210.0874448,
+      "timestamp_str": "2026-11-19 00:26:50",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "nqueens 24.1 vs Rust 20.2 and many_params 13.2 vs C 10.58 hold the two largest remaining gaps; generalizing the select/cmov family removes branch misprediction on leaf selects and targets the 7-arg stack-spill shape",
+        "benefits": "general optimizer rule, not per-benchmark hacks; eligible ifs lower branchless across all cases; expected nqueens -10-15%, many_params path toward C parity",
+        "risks": "contract: refusal on any shape not provably equivalent (side-effect reads, else, partial body); dependency: none new; concurrency: none; state: cmov needs register homes - frame slots refuse",
+        "mitigation": "failing-first SelectionFusionTest; differential corpus entries cover fused and refused shapes; interleaved A/B on load spikes; honest full gate with 10% noise band per G-004"
+      },
+      "plan_digest": "1c12a4d015868d04960f28fccb0dababca9ee98323a4dfea7dcaf81909d3774a"
+    },
+    {
+      "task_id": "cairn-select-generalize",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/1] investigate-first verdict: ADR-071 - all three baselines fold many_params to a compile-time constant (mains are bare prints), so the gap is an unfair twin, not codegen; README rows + losses list synced; cairn-cmov closed (bd8f112); suite 1254 OK; no emitted-bytes change this turn; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795037736.6478553,
+      "timestamp_str": "2026-11-19 00:35:36",
+      "agent": "mistral:vibe"
     }
   ]
 }

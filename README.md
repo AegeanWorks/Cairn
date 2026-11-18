@@ -327,7 +327,7 @@ a spread:
 | `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.1-16.1 ms | 11.1-13.3 ms | 10.9-13.4 ms | 12.0-14.4 ms | 71,168 bytes |
 | `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 94.3-96.7 ms | 92.5-101.5 ms | 96.4-102.9 ms | 105.9-113.5 ms | 71,168 bytes |
 | `hex_io` | 400,000 hex-format-then-print values | 612-645 ms | 4,764-5,095 ms | 397-467 ms | 677-723 ms | 71,168 bytes |
-| `many_params` | 10,000,000 six-argument mix calls | 24.2-34.6 ms | 7.8-11.1 ms | 9.7-13.0 ms | 8.4-11.6 ms | 71,168 bytes |
+| `many_params` | 10,000,000 six-argument mix calls | 24.2-34.6 ms | 7.8-11.1 ms (startup-only: folded to a constant, ADR-071) | 9.7-13.0 ms (same, ADR-071) | 8.4-11.6 ms (same, ADR-071) | 71,168 bytes |
 | `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 20.0-23.7 ms | 18.5-24.2 ms | 19.1-22.5 ms | 25.5-28.4 ms | 71,168 bytes |
 | `char_stream` | 4 MiB piped through `read_char()`, summed | 11.1-14.3 ms | 7.7-10.7 ms | 7.4-10.3 ms | 12.9-22.0 ms | 71,168 bytes |
 | `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.9-18.4 ms | 11.8-16.6 ms | 12.2-19.6 ms | 28.2-37.0 ms | 71,168 bytes |
@@ -364,8 +364,11 @@ body copies, and the delta-0 `ack(m, n - 1)` chain site collapses into a counted
 C++'s 15.4-18.0 ms and Rust's 55.9-64.5 ms. `xorshift` remains the
 recorded structural tie at the ISA latency floor, and `folded_math`'s margin is inside run-to-run
 spread in some sessions; `nqueens`, `binary_gcd`, `call_chain`, `primes`, `mandelbrot`,
-`many_params` (gcc folds the six-argument mix structurally), `argv_walk`, `char_stream` and
-`str_scan` remain
+`many_params` (every baseline folds the six-argument mix to a
+compile-time constant — C/C++/Rust mains are a bare print of 0x2cc3a372e58980,
+so their 7.8-13.0 ms is startup only, while Cairn honestly runs the loop;
+ADR-071 rules out codegen work until the twin contract changes), `argv_walk`,
+`char_stream` and `str_scan` remain
 the recorded losses, with the mechanisms in the ADR register (`argv_walk`: ADR-059's inline;
 `char_stream`: ADR-058/062/063's measured call-vs-inline ledger; `str_scan`: ADR-060/061's
 NUL-test facts).
