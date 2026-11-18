@@ -833,3 +833,25 @@ one fill, 100 read-modify-write passes, one summation pass) and `sieve`
 (Eratosthenes over 0..65536, nested dynamic indices); C, C++ and Rust twins
 print the identical totals. Per the standing rule every benchmark case runs in
 the benchmark gate, and the gate record lands with the closing commit.
+
+## ADR-069: element-store address fusion and interleaved benchmark trust
+
+Task cairn-speed-2 [1/3]. `ca[i] = ca[i] op e` folded to one address computation
+and one memory-operand store: `binary_store_reg` in machine.py, fused emission in
+codegen. The refusal duties sit with the value side: a printed index, or a value that
+can trap a crossed divisor between the read and the write, refuses to fuse,
+because both the trap and the print must run exactly once.
+
+Measurement truth from this task: one gate fired into a loaded machine (another
+agent session on this box) printed +69 to +336 percent across the whole scoreboard
+and its record was dropped from benchmark history under the pollution rule. A
+serial re-gate still misprinted fib30/primes/mandelbrot/argv_walk at +12 to
++24 percent; only interleaved re-measurement (cairn and C twin alternating in
+the same seconds, nine rounds) reproduced them at -5.4/-2.7/-10.9/-1.4 percent,
+all under their C twins. The scoreboard rows for xorshift, binary_gcd and
+array_sum carry the new honest ranges; binary_gcd improved with no code change
+(its C twin moved the same direction) and array_sum's -14 percent is the fusion.
+
+Honest-window criterion (many_params, seven runs): best <= 20 ms accepts, best
+19-34 ms is pollution. Comparing two gates from different windows beats trusting
+one.

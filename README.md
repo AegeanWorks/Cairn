@@ -314,13 +314,13 @@ a spread:
 
 | Case | Work | Cairn best | C best | C++ best | Rust best | Cairn size |
 |---|---|---|---|---|---|---|
-| `xorshift` | 200,000,000 serial xorshift steps | 292-306 ms | 283-306 ms | 287-300 ms | 292-308 ms | 71,168 bytes |
-| `fib30` | 2,692,537 recursive calls | 9.6-11.9 ms | 8.7-11.8 ms | 8.7-10.7 ms | 10.6-13.1 ms | 81,408 bytes |
+| `xorshift` | 200,000,000 serial xorshift steps | 283-306 ms | 283-306 ms | 287-300 ms | 292-314 ms | 71,168 bytes |
+| `fib30` | 2,692,537 recursive calls | 9.6-12.7 ms | 8.7-11.8 ms | 8.7-10.7 ms | 10.6-13.1 ms | 81,408 bytes |
 | `folded_math` | 20,000,000 bit-mixed constant additions | 18.4-20.4 ms | 18.0-22.0 ms | 18.3-22.1 ms | 19.2-23.1 ms | 71,168 bytes |
 | `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-106 ms | 158-164 ms | 160-164 ms | 140-150 ms | 71,168 bytes |
 | `ackermann` | `A(3,9)`, about 25 million calls | 10.2-13.9 ms | 15.2-19.4 ms | 15.4-18.0 ms | 18.4-64.5 ms | 71,680 bytes |
 | `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 24.9-26.7 ms | 22.1-25.1 ms | 22.8-24.9 ms | 18.4-20.4 ms | 71,168 bytes |
-| `binary_gcd` | 1,000,000 Stein-GCD pairs | 182-190 ms | 170-180 ms | 173-181 ms | 148-154 ms | 71,680 bytes |
+| `binary_gcd` | 1,000,000 Stein-GCD pairs | 162-190 ms | 164-180 ms | 173-181 ms | 148-154 ms | 71,680 bytes |
 | `call_chain` | 20,000,000 three-argument hot-path calls | 45-48 ms | 33-37 ms | 34-37 ms | 74-79 ms | 71,168 bytes |
 | `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 7.8-9.7 ms | 7.7-10.7 ms | 7.7-10.9 ms | 8.6-10.8 ms | 71,168 bytes |
 | `primes` | trial division over 2..300000 | 25.1-27.2 ms | 24.5-27.3 ms | 24.1-26.3 ms | 18.9-23.2 ms | 71,168 bytes |
@@ -331,7 +331,7 @@ a spread:
 | `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 20.0-23.7 ms | 18.5-24.2 ms | 19.1-22.5 ms | 25.5-28.4 ms | 71,168 bytes |
 | `char_stream` | 4 MiB piped through `read_char()`, summed | 11.1-14.3 ms | 7.7-10.7 ms | 7.4-10.3 ms | 12.9-22.0 ms | 71,168 bytes |
 | `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.9-18.4 ms | 11.8-16.6 ms | 12.2-19.6 ms | 28.2-37.0 ms | 71,168 bytes |
-| `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 13.6-13.7 ms | 10.2-10.9 ms | 10.4-11.8 ms | 11.6-13.0 ms | 137,216 bytes |
+| `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 11.8-13.7 ms | 10.2-11.9 ms | 10.4-11.9 ms | 11.6-13.0 ms | 137,216 bytes |
 | `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 9.4-9.4 ms | 9.6-10.0 ms | 10.1-10.9 ms | 11.2-11.8 ms | 137,216 bytes |
 
 The size column is the executable's `.text` frame at the current revision: the runtime helpers (argv arena, 64 KiB stdin state, printers, divide trap) ride in every program, so most cases share the same 71,168-byte base. `array_sum` and sieve reserve 8 MiB of stack in the PE header (ADR-068), so their base carries the bigger frame.

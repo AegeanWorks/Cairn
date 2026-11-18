@@ -2,32 +2,15 @@
   "version": 1,
   "active_task": {
     "task_id": "cairn-speed-2",
-    "last_phase": "verify",
-    "active_phase": 4,
+    "last_phase": "in_progress",
+    "active_phase": 3,
     "status": "in_progress",
-    "updated_at": 1795015131.4693491,
+    "updated_at": 1795033915.049349,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-charloop-shave",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-charloop-shave' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794941892.956477,
-      "timestamp_str": "2026-11-17 21:58:12",
-      "agent": "mistral:vibe",
-      "head": "eba43d9ec7f47a29ed22a0898c6233befe9ec7bc",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-contract-sync",
       "phase": "plan",
@@ -302,6 +285,17 @@
       "status": "in_progress",
       "timestamp": 1795015131.4693491,
       "timestamp_str": "2026-11-18 18:18:51",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-speed-2",
+      "phase": "in_progress",
+      "phase_num": 3,
+      "description": "[2/3] gate honest in quiet window: array_sum -14.1%, binary_gcd -11.9% (C twin moved same), xorshift -7.8%; flagged fib30/primes/mandelbrot/argv_walk re-measured interleaved at -5.4/-2.7/-10.9/-1.4% beating their C twins; ADR-069 + README scoreboard rows updated",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795033915.049349,
+      "timestamp_str": "2026-11-18 23:31:55",
       "agent": "mistral:vibe"
     }
   ]
