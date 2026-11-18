@@ -10,11 +10,11 @@
 - **Total Classes**: `181`
 - **Total Top-Level Functions**: `210`
 - **Total Class Methods**: `948`
-- **Total Source Lines**: `18216`
+- **Total Source Lines**: `18226`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
-- **Not indexed by this map**: cpp (`34` file(s)), rust (`17` file(s))
+- **Not indexed by this map**: cpp (`38` file(s)), rust (`19` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -32,7 +32,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `565` lines (`27085` bytes)
+**Size**: `569` lines (`27392` bytes)
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -96,7 +96,7 @@
 ### [`cairn/capabilities.py`](cairn/capabilities.py)
 > *The machine-readable description of what this compiler accepts and emits.*
 
-**Size**: `105` lines (`5126` bytes)
+**Size**: `110` lines (`5453` bytes)
 
 **Functions:**
 - `def _operators()` - *Operators grouped by precedence tier, loosest first.*
@@ -635,7 +635,7 @@
 ### [`cairn/pe.py`](cairn/pe.py)
 > *PE writer: link an artifact and emit a Windows PE32+ console executable.*
 
-**Size**: `199` lines (`8992` bytes)
+**Size**: `199` lines (`8994` bytes)
 
 **Functions:**
 - `def align(value, boundary)` - *Round `value` up to the next multiple of `boundary`.*
@@ -800,7 +800,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `465` lines (`26151` bytes)
+**Size**: `466` lines (`26206` bytes)
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
