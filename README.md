@@ -320,7 +320,7 @@ a spread:
 | `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-106 ms | 158-164 ms | 160-164 ms | 140-150 ms | 71,168 bytes |
 | `ackermann` | `A(3,9)`, about 25 million calls | 10.2-13.9 ms | 15.2-19.4 ms | 15.4-18.0 ms | 18.4-64.5 ms | 71,680 bytes |
 | `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 24.9-26.7 ms | 22.1-25.1 ms | 22.8-24.9 ms | 18.4-20.4 ms | 71,168 bytes |
-| `binary_gcd` | 1,000,000 Stein-GCD pairs | 162-190 ms | 164-180 ms | 173-181 ms | 148-154 ms | 71,680 bytes |
+| `binary_gcd` | 1,000,000 Stein-GCD pairs | 147-162 ms | 158-180 ms | 173-181 ms | 139-154 ms | 71,680 bytes |
 | `call_chain` | 20,000,000 three-argument hot-path calls | 45-48 ms | 33-37 ms | 34-37 ms | 74-79 ms | 71,168 bytes |
 | `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 7.8-9.7 ms | 7.7-10.7 ms | 7.7-10.9 ms | 8.6-10.8 ms | 71,168 bytes |
 | `primes` | trial division over 2..300000 | 25.1-27.2 ms | 24.5-27.3 ms | 24.1-26.3 ms | 18.9-23.2 ms | 71,168 bytes |

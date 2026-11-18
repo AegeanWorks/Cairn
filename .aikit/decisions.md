@@ -862,3 +862,20 @@ registry sources), verified by full-image SHA-256 through a temporary worktree.
 flapping windows mid-gate therefore cannot claim a code regression for these
 cases: the honest 79af21f record is the current tree's measurement. A cross-window
 regression claim needs a byte-difference first.
+
+## ADR-070: the swap shape lowers branchless through one cmov pair
+
+Task cairn-speed-2 [2/3]. `if a > b { var t = a; a = b; b = t; }` — the
+data-dependent swap whose branch mispredicts at the heart of a Stein-GCD
+inner loop — lowers to three moves and no branch: one scratch keeps the
+old `a`, and both `cmov`s select on the same comparison flags. Refusals:
+an else, a different body, a condition not between the two swapped slots
+(named either way round), a frame slot (the cmov needs a register
+destination), or the temporary read anywhere outside the if, where the
+language's never-taken-binding-reads-zero rule beats what a cmov answers.
+
+binary_gcd measured -16.2 percent best and -13.8 median in the interleaved
+A/B (147.3 vs 145.4 quiet-record against 162.5/173.5), closing to -4.7
+percent from the Rust twin; the full honest gate then read zero cases
+beyond the noise band versus 79af21f. The pass refuses whenever any input
+of the shape is off, so a refused swap keeps the exact branchy semantics.
