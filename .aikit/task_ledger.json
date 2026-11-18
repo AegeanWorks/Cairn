@@ -2,50 +2,18 @@
   "version": 1,
   "active_task": {
     "task_id": "cairn-ir-passes",
-    "last_phase": "planning",
-    "active_phase": 2,
-    "status": "in_progress",
-    "updated_at": 1794977959.9134877,
+    "last_phase": "4",
+    "active_phase": 5,
+    "status": "completed",
+    "updated_at": 1794994074.4367173,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
     "continuations": [],
-    "impact_assessment": {
-      "why": "user goal is faster than C/C++/Rust; gcc wins many_params by inlining and folding 31i+37(i+1)+... to 216i+252 while cairn pays six materialized arguments and a call per iteration; the gap is structural, not per-benchmark",
-      "benefits": "benefits: inlining removes call overhead for the general class of pure single-return functions; distributive expansion plus like-term collection folds linear argument algebra; both apply to any program, no benchmark special cases",
-      "risks": "contract: passes reorder nothing observable but multi-use hoisting can permute which of two trapping arguments traps first (same exit 3, same stdout; stderr message order only). dependency: optimizer mutates sema-assigned slots; fresh hoist slots must bump function.slots or the frame misaligns. concurrency: no shared state. state: emitted bytes change, so the benchmark gate returns",
-      "mitigation": "contract: evaluation order preserved by substituting in left-to-right arg order and hoisting before the statement; trapping-only divergence documented in ADR. dependency: fresh slots numbered from the caller's existing slots count, zip-pinned by tests. state: full unittest gate plus python -m benchmarks.run_benchmarks --save --compare before phase 4"
-    }
+    "completed_at": 1794994074.7789102,
+    "completed_head": "6a66ee07811c7d30c371f8028a683824d8ee1269",
+    "completed_tree": "c046590393b7fd813d94cd63efb7dbefd40b8384"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-nonzero-facts",
-      "phase": "plan",
-      "phase_num": 2,
-      "description": "[1/1] plan: record the non-negative fact on xor-zero stores so scan loops lose the index sign guard",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794927366.3685355,
-      "timestamp_str": "2026-11-17 17:56:06",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "contract: _emit_value's xor-zero fast path records slot in nonnegative_slots (zero is non-negative) alongside the existing IntLiteral >= 0 path, delta-slot copies stay excluded; dependency: no machine.py change, only the fact set discipline in codegen; concurrency: single-threaded session; state: codegen.py one path plus failing-first shape test, gate history refresh after",
-        "benefits": "contract: str_byte and arg_byte inlines skip the sign test of an index proven non-negative (j = 0 then j = j + 1 loops), str_scan drops two of nine per-byte instructions; dependency: identical inline selection conditions otherwise; concurrency: none; state: str_scan expected -4 to -8 percent, argv_walk and char_stream possible small gains, everything else in noise",
-        "risks": "contract: a wrongly recorded fact would let a negative index reach movzbl address math; dependency: the fact is only for the literal zero store, the store cannot make the register negative; concurrency: none; state: misaddressed loads or lost fact benefits going unnoticed",
-        "mitigation": "contract: fact gated on IntLiteral value 0 and not the delta view, exactly like the existing literal >= 0 add at the general store; dependency: shape test asserts the folded movzbl plus the js absence and a signed-index control keeps the js; concurrency: none; state: full 3,700 test suite plus high-priority gate with byte-identical outputs before commit"
-      },
-      "plan_digest": "f04d3a83efb16e8eb236255e43ff51d2e93f04277e75c65cdb4e860fedaa4d8b"
-    },
-    {
-      "task_id": "cairn-nonzero-facts",
-      "phase": "verify",
-      "phase_num": 4,
-      "description": "[1/1] verify: xor-zero nonnegative fact ships in cd93a03; 1101 tests OK; gate run twice (first window showed nqueens/splitmix regressions), clean rerun exit 0 with no regressions; same-window A/B: str_scan 16.12 -> 13.96 best, nqueens and splitmix level, outputs identical; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794928114.5108368,
-      "timestamp_str": "2026-11-17 18:08:34",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-nonzero-facts",
       "phase": "completed",
@@ -323,6 +291,34 @@
         "mitigation": "contract: evaluation order preserved by substituting in left-to-right arg order and hoisting before the statement; trapping-only divergence documented in ADR. dependency: fresh slots numbered from the caller's existing slots count, zip-pinned by tests. state: full unittest gate plus python -m benchmarks.run_benchmarks --save --compare before phase 4"
       },
       "plan_digest": "2c02aeb845b7b779c0784bb284818a3a6505a478496f3546e5ac5f09f6cea094"
+    },
+    {
+      "task_id": "cairn-ir-passes",
+      "phase": "4",
+      "phase_num": 4,
+      "description": "benchmark gate re-run in a quiet window: compare clean against c3d39bf, only xorshift +12.6% on byte-identical code within its known noise band; suite 1210 OK; ends with checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1794994074.4367173,
+      "timestamp_str": "2026-11-18 12:27:54",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-ir-passes",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-ir-passes' completed successfully.",
+      "status": "completed",
+      "timestamp": 1794994074.8894587,
+      "timestamp_str": "2026-11-18 12:27:54",
+      "agent": "mistral:vibe",
+      "head": "6a66ee07811c7d30c371f8028a683824d8ee1269",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
