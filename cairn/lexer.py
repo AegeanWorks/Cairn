@@ -13,7 +13,7 @@ KEYWORDS = frozenset({"fn", "let", "var", "if", "else", "while", "for", "in", "r
                       "break", "continue", "true", "false"})
 
 MULTI_CHAR_SYMBOLS = ("..=", "..", "->", "==", "!=", "<=", ">=", "&&", "||", "<<", ">>")
-SINGLE_CHAR_SYMBOLS = frozenset("(){}:,;=+-*/%<>!&|^~")
+SINGLE_CHAR_SYMBOLS = frozenset("(){}:,;=+-*/%<>!&|^~[]")
 
 INT64_MAX = 2 ** 63 - 1
 

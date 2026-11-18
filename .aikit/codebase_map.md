@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `175`
-- **Total Top-Level Functions**: `207`
-- **Total Class Methods**: `902`
-- **Total Source Lines**: `17455`
+- **Total Classes**: `179`
+- **Total Top-Level Functions**: `208`
+- **Total Class Methods**: `925`
+- **Total Source Lines**: `17816`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -263,7 +263,7 @@
 ### [`cairn/codes.py`](cairn/codes.py)
 > *The diagnostic code registry: one record per code the compiler can emit.*
 
-**Size**: `80` lines (`3640` bytes)
+**Size**: `84` lines (`3961` bytes)
 
 **Classes:**
 - `class Code` - *One diagnostic code: its stage family and a one-line statement of what it means.*
@@ -394,7 +394,7 @@
 ### [`cairn/lexer.py`](cairn/lexer.py)
 > *Lexer: source text to a flat token list.*
 
-**Size**: `195` lines (`8329` bytes)
+**Size**: `195` lines (`8331` bytes)
 
 **Classes:**
 - `class Token` - *One lexical unit: its kind, its text, its value when it is an integer, and its span.*
@@ -585,17 +585,19 @@
 ### [`cairn/parser.py`](cairn/parser.py)
 > *Parser: recursive descent over the token list.*
 
-**Size**: `352` lines (`14790` bytes)
+**Size**: `451` lines (`20108` bytes)
 
 **Classes:**
 - `class Parser` - *A cursor over one token list; every parse method consumes what it matches.*
   - Method `.parse_program()` - *Parse top-level functions until end of file.*
   - Method `._parse_function()` - *`fn name(a: i64, ...) -> i64 { ... }`.*
   - Method `._parse_parameter()` - *One `name: i64` parameter.*
-  - Method `._parse_type()` - *`i64` is the only type in Cairn 0.1; anything else names what is missing.*
+  - Method `._parse_type(allow_array)` - *One type: `i64`, or `[N]i64` where arrays are allowed; answers (size, name).*
+  - Method `._parse_array_literal()` - *A `[` elements `]` literal; the parser sees one element list.*
+  - Method `._clone(expression, depth)` - *A deep copy of one expression; fill expansion needs one node per element.*
   - Method `._parse_block()` - *`{ statement* }`.*
   - Method `._parse_statement()` - *Dispatch on the first token of one statement.*
-  - Method `._parse_binding()` - *`let|var name: i64 = expr;`.*
+  - Method `._parse_binding()` - *`let|var name: i64 = expr;` or `let|var name: [N]i64 = literal;`.*
   - Method `._parse_if()` - *`if expr block [else (if | block)]`.*
   - Method `._parse_while()` - *`while expr block`.*
   - Method `._parse_for()` - *`for name in start..end block`, with `..=` for the inclusive upper bound.*
@@ -604,6 +606,7 @@
   - Method `._parse_expression(minimum)` - *Precedence climbing: parse operators at least as tight as `minimum`.*
   - Method `._parse_unary()` - *`-x`, `!x`, `~x`, otherwise a primary expression.*
   - Method `._parse_primary()` - *An integer, a string, a name, a call, a parenthesised expression, or `true`/`false`.*
+  - Method `._parse_index(operand)` - *An `operand[index]` load; the opening bracket is the current token.*
   - Method `._parse_call(name)` - *`name(arg, ...)`; the opening parenthesis is already the current token.*
   - Method `._peek()` - *The current token without consuming it.*
   - Method `._advance()` - *Consume and return the current token; `eof` stays put.*
@@ -662,7 +665,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `322` lines (`15332` bytes)
+**Size**: `460` lines (`22075` bytes)
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -676,13 +679,19 @@
   - Method `._check_block(block)` - *Check statements in order; the scope is flat and function-wide.*
   - Method `._check_statement(statement)` - *Dispatch one statement to its checker.*
   - Method `._check_for(statement)` - *A `for` declares one scoped, mutable loop variable for its body, then restores.*
-  - Method `._check_binding(statement)` - *A `let`/`var` declares one new name and initialises it from an i64 expression.*
-  - Method `._check_assign(statement)` - *Assignment requires an existing `var` binding.*
+  - Method `._check_binding(statement)` - *A `let`/`var` declares one new name: a scalar initialises from one i64*
+  - Method `._check_binding_initializer(statement, size)` - *Check one binding's initializer against the declared shape.*
+  - Method `._new_array_slots(count)` - *Allocate `count` consecutive 8-byte frame slots; the first is the base.*
+  - Method `._check_assign(statement)` - *Assignment requires an existing `var` binding; `a[i] = e;` a `var` array.*
+  - Method `._check_element_store(statement, binding)` - *`a[index] = value;` needs a declared `var` array; scalars refuse indexing.*
+  - Method `._check_element_index(index, size)` - *Check one index expression; a literal index must land inside the array.*
   - Method `._check_expression(expression)` - *Dispatch one expression to its checker.*
+  - Method `._check_index_load(expression)` - *`a[i]` loads one element; it needs a declared array, never a scalar.*
   - Method `._check_name(expression)` - *A name must be a declared local; `print` is callable but not a value.*
   - Method `._check_call(expression, allow_stop)` - *A call names a function (or the builtin) and passes exactly its arity of arguments.*
 
 **Functions:**
+- `def _literal_index(expression)` - *A statically known index, or None for a dynamic one; parens are unwrapped.*
 - `def emitted_return(block)` - *Whether every path through `block` ends in a `return` or an `exit` statement.*
 - `def analyze(program, path)` - *Run semantic analysis over one parsed program.*
 
@@ -691,7 +700,7 @@
 ### [`cairn/syntax.py`](cairn/syntax.py)
 > *Syntax tree: one dataclass per construct, each carrying its source span.*
 
-**Size**: `207` lines (`4612` bytes)
+**Size**: `237` lines (`5611` bytes)
 
 **Classes:**
 - `class Node` - *Every node carries the span it was parsed from.*
@@ -703,10 +712,12 @@
 - `class Binary` - *A binary operator; `op` is the source spelling.*
 - `class Parens` - *A parenthesised expression; kept so spans and grouping survive into code generation.*
 - `class Call` - *`name(arg, ...)`; the callee is a function name or the builtin `print`.*
+- `class ArrayLiteral` - *An array literal `[e0, e1, ...]`; a fill `[v; N]` is expanded to N copies of `v`.*
+- `class Index` - *`a[i]`; `a` must name an array binding. `slot` is the array's base slot and*
 - `class Stmt` - *Base class for statements.*
 - `class Block` - *A brace-delimited statement sequence.*
 - `class Let` - *`let x: i64 = e;` (immutable) or `var x: i64 = e;` (mutable).*
-- `class Assign` - *`x = e;`, valid only for a `var` binding.*
+- `class Assign` - *`x = e;`, valid only for a `var` binding; `a[i] = e;` stores into one element.*
 - `class If` - *`if cond { ... } else { ... }`, where the else block is optional.*
 - `class While` - *`while cond { ... }`; `countdown` marks a counter loop the optimiser converted.*
 - `class For` - *`for name in start..end { ... }`, or `start..=end` for the inclusive bound.*
@@ -1581,7 +1592,7 @@
 ### [`tests/test_parser.py`](tests/test_parser.py)
 > *Parser tests: shapes, precedence and the grammar's positioned refusals.*
 
-**Size**: `157` lines (`7400` bytes)
+**Size**: `202` lines (`9788` bytes)
 
 **Classes:**
 - `class ParserTest` - *The tree shape decides code shape, so these assertions are about generated code too.*
@@ -1607,6 +1618,13 @@
   - Method `.test_a_missing_range_symbol_is_a_positioned_refusal()`
   - Method `.test_the_loop_variable_must_be_a_name()`
   - Method `.test_the_loop_needs_the_in_keyword()`
+- `class ArrayTest` - *`[N]i64` bindings, array literals and indexing reach the tree as designed.*
+  - Method `.test_a_fill_literal_expands_to_one_node_per_element()`
+  - Method `.test_an_aggregate_literal_keeps_its_element_expressions()`
+  - Method `.test_index_store_targets_the_binding_with_its_index()`
+  - Method `.test_fill_counts_must_be_integer_literals()`
+  - Method `.test_array_types_stay_local_bindings()`
+  - Method `.test_an_unclosed_index_is_a_positioned_refusal()`
 
 **Functions:**
 - `def body(source)` - *The body of the single function in a tiny program.*
@@ -1673,7 +1691,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `215` lines (`10788` bytes)
+**Size**: `260` lines (`13014` bytes)
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -1717,6 +1735,16 @@
 - `class FlushBuiltinTest` - *flush() drains the shared stdout buffer: zero arguments, a real value.*
   - Method `.test_flush_takes_no_arguments_and_runs_as_a_statement()`
   - Method `.test_flush_is_a_value_builtin_that_cannot_be_renamed()`
+- `class ArraySemaTest` - *`[N]i64` bindings reserve N consecutive slots and index only within range.*
+  - Method `.test_an_array_binding_reserves_consecutive_slots()`
+  - Method `.test_a_non_literal_initializer_is_refused()`
+  - Method `.test_a_literal_length_mismatch_is_refused()`
+  - Method `.test_an_empty_or_oversized_array_is_refused()`
+  - Method `.test_indexing_a_scalar_is_refused()`
+  - Method `.test_an_array_name_is_not_a_value()`
+  - Method `.test_a_static_out_of_range_index_is_refused()`
+  - Method `.test_storing_into_an_immutable_array_element_is_refused()`
+  - Method `.test_storing_into_an_undeclared_array_is_refused()`
 
 **Functions:**
 - `def codes(source)` - *The diagnostic codes a source produces; asserts it is refused.*

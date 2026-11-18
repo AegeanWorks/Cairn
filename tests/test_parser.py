@@ -155,3 +155,48 @@ class ForTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ArrayTest(unittest.TestCase):
+    """`[N]i64` bindings, array literals and indexing reach the tree as designed."""
+
+    def test_a_fill_literal_expands_to_one_node_per_element(self) -> None:
+        program = parse("fn main() -> i64 { var a: [4]i64 = [0; 4]; return 0; }")
+        statement = program.functions[0].body.statements[0]
+        self.assertIsInstance(statement, syntax.Let)
+        self.assertEqual(statement.array_size, 4)
+        self.assertEqual(len(statement.value.elements), 4)
+        for element in statement.value.elements:
+            self.assertIsInstance(element, syntax.IntLiteral)
+            self.assertEqual(element.value, 0)
+
+    def test_an_aggregate_literal_keeps_its_element_expressions(self) -> None:
+        program = parse("fn main() -> i64 { let a: [3]i64 = [1, 2, 3]; return a[0]; }")
+        statement = program.functions[0].body.statements[0]
+        self.assertEqual(statement.array_size, 3)
+        self.assertEqual([element.value for element in statement.value.elements], [1, 2, 3])
+        load = program.functions[0].body.statements[1].value
+        self.assertIsInstance(load, syntax.Index)
+        self.assertEqual((load.operand.name, load.index.value), ("a", 0))
+
+    def test_index_store_targets_the_binding_with_its_index(self) -> None:
+        program = parse("fn main() -> i64 { var a: [4]i64 = [0; 4]; a[1] = 7; return 0; }")
+        statement = program.functions[0].body.statements[1]
+        self.assertIsInstance(statement, syntax.Assign)
+        self.assertEqual(statement.name, "a")
+        self.assertEqual(statement.index.value, 1)
+        self.assertEqual(statement.value.value, 7)
+
+    def test_fill_counts_must_be_integer_literals(self) -> None:
+        with self.assertRaises(DiagnosticError) as caught:
+            parse("fn main() -> i64 { var n: i64 = 4; var a: [4]i64 = [0; n]; return 0; }")
+        self.assertEqual(caught.exception.diagnostics[0].code, "E2001")
+
+    def test_array_types_stay_local_bindings(self) -> None:
+        with self.assertRaises(DiagnosticError):
+            parse("fn f(a: [2]i64) -> i64 { return a[0]; }")
+
+    def test_an_unclosed_index_is_a_positioned_refusal(self) -> None:
+        with self.assertRaises(DiagnosticError) as caught:
+            parse("fn main() -> i64 { var a: [4]i64 = [0; 4]; return a[2; }")
+        self.assertEqual(caught.exception.diagnostics[0].code, "E2001")

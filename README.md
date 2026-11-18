@@ -170,6 +170,10 @@ python -m cairn check broken.crn --json
 | E3011 | Missing or ill-formed `main` |
 | E3012 | Builtin redefined or used as a value |
 | E3013 | `exit(...)` used inside an expression instead of as a statement |
+| E3014 | Array declaration, size range, or initializer literal length mismatch |
+| E3015 | Indexed a scalar instead of an array |
+| E3016 | A whole array used as a value instead of an indexed element |
+| E3017 | Static index literal outside `0 .. N-1`; dynamic bounds are undefined |
 
 `E1002` and `E3002` are reserved for future stages and must not be reused.
 

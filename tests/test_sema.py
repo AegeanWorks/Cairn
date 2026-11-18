@@ -213,3 +213,48 @@ class FlushBuiltinTest(unittest.TestCase):
     def test_flush_is_a_value_builtin_that_cannot_be_renamed(self) -> None:
         self.assertEqual(codes("fn main() -> i64 { return flush; }"), ["E3012"])
         self.assertEqual(codes("fn main() -> i64 { flush = 1; return 0; }"), ["E3012"])
+
+
+class ArraySemaTest(unittest.TestCase):
+    """`[N]i64` bindings reserve N consecutive slots and index only within range."""
+
+    def test_an_array_binding_reserves_consecutive_slots(self) -> None:
+        program = analyze(parse(
+            "fn main() -> i64 { var a: [8]i64 = [0; 8]; var j: i64 = 5; a[j] = j;"
+            " return 0; }"))
+        function = program.functions[0]
+        self.assertEqual(function.slots, 10)
+        self.assertEqual(function.body.statements[0].slot, 0)
+        self.assertEqual(function.body.statements[1].slot, 8)
+        store = function.body.statements[2]
+        self.assertEqual((store.slot, store.index.slot), (0, 8))
+
+    def test_a_non_literal_initializer_is_refused(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { var a: [3]i64 = 5; return 0; }"),
+                         ["E3014"])
+
+    def test_a_literal_length_mismatch_is_refused(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { var a: [3]i64 = [1, 2]; return 0; }"),
+                         ["E3014"])
+
+    def test_an_empty_or_oversized_array_is_refused(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { var a: [0]i64 = []; return 0; }"),
+                         ["E3014"])
+        self.assertEqual(codes("fn main() -> i64 { var a: [70000]i64 = [0; 70000]; return 0; }"), ["E3014"])
+
+    def test_indexing_a_scalar_is_refused(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { var a: i64 = 0; return a[0]; }"),
+                         ["E3015"])
+
+    def test_an_array_name_is_not_a_value(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { var a: [2]i64 = [1, 1]; return a; }"),
+                         ["E3016"])
+
+    def test_a_static_out_of_range_index_is_refused(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { var a: [4]i64 = [0; 4]; return a[9]; }"), ["E3017"])
+
+    def test_storing_into_an_immutable_array_element_is_refused(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { let a: [2]i64 = [1, 1]; a[0] = 1; return 0; }"), ["E3005"])
+
+    def test_storing_into_an_undeclared_array_is_refused(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { b[0] = 1; return 0; }"), ["E3007"])

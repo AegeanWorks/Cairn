@@ -84,6 +84,29 @@ class Call(Expr):
 
 
 @dataclass
+class ArrayLiteral(Expr):
+    """An array literal `[e0, e1, ...]`; a fill `[v; N]` is expanded to N copies of `v`.
+
+    Every element expression is evaluated in source order at binding initialisation,
+    once per element, with the leftmost element first. The literal is only valid as a
+    binding's initializer.
+    """
+
+    elements: List[Expr] = field(default_factory=list)
+
+
+@dataclass
+class Index(Expr):
+    """`a[i]`; `a` must name an array binding. `slot` is the array's base slot and
+    `size` its declared element count, both filled in by semantic analysis."""
+
+    operand: Optional[Expr] = None
+    index: Optional[Expr] = None
+    slot: int = -1
+    size: int = 0
+
+
+@dataclass
 class Stmt(Node):
     """Base class for statements."""
 
@@ -97,22 +120,29 @@ class Block(Stmt):
 
 @dataclass
 class Let(Stmt):
-    """`let x: i64 = e;` (immutable) or `var x: i64 = e;` (mutable)."""
+    """`let x: i64 = e;` (immutable) or `var x: i64 = e;` (mutable).
+
+    A `[N]i64` binding names zero `array_size` and reserves N frame slots: `slot` is
+    the first of them, elements at `slot + 0 .. slot + N - 1`, ascending.
+    """
 
     name: str = ""
     mutable: bool = False
     type_name: str = ""
     value: Optional[Expr] = None
     slot: int = -1
+    array_size: Optional[int] = None
 
 
 @dataclass
 class Assign(Stmt):
-    """`x = e;`, valid only for a `var` binding."""
+    """`x = e;`, valid only for a `var` binding; `a[i] = e;` stores into one element."""
 
     name: str = ""
     value: Optional[Expr] = None
     slot: int = -1
+    index: Optional[Expr] = None
+    temp_slot: Optional[int] = None
 
 
 @dataclass

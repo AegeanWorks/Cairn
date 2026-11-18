@@ -6,7 +6,7 @@ without a table lookup. The grammar has no expression that is also a declaration
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from cairn.diagnostics import DiagnosticError, Span, fail
 from cairn.lexer import Token, tokenize
@@ -76,7 +76,7 @@ class Parser:
                 parameters.append(self._parse_parameter())
         self._expect_symbol(")")
         self._expect_symbol("->")
-        return_type = self._parse_type()
+        _return_size, return_type = self._parse_type()
         body = self._parse_block()
         span = Span.join(start.span, body.span)
         return syntax.Function(span=span, name=name.text, parameters=parameters,
@@ -86,13 +86,34 @@ class Parser:
         """One `name: i64` parameter."""
         name = self._expect_ident("a parameter name")
         self._expect_symbol(":")
-        type_name = self._parse_type()
+        _size, type_name = self._parse_type()
         return syntax.Parameter(span=Span.join(name.span, self.tokens[self.index - 1].span),
                                 name=name.text, type_name=type_name)
 
-    def _parse_type(self) -> str:
-        """`i64` is the only type in Cairn 0.1; anything else names what is missing."""
+    def _parse_type(self, allow_array: bool = False) -> Tuple[Optional[int], str]:
+        """One type: `i64`, or `[N]i64` where arrays are allowed; answers (size, name).
+
+        Arrays stay a local-binding feature: a parameter or return type carrying
+        `[N]` is refused outright (E2002).
+        """
         token = self._peek()
+        if token.is_symbol("["):
+            open_bracket = self._advance()
+            count = self._peek()
+            if count.kind != "int":
+                raise self._expected("an array length")
+            self._advance()
+            self._expect_symbol("]")
+            element = self._peek()
+            if element.kind != "ident" or element.text not in TYPE_NAMES:
+                raise self._expected("an element type name")
+            self._advance()
+            if not allow_array:
+                raise fail("E2002", "an array type needs a local 'let' or 'var' binding",
+                           "Arrays bind only to locals; parameters and return types stay "
+                           "'i64'.",
+                           open_bracket.span, self.path)
+            return count.value, element.text
         if token.kind != "ident":
             raise self._expected("a type name")
         if token.text not in TYPE_NAMES:
@@ -100,7 +121,60 @@ class Parser:
                        "Cairn 0.1 has exactly one type, i64; write 'i64'.",
                        token.span, self.path)
         self._advance()
-        return token.text
+        return None, token.text
+
+    def _parse_array_literal(self) -> syntax.ArrayLiteral:
+        """A `[` elements `]` literal; the parser sees one element list.
+
+        `[v; N]` is the whole literal: the fill expansion evaluates the fill
+        expression once per element, in element order, which is the documented
+        aggregate-literal semantics.
+        """
+        open_bracket = self._expect_symbol("[")
+        span = open_bracket.span
+        if self._peek().is_symbol("]"):
+            close = self._advance()
+            return syntax.ArrayLiteral(span=Span.join(span, close.span), elements=[])
+        first = self._parse_expression()
+        if self._peek().is_symbol(";"):
+            self._advance()
+            count = self._peek()
+            if count.kind != "int":
+                raise self._expected("an integer fill count")
+            self._advance()
+            close = self._expect_symbol("]")
+            elements = [self._clone(first, 1) for _ in range(count.value)]
+            return syntax.ArrayLiteral(span=Span.join(span, close.span),
+                                       elements=elements)
+        elements = [first]
+        while self._peek().is_symbol(","):
+            self._advance()
+            elements.append(self._parse_expression())
+        close = self._expect_symbol("]")
+        return syntax.ArrayLiteral(span=Span.join(span, close.span),
+                                   elements=elements)
+
+    def _clone(self, expression: syntax.Expr, depth: int) -> syntax.Expr:
+        """A deep copy of one expression; fill expansion needs one node per element."""
+        if depth > 64:
+            raise self._expected("a fill expression shallower than 64 nested operators")
+        if isinstance(expression, (syntax.IntLiteral, syntax.Name, syntax.StrLiteral)):
+            return expression
+        if isinstance(expression, syntax.Parens):
+            return syntax.Parens(span=expression.span,
+                                 inner=self._clone(expression.inner, depth + 1))
+        if isinstance(expression, syntax.Unary):
+            return syntax.Unary(span=expression.span, op=expression.op,
+                                operand=self._clone(expression.operand, depth + 1))
+        if isinstance(expression, syntax.Binary):
+            return syntax.Binary(span=expression.span, op=expression.op,
+                                 left=self._clone(expression.left, depth + 1),
+                                 right=self._clone(expression.right, depth + 1))
+        if isinstance(expression, syntax.Call):
+            return syntax.Call(span=expression.span, name=expression.name,
+                               arguments=[self._clone(argument, depth + 1)
+                                          for argument in expression.arguments])
+        raise self._expected("a fill expression the parser can copy")
 
     def _parse_block(self) -> syntax.Block:
         """`{ statement* }`."""
@@ -139,17 +213,20 @@ class Parser:
         return self._parse_expression_statement()
 
     def _parse_binding(self) -> syntax.Let:
-        """`let|var name: i64 = expr;`."""
+        """`let|var name: i64 = expr;` or `let|var name: [N]i64 = literal;`."""
         keyword = self._advance()
         name = self._expect_ident("a binding name")
         self._expect_symbol(":")
-        type_name = self._parse_type()
+        size, type_name = self._parse_type(allow_array=True)
         self._expect_symbol("=")
-        value = self._parse_expression()
+        if size is not None and self._peek().is_symbol("["):
+            value = self._parse_array_literal()
+        else:
+            value = self._parse_expression()
         semi = self._expect_symbol(";")
         return syntax.Let(span=Span.join(keyword.span, semi.span), name=name.text,
                           mutable=keyword.text == "var", type_name=type_name,
-                          value=value)
+                          value=value, array_size=size)
 
     def _parse_if(self) -> syntax.If:
         """`if expr block [else (if | block)]`."""
@@ -211,6 +288,18 @@ class Parser:
         start_span = self._peek().span
         expression = self._parse_expression()
         if self._peek().is_symbol("="):
+            if isinstance(expression, syntax.Index):
+                operand = expression.operand
+                if not isinstance(operand, syntax.Name):
+                    raise fail("E2003", "only an array element can be index-assigned",
+                               "Write 'a[expression] = value;' with `a` a 'var' array.",
+                               operand.span, self.path)
+                self._advance()
+                value = self._parse_expression()
+                semi = self._expect_symbol(";")
+                return syntax.Assign(span=Span.join(start_span, semi.span),
+                                     name=operand.name, value=value,
+                                     index=expression.index)
             if not isinstance(expression, syntax.Name):
                 raise fail("E2003", "only a variable name can be assigned",
                            "Write 'name = expression;' with a name declared by 'var'.",
@@ -278,6 +367,8 @@ class Parser:
             self._advance()
             if self._peek().is_symbol("("):
                 return self._parse_call(token)
+            if self._peek().is_symbol("["):
+                return self._parse_index(syntax.Name(span=token.span, name=token.text))
             return syntax.Name(span=token.span, name=token.text)
         if token.is_symbol("("):
             self._advance()
@@ -285,6 +376,14 @@ class Parser:
             close = self._expect_symbol(")")
             return syntax.Parens(span=Span.join(token.span, close.span), inner=inner)
         raise self._expected("an expression")
+
+    def _parse_index(self, operand: syntax.Expr) -> syntax.Index:
+        """An `operand[index]` load; the opening bracket is the current token."""
+        self._expect_symbol("[")
+        index = self._parse_expression()
+        close = self._expect_symbol("]")
+        return syntax.Index(span=Span.join(operand.span, close.span),
+                            operand=operand, index=index)
 
     def _parse_call(self, name: Token) -> syntax.Call:
         """`name(arg, ...)`; the opening parenthesis is already the current token."""

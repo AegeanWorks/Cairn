@@ -28,6 +28,7 @@ class Binding:
     slot: int
     mutable: bool
     span: object
+    array_size: Optional[int] = None
 
 
 @dataclass
@@ -188,30 +189,82 @@ class Analyzer:
             self.bindings[statement.name] = outer
 
     def _check_binding(self, statement: syntax.Let) -> None:
-        """A `let`/`var` declares one new name and initialises it from an i64 expression."""
+        """A `let`/`var` declares one new name: a scalar initialises from one i64
+        expression, an array needs a literal whose length is the declared size and
+        reserves that many consecutive frame slots."""
         if statement.name in BUILTINS:
             self._report("E3012", f"'{statement.name}' is a builtin and cannot be redefined",
                          "Rename the variable.", statement.span)
-            self._check_expression(statement.value)
+            self._check_binding_initializer(statement, None)
             return
         if statement.name in self.bindings:
             self._report("E3006", f"'{statement.name}' is already declared in this function",
                          "Use a new name; Cairn has no shadowing.", statement.span)
+            self._check_binding_initializer(statement, None)
+            return
+        size = statement.array_size
+        if size is not None and not 1 <= size <= 65536:
+            self._report("E3014",
+                         f"array '{statement.name}' declares {size} element(s)",
+                         "Declare between 1 and 65536 elements.",
+                         statement.span)
+            size = None
+        self._check_binding_initializer(statement, size)
+        if size is not None:
+            statement.slot = self._new_array_slots(size)
+        else:
+            statement.slot = self._new_slot()
+        self.bindings.setdefault(statement.name, Binding(statement.slot, statement.mutable,
+                                                         statement.span, size))
+
+    def _check_binding_initializer(self, statement: syntax.Let,
+                                   size: Optional[int]) -> None:
+        """Check one binding's initializer against the declared shape.
+
+        `size is None` means a scalar initializer or a refused array declaration:
+        the elements are still walked so that their own errors surface, but no
+        shape diagnostic is added on top of the size refusal.
+        """
+        value = statement.value
+        while isinstance(value, syntax.Parens):
+            value = value.inner
+        if isinstance(value, syntax.ArrayLiteral):
+            for element in value.elements:
+                self._check_expression(element)
+        elif size is not None:
+            self._report("E3014",
+                         f"array '{statement.name}' of {size} element(s) needs an array "
+                         "literal",
+                         f"Write '[e0, e1, ...]' with exactly {size} element(s).",
+                         statement.span)
+            return
+        else:
             self._check_expression(statement.value)
             return
-        self._check_expression(statement.value)
-        statement.slot = self._new_slot()
-        self.bindings.setdefault(statement.name, Binding(statement.slot, statement.mutable,
-                                                         statement.span))
+        if size is not None and len(value.elements) != size:
+            self._report("E3014",
+                         f"the literal for '{statement.name}' has {len(value.elements)} "
+                         f"element(s), declared [{size}]",
+                         f"Write exactly {size} element(s) in the literal.",
+                         value.span)
+
+    def _new_array_slots(self, count: int) -> int:
+        """Allocate `count` consecutive 8-byte frame slots; the first is the base."""
+        slot = self.slots
+        self.slots += count
+        return slot
 
     def _check_assign(self, statement: syntax.Assign) -> None:
-        """Assignment requires an existing `var` binding."""
+        """Assignment requires an existing `var` binding; `a[i] = e;` a `var` array."""
         if statement.name in BUILTINS:
             self._report("E3012", f"'{statement.name}' is a builtin and cannot be redefined",
                          "Rename the variable; the builtin keeps its meaning.", statement.span)
             binding = None
         else:
             binding = self.bindings.get(statement.name)
+        if statement.index is not None:
+            self._check_element_store(statement, binding)
+            return
         if binding is None:
             if statement.name not in BUILTINS:
                 self._report("E3007", f"'{statement.name}' is not declared",
@@ -223,6 +276,49 @@ class Analyzer:
         else:
             statement.slot = binding.slot
         self._check_expression(statement.value)
+
+    def _check_element_store(self, statement: syntax.Assign,
+                             binding: Optional[Binding]) -> None:
+        """`a[index] = value;` needs a declared `var` array; scalars refuse indexing.
+
+        A dynamic index reserves one scratch slot: the computed address must survive
+        the value expression's evaluation, which may call and clobber every register.
+        """
+        if binding is None:
+            if statement.name not in BUILTINS:
+                self._report("E3007", f"'{statement.name}' is not declared",
+                             "Declare it first with 'var a: [N]i64 = [...];'.",
+                             statement.span)
+        elif binding.array_size is None:
+            self._report("E3015", f"'{statement.name}' is not an array",
+                         "Index only arrays declared as '[N]i64'.", statement.span)
+        elif not binding.mutable:
+            self._report("E3005", f"'{statement.name}' is immutable",
+                         "Declare the array with 'var' to change its elements.",
+                         statement.span)
+        else:
+            statement.slot = binding.slot
+        size = binding.array_size if binding is not None else None
+        self._check_element_index(statement.index, size)
+        self._check_expression(statement.value)
+        if (statement.slot >= 0 and size is not None
+                and _literal_index(statement.index) is None):
+            statement.temp_slot = self._new_slot()
+
+    def _check_element_index(self, index: syntax.Expr, size: Optional[int]) -> None:
+        """Check one index expression; a literal index must land inside the array.
+
+        A dynamic index stays unchecked at compile time: out-of-range access is
+        undefined, matching Cairn's zero-overhead memory contract.
+        """
+        self._check_expression(index)
+        if size is None:
+            return
+        position = _literal_index(index)
+        if position is not None and not 0 <= position < size:
+            self._report("E3017",
+                         f"index {position} is outside an array of {size} element(s)",
+                         f"Use an index between 0 and {size - 1}.", index.span)
 
     def _check_expression(self, expression: Optional[syntax.Expr]) -> None:
         """Dispatch one expression to its checker."""
@@ -246,8 +342,36 @@ class Analyzer:
         elif isinstance(expression, syntax.Binary):
             self._check_expression(expression.left)
             self._check_expression(expression.right)
+        elif isinstance(expression, syntax.Index):
+            self._check_index_load(expression)
         elif isinstance(expression, syntax.Call):
             self._check_call(expression)
+
+    def _check_index_load(self, expression: syntax.Index) -> None:
+        """`a[i]` loads one element; it needs a declared array, never a scalar."""
+        operand = expression.operand
+        binding = None
+        if not isinstance(operand, syntax.Name):
+            self._report("E3015", "only an array name can be indexed",
+                         "Write 'a[index]' with `a` an array variable.", operand.span)
+        elif operand.name in BUILTINS:
+            self._report("E3015", f"'{operand.name}' is not an array",
+                         "Index only arrays declared as '[N]i64'.", operand.span)
+        else:
+            binding = self.bindings.get(operand.name)
+            if binding is None:
+                self._report("E3007", f"'{operand.name}' is not declared",
+                             "Declare it with 'let a: [N]i64 = [...];' before this line.",
+                             operand.span)
+            elif binding.array_size is None:
+                self._report("E3015", f"'{operand.name}' is not an array",
+                             "Index only arrays declared as '[N]i64'.", operand.span)
+                binding = None
+        size = binding.array_size if binding is not None else None
+        self._check_element_index(expression.index, size)
+        if binding is not None:
+            expression.slot = binding.slot
+            expression.size = size
 
     def _check_name(self, expression: syntax.Name) -> None:
         """A name must be a declared local; `print` is callable but not a value."""
@@ -262,6 +386,10 @@ class Analyzer:
                          expression.span)
             return
         expression.slot = binding.slot
+        if binding.array_size is not None:
+            self._report("E3016", f"array '{expression.name}' is not a value",
+                         "Index it ('a[i]'); a whole array cannot be read or passed.",
+                         expression.span)
 
     def _check_call(self, expression: syntax.Call,
                     allow_stop: bool = False) -> None:
@@ -292,6 +420,16 @@ class Analyzer:
                          f"'{expression.name}' takes {expected} argument(s), "
                          f"not {len(expression.arguments)}",
                          f"Pass exactly {expected} i64 value(s).", expression.span)
+
+
+def _literal_index(expression: syntax.Expr) -> Optional[int]:
+    """A statically known index, or None for a dynamic one; parens are unwrapped."""
+    inner = expression
+    while isinstance(inner, syntax.Parens):
+        inner = inner.inner
+    if isinstance(inner, syntax.IntLiteral):
+        return inner.value
+    return None
 
 
 def emitted_return(block: Optional[syntax.Block]) -> bool:
