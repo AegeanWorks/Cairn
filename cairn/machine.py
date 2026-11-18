@@ -288,6 +288,28 @@ class Assembler:
         self.emit(bytes([_rex(True, dst >> 3, 0, base_code >> 3), 0x8B,
                          *_modrm(0, dst, base_code)]))
 
+    def neg(self, destination: str) -> None:
+        """`neg r64`: twos-complement negation for descending frame indexing.
+
+        Frame slots descend with the slot number, so a dynamic array index is
+        negated before the scaled `lea` folds it into the element address.
+        """
+        src = REGISTERS[destination]
+        assert src != REGISTERS["rsp"]
+        self.emit(bytes([_rex(True, 0, 0, src >> 3), 0xF7, *_modrm(3, 3, src)]))
+
+    def mov_store_reg(self, base: str, source: str) -> None:
+        """`mov [base], r64`: write a qword through a pointer register.
+
+        Array element stores land through an address register: the frame
+        displacement of a dynamic index is not a compile-time constant, so the
+        address forms in a scratch register and this writes the element.
+        """
+        src, base_code = REGISTERS[source], REGISTERS[base]
+        assert base_code != REGISTERS["rsp"]
+        self.emit(bytes([_rex(True, src >> 3, 0, base_code >> 3), 0x89,
+                         *_modrm(0, src, base_code)]))
+
     def movzx_load8(self, destination: str, base: str) -> None:
         """`movzx r32, [base]`: read the byte at a pointer register, zero-extended."""
         dst, base_code = REGISTERS[destination], REGISTERS[base]

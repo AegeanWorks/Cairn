@@ -215,5 +215,35 @@ class NopPadEncodingTest(unittest.TestCase):
             body = self.code(lambda a, s=size: a.nop_pad(s))
             self.assertEqual(len(body), size, f'size {size}')
 
+
+class IndirectStoreEncodingTest(unittest.TestCase):
+    """Dynamic array stores write through a pointer register: `mov [base], r64`.
+
+    The fill loop and the park-reload store sequence are exercised end to
+    end; these tests pin the bytes so a wrong REX or ModRM bit fails here
+    instead of corrupting a stack frame inside a produced executable.
+    """
+
+    def code(self, build) -> bytes:
+        assembler = Assembler()
+        build(assembler)
+        return bytes(assembler.code)
+
+    def test_pointer_store_encodes_the_base_register_directly(self) -> None:
+        self.assertEqual(self.code(lambda a: a.mov_store_reg("rcx", "rax")),
+                         b"\x48\x89\x01")
+
+    def test_pointer_store_masks_extended_register_bits_into_rex(self) -> None:
+        self.assertEqual(self.code(lambda a: a.mov_store_reg("r9", "r10")),
+                         b"\x4d\x89\x11")
+
+    def test_pointer_store_swaps_src_bits_into_the_reg_field(self) -> None:
+        self.assertEqual(self.code(lambda a: a.mov_store_reg("rcx", "rcx")),
+                         b"\x48\x89\x09")
+
+    def test_pointer_store_rejects_a_stack_base(self) -> None:
+        with self.assertRaises(AssertionError):
+            self.code(lambda a: a.mov_store_reg("rsp", "rax"))
+
 if __name__ == "__main__":
     unittest.main()

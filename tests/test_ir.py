@@ -140,6 +140,17 @@ fn main() -> i64 {
     print(read_char());
     return 0;
 }""", b"quiet"),
+    ("array_fill", 'fn main() -> i64 {'
+     ' var a: [8]i64 = [0; 8]; var i: i64 = 0;'
+     ' while i < 8 { a[i] = i * i; i = i + 1; }'
+     ' print(a[7]); return 0; }', b""),
+    ("array_nested", 'fn main() -> i64 {'
+     ' var a: [4]i64 = [3, 1, 2, 0]; var b: [4]i64 = [40, 50, 60, 70];'
+     ' print(b[a[0]]); a[0] = 2; print(b[a[0]]); print(a[a[1]]); return 0; }', b""),
+    ("array_callee", 'fn squares() -> i64 {'
+     ' var s: [6]i64 = [0; 6]; var i: i64 = 0;'
+     ' while i < 6 { s[i] = i * i; i = i + 1; } return s[3] + s[5]; }'
+     ' fn main() -> i64 { print(squares()); return 0; }', b""),
     ("exit_midstream", """
 fn main() -> i64 {
     print(1);

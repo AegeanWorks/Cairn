@@ -97,7 +97,9 @@ class Op:
     (cell), `cell_store` (cell, lhs), `bin` (op, lhs, rhs), `unary` (op, lhs),
     `param` (text = the declared parameter name), `call` (op = callee name,
     args), `jump` (target), `branch` (lhs, target, other), `return` (lhs),
-    `exit` (lhs). `dest` is the SSA result slot of a value-producing op.
+    `exit` (lhs), `array_load` (cell = base cell, lhs = index), `array_store`
+    (cell = base cell, lhs = index, rhs = value). `dest` is the SSA result
+    slot of a value-producing op.
     """
 
     kind: str
@@ -215,6 +217,15 @@ class _Translator:
             right = self.value_of(expression.right)
             return self.emit(Op(kind="bin", dest=self._fresh_value(), op=expression.op,
                                 lhs=left, rhs=right))
+        if isinstance(expression, syntax.Index):
+            base = self.slot_cells[expression.slot]
+            static = _static_index(expression.index)
+            if static is not None:
+                return self.emit(Op(kind="cell_load", dest=self._fresh_value(),
+                                    cell=base + static))
+            index = self.value_of(expression.index)
+            return self.emit(Op(kind="array_load", dest=self._fresh_value(),
+                                cell=base, lhs=index))
         if isinstance(expression, syntax.Call):
             return self.emit(Op(kind="call", dest=self._fresh_value(),
                                 op=expression.name,
@@ -293,12 +304,32 @@ class _Translator:
         if self.terminates(self.current):
             return  # statements after a terminator are unreachable; drop them
         if isinstance(statement, syntax.Let):
+            if statement.array_size is not None:
+                first = self._fresh_cell()
+                self.slot_cells[statement.slot] = first
+                self._fresh_cell_many(statement.array_size - 1)
+                for offset, element in enumerate(
+                        self._initializer_elements(statement)):
+                    value = self.value_of(element)
+                    self.emit(Op(kind="cell_store", cell=first + offset, lhs=value))
+                return
             cell = self._fresh_cell()
             self.slot_cells[statement.slot] = cell
             value = self.value_of(statement.value)
             self.emit(Op(kind="cell_store", cell=cell, lhs=value))
             return
         if isinstance(statement, syntax.Assign):
+            if statement.index is not None:
+                base = self.slot_cells[statement.slot]
+                static = _static_index(statement.index)
+                if static is not None:
+                    value = self.value_of(statement.value)
+                    self.emit(Op(kind="cell_store", cell=base + static, lhs=value))
+                else:
+                    index = self.value_of(statement.index)
+                    value = self.value_of(statement.value)
+                    self.emit(Op(kind="array_store", cell=base, lhs=index, rhs=value))
+                return
             value = self.value_of(statement.value)
             self.emit(Op(kind="cell_store", cell=self.slot_cells[statement.slot],
                          lhs=value))
@@ -356,6 +387,28 @@ class _Translator:
             self.close_with(Op(kind="jump", target=self.loop_cond[-1]))
             return
         raise AssertionError(f"ir: unsupported statement node {type(statement).__name__}")
+
+    def _fresh_cell_many(self, count: int) -> None:
+        """Reserve `count` cell ids beyond the last one already issued."""
+        self.cells += count
+
+    def _initializer_elements(self, statement: syntax.Let) -> List[syntax.Expr]:
+        """The element expressions of an array binding, parens unwrapped.
+
+        Sematic analysis guarantees an ArrayLiteral of the declared length.
+        """
+        value = statement.value
+        while isinstance(value, syntax.Parens):
+            value = value.inner
+        return value.elements
+
+
+def _static_index(expression: syntax.Expr):
+    """A compile-time element position, or None; sema already range-checks this."""
+    inner = expression
+    while isinstance(inner, syntax.Parens):
+        inner = inner.inner
+    return inner.value if isinstance(inner, syntax.IntLiteral) else None
 
 
 def translate(program: syntax.Program) -> Module:
@@ -458,6 +511,10 @@ class Interpret:
                     vals[op.dest] = cells[op.cell]
                 elif op.kind == "cell_store":
                     cells[op.cell] = vals[op.lhs]
+                elif op.kind == "array_load":
+                    vals[op.dest] = cells[op.cell + vals[op.lhs]]
+                elif op.kind == "array_store":
+                    cells[op.cell + vals[op.lhs]] = vals[op.rhs]
                 elif op.kind == "unary":
                     operand = vals[op.lhs]
                     if op.op == "-":

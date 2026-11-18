@@ -94,6 +94,10 @@ def align16(value: int) -> int:
     return (value + 15) & ~15
 
 
+ARRAY_UNROLL_LIMIT = 8
+"""The fill length up to which an array initializer unrolls instead of looping."""
+
+
 def slot_of(expression: Optional[syntax.Expr]) -> Optional[int]:
     """The slot a parenthesised name refers to, or None for every other expression."""
     while isinstance(expression, syntax.Parens):
@@ -273,6 +277,7 @@ class CodeGenerator:
         Every `return` jumps to the single epilogue, so a home is restored on every path out.
         """
         asm = self.assembler
+        self.array_spans = self._array_sizes(function)
         ranked = self._home_slots(function,
                                   len(HOME_REGISTERS) + len(EXTRA_HOME_REGISTERS))
         homed = ranked[:len(HOME_REGISTERS)]
@@ -288,7 +293,8 @@ class CodeGenerator:
         frame = align16((function.slots + len(self.homes)) * 8)
         asm.label(function_label(function.name))
         if (function.slots <= len(HOME_REGISTERS)
-                and len(function.parameters) <= len(ARGUMENT_REGISTERS)):
+                and len(function.parameters) <= len(ARGUMENT_REGISTERS)
+                and not self.array_spans):
             # Every slot has a home, so no frame (and no rbp) is needed: the homes
             # save and restore with push/pop, which also drops the store-forwarding
             # latency a frame store re-load pays on the hot call path. Functions with
@@ -440,6 +446,9 @@ class CodeGenerator:
         asm = self.assembler
         assigned = {slot for slot in range(function.slots)
                     if self._cleared_before_use(function.body, slot)}
+        for base, size in self.array_spans.items():
+            if self._cleared_before_use(function.body, base):
+                assigned.update(range(base, base + size))
         frame_slots = [slot for slot in range(function.slots)
                        if slot not in self.home_of and slot not in assigned]
         if frame_slots:
@@ -463,7 +472,8 @@ class CodeGenerator:
         """
         limit = len(HOME_REGISTERS) if limit is None else limit
         if function.slots <= len(HOME_REGISTERS):
-            return list(range(function.slots))[:limit]
+            return [slot for slot in range(function.slots)
+                    if not self._slot_in_array(slot)][:limit]
         ranks: dict = {}
 
         def touch(slot, depth):
@@ -508,7 +518,7 @@ class CodeGenerator:
         rank_block(function.body, 0)
         ranked = sorted(range(function.slots),
                         key=lambda slot: (-ranks.get(slot, 0), -slot))
-        return ranked[:limit]
+        return [slot for slot in ranked if not self._slot_in_array(slot)][:limit]
 
     def _home(self, slot: int) -> Optional[str]:
         """The register that holds `slot`, or None when the slot stays in the frame.
@@ -1188,9 +1198,15 @@ class CodeGenerator:
         """Lower one statement; `tail` only concerns a final `return`."""
         asm = self.assembler
         if isinstance(statement, syntax.Let):
-            self._emit_value(statement.slot, statement.value)
+            if statement.array_size is not None:
+                self._emit_array_init(statement)
+            else:
+                self._emit_value(statement.slot, statement.value)
         elif isinstance(statement, syntax.Assign):
-            self._emit_value(statement.slot, statement.value)
+            if statement.index is not None:
+                self._emit_element_store(statement)
+            else:
+                self._emit_value(statement.slot, statement.value)
         elif isinstance(statement, syntax.If):
             self._emit_if(statement, tail)
         elif isinstance(statement, syntax.While):
@@ -2039,8 +2055,109 @@ class CodeGenerator:
             self._emit_unary(expression)
         elif isinstance(expression, syntax.Binary):
             self._emit_binary(expression)
+        elif isinstance(expression, syntax.Index):
+            self._emit_index_load(expression)
         elif isinstance(expression, syntax.Call):
             self._emit_call(expression)
+
+    def _emit_index_load(self, expression: syntax.Index) -> None:
+        """Leave element `index` of the array in rax; bound checks stay compile-time.
+
+        A literal index folds into the frame displacement; a dynamic one forms the
+        element address with a scaled `lea` (`index * 8` wraps at 64 bits exactly
+        like the arithmetic it replaces, so negative indices stay one instruction).
+        """
+        asm = self.assembler
+        static = expression.index
+        while isinstance(static, syntax.Parens):
+            static = static.inner
+        if isinstance(static, syntax.IntLiteral):
+            asm.mov_load_rbp("rax", slot_offset(expression.slot) - 8 * static.value)
+            return
+        self._emit_into(expression.index, "rax")
+        asm.neg("rax")
+        asm.lea_scale("rcx", "rbp", "rax", 3, slot_offset(expression.slot))
+        asm.mov_load("rax", "rcx")
+
+    def _emit_element_store(self, statement: syntax.Assign) -> None:
+        """`a[i] = value;`: fold literal indices, park a dynamic address in the frame.
+
+        The dynamic address rides the scratch slot semantic analysis reserved, so
+        the value expression can call and clobber every register before the store.
+        """
+        asm = self.assembler
+        static = statement.index
+        while isinstance(static, syntax.Parens):
+            static = static.inner
+        if isinstance(static, syntax.IntLiteral):
+            self._emit_into(statement.value, "rax")
+            asm.mov_store_rbp(slot_offset(statement.slot) - 8 * static.value, "rax")
+            return
+        self._emit_into(statement.index, "rax")
+        asm.neg("rax")
+        asm.lea_scale("rcx", "rbp", "rax", 3, slot_offset(statement.slot))
+        asm.mov_store_rbp(slot_offset(statement.temp_slot), "rcx")
+        self._emit_into(statement.value, "rax")
+        asm.mov_load_rbp("rcx", slot_offset(statement.temp_slot))
+        asm.mov_store_reg("rcx", "rax")
+
+    def _emit_array_init(self, statement: syntax.Let) -> None:
+        """Store every element of an array initializer into its consecutive slots.
+
+        A same-literal fill longer than the unroll limit becomes one down-counting
+        store loop in scratch registers; every other shape stores element by
+        element, matching the one-evaluation-per-element semantics.
+        """
+        asm = self.assembler
+        value = statement.value
+        while isinstance(value, syntax.Parens):
+            value = value.inner
+        elements = value.elements
+        fill = None
+        if (len(elements) > ARRAY_UNROLL_LIMIT
+                and all(isinstance(element, syntax.IntLiteral)
+                        for element in elements)):
+            first = elements[0].value
+            if all(element.value == first for element in elements):
+                fill = first
+        if fill is not None:
+            loop = self._fresh("array_fill")
+            asm.mov_imm64("rdx", len(elements))
+            asm.mov_imm64("rax", fill)
+            asm.lea_rbp("rcx", slot_offset(statement.slot))
+            asm.label(loop)
+            asm.mov_store_reg("rcx", "rax")
+            asm.sub_imm("rcx", 8)
+            asm.sub_imm("rdx", 1)
+            asm.jcc("nz", loop)
+            return
+        for offset, element in enumerate(elements):
+            self._emit_into(element, "rax")
+            asm.mov_store_rbp(slot_offset(statement.slot + offset), "rax")
+
+    def _array_sizes(self, function: syntax.Function) -> dict:
+        """The frame-slot span of every array binding: base slot -> element count."""
+        sizes: dict = {}
+        pending = [function.body]
+        while pending:
+            block = pending.pop()
+            if block is None:
+                continue
+            for statement in block.statements:
+                if isinstance(statement, syntax.Let) and statement.array_size is not None:
+                    sizes[statement.slot] = statement.array_size
+                elif isinstance(statement, syntax.If):
+                    pending.extend((statement.then_block, statement.else_block))
+                elif isinstance(statement, syntax.While):
+                    pending.append(statement.body)
+                elif isinstance(statement, syntax.Block):
+                    pending.append(statement)
+        return sizes
+
+    def _slot_in_array(self, slot: int) -> bool:
+        """Whether `slot` is one of a declared array's consecutive frame slots."""
+        return any(base <= slot < base + size
+                   for base, size in self.array_spans.items())
 
     def _emit_unary(self, expression: syntax.Unary) -> None:
         """Negate, complement, or compare with zero."""

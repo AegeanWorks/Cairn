@@ -205,6 +205,14 @@ class CountdownLatchTest(unittest.TestCase):
         self.assertFalse(loop.countdown)
         self.assertEqual(loop.condition.op, "<")
 
+    def test_an_index_read_of_the_counter_refuses_the_rewrite(self) -> None:
+        body = optimized_body(
+            "var i: i64 = 0; var a: [4]i64 = [0; 4];"
+            "while i < 4 { print(a[i]); i = i + 1; } return 0;")
+        loop = body.statements[2]
+        self.assertFalse(loop.countdown)
+        self.assertEqual(loop.condition.op, "<")
+
     def test_a_parameter_counter_refuses_the_rewrite(self) -> None:
         program = analyze(parse(
             "fn main() -> i64 { print(run(0)); return 0; }\n"

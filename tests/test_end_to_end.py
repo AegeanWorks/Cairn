@@ -923,6 +923,92 @@ class LoopConstantHoistValueTest(EndToEndTest):
         self.assertEqual(completed.stdout, f"{a}\n{b}\n")
 
 
+class ArrayRuntimeTest(EndToEndTest):
+    """Arrays: fill loops, aggregate literals, dynamic stores and callee scopes."""
+
+    def test_dynamic_element_stores_and_reads_round_trip(self) -> None:
+        source = ('fn main() -> i64 {'
+                  ' var a: [8]i64 = [0; 8]; var i: i64 = 0;'
+                  ' while i < 8 { a[i] = i * i; i = i + 1; }'
+                  ' var j: i64 = 0;'
+                  ' while j < 8 { print(a[j]); j = j + 1; }'
+                  ' return a[7]; }')
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 49)
+        self.assertEqual(completed.stdout.splitlines(),
+                         ["0", "1", "4", "9", "16", "25", "36", "49"])
+
+    def test_aggregate_literal_initialises_in_order(self) -> None:
+        source = ('fn main() -> i64 {'
+                  ' var a: [5]i64 = [2, 4, 6, 8, 10];'
+                  ' print(a[0] + a[1] + a[2] + a[3] + a[4]);'
+                  ' print(a[4]); return 0; }')
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "30\n10\n")
+
+    def test_static_store_load_and_callee_element_argument(self) -> None:
+        source = ('fn bump(x: i64) -> i64 { return x + 1; }'
+                  'fn main() -> i64 {'
+                  ' var a: [5]i64 = [0; 5]; a[3] = 7;'
+                  ' print(a[3]); print(bump(a[3])); return 0; }')
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "7\n8\n")
+
+    def test_nested_indices_index_loads_and_stores_compose(self) -> None:
+        source = ('fn main() -> i64 {'
+                  ' var a: [4]i64 = [3, 1, 2, 0];'
+                  ' var b: [4]i64 = [40, 50, 60, 70];'
+                  ' print(b[a[0]]); a[0] = 2; print(b[a[0]]);'
+                  ' print(a[a[1]]); a[a[2]] = 9; print(a[2]); return 0; }')
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "70\n60\n1\n9\n")
+
+    def test_arrays_in_callee_scopes_survive_their_frame(self) -> None:
+        source = ('fn squares() -> i64 {'
+                  ' var s: [6]i64 = [0; 6]; var i: i64 = 0;'
+                  ' while i < 6 { s[i] = i * i; i = i + 1; }'
+                  ' return s[3] + s[5]; }'
+                  'fn main() -> i64 { print(squares()); print(squares()); return 0; }')
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "34\n34\n")
+
+    def test_index_reads_in_loops_accumulate_the_full_sum(self) -> None:
+        source = ('fn main() -> i64 {'
+                  ' var a: [6]i64 = [0; 6]; var i: i64 = 0;'
+                  ' while i < 6 { a[i] = i + 1; i = i + 1; }'
+                  ' var total: i64 = 0; i = 0;'
+                  ' while i < 6 { total = total + a[i]; i = i + 1; }'
+                  ' print(total); return 0; }')
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "21\n")
+
+    def test_large_array_spills_beyond_disp8(self) -> None:
+        source = ('fn main() -> i64 {'
+                  ' var a: [400]i64 = [0; 400]; a[250] = 92; a[0] = 3;'
+                  ' print(a[250] + a[0]); return 0; }')
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "95\n")
+
+    def test_array_programs_behave_identically_unoptimised(self) -> None:
+        source = ('fn main() -> i64 {'
+                  ' var a: [8]i64 = [0; 8]; var i: i64 = 0;'
+                  ' while i < 8 { a[i] = i * i; i = i + 1; }'
+                  ' print(a[3] + a[5]); print(a[a[0]]); return 2; }')
+        optimised = self.execute(source)
+        executable = self.folder / "plain.exe"
+        write_executable(executable, compile_source(source, optimise=False).image)
+        plain = subprocess.run([str(executable)], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=TIMEOUT_SECONDS)
+        self.assertEqual(optimised.stdout, "34\n0\n")
+        self.assertEqual(plain.stdout, optimised.stdout)
+        self.assertEqual(plain.returncode, optimised.returncode)
+
 if __name__ == "__main__":
     unittest.main()
 

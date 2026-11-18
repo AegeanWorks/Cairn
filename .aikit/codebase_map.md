@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `179`
-- **Total Top-Level Functions**: `208`
-- **Total Class Methods**: `925`
-- **Total Source Lines**: `17816`
+- **Total Classes**: `181`
+- **Total Top-Level Functions**: `210`
+- **Total Class Methods**: `948`
+- **Total Source Lines**: `18216`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3822` lines (`193702` bytes)
+**Size**: `3939` lines (`199080` bytes)
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -194,6 +194,11 @@
   - Method `._emit_shift_through_into_destination(expression, destination)` - *Lower `(a >> m) << m` as one load-plus-and-immediate into `destination`.*
   - Method `._emit_comparison_branch(expression, target, when_true)` - *Compare two operands and branch, using an immediate form when the right side is small.*
   - Method `._emit_expression(expression)` - *Lower one expression, leaving its value in rax.*
+  - Method `._emit_index_load(expression)` - *Leave element `index` of the array in rax; bound checks stay compile-time.*
+  - Method `._emit_element_store(statement)` - *`a[i] = value;`: fold literal indices, park a dynamic address in the frame.*
+  - Method `._emit_array_init(statement)` - *Store every element of an array initializer into its consecutive slots.*
+  - Method `._array_sizes(function)` - *The frame-slot span of every array binding: base slot -> element count.*
+  - Method `._slot_in_array(slot)` - *Whether `slot` is one of a declared array's consecutive frame slots.*
   - Method `._emit_unary(expression)` - *Negate, complement, or compare with zero.*
   - Method `._emit_binary(expression)` - *Short-circuit `&&`/`||`, otherwise place the left operand, then combine.*
   - Method `._emit_left_operand(left, right)` - *Evaluate `left`, keep it across `right`, and leave it in rcx with right in rax.*
@@ -348,7 +353,7 @@
 ### [`cairn/ir.py`](cairn/ir.py)
 > *A deliberately minimal typed SSA IR between the AST and machine code.*
 
-**Size**: `542` lines (`21763` bytes)
+**Size**: `599` lines (`24524` bytes)
 
 **Classes:**
 - `class DivZeroTrap` - *`/ 0` or `i64.min / -1`: the machine's message plus exit code 3.*
@@ -371,6 +376,8 @@
   - Method `.short_circuit(expression)` - *`&&`/`||` lower to branches across one result cell; unstored is false.*
   - Method `.lower_function(function)`
   - Method `.emit_stmt(statement)`
+  - Method `._fresh_cell_many(count)` - *Reserve `count` cell ids beyond the last one already issued.*
+  - Method `._initializer_elements(statement)` - *The element expressions of an array binding, parens unwrapped.*
 - `class Interpret` - *Run a translated module at full machine semantics.*
   - Method `.__init__(stdin)`
   - Method `.run(module, start)`
@@ -386,6 +393,7 @@
 - `def to_signed(raw)` - *The wrapped 64-bit pattern `raw` re-read as a signed integer.*
 - `def trunc_divmod(left, right)` - *C semantics: quotient truncates toward zero, remainder keeps the sign.*
 - `def apply_binop(op, left, right)` - *One `i64` binary operation at machine semantics, signed values in and out.*
+- `def _static_index(expression)` - *A compile-time element position, or None; sema already range-checks this.*
 - `def translate(program)` - *Lower one optimized program (for-loops already lowered) into a module.*
 - `def encode_number(value)` - *The runtime's decimal form of one signed `i64` (no newline).*
 
@@ -431,7 +439,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `578` lines (`26948` bytes)
+**Size**: `600` lines (`27999` bytes)
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -464,6 +472,8 @@
   - Method `.lea_rip(destination, target)` - *`lea r64, [rip+disp32]`, used for read-only data addresses.*
   - Method `.mov_load_rip(destination, target)` - *`mov r64, [rip+disp32]`: read a qword of state without an address register.*
   - Method `.mov_load(destination, base)` - *`mov r64, [base]`: read a qword through a pointer register.*
+  - Method `.neg(destination)` - *`neg r64`: twos-complement negation for descending frame indexing.*
+  - Method `.mov_store_reg(base, source)` - *`mov [base], r64`: write a qword through a pointer register.*
   - Method `.movzx_load8(destination, base)` - *`movzx r32, [base]`: read the byte at a pointer register, zero-extended.*
   - Method `.movzx_load8_sib(destination, base, index)` - *`movzx r32, [base + index]`: one byte load off two pointer registers.*
   - Method `.movzx_from8(destination, source)` - *`movzx r32, r8`: the `& 255` mask of a register's value in one instruction.*
@@ -513,7 +523,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `1334` lines (`59509` bytes)
+**Size**: `1403` lines (`63139` bytes)
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -532,6 +542,7 @@
 - `def fold_constant(op, left, right)` - *The folded value of `left op right`, or None when folding would change behaviour.*
 - `def fold_unary(op, value)` - *The folded value of a unary operator, or None when it must stay dynamic.*
 - `def has_call(expression)` - *Whether evaluating `expression` can run a call, and therefore an effect.*
+- `def _contains_index(expression)` - *Whether an element load sits anywhere under one expression tree.*
 - `def _may_trap(expression)` - *Whether evaluating `expression` can trap on `/` or `%`.*
 - `def _constant(expression)` - *The literal value of an expression, or None when it is not a constant.*
 - `def _peel_parens(expression)`
@@ -1192,7 +1203,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1427` lines (`54135` bytes)
+**Size**: `1513` lines (`58472` bytes)
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1278,6 +1289,15 @@
 - `class LoopConstantHoistValueTest` - *Hoisted big constants must read the loaded value on every loop iteration.*
   - Method `.test_a_countdown_mixer_with_hoisted_constants_wraps_like_the_source()`
   - Method `.test_two_sequential_loops_hoist_their_own_constants()`
+- `class ArrayRuntimeTest` - *Arrays: fill loops, aggregate literals, dynamic stores and callee scopes.*
+  - Method `.test_dynamic_element_stores_and_reads_round_trip()`
+  - Method `.test_aggregate_literal_initialises_in_order()`
+  - Method `.test_static_store_load_and_callee_element_argument()`
+  - Method `.test_nested_indices_index_loads_and_stores_compose()`
+  - Method `.test_arrays_in_callee_scopes_survive_their_frame()`
+  - Method `.test_index_reads_in_loops_accumulate_the_full_sum()`
+  - Method `.test_large_array_spills_beyond_disp8()`
+  - Method `.test_array_programs_behave_identically_unoptimised()`
 - `class CommutativePeepholeValueTest` - *The commutative-home fast path and its ZF-fed branch print identical results.*
   - Method `.test_the_peephole_functions_preserve_output()`
 - `class SameNameInPlaceValueTest` - *Same-name in-place products and homes-fed multiplies print identical values.*
@@ -1363,7 +1383,7 @@
 ### [`tests/test_ir.py`](tests/test_ir.py)
 > *SSA IR foundation tests: differential execution and invariants.*
 
-**Size**: `267` lines (`9279` bytes)
+**Size**: `278` lines (`9883` bytes)
 
 **Classes:**
 - `class DifferentialTest` - *Compiled machine behaviour and interpreted IR behaviour must agree.*
@@ -1438,7 +1458,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `219` lines (`9924` bytes)
+**Size**: `249` lines (`11184` bytes)
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1481,6 +1501,12 @@
   - Method `.test_fifteen_bytes_compose_from_nine_and_six()`
   - Method `.test_zero_bytes_pad_nothing()`
   - Method `.test_every_size_rounds_to_its_requested_length()`
+- `class IndirectStoreEncodingTest` - *Dynamic array stores write through a pointer register: `mov [base], r64`.*
+  - Method `.code(build)`
+  - Method `.test_pointer_store_encodes_the_base_register_directly()`
+  - Method `.test_pointer_store_masks_extended_register_bits_into_rex()`
+  - Method `.test_pointer_store_swaps_src_bits_into_the_reg_field()`
+  - Method `.test_pointer_store_rejects_a_stack_base()`
 
 ---
 
@@ -1517,7 +1543,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `539` lines (`25934` bytes)
+**Size**: `547` lines (`26286` bytes)
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -1549,6 +1575,7 @@
   - Method `.test_the_loop_condition_shape_survives_the_rewrite()`
   - Method `.test_a_counter_read_after_the_loop_refuses_the_rewrite()`
   - Method `.test_a_body_that_reads_the_counter_refuses_the_rewrite()`
+  - Method `.test_an_index_read_of_the_counter_refuses_the_rewrite()`
   - Method `.test_a_parameter_counter_refuses_the_rewrite()`
   - Method `.test_a_loop_with_break_refuses_the_rewrite()`
   - Method `.test_a_loop_with_continue_refuses_the_rewrite()`

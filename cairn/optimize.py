@@ -97,6 +97,31 @@ def has_call(expression: Optional[syntax.Expr]) -> bool:
         return has_call(expression.operand)
     if isinstance(expression, syntax.Binary):
         return has_call(expression.left) or has_call(expression.right)
+    if isinstance(expression, syntax.Index):
+        return has_call(expression.operand) or has_call(expression.index)
+    if isinstance(expression, syntax.ArrayLiteral):
+        return any(has_call(element) for element in expression.elements)
+    return False
+
+
+def _contains_index(expression) -> bool:
+    """Whether an element load sits anywhere under one expression tree.
+
+    The pure inliner refuses such bodies: an array binding lives in its own
+    function's frame, so the array name's slot means nothing at a call site.
+    """
+    if isinstance(expression, syntax.Index):
+        return True
+    if isinstance(expression, syntax.Parens):
+        return _contains_index(expression.inner)
+    if isinstance(expression, syntax.Unary):
+        return _contains_index(expression.operand)
+    if isinstance(expression, syntax.Binary):
+        return _contains_index(expression.left) or _contains_index(expression.right)
+    if isinstance(expression, syntax.Call):
+        return any(_contains_index(argument) for argument in expression.arguments)
+    if isinstance(expression, syntax.ArrayLiteral):
+        return any(_contains_index(element) for element in expression.elements)
     return False
 
 
@@ -125,6 +150,10 @@ def _may_trap(expression: Optional[syntax.Expr]) -> bool:
         return _may_trap(expression.operand)
     if isinstance(expression, syntax.Call):
         return any(_may_trap(argument) for argument in expression.arguments)
+    if isinstance(expression, syntax.Index):
+        return _may_trap(expression.operand) or _may_trap(expression.index)
+    if isinstance(expression, syntax.ArrayLiteral):
+        return any(_may_trap(element) for element in expression.elements)
     return False
 
 
@@ -286,6 +315,11 @@ def _mentions_slot(node, slot: int) -> bool:
         if node.slot == slot:
             return True
         return _mentions_slot(node.value, slot)
+    if isinstance(node, syntax.Index):
+        return (_mentions_slot(node.operand, slot)
+                or _mentions_slot(node.index, slot))
+    if isinstance(node, syntax.ArrayLiteral):
+        return any(_mentions_slot(element, slot) for element in node.elements)
     if isinstance(node, syntax.Name):
         return node.slot == slot
     if isinstance(node, syntax.If):
@@ -333,7 +367,10 @@ def _count_reads(node, slot: int) -> int:
     """How many times a statement tree reads the variable in `slot` (writes are not reads)."""
     reads = 0
     if isinstance(node, (syntax.Let, syntax.Assign)):
-        return _count_reads(node.value, slot)
+        reads = _count_reads(node.value, slot)
+        if isinstance(node, syntax.Assign) and node.index is not None:
+            reads += _count_reads(node.index, slot)
+        return reads
     if isinstance(node, syntax.Name):
         return int(node.slot == slot)
     if isinstance(node, syntax.If):
@@ -354,6 +391,13 @@ def _count_reads(node, slot: int) -> int:
         return _count_reads(node.left, slot) + _count_reads(node.right, slot)
     if isinstance(node, syntax.Parens):
         return _count_reads(node.inner, slot)
+    if isinstance(node, syntax.Index):
+        reads = _count_reads(node.index, slot)
+        if node.operand is not None:
+            reads += _count_reads(node.operand, slot)
+        return reads
+    if isinstance(node, syntax.ArrayLiteral):
+        return sum(_count_reads(element, slot) for element in node.elements)
     if isinstance(node, syntax.Call):
         return sum(_count_reads(argument, slot) for argument in node.arguments)
     return reads
@@ -569,6 +613,13 @@ def _read_slots(expression, acc: set) -> None:
     elif isinstance(expression, syntax.Call):
         for argument in expression.arguments:
             _read_slots(argument, acc)
+    elif isinstance(expression, syntax.Index):
+        if isinstance(expression.operand, syntax.Name):
+            acc.add(expression.operand.slot)
+        _read_slots(expression.index, acc)
+    elif isinstance(expression, syntax.ArrayLiteral):
+        for element in expression.elements:
+            _read_slots(element, acc)
 
 
 def apply_copy_propagation(program: syntax.Program) -> int:
@@ -869,6 +920,10 @@ def _node_count(expression) -> int:
         return 1 + _node_count(expression.left) + _node_count(expression.right)
     if isinstance(expression, syntax.Call):
         return 1 + sum(_node_count(argument) for argument in expression.arguments)
+    if isinstance(expression, syntax.Index):
+        return 1 + _node_count(expression.operand) + _node_count(expression.index)
+    if isinstance(expression, syntax.ArrayLiteral):
+        return 1 + sum(_node_count(element) for element in expression.elements)
     return 1
 
 
@@ -895,6 +950,15 @@ def _clone_expression(expression):
         return syntax.Call(span=expression.span, name=expression.name,
                            arguments=[_clone_expression(argument)
                                       for argument in expression.arguments])
+    if isinstance(expression, syntax.Index):
+        return syntax.Index(span=expression.span, slot=expression.slot,
+                            size=expression.size,
+                            operand=_clone_expression(expression.operand),
+                            index=_clone_expression(expression.index))
+    if isinstance(expression, syntax.ArrayLiteral):
+        return syntax.ArrayLiteral(span=expression.span,
+                                   elements=[_clone_expression(element)
+                                             for element in expression.elements])
     raise AssertionError(f"optimize: cannot clone {type(expression).__name__}")
 
 
@@ -905,7 +969,8 @@ def _single_return_bodies(program: syntax.Program) -> dict:
         statements = function.body.statements if function.body is not None else []
         if (len(statements) == 1 and isinstance(statements[0], syntax.Return)
                 and statements[0].value is not None
-                and _node_count(statements[0].value) <= INLINE_EXPANSION_NODES):
+                and _node_count(statements[0].value) <= INLINE_EXPANSION_NODES
+                and not _contains_index(statements[0].value)):
             bodies[function.name] = function
     return bodies
 
@@ -1083,6 +1148,10 @@ def _substitute_parameters(expression, substitutions: dict):
     if isinstance(expression, syntax.Call):
         expression.arguments = [_substitute_parameters(argument, substitutions)
                                 for argument in expression.arguments]
+        return expression
+    if isinstance(expression, syntax.Index):
+        expression.operand = _substitute_parameters(expression.operand, substitutions)
+        expression.index = _substitute_parameters(expression.index, substitutions)
         return expression
     return expression
 
