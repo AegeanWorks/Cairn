@@ -1,0 +1,19 @@
+// Array read-modify-write sweep: one 65536-element array filled, then 100
+// read-modify-write passes over every element, then one summation pass. Twin
+// of array_sum.c and array_sum.rs; all three print the identical total.
+fn main() -> i64 {
+    var a: [65536]i64 = [0; 65536];
+    var i: i64 = 0;
+    while i < 65536 { a[i] = i; i = i + 1; }
+    var r: i64 = 0;
+    while r < 100 {
+        i = 0;
+        while i < 65536 { a[i] = a[i] + r; i = i + 1; }
+        r = r + 1;
+    }
+    var total: i64 = 0;
+    i = 0;
+    while i < 65536 { total = total + a[i]; i = i + 1; }
+    print(total);
+    return 0;
+}

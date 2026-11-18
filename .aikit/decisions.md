@@ -791,3 +791,45 @@ executable are byte-identical (verified for char_stream, hex_io, xorshift), so
 those deltas are provably not code. A saved record from the first polluted
 window was removed from benchmark_history.jsonl before commit; the re-gate is
 pending the first quiet window and the task stays open for it.
+
+## ADR-068: fixed-size `i64` arrays with frame-slot elements
+
+Date: task cairn-arrays (milestones 1-3 of the roadmap's language-expansion
+track). Accepted.
+
+Context. The first aggregate type. Cairn stores everything in frame slots, so
+an array is exactly N consecutive slots reserved behind one binding slot at
+semantic-analysis time; element `i` is the frame at the binding slot displaced
+`8i` bytes downward. Nothing mixes with the pointer layer planned for later
+milestones: no heap, no new ABI, no runtime allocation.
+
+Decision. `[N]i64` binds with a fill `[v; N]` or an aggregate `[e0, e1, ...]`
+initializer; `[v; N]` with N > 8 equal literals compiles to one down-counting
+store loop, everything else unrolls element by element in source order.
+`a[i]` reads and `a[i] = v` stores: a literal index folds into the frame
+displacement, a dynamic one negates the index once and lets a scaled `lea`
+(`8i` wraps at 64 bits exactly like the scalar arithmetic) form the element
+address - negative indices work like two's-complement scalars, no bounds
+check exists for dynamic indices (E3017 refuses out-of-range literals at
+analysis time). Parameter and return types stay `i64`; a whole array is never
+a value (E3016). Every value-expression visitor in the optimizer (reads,
+traps, slots, call detection, cloning, parameter substitution) learned Index
+and ArrayLiteral; the single-return inliner refuses callee bodies that reserve
+array slots, and the countdown-latch rewrite now counts Index reads, which it
+previously descended into with a zero default - a loop body reading its
+counter only through `a[j]` was silently inverted (found by the new e2e
+round-trip, pinned by a refusal test, corrected in `_count_reads`).
+
+Artifact change. The PE optional header now reserves and commits 8 MiB of
+stack (was: 1 MiB reserve, 4 KiB commit). The first array fill store sits at
+the deepest frame page, which on an almost-untouched 4 KiB commit jumped
+straight past the guard page and crashed (C0000005) before any probe could
+commit those pages. Committing the stack up front removes the Windows
+stack-probe obligation from every generated caller; the 8 MiB ceiling is a
+documented limit, revised with the pointer milestone.
+
+Benchmarks. Two new twin cases join the registry: `array_sum` (65536 elements,
+one fill, 100 read-modify-write passes, one summation pass) and `sieve`
+(Eratosthenes over 0..65536, nested dynamic indices); C, C++ and Rust twins
+print the identical totals. Per the standing rule every benchmark case runs in
+the benchmark gate, and the gate record lands with the closing commit.

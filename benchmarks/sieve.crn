@@ -1,0 +1,18 @@
+// Sieve of Eratosthenes over 0..65536 with a flagged element array: one
+// store per composite, one load per candidate, nested dynamic indices. Twin
+// of sieve.c and sieve.rs; all three print the identical prime count.
+fn main() -> i64 {
+    var composite: [65536]i64 = [0; 65536];
+    var count: i64 = 0;
+    var n: i64 = 2;
+    while n < 65536 {
+        if composite[n] == 0 {
+            count = count + 1;
+            var m: i64 = n * n;
+            while m < 65536 { composite[m] = 1; m = m + n; }
+        }
+        n = n + 1;
+    }
+    print(count);
+    return 0;
+}

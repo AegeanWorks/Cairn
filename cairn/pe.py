@@ -94,7 +94,7 @@ def _optional_header(size_of_code: int, size_of_data: int, entry_rva: int,
     body += struct.pack("<I", 0)
     body += struct.pack("<III", size_of_image, HEADERS_SIZE, 0)
     body += struct.pack("<HH", SUBSYSTEM_CONSOLE, 0)
-    body += struct.pack("<QQQQ", 0x100000, 0x1000, 0x100000, 0x1000)
+    body += struct.pack("<QQQQ", 0x800000, 0x800000, 0x100000, 0x1000)
     body += struct.pack("<II", 0, 16)
     directories = [(0, 0)] * 16
     directories[1] = (import_rva, import_size)

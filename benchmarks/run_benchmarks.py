@@ -111,6 +111,10 @@ CASES: Tuple[Case, ...] = (
          bytes(range(256)) * 16_384),
     Case("str_scan", "benchmarks/str_scan.crn", "benchmarks/str_scan.c",
          "benchmarks/str_scan.rs", "benchmarks/str_scan.cpp", 12_800_000, "reads"),
+    Case("array_sum", "benchmarks/array_sum.crn", "benchmarks/array_sum.c",
+         "benchmarks/array_sum.rs", "benchmarks/array_sum.cpp", 6_619_136, "elements"),
+    Case("sieve", "benchmarks/sieve.crn", "benchmarks/sieve.c",
+         "benchmarks/sieve.rs", "benchmarks/sieve.cpp", 65_536, "candidates"),
 )
 
 

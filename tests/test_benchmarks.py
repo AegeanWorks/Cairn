@@ -391,7 +391,8 @@ class RegistryShapeTest(unittest.TestCase):
         self.assertEqual(names, ["xorshift", "fib30", "folded_math", "collatz",
                                  "ackermann", "nqueens", "binary_gcd", "call_chain",
                                  "tak", "primes", "mandelbrot", "splitmix", "hex_io",
-                                 "many_params", "argv_walk", "char_stream", "str_scan"])
+                                 "many_params", "argv_walk", "char_stream", "str_scan",
+                                 "array_sum", "sieve"])
 
     def test_each_case_declares_a_unit_and_a_positive_iteration_count(self) -> None:
         for case in run_benchmarks.CASES:

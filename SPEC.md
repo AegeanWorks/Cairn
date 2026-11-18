@@ -18,6 +18,7 @@ task re-verifies every claim below against those sources.
 ## 1. Design axioms
 
 1. One type: `i64`. Every value is a signed 64-bit integer; comparisons yield `0` or `1`.
+   Arrays are homogeneous `i64` collections declared `[N]i64` (§5.2, §6.4).
 2. One binding form per intent: `let` is immutable, `var` is assignable. No shadowing.
 3. One scope: flat and function-wide. A name declared in any block is visible after it.
 4. One function form: `fn name(a: i64, ...) -> i64`. At most eight parameters.
@@ -55,8 +56,8 @@ compilation. Two files are never joined: what the file declares is the program.
 
 ## 4. Types
 
-Exactly one type name exists: `i64`. Any other type name is `E2002`.
-There are no strings, floats, arrays, structs, classes, interfaces, pointers,
+The scalar type is `i64`; arrays are `[N]i64`. Any other scalar type name is `E2002`.
+There are no strings-as-values, floats, structs, classes, interfaces, pointers,
 generics, function types, enums, or `Result`. Values that other languages put
 in those types are packed into `i64` by the author until a later specification
 adds them.
@@ -81,10 +82,19 @@ fn name(a: i64, b: i64) -> i64 { block }
 ```
 let x: i64 = expr;
 var y: i64 = expr;
+var a: [N]i64 = [v; N];
+var b: [N]i64 = [e0, e1, ...];
 ```
 
-- Every binding names its type (`i64`), has an initializer, and gets one frame slot.
+- Every binding names its scalar type (`i64`), has an initializer, and gets one frame slot.
 - `let` cannot be assigned after init (`E3005`). `var` can.
+- An array binding declares `[N]i64` with a literal initializer: `[v; N]` fills N
+  elements with one literal, `[e0, e1, ...]` lists them in evaluation order every
+  element once. N is 1..65536 (`E3014`); a fill or aggregate must match N exactly
+  (`E3014`); an empty `[v; 0]` or literal is refused the same way. The elements
+  occupy N consecutive frame slots starting at the binding's own slot.
+- Arrays never narrow to scalars: a whole-array use as a value is `E3016`, and
+  parameters and return types stay `i64` (`E2002` refuses `[N]i64` there).
 - A name already declared in the function cannot be redeclared (`E3006`), including parameters. There is no shadowing.
 - Reading an undeclared name is `E3007`. A builtin's bare name is never a value (`E3012`): every
   use is a call.
@@ -137,6 +147,24 @@ binding resumes that binding after the loop (`E3006` still refuses shadowing
 inside the body). The loop lowers to `var` + `while` before optimisation;
 code generation never sees a `for`.
 
+### 6.4 Arrays
+
+```
+a[i]           read element i
+a[i] = expr;   store into element i
+```
+
+- `a` is an array binding; indexing a scalar is `E3015`. Indices nest: `a[a[0]]` is legal;
+  array literals may not nest inside one another, and an element is not assignable
+  through anything but a plain `a[i] =` statement.
+- A literal index outside `0 .. N-1` is `E3017` at analysis time. A dynamic index is
+  negated, scaled by 8 and displaced by the array's own slot offset, so element `i` sits
+  at the same frame slot a static analysis would name; there is no runtime bounds check,
+  and an out-of-range dynamic index addresses foreign frame slots or beyond.
+- Static element stores evaluate the value expression first; dynamic element stores park
+  the element address in a frame scratch slot so the value's own calls and register use
+  cannot clobber it. Evaluation order is index, then value.
+
 ## 7. Defined semantics
 
 | Question | Answer (no undefined behaviour here) |
@@ -159,6 +187,8 @@ code generation never sees a `for`.
 | Uninitialised reads | Impossible: initializers are mandatory and every frame slot is zeroed on entry |
 | Branch never taken | A binding declared inside it reads as `0` |
 | Undeclared read | Rejected before code generation (`E3007`) |
+| Array element address | Element `i` sits at the base slot's frame displacement minus `8i`; static indices are bounds-checked at analysis time (`E3017`), dynamic indices are never re-checked at runtime |
+| Array element store order | `index`, then `value`; the store address is parked in the frame across the value's evaluation |
 
 Folding (`optimize.py`) preserves these answers exactly: it never folds a zero
 divisor or `i64.min / -1`, never drops a `print`, and `while 0` removal plus
@@ -307,8 +337,10 @@ is the backend probe's starting exhibit.)
 A source file is valid Cairn 0.1 if every box ticks:
 
 - [ ] Every routine uses `fn` and declares `-> i64`
-- [ ] Every binding is `let name: i64 = expr;` or `var name: i64 = expr;`, never redeclared
-- [ ] No type name besides `i64` appears
+- [ ] Every binding is `let name: i64 = expr;`, `var name: i64 = expr;`, or an array form
+      `var name: [N]i64 = [v; N];` / `var name: [N]i64 = [e0, e1, ...];`, never redeclared
+- [ ] No scalar type name besides `i64` appears (`[N]i64` array annotations excepted)
+- [ ] Every array index is a literal in `0 .. N-1`, or reads or overwrites no slot outside the array
 - [ ] Every call has exact arity per §10 (`exit` sits only as its own statement)
 - [ ] `fn main() -> i64` exists, takes no parameters, and every function ends in `return`
 - [ ] No statement besides assignment or call sits bare; `break`/`continue` are inside a loop (a `while` or a `for`)
@@ -316,7 +348,7 @@ A source file is valid Cairn 0.1 if every box ticks:
 - [ ] `python -m cairn verify file.crn` reports verified (same ten `V####` rules as a built `.exe`)
 - [ ] `python -m cairn run file.crn` prints the expected integers and forwards the expected exit code
 
-Non-goals for 0.1 (explicit): floats, arrays, structs, modules,
+Non-goals for 0.1 (explicit): floats, structs, modules,
 closures, generics, exceptions, threads, GC, pointers, interfaces, DI,
 conditional compilation, foreign declarations, and any standard library
 beyond §10's named builtins. Each is a new specification task with its own ADR, not an

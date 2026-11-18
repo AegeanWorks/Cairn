@@ -18,6 +18,9 @@ Keyword for routines is `fn`. Never `function`.
 fn name(a: i64, b: i64) -> i64 { return a + b; }
 let x: i64 = 1;
 var y: i64 = 1;
+var a: [8]i64 = [0; 8];
+var b: [3]i64 = [2, 4, 6];
+a[0] = a[1] + b[2];
 y = y + 1;
 print(x);
 if x < 2 { return x; }
@@ -32,7 +35,11 @@ return 0;
 ## Types and limits
 One type: `i64` (`-9223372036854775808..9223372036854775807`).
 `true` is `1`, `false` is `0`. String literals (`"bytes"`) are read-only
-`i64` handles. At most 8 parameters: the first 4 travel in registers, the rest
+`i64` handles. Arrays are `[N]i64` with N in 1..65536, initialized by a fill
+`[v; N]` or an aggregate `[e0, e1, ...]` of exactly N elements (`E3014`);
+index with `a[i]`, store with `a[i] = expr;`; a literal index outside
+`0..N-1` is `E3017` and dynamic indices are never bounds-checked.
+At most 8 parameters: the first 4 travel in registers, the rest
 in the caller's outgoing stack area. ASCII names, no shadowing, flat function
 scope, every slot zeroed on entry.
 
@@ -56,13 +63,13 @@ Division by zero traps (stderr, exit 3). One statement per idea; a bare
 expression must be a call.
 
 ## What does not exist
-Floats, string variables, arrays, structs, classes, interfaces, pointers,
+Floats, string variables, structs, classes, interfaces, pointers,
 generics, closures, `match`, `Result`, `use`, `#if target`, `extern`,
 exceptions, GC, threads, or any builtin beyond the list above.
 
 ## Forbidden emissions
 `function func def impl trait dyn unsafe match use extern #if $name ->method`
-any type besides `i64`, any import, any shadowing.
+any type besides `i64` or `[N]i64`, any import, any shadowing.
 
 ## When asked to "build"
 1. Emit one complete `.crn` file.
