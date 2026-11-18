@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `173`
-- **Total Top-Level Functions**: `186`
-- **Total Class Methods**: `893`
-- **Total Source Lines**: `16833`
+- **Total Classes**: `175`
+- **Total Top-Level Functions**: `207`
+- **Total Class Methods**: `902`
+- **Total Source Lines**: `17455`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -513,7 +513,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `853` lines (`37885` bytes)
+**Size**: `1334` lines (`59509` bytes)
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -560,6 +560,25 @@
 - `def _flatten(statements)` - *Splice a branch selected by folding into its parent, since Cairn has one flat scope.*
 - `def _reachable(statements)` - *Drop statements after one that cannot fall through: `return`, `break`, `continue`.*
 - `def optimize(program)` - *Run one folding pass over a checked program, then convert counter loops.*
+- `def _node_count(expression)` - *How many expression nodes one tree carries.*
+- `def _clone_expression(expression)` - *A deep copy of one expression node tree.*
+- `def _single_return_bodies(program)` - *Callees whose body is exactly one `return <expr>;`, within the inline budget.*
+- `def apply_pure_inlining(program)` - *Inline every call to a single-`return` function, substituting its arguments.*
+- `def _inline_program(program, bodies)` - *One inlining round over every statement; answers how many statements changed.*
+- `def _inline_statements(function, block, bodies, active)` - *Rewrite calls inside one block, descending into every statement kind.*
+- `def _inline_attribute(function, statement, attribute, bodies, active)` - *Inline calls inside one statement's expression; answers whether it changed.*
+- `def _inline_expression(function, expression, bodies, active)` - *Replace inlineable calls throughout one expression; None when unchanged.*
+- `def _inlined_body(call, bodies, active)` - *The substituted body of one inlineable call, or None when a guard refuses.*
+- `def _substitute_parameters(expression, substitutions)` - *Replace every read of a substituted parameter with a fresh argument clone.*
+- `def _calls_in(expression)` - *Every Call node under one expression tree.*
+- `def apply_algebraic_simplification(program)` - *Expand constant coefficients over add-chains and collect like terms.*
+- `def _algebraic_statements(block)` - *Collect like terms in every statement of one block, recursing through shapes.*
+- `def _algebraic_attribute(statement, attribute)` - *Collect one statement root; answers whether the tree changed.*
+- `def _algebraic_expression(expression)` - *Collect beneath non-chain operators; a `+`/`-` chain collects as a whole.*
+- `def _collect_chain(expression)` - *The collected `+`/`-` chain rooted at `expression`, or None when nothing improved.*
+- `def _signature(expression)` - *A structural key for one expression subtree; sames group together.*
+- `def _chain_terms(expression, sign)` - *Flatten a `+`/`-` chain into signed terms.*
+- `def _product_term(expression, sign)` - *One non-chain term as a one-element list: literal-coefficient products distribute.*
 
 ---
 
@@ -1487,7 +1506,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `398` lines (`19018` bytes)
+**Size**: `539` lines (`25934` bytes)
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -1539,10 +1558,23 @@
   - Method `.test_a_trapping_definition_refuses()`
   - Method `.test_a_clobbered_operand_between_definition_and_copy_refuses()`
   - Method `.test_a_loop_body_temp_propagates_per_iteration()`
+- `class InliningTest` - *Single-return pure functions inline into their call sites.*
+  - Method `.test_pure_single_return_call_inlines_into_a_literal()`
+  - Method `.test_multi_use_call_argument_keeps_the_call()`
+  - Method `.test_multi_use_pure_argument_inlines_one_clone_per_read()`
+  - Method `.test_self_recursion_is_never_inlined()`
+  - Method `.test_multi_statement_functions_are_never_inlined()`
+- `class AlgebraicTest` - *Distributive expansion and like-term collection must be ring-exact.*
+  - Method `.test_like_terms_collect()`
+  - Method `.test_distribution_expands_and_collects()`
+  - Method `.test_cancelling_terms_leave_zero()`
+  - Method `.test_calls_are_never_grouped_or_duplicated()`
 
 **Functions:**
 - `def folded_value(op, left, right)` - *`fold_constant` for one pair, through the public entry point.*
 - `def optimized_body(source)` - *Optimise a single-function body; a trailing `return 0;` is added and then hidden.*
+- `def count_calls(expression)` - *Every Call node under one expression.*
+- `def _peel_name_or_product(expression)`
 
 ---
 
