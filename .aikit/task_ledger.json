@@ -3,25 +3,23 @@
   "active_task": {
     "task_id": "cairn-speed-2",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1795035365.675352,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [
+      {
+        "agent": "unidentified",
+        "from": "mistral:vibe",
+        "at": 1795035398.8750134
+      }
+    ],
+    "completed_at": 1795035398.8750155,
+    "completed_head": "48b5031320ac3e391a7dd119dc96ddcd02ce610b",
+    "completed_tree": "ab9f8a7907b3caeb829f1de5588d199955ec5d56"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-contract-sync",
-      "phase": "verify",
-      "phase_num": 4,
-      "description": "contract test (10 tests) binds capabilities --json to SPEC.md, LLM_SYSTEM.md and the README benchmark table; 8 failed first against the drifted docs; SPEC 5-sections fixed, system card regenerated compact (3,000 bytes), README adds the 3 missing cases and honest size column; 1118 tests OK; doc-only change, no emitted-bytes surface touched so no re-gate required; ends with checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794943307.4025302,
-      "timestamp_str": "2026-11-17 22:21:47",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-contract-sync",
       "phase": "completed",
@@ -290,6 +288,24 @@
       "timestamp": 1795035365.675352,
       "timestamp_str": "2026-11-18 23:56:05",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-speed-2",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-speed-2' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795035398.9930825,
+      "timestamp_str": "2026-11-18 23:56:38",
+      "agent": "unidentified",
+      "head": "48b5031320ac3e391a7dd119dc96ddcd02ce610b",
+      "continued_from": "mistral:vibe",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }

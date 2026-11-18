@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `184`
+- **Total Classes**: `185`
 - **Total Top-Level Functions**: `211`
-- **Total Class Methods**: `974`
-- **Total Source Lines**: `18539`
+- **Total Class Methods**: `981`
+- **Total Source Lines**: `18612`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -530,7 +530,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `1403` lines
+**Size**: `1441` lines
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -539,6 +539,7 @@
   - Method `._statement(statement)` - *Fold one statement, replacing a constant `if` with the branch it always takes.*
   - Method `._choose_branch(statement)` - *Replace an `if` whose condition is a constant with the branch it always takes.*
   - Method `._expression(expression)` - *Fold one expression; returns the replacement node.*
+  - Method `._fold_string_builtin(expression)` - *Fold `str_len`/`str_byte` of a literal handle into the specified answer.*
   - Method `._fold_unary(expression)` - *Fold a unary operator applied to a literal.*
   - Method `._fold_binary(expression)` - *Fold two literals, then apply an identity that is safe for every i64.*
   - Method `._identity(expression, left, right)` - *`x + 0`, `x * 1` and friends; a dropped operand must have no effect.*
@@ -1401,7 +1402,7 @@
 ### [`tests/test_ir.py`](tests/test_ir.py)
 > *SSA IR foundation tests: differential execution and invariants.*
 
-**Size**: `278` lines
+**Size**: `281` lines
 
 **Classes:**
 - `class DifferentialTest` - *Compiled machine behaviour and interpreted IR behaviour must agree.*
@@ -1573,7 +1574,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `547` lines
+**Size**: `579` lines
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -1632,6 +1633,13 @@
   - Method `.test_multi_use_pure_argument_inlines_one_clone_per_read()`
   - Method `.test_self_recursion_is_never_inlined()`
   - Method `.test_multi_statement_functions_are_never_inlined()`
+- `class StringFoldTest` - *str_len/str_byte of literal handles fold to the exact specified answers.*
+  - Method `.test_str_len_of_a_literal_folds_to_its_length()`
+  - Method `.test_str_byte_of_a_literal_index_folds_to_the_byte()`
+  - Method `.test_str_byte_at_the_terminator_folds_to_minus_one()`
+  - Method `.test_a_negative_index_folds_to_minus_one()`
+  - Method `.test_str_byte_past_the_terminator_is_never_folded()`
+  - Method `.test_a_non_literal_handle_is_never_folded()`
 - `class AlgebraicTest` - *Distributive expansion and like-term collection must be ring-exact.*
   - Method `.test_like_terms_collect()`
   - Method `.test_distribution_expands_and_collects()`
