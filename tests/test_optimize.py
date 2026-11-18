@@ -394,5 +394,146 @@ class CopyPropagationTest(unittest.TestCase):
         self.assertEqual(copy.value.right.value, 1)
 
 
+
+def count_calls(expression):
+    """Every Call node under one expression."""
+    if expression is None:
+        return []
+    if isinstance(expression, syntax.Call):
+        found = [expression]
+    else:
+        found = []
+    if isinstance(expression, syntax.Parens):
+        found += count_calls(expression.inner)
+    if isinstance(expression, syntax.Unary):
+        found += count_calls(expression.operand)
+    if isinstance(expression, syntax.Binary):
+        found += count_calls(expression.left) + count_calls(expression.right)
+    if isinstance(expression, syntax.Call):
+        for argument in expression.arguments:
+            found += count_calls(argument)
+    return found
+
+
+class InliningTest(unittest.TestCase):
+    """Single-return pure functions inline into their call sites."""
+
+    MIX = ('fn mix(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64 '
+           '{ return a * 31 + b * 37 + c * 41 + d * 43 + e * 47 + f * 53; }')
+
+    def test_pure_single_return_call_inlines_into_a_literal(self) -> None:
+        program = analyze(parse(self.MIX + ' fn main() -> i64 '
+                                '{ var t: i64 = mix(3, 4, 5, 6, 7, 8); return t; }'))
+        result = optimize.optimize(program)
+        statement = result.functions[1].body.statements[0]
+        self.assertIsInstance(statement, syntax.Let)
+        self.assertEqual(statement.value.value, 3 * 31 + 4 * 37 + 5 * 41 + 6 * 43 + 7 * 47 + 8 * 53)
+
+    def test_multi_use_call_argument_keeps_the_call(self) -> None:
+        # A parameter read twice must not duplicate a call argument: the call stays.
+        source = ('fn twice(x: i64) -> i64 { return x + x; } '
+                  'fn main() -> i64 { var t: i64 = twice(read_char()); return t; }')
+        result = optimize.optimize(analyze(parse(source)))
+        statement = result.functions[1].body.statements[0]
+        self.assertIsInstance(statement.value, syntax.Call)
+        self.assertEqual(statement.value.name, 'twice')
+        # the surviving tree is the outer call plus its single read_char argument
+        self.assertEqual(len(count_calls(statement.value)), 2)
+
+    def test_multi_use_pure_argument_inlines_one_clone_per_read(self) -> None:
+        source = ('fn twice(x: i64) -> i64 { return x + x; } '
+                  'fn main() -> i64 { var i: i64 = 5; var t: i64 = twice(i); return t; }')
+        result = optimize.optimize(analyze(parse(source)))
+        statement = result.functions[1].body.statements[1]
+        self.assertEqual(len(count_calls(statement.value)), 0)
+        self.assertIsInstance(statement.value, syntax.Binary)
+        # twice(i) inlines as i + i, and the algebraic pass collects it as i * 2
+        pair = [statement.value.left, statement.value.right]
+        names = [operand for operand in pair if isinstance(operand, syntax.Name)]
+        literals = [operand for operand in pair if isinstance(operand, syntax.IntLiteral)]
+        self.assertEqual(len(names), 1)
+        self.assertEqual(len(literals), 1)
+        self.assertEqual(literals[0].value, 2)
+
+    def test_self_recursion_is_never_inlined(self) -> None:
+        source = ('fn f(n: i64) -> i64 { return f(n - 1) + n; } '
+                  'fn main() -> i64 { var t: i64 = f(4); return t; }')
+        result = optimize.optimize(analyze(parse(source)))
+        statement = result.functions[1].body.statements[0]
+        self.assertEqual(len(count_calls(statement.value)), 1)
+        self.assertEqual(statement.value.name, 'f')
+
+    def test_multi_statement_functions_are_never_inlined(self) -> None:
+        source = ('fn probe(k: i64) -> i64 { var t: i64 = k; return t + t + 1; } '
+                  'fn main() -> i64 { var t: i64 = probe(7); return t; }')
+        result = optimize.optimize(analyze(parse(source)))
+        statement = result.functions[1].body.statements[0]
+        self.assertIsInstance(statement.value, syntax.Call)
+        self.assertEqual(statement.value.name, 'probe')
+
+
+class AlgebraicTest(unittest.TestCase):
+    """Distributive expansion and like-term collection must be ring-exact."""
+
+    def test_like_terms_collect(self) -> None:
+        body = optimized_body('var i: i64 = 5; var r: i64 = i * 31 + i * 37;')
+        value = body.statements[1].value
+        self.assertEqual(len(count_calls(value)), 0)
+        operands = [value.left, value.right]
+        multipliers = [side.value for side in operands
+                       if isinstance(side, syntax.IntLiteral)]
+        self.assertEqual(multipliers, [68])
+        names = [side for side in operands
+                 if isinstance(_peel_name_or_product(side), syntax.Name)]
+        self.assertEqual(len(names), 1)
+
+    def test_distribution_expands_and_collects(self) -> None:
+        body = optimized_body('var i: i64 = 5; var total: i64 = 0;'
+                              ' total = (i + 2) * 31 + i * 37;')
+        value = body.statements[2].value
+        # (i + 2) * 31 + i * 37 == 68 * i + 62: one constant and one product remain.
+        def terms(expression):
+            expression = expression
+            while isinstance(expression, syntax.Parens):
+                expression = expression.inner
+            if isinstance(expression, syntax.Binary) and expression.op == '+':
+                return terms(expression.left) + terms(expression.right)
+            return [expression]
+        pieces = terms(value)
+        constants = sorted(piece.value for piece in pieces
+                           if isinstance(piece, syntax.IntLiteral))
+        products = [piece for piece in pieces if isinstance(piece, syntax.Binary)]
+        self.assertEqual(constants, [62])
+        self.assertEqual(len(products), 1)
+        multipliers = [side.value for side in (products[0].left, products[0].right)
+                       if isinstance(side, syntax.IntLiteral)]
+        self.assertEqual(multipliers, [68])
+
+    def test_cancelling_terms_leave_zero(self) -> None:
+        body = optimized_body('var i: i64 = 5; var r: i64 = i * 7 - i * 7;')
+        value = body.statements[1].value
+        self.assertEqual(value.value, 0)
+
+    def test_calls_are_never_grouped_or_duplicated(self) -> None:
+        source = ('fn probe(k: i64) -> i64 { var t: i64 = k; return t + t; } '
+                  'fn main() -> i64 { var x: i64 = 5; '
+                  'var r: i64 = probe(x) * 3 + probe(x) * 4; return r; }')
+        result = optimize.optimize(analyze(parse(source)))
+        statement = result.functions[1].body.statements[1]
+        self.assertEqual(len(count_calls(statement.value)), 2)
+
+
+def _peel_name_or_product(expression):
+    while isinstance(expression, syntax.Parens):
+        expression = expression.inner
+    if isinstance(expression, syntax.Binary) and expression.op == '*':
+        for side in (expression.left, expression.right):
+            peeled = _peel_name_or_product(side)
+            if peeled is not None:
+                return peeled
+        return None
+    return expression
+
+
 if __name__ == "__main__":
     unittest.main()

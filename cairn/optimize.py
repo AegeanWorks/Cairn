@@ -136,6 +136,10 @@ class Optimizer:
 
     def run(self, program: syntax.Program) -> syntax.Program:
         """Optimise every function body, then convert counter loops and fuse odd pairs."""
+        apply_pure_inlining(program)
+        for function in program.functions:
+            function.body = self._block(function.body)
+        apply_algebraic_simplification(program)
         for function in program.functions:
             function.body = self._block(function.body)
         apply_copy_propagation(program)
@@ -847,7 +851,484 @@ def optimize(program: syntax.Program) -> syntax.Program:
     return Optimizer().run(program)
 
 
-__all__ = ["INT64_MAX", "INT64_MIN", "MASK64", "Optimizer", "apply_copy_propagation",
-           "apply_countdown_latches",
-           "apply_odd_pair_fusion", "fold_constant", "fold_unary", "has_call",
+INLINE_EXPANSION_NODES = 512
+INLINE_ROUNDS = 8
+
+
+def _node_count(expression) -> int:
+    """How many expression nodes one tree carries."""
+    if expression is None:
+        return 0
+    if isinstance(expression, (syntax.IntLiteral, syntax.Name, syntax.StrLiteral)):
+        return 1
+    if isinstance(expression, syntax.Parens):
+        return 1 + _node_count(expression.inner)
+    if isinstance(expression, syntax.Unary):
+        return 1 + _node_count(expression.operand)
+    if isinstance(expression, syntax.Binary):
+        return 1 + _node_count(expression.left) + _node_count(expression.right)
+    if isinstance(expression, syntax.Call):
+        return 1 + sum(_node_count(argument) for argument in expression.arguments)
+    return 1
+
+
+def _clone_expression(expression):
+    """A deep copy of one expression node tree."""
+    if isinstance(expression, syntax.IntLiteral):
+        return syntax.IntLiteral(span=expression.span, value=expression.value)
+    if isinstance(expression, syntax.Name):
+        return syntax.Name(span=expression.span, name=expression.name,
+                           slot=expression.slot)
+    if isinstance(expression, syntax.StrLiteral):
+        return syntax.StrLiteral(span=expression.span, text=expression.text)
+    if isinstance(expression, syntax.Unary):
+        return syntax.Unary(span=expression.span, op=expression.op,
+                            operand=_clone_expression(expression.operand))
+    if isinstance(expression, syntax.Binary):
+        return syntax.Binary(span=expression.span, op=expression.op,
+                             left=_clone_expression(expression.left),
+                             right=_clone_expression(expression.right))
+    if isinstance(expression, syntax.Parens):
+        return syntax.Parens(span=expression.span,
+                             inner=_clone_expression(expression.inner))
+    if isinstance(expression, syntax.Call):
+        return syntax.Call(span=expression.span, name=expression.name,
+                           arguments=[_clone_expression(argument)
+                                      for argument in expression.arguments])
+    raise AssertionError(f"optimize: cannot clone {type(expression).__name__}")
+
+
+def _single_return_bodies(program: syntax.Program) -> dict:
+    """Callees whose body is exactly one `return <expr>;`, within the inline budget."""
+    bodies = {}
+    for function in program.functions:
+        statements = function.body.statements if function.body is not None else []
+        if (len(statements) == 1 and isinstance(statements[0], syntax.Return)
+                and statements[0].value is not None
+                and _node_count(statements[0].value) <= INLINE_EXPANSION_NODES):
+            bodies[function.name] = function
+    return bodies
+
+
+def apply_pure_inlining(program: syntax.Program) -> int:
+    """Inline every call to a single-`return` function, substituting its arguments.
+
+    A call to a function whose body is exactly one `return <expr>;` is rewritten
+    at the call site into that expression with every parameter replaced by the
+    argument, so the call-per-iteration cost of pure scalar helpers disappears.
+    Guards: a parameter read twice or more may only take a call-free argument,
+    because a call is an effect and must not be duplicated; a parameter never read
+    must not carry a call or trap argument either, because dropping the argument
+    would drop its effect. Anything else keeps the call. Substitution past twice
+    the node budget keeps the call, and a callee reached again inside its own
+    inlined body refuses, so `f(4)` stays one call.
+    """
+    bodies = _single_return_bodies(program)
+    if not bodies:
+        return 0
+    inlined = 0
+    for _ in range(INLINE_ROUNDS):
+        if not _inline_program(program, bodies):
+            break
+        inlined += 1
+    return inlined
+
+
+def _inline_program(program: syntax.Program, bodies: dict) -> int:
+    """One inlining round over every statement; answers how many statements changed."""
+    inlined = 0
+    for function in program.functions:
+        inlined += _inline_statements(function, function.body, bodies, frozenset())
+    return inlined
+
+
+def _inline_statements(function: syntax.Function, block: Optional[syntax.Block],
+                       bodies: dict, active: frozenset) -> int:
+    """Rewrite calls inside one block, descending into every statement kind."""
+    if block is None:
+        return 0
+    inlined = 0
+    for statement in block.statements:
+        if isinstance(statement, syntax.If):
+            inlined += _inline_attribute(function, statement, "condition", bodies,
+                                         active)
+            inlined += _inline_statements(function, statement.then_block, bodies,
+                                          active)
+            inlined += _inline_statements(function, statement.else_block, bodies,
+                                          active)
+        elif isinstance(statement, syntax.While):
+            inlined += _inline_attribute(function, statement, "condition", bodies,
+                                         active)
+            inlined += _inline_statements(function, statement.body, bodies, active)
+        elif isinstance(statement, syntax.Block):
+            inlined += _inline_statements(function, statement, bodies, active)
+        elif isinstance(statement, syntax.For):
+            for attribute in ("start", "end"):
+                inlined += _inline_attribute(function, statement, attribute, bodies,
+                                             active)
+            inlined += _inline_statements(function, statement.body, bodies, active)
+        elif isinstance(statement, (syntax.Let, syntax.Assign, syntax.Return)):
+            inlined += _inline_attribute(function, statement, "value", bodies, active)
+        elif isinstance(statement, syntax.ExprStmt):
+            inlined += _inline_attribute(function, statement, "expression", bodies,
+                                         active)
+    return inlined
+
+
+def _inline_attribute(function: syntax.Function, statement: syntax.Stmt,
+                      attribute: str, bodies: dict, active: frozenset) -> int:
+    """Inline calls inside one statement's expression; answers whether it changed."""
+    value = getattr(statement, attribute, None)
+    if value is None:
+        return 0
+    rewritten = _inline_expression(function, value, bodies, active)
+    if rewritten is None:
+        return 0
+    setattr(statement, attribute, rewritten)
+    return 1
+
+
+def _inline_expression(function: syntax.Function, expression, bodies: dict,
+                       active: frozenset):
+    """Replace inlineable calls throughout one expression; None when unchanged.
+
+    Substitution keeps the effect count exact: a parameter read once takes any
+    argument, a parameter read twice takes only a call-free argument (a fresh
+    clone is inserted per read), and a parameter never read must not carry a
+    call or trap argument, since dropping the argument would drop its effect.
+    """
+    if expression is None:
+        return None
+    if isinstance(expression, syntax.Call):
+        changed = False
+        arguments = []
+        for argument in expression.arguments:
+            replacement = _inline_expression(function, argument, bodies, active)
+            if replacement is not None:
+                arguments.append(replacement)
+                changed = True
+            else:
+                arguments.append(argument)
+        if changed:
+            expression.arguments = arguments
+        if expression.name in bodies and expression.name not in active:
+            substituted = _inlined_body(expression, bodies,
+                                        active | {expression.name})
+            if substituted is not None:
+                return substituted
+        return expression if changed else None
+    if isinstance(expression, syntax.Parens):
+        replacement = _inline_expression(function, expression.inner, bodies, active)
+        if replacement is not None:
+            expression.inner = replacement
+            return expression
+        return None
+    if isinstance(expression, syntax.Unary):
+        replacement = _inline_expression(function, expression.operand, bodies, active)
+        if replacement is not None:
+            expression.operand = replacement
+            return expression
+        return None
+    if isinstance(expression, syntax.Binary):
+        left = _inline_expression(function, expression.left, bodies, active)
+        right = _inline_expression(function, expression.right, bodies, active)
+        if left is not None:
+            expression.left = left
+        if right is not None:
+            expression.right = right
+        return expression if left is not None or right is not None else None
+    return None
+
+
+def _inlined_body(call: syntax.Call, bodies: dict, active: frozenset):
+    """The substituted body of one inlineable call, or None when a guard refuses."""
+    callee = bodies[call.name]
+    value = callee.body.statements[0].value
+    counts = [(parameter, _count_reads(value, parameter.slot), argument)
+              for parameter, argument in zip(callee.parameters, call.arguments)]
+    for _, count, argument in counts:
+        if count == 0 and (has_call(argument) or _may_trap(argument)):
+            return None  # dropping the argument would drop its effect
+        if count > 1 and has_call(argument):
+            return None  # duplicating the argument would duplicate its call
+    substitutions = {parameter.slot: argument for parameter, count, argument in counts
+                     if count > 0}
+    if not substitutions:
+        return None
+    substituted = _substitute_parameters(_clone_expression(value), substitutions)
+    if _node_count(substituted) > INLINE_EXPANSION_NODES * 2:
+        return None
+    if any(node.name in bodies and node.name in active
+           for node in _calls_in(substituted)):
+        return None  # recursion back into the inline set
+    return substituted
+
+
+def _substitute_parameters(expression, substitutions: dict):
+    """Replace every read of a substituted parameter with a fresh argument clone."""
+    if isinstance(expression, syntax.Name):
+        if expression.slot in substitutions:
+            return _clone_expression(substitutions[expression.slot])
+        return expression
+    if isinstance(expression, syntax.Parens):
+        expression.inner = _substitute_parameters(expression.inner, substitutions)
+        return expression
+    if isinstance(expression, syntax.Unary):
+        expression.operand = _substitute_parameters(expression.operand, substitutions)
+        return expression
+    if isinstance(expression, syntax.Binary):
+        expression.left = _substitute_parameters(expression.left, substitutions)
+        expression.right = _substitute_parameters(expression.right, substitutions)
+        return expression
+    if isinstance(expression, syntax.Call):
+        expression.arguments = [_substitute_parameters(argument, substitutions)
+                                for argument in expression.arguments]
+        return expression
+    return expression
+
+
+def _calls_in(expression) -> list:
+    """Every Call node under one expression tree."""
+    if expression is None:
+        return []
+    if isinstance(expression, syntax.Call):
+        found = [expression]
+    else:
+        found = []
+    if isinstance(expression, syntax.Parens):
+        found += _calls_in(expression.inner)
+    if isinstance(expression, syntax.Unary):
+        found += _calls_in(expression.operand)
+    if isinstance(expression, syntax.Binary):
+        found += _calls_in(expression.left) + _calls_in(expression.right)
+    if isinstance(expression, syntax.Call):
+        for argument in expression.arguments:
+            found += _calls_in(argument)
+    return found
+
+
+def apply_algebraic_simplification(program: syntax.Program) -> int:
+    """Expand constant coefficients over add-chains and collect like terms.
+
+    `31 * (i + 2)` rewrites as `i * 31 + 62`, and `i * 31 + i * 37` collects as
+    `i * 68`; both are ring-exact under wrapping i64 arithmetic (multiplication
+    distributes over addition and subtraction modulo 2^64, and `/`, `%` and the
+    shifts never take part in a collection). Terms whose subtree carries a call
+    neither group nor drop, because a call is an effect: `read_char() * 3 +
+    read_char() * 4` stays two reads. A chain rebuilds only when its term count
+    actually shrinks.
+    """
+    changed = 0
+    for function in program.functions:
+        changed += _algebraic_statements(function.body)
+    return changed
+
+
+def _algebraic_statements(block: Optional[syntax.Block]) -> int:
+    """Collect like terms in every statement of one block, recursing through shapes."""
+    if block is None:
+        return 0
+    changed = 0
+    for statement in block.statements:
+        if isinstance(statement, (syntax.Let, syntax.Assign)):
+            changed += _algebraic_attribute(statement, "value")
+        elif isinstance(statement, syntax.Return):
+            changed += _algebraic_attribute(statement, "value")
+        elif isinstance(statement, syntax.ExprStmt):
+            changed += _algebraic_attribute(statement, "expression")
+        elif isinstance(statement, syntax.If):
+            changed += _algebraic_attribute(statement, "condition")
+            changed += _algebraic_statements(statement.then_block)
+            changed += _algebraic_statements(statement.else_block)
+        elif isinstance(statement, syntax.While):
+            changed += _algebraic_attribute(statement, "condition")
+            changed += _algebraic_statements(statement.body)
+        elif isinstance(statement, syntax.Block):
+            changed += _algebraic_statements(statement)
+        elif isinstance(statement, syntax.For):
+            for attribute in ("start", "end"):
+                changed += _algebraic_attribute(statement, attribute)
+            changed += _algebraic_statements(statement.body)
+    return changed
+
+
+def _algebraic_attribute(statement: syntax.Stmt, attribute: str) -> int:
+    """Collect one statement root; answers whether the tree changed."""
+    value = getattr(statement, attribute, None)
+    if value is None:
+        return 0
+    replacement = _algebraic_expression(value)
+    if replacement is None:
+        return 0
+    setattr(statement, attribute, replacement)
+    return 1
+
+
+def _algebraic_expression(expression):
+    """Collect beneath non-chain operators; a `+`/`-` chain collects as a whole."""
+    if expression is None or isinstance(expression, (syntax.IntLiteral, syntax.Name,
+                                                     syntax.StrLiteral)):
+        return None
+    if isinstance(expression, syntax.Parens):
+        replacement = _algebraic_expression(expression.inner)
+        if replacement is not None:
+            expression.inner = replacement
+            return expression
+        return None
+    if isinstance(expression, syntax.Unary):
+        replacement = _algebraic_expression(expression.operand)
+        if replacement is not None:
+            expression.operand = replacement
+            return expression
+        return None
+    if isinstance(expression, syntax.Call):
+        changed = False
+        arguments = []
+        for argument in expression.arguments:
+            replacement = _algebraic_expression(argument)
+            if replacement is not None:
+                arguments.append(replacement)
+                changed = True
+            else:
+                arguments.append(argument)
+        if changed:
+            expression.arguments = arguments
+            return expression
+        return None
+    if isinstance(expression, syntax.Binary) and expression.op in ("+", "-"):
+        return _collect_chain(expression)
+    if isinstance(expression, syntax.Binary):
+        left = _algebraic_expression(expression.left)
+        right = _algebraic_expression(expression.right)
+        if left is not None:
+            expression.left = left
+        if right is not None:
+            expression.right = right
+        return expression if left is not None or right is not None else None
+    return None
+
+
+def _collect_chain(expression):
+    """The collected `+`/`-` chain rooted at `expression`, or None when nothing improved.
+
+    The chain flattens into signed terms; product spines with a literal
+    coefficient distribute over nested chains; same-signature terms sum. A
+    rebuild happens only when grouping, cancelling or folding shrinks the term
+    count, so `x * 0` (effect-free) vanishes but `0 * g(x)` stays.
+    """
+    if not (isinstance(expression, syntax.Binary) and expression.op in ("+", "-")):
+        return None
+    terms = _chain_terms(expression, 1)
+    order = []
+    table = {}
+    for sign, kind, content, span in terms:
+        if kind == "const":
+            if content == 0:
+                continue
+            key = ("const",)
+            base = None
+        elif has_call(content):
+            key = ("effect", id(content))
+            base = content
+        else:
+            key = _signature(content)
+            base = content
+        if key not in table:
+            table[key] = [0, base, span, 0]
+            order.append(key)
+        entry = table[key]
+        entry[0] = wrap(entry[0] + sign)
+        entry[3] += 1
+    # Collect only when two or more non-constant terms really merge; a lone
+    # expression term keeps its original shape (e.g. `0 - a` stays a negation).
+    if not any(key != ("const",) and table[key][3] >= 2 for key in order):
+        return None
+    rebuilt = None
+    span = expression.span
+    for key in order:
+        sign_total, base, term_span, _ = table[key]
+        if key == ("const",):
+            if sign_total == 0:
+                continue
+            node = syntax.IntLiteral(span=term_span, value=sign_total)
+        elif sign_total == 0:
+            if has_call(base) or _may_trap(base):
+                node = syntax.Binary(span=term_span, op="*",
+                                     left=syntax.IntLiteral(span=term_span, value=0),
+                                     right=base)
+            else:
+                continue
+        elif sign_total == 1:
+            node = base
+        else:
+            node = syntax.Binary(span=term_span, op="*", left=base,
+                                 right=syntax.IntLiteral(span=term_span,
+                                                         value=sign_total))
+        if rebuilt is None:
+            rebuilt = node
+        else:
+            rebuilt = syntax.Binary(span=span, op="+", left=rebuilt, right=node)
+    return rebuilt if rebuilt is not None else syntax.IntLiteral(span=span, value=0)
+
+
+def _signature(expression) -> tuple:
+    """A structural key for one expression subtree; sames group together."""
+    expression = _peel_parens(expression)
+    if isinstance(expression, syntax.IntLiteral):
+        return ("int", expression.value)
+    if isinstance(expression, syntax.Name):
+        return ("slot", expression.slot)
+    if isinstance(expression, syntax.StrLiteral):
+        return ("str", expression.text)
+    if isinstance(expression, syntax.Unary):
+        return ("unary", expression.op, _signature(expression.operand))
+    if isinstance(expression, syntax.Binary):
+        return ("bin", expression.op, _signature(expression.left),
+                _signature(expression.right))
+    if isinstance(expression, syntax.Call):
+        return ("call", expression.name,
+                tuple(_signature(argument) for argument in expression.arguments))
+    return ("other", id(expression))
+
+
+def _chain_terms(expression, sign):
+    """Flatten a `+`/`-` chain into signed terms.
+
+    Each term is `(sign, kind, content, span)`, where `kind` is `"const"`
+    (content the value) or `"expr"` (content the node). Product spines carrying a
+    literal coefficient distribute over nested chains; signs stay wrapped.
+    """
+    expression = _peel_parens(expression)
+    if isinstance(expression, syntax.Binary) and expression.op in ("+", "-"):
+        right_sign = sign if expression.op == "+" else -sign
+        return _chain_terms(expression.left, sign) + \
+            _chain_terms(expression.right, right_sign)
+    return _product_term(expression, sign)
+
+
+def _product_term(expression, sign) -> list:
+    """One non-chain term as a one-element list: literal-coefficient products distribute."""
+    span = expression.span
+    expression = _peel_parens(expression)
+    if isinstance(expression, syntax.Unary) and expression.op == "-":
+        return _product_term(expression.operand, -sign)
+    if isinstance(expression, syntax.IntLiteral):
+        return [(wrap(sign * expression.value), "const", expression.value, span)]
+    if isinstance(expression, syntax.Binary) and expression.op == "*":
+        left = _peel_parens(expression.left)
+        right = _peel_parens(expression.right)
+        literal = None
+        if isinstance(left, syntax.IntLiteral) and not isinstance(right, syntax.IntLiteral):
+            literal, base = left, right
+        elif isinstance(right, syntax.IntLiteral) and not isinstance(left, syntax.IntLiteral):
+            literal, base = right, left
+        if literal is not None:
+            pieces = _chain_terms(base, wrap(sign * literal.value))
+            return [(piece[0], piece[1], piece[2], span) for piece in pieces]
+    return [(sign, "expr", expression, span)]
+
+
+__all__ = ["INT64_MAX", "INT64_MIN", "MASK64", "Optimizer", "apply_algebraic_simplification",
+           "apply_copy_propagation", "apply_countdown_latches", "apply_odd_pair_fusion",
+           "apply_pure_inlining", "fold_constant", "fold_unary", "has_call",
            "lower_for_loops", "optimize", "truncate_division", "wrap"]

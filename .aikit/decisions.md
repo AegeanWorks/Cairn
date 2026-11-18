@@ -725,3 +725,69 @@ IR, independent of the emitter, with the differential suite as the
 regression shield. Production codegen is unchanged, so no benchmark gate
 was required for this task; full suite grew 1156 to 1163 tests, all green.
 
+
+## ADR-067: AST-level pure inlining and algebraic collection inside the optimizer run
+
+Date: task cairn-ir-passes (milestones 1/3 and 2/3 of the general-optimizer
+track). Accepted.
+
+Context. The roadmap's fourth milestone named general optimization passes, not
+per-benchmark recognisers. The concrete target was many_params: `mix(i, i+1 ...,
+i+5)` with body `return a*31 + b*37 + c*41 + d*43 + e*47 + f*53;` cost six
+argument materializations plus one call per iteration while gcc, by inlining and
+simplifying, folds the same shape to one multiply-add per iteration. The
+milestone text said IR passes; codegen.py is still a tuned 3,800-line AST
+emitter (the IR today is a differential execution oracle, not the compile
+path), so the passes landed at the AST layer inside the existing pipeline and
+the port onto the IR stays deferred until codegen consumes the IR. That is a
+placement deviation, not a semantics deviation: this ADR records it.
+
+Decision. Two conservative passes live in cairn/optimize.py and run in
+`Optimizer.run` in this order: `apply_pure_inlining`, fold `_block`,
+`apply_algebraic_simplification`, fold, then the pre-existing copy propagation,
+countdown latches, odd-pair fusion rounds and final copy propagation.
+
+`apply_pure_inlining` inlines every call to a function whose body is exactly one
+`return <expr>;` under a 512-node callee budget (substituted body capped at
+2x512, 8 rounds). Guards keep the effect and slot parity exact: a parameter read
+twice or more takes only a call-free argument (a call is an effect and must not
+duplicate; hoisting is deliberately deferred); a parameter read zero times must
+not carry a call or trap argument, because dropping the argument would drop its
+effect; recursion into the inline set refuses (self- or mutual-, one level per
+round, then calls remain); substitution clones per read, never aliases.
+
+`apply_algebraic_simplification` flattens `+`/`-` chains into signed terms,
+distributes literal coefficients over the nested chains of a product spine, and
+collects like terms by structural signature. It is ring-exact under wrapping
+i64: distributivity of multiplication over addition and subtraction holds
+modulo 2^64, and `/`, `%` and the shifts never take part in a collection.
+Rebuild happens only when at least two non-constant like terms actually merge,
+call-carrying subtrees never group, drop or duplicate (`read_char()*3 +
+read_char()*4` stays two reads), a zero coefficient vanishes only when the term
+has no call and cannot trap (`0*g(x)` stays), and `0 - a` keeps its negation
+shape (a lone expression term is never rewritten), preserving the RewriteTest
+contract.
+
+many_params verified through the optimizer: the loop body becomes
+`total + i*252 + 701` (coefficients 31+37+41+43+47+53 = 252; constants
+37+82+129+188+265 = 701). An earlier session note claimed 216/252; that
+arithmetic was wrong, this ADR is a correction.
+
+Verification. Failing-first tests: InliningTest (inline a literal-argument
+single-return call; keep the call when the parameter is read twice and the
+argument carries one; clone per read for a multi-read pure argument; refuse
+self-recursion; refuse multi-statement bodies) plus AlgebraicTest (like-term
+collection, distribution-then-collection, cancellation to a literal zero with
+calls never grouped). Two of the new tests' own expectations were corrected
+against the designed contract, not relaxed: `count_calls` counts the surviving
+outer call too, and `twice(i)` is deliberately collected to `i*2` by the second
+pass. No pre-existing test weakened; suite 1210 OK. Benchmark gate: three
+measurement windows all showed 2-20x inflation against the c3d39bf baseline
+(xorshift 445 then 326 then 318 ms; many_params 269, 58, 54 ms where an isolated
+best-of-21 in the same hour measured 12.4 ms and the old baseline is 23.2 ms),
+and char_stream timed out outright - an external load source, not code. For
+every case without an inlineable pattern the new executable and the HEAD
+executable are byte-identical (verified for char_stream, hex_io, xorshift), so
+those deltas are provably not code. A saved record from the first polluted
+window was removed from benchmark_history.jsonl before commit; the re-gate is
+pending the first quiet window and the task stays open for it.
