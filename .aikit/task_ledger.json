@@ -3,60 +3,17 @@
   "active_task": {
     "task_id": "cairn-arrays",
     "last_phase": "verify",
-    "active_phase": 4,
-    "status": "in_progress",
-    "updated_at": 1795004618.9823995,
+    "active_phase": 5,
+    "status": "completed",
+    "updated_at": 1795011395.1406238,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1795011395.75578,
+    "completed_head": "0603e6471cf3f94edf4a0f8359e7771c42ce992a",
+    "completed_tree": "8d2c2cf6bf01aaecc9ff90e40cb2b1c22b2b5f84"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-stdin-refill",
-      "phase": "plan",
-      "phase_num": 2,
-      "description": "[1/1] plan: cache the stdin handle and refill 64 KiB at a time so char_stream stops paying two syscalls per 4 KiB",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794931950.4856436,
-      "timestamp_str": "2026-11-17 19:12:30",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "contract: emit_read_char caches the stdin handle in a new static writable (STDIN_HANDLE_LABEL, zero-initialized, fetched via GetStdHandle only when zero) and STDIN_BUFFER_SIZE moves 4096 -> 65536; dependency: win32 semantics - the stdin handle is stable for process lifetime, so caching cannot go stale; concurrency: single-threaded programs, no stdin races; state: runtime.py only, fast per-byte path byte-shape preserved, appended reserve keeps earlier labels' offsets",
-        "benefits": "contract: char_stream refills drop from 1024 to 64 ReadFile calls and from 1024 GetStdHandle calls to 1; dependency: other read_char users (interactive tests) share the fast path unchanged; concurrency: none; state: char_stream -8 to -30 percent if the gate delta is syscall-bound, others in noise",
-        "risks": "contract: a wrong cache guard would re-fetch or misuse an invalid pseudo-handle; dependency: zero-init writable cache with a test flag on every refill, invalid-handle path unchanged; concurrency: none; state: the ADR-058 lesson says layout shifts can regress the fast path - the helper's internal refill block grows, shifting the fast-path bytes",
-        "mitigation": "contract: guard on exactly cache == 0 before fetch, else reuse; dependency: failing-first fixup test asserts STDIN_HANDLE_LABEL referenced and GetStdHandle IAT load present once, plus an end-to-end stream over 70 KB so every refill boundary runs; concurrency: none; state: same-window char_stream A/B old vs new plus the full high-priority gate before commit, revert fast on any fast-path loss"
-      },
-      "plan_digest": "4935c90651f89065f92fdc954c2e00cb0237afff9eeaff101cf8eaf65e4fb608"
-    },
-    {
-      "task_id": "cairn-stdin-refill",
-      "phase": "verify",
-      "phase_num": 4,
-      "description": "stdin handle cache + 64 KiB refill; A/B outputs identical three windows, char_stream best 12.49->11.98; 1105 tests pass; clean-window gate exit 0; ends with checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794934471.5967133,
-      "timestamp_str": "2026-11-17 19:54:31",
-      "agent": "mistral:vibe"
-    },
-    {
-      "task_id": "cairn-stdin-refill",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-stdin-refill' completed successfully.",
-      "status": "completed",
-      "timestamp": 1794934519.275164,
-      "timestamp_str": "2026-11-17 19:55:19",
-      "agent": "mistral:vibe",
-      "head": "22c51988f8397fd20a53da607ef13d5a0dd6ea7b",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-charloop-shave",
       "phase": "plan",
@@ -310,6 +267,45 @@
       "timestamp": 1795004618.9823995,
       "timestamp_str": "2026-11-18 15:23:38",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-arrays",
+      "phase": "verify",
+      "phase_num": 4,
+      "description": "[2/3] array element memory, IR oracle, countdown Index soundness fix committed as 1098e5f; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795010412.3040054,
+      "timestamp_str": "2026-11-18 17:00:12",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-arrays",
+      "phase": "verify",
+      "phase_num": 4,
+      "description": "[3/3] complete: array benchmarks + twins, docs contract (SPEC/card/capabilities/README), ADR-068, 8 MiB committed stack, quiet-window gate recorded (repeat clean, exit 0); checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795011395.1406238,
+      "timestamp_str": "2026-11-18 17:16:35",
+      "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-arrays",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-arrays' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795011395.8339822,
+      "timestamp_str": "2026-11-18 17:16:35",
+      "agent": "mistral:vibe",
+      "head": "0603e6471cf3f94edf4a0f8359e7771c42ce992a",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
