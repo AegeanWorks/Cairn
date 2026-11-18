@@ -245,5 +245,60 @@ class IndirectStoreEncodingTest(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.code(lambda a: a.mov_store_reg("rsp", "rax"))
 
+
+class AluThroughRegisterPointerTest(unittest.TestCase):
+    """A read-modify-write through a pointer register: `op [base], r64`.
+
+    The fused array element update lowers to one memory-operand ALU
+    instruction; a wrong reg/rm direction usually survives compilation and
+    only shows up as a wrong element value, so the bytes are pinned here.
+    """
+
+    def code(self, build) -> bytes:
+        assembler = Assembler()
+        build(assembler)
+        return bytes(assembler.code)
+
+    def test_add_through_a_pointer_register(self) -> None:
+        self.assertEqual(self.code(lambda a: a.binary_store_reg(0x01, "rcx", "rax")),
+                         b"\x48\x01\x01")
+
+    def test_sub_through_an_extended_base_masks_into_rex(self) -> None:
+        self.assertEqual(self.code(lambda a: a.binary_store_reg(0x29, "r9", "r10")),
+                         b"\x4d\x29\x11")
+
+    def test_rejects_a_stack_base(self) -> None:
+        with self.assertRaises(AssertionError):
+            self.code(lambda a: a.binary_store_reg(0x01, "rsp", "rax"))
+
+
+class AluThroughPointerWithImmediateTest(unittest.TestCase):
+    """`op qword [base], imm8/imm32` for a fused element update with a literal."""
+
+    def code(self, build) -> bytes:
+        assembler = Assembler()
+        build(assembler)
+        return bytes(assembler.code)
+
+    def test_add_an_imm8_through_a_pointer_register(self) -> None:
+        self.assertEqual(self.code(lambda a: a.group1_store_reg_imm(0, "rcx", 7)),
+                         b"\x48\x83\x01\x07")
+
+    def test_sub_an_imm8_through_an_extended_base(self) -> None:
+        self.assertEqual(self.code(lambda a: a.group1_store_reg_imm(5, "r9", -1)),
+                         b"\x49\x83\x29\xff")
+
+    def test_an_imm32_extends_the_displacement_size(self) -> None:
+        self.assertEqual(self.code(lambda a: a.group1_store_reg_imm(6, "rax", 4096)),
+                         b"\x48\x81\x30\x00\x10\x00\x00")
+
+    def test_rejects_an_immediate_wider_than_32_signed_bits(self) -> None:
+        with self.assertRaises(ValueError):
+            self.code(lambda a: a.group1_store_reg_imm(0, "rcx", 0x80000000))
+
+    def test_rejects_a_stack_base(self) -> None:
+        with self.assertRaises(AssertionError):
+            self.code(lambda a: a.group1_store_reg_imm(0, "rsp", 1))
+
 if __name__ == "__main__":
     unittest.main()

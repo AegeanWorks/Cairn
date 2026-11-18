@@ -50,6 +50,36 @@ IMMEDIATE_SHIFT_EXTENSIONS = {"<<": 4, ">>": 7}
 
 # Binary operators that can update a destination in place: `slot = slot op value`.
 UPDATE_OPCODES = {"+": 0x01, "-": 0x29, "&": 0x21, "|": 0x09, "^": 0x31}
+
+
+def _shape_equal(left, right) -> bool:
+    """Structural equality of two index sub-expressions, spans ignored.
+
+    Two textually identical expressions denote the same element, which is what
+    makes the in-place read redundant; any construct the comparator does not
+    model answers unequal and the fusion is refused.
+    """
+    left = getattr(left, "inner", left)
+    right = getattr(right, "inner", right)
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, syntax.Name):
+        return left.slot == right.slot
+    if isinstance(left, syntax.IntLiteral):
+        return left.value == right.value
+    if isinstance(left, syntax.Binary):
+        return (left.op == right.op
+                and _shape_equal(left.left, right.left)
+                and _shape_equal(left.right, right.right))
+    if isinstance(left, syntax.Unary):
+        return left.op == right.op and _shape_equal(left.operand, right.operand)
+    if isinstance(left, syntax.Index):
+        return (left.slot == right.slot
+                and left.index is not None and right.index is not None
+                and _shape_equal(left.index, right.index))
+    if isinstance(left, syntax.Call):
+        return False
+    return False
 COMMUTATIVE_UPDATES = frozenset({"+", "*", "&", "|", "^"})
 IMMEDIATE_UPDATES = frozenset({"+", "-"})
 # `name * m` for these factors is one scaled `lea`: m = 2**log2 + 1, and the lea's
@@ -2089,17 +2119,115 @@ class CodeGenerator:
         static = statement.index
         while isinstance(static, syntax.Parens):
             static = static.inner
+        update = self._inplace_element(statement)
         if isinstance(static, syntax.IntLiteral):
+            offset = slot_offset(statement.slot) - 8 * static.value
+            if update is not None:
+                operator, other = update
+                direct = self._direct_update_operand(other)
+                if direct is not None:
+                    self._store_immediate_or_register(operator, offset, direct)
+                    return
+                self._emit_into(other, "rax")
+                asm.binary_store_rbp(UPDATE_OPCODES[operator], offset, "rax")
+                return
             self._emit_into(statement.value, "rax")
-            asm.mov_store_rbp(slot_offset(statement.slot) - 8 * static.value, "rax")
+            asm.mov_store_rbp(offset, "rax")
             return
-        self._emit_into(statement.index, "rax")
-        asm.neg("rax")
-        asm.lea_scale("rcx", "rbp", "rax", 3, slot_offset(statement.slot))
+        if update is not None:
+            operator, other = update
+            direct = self._direct_update_operand(other)
+            if direct is not None:
+                # Neither operand can call, and a home register survives every
+                # call-free lowering, so the value needs no park: the address
+                # forms once into rcx and the update reads and writes through it.
+                self._emit_dynamic_element_address(statement)
+                kind, operand = direct
+                if kind == "register":
+                    asm.binary_store_reg(UPDATE_OPCODES[operator], "rcx", operand)
+                else:
+                    asm.group1_store_reg_imm(UPDATE_OPCODES[operator] >> 3, "rcx", operand)
+                return
+            self._emit_dynamic_element_address(statement)
+            asm.mov_store_rbp(slot_offset(statement.temp_slot), "rcx")
+            self._emit_into(other, "rax")
+            asm.mov_load_rbp("rcx", slot_offset(statement.temp_slot))
+            asm.binary_store_reg(UPDATE_OPCODES[operator], "rcx", "rax")
+            return
+        self._emit_dynamic_element_address(statement)
         asm.mov_store_rbp(slot_offset(statement.temp_slot), "rcx")
         self._emit_into(statement.value, "rax")
         asm.mov_load_rbp("rcx", slot_offset(statement.temp_slot))
         asm.mov_store_reg("rcx", "rax")
+
+    def _emit_dynamic_element_address(self, statement: syntax.Assign) -> None:
+        """Leave the element's address in rcx for `a[i]` with a non-literal `i`."""
+        asm = self.assembler
+        self._emit_into(statement.index, "rax")
+        asm.neg("rax")
+        asm.lea_scale("rcx", "rbp", "rax", 3, slot_offset(statement.slot))
+
+    def _direct_update_operand(self, expression: Optional[syntax.Expr]):
+        """The operand of a fused element update that needs no temporary register.
+
+        A register home survives a call-free lowering, and a literal fits the
+        group-1 immediate form, so either can be the ALU's source directly. Any
+        other shape answers None and keeps the parked-address path.
+        """
+        while isinstance(expression, syntax.Parens):
+            expression = expression.inner
+        if isinstance(expression, syntax.IntLiteral):
+            if IMMEDIATE_MIN <= expression.value <= IMMEDIATE_MAX:
+                return "immediate", expression.value
+            return None
+        if isinstance(expression, syntax.Name):
+            if expression.slot == self.delta_slot and self.delta_value:
+                return None
+            home = self._home(expression.slot)
+            if home is not None:
+                return "register", home
+        return None
+
+    def _store_immediate_or_register(self, operator: str, offset: int, direct) -> None:
+        """One frame-slot ALU update whose operand is ready to use."""
+        kind, operand = direct
+        if kind == "register":
+            self.assembler.binary_store_rbp(UPDATE_OPCODES[operator], offset, operand)
+        else:
+            self.assembler.group1_store_rbp_imm(UPDATE_OPCODES[operator] >> 3, offset, operand)
+
+    def _inplace_element(self, statement: syntax.Assign):
+        """Match `a[i] = a[i] op e` (or `e op a[i]` commutative) for one fused update.
+
+        Returns `(operator, other)` when the store's value is one binary update of the
+        very element just indexed: the read then lowers through the same address
+        computation as the store instead of recomputing it, and fuses into a single
+        memory-operand ALU instruction. Refuses when the dropped second index
+        evaluation could print (`has_call`), so a calling index such as
+        `a[pick(3)] = a[pick(3)] + 5` keeps its two exact call sites.
+        """
+        if statement.index is None:
+            return None
+        value = statement.value
+        while isinstance(value, syntax.Parens):
+            value = value.inner
+        if not (isinstance(value, syntax.Binary) and value.op in UPDATE_OPCODES):
+            return None
+        if value.op in COMMUTATIVE_UPDATES:
+            sides = ((value.left, value.right), (value.right, value.left))
+        else:
+            sides = ((value.left, value.right),)
+        for read, other in sides:
+            while isinstance(read, syntax.Parens):
+                read = read.inner
+            if not (isinstance(read, syntax.Index)
+                    and read.slot == statement.slot
+                    and read.index is not None
+                    and _shape_equal(read.index, statement.index)
+                    and not has_call(read.index)):
+                continue
+            return value.op, other
+        return None
 
     def _emit_array_init(self, statement: syntax.Let) -> None:
         """Store every element of an array initializer into its consecutive slots.

@@ -987,6 +987,26 @@ class ArrayRuntimeTest(EndToEndTest):
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "21\n")
 
+    def test_read_modify_write_fusions_keep_the_values(self) -> None:
+        source = ('fn main() -> i64 {'
+                  ' var a: [4]i64 = [0; 4]; var r: i64 = 10;'
+                  ' a[3] = a[3] + r; a[3] = a[3] - r; a[3] = r + a[3];'
+                  ' a[3] = r & a[3]; a[3] = a[3] | 1; a[3] = a[3] ^ r;'
+                  ' print(a[3]); return 0; }')
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "1\n")
+
+    def test_dynamic_read_modify_write_keeps_the_values(self) -> None:
+        source = ('fn main() -> i64 {'
+                  ' var a: [6]i64 = [0; 6]; var i: i64 = 0;'
+                  ' while i < 6 { a[i] = a[i] + i * 100; a[i] = a[i] + i;'
+                  ' a[i] = a[i] + 7; a[i] = 1000 - 0 + a[i]; i = i + 1; }'
+                  ' print(a[0] + a[1] + a[2] + a[3] + a[4] + a[5]); return 0; }')
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "7557\n")
+
     def test_large_array_spills_beyond_disp8(self) -> None:
         source = ('fn main() -> i64 {'
                   ' var a: [400]i64 = [0; 400]; a[250] = 92; a[0] = 3;'

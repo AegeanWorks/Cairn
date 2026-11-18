@@ -600,6 +600,84 @@ class MergedMaskMixTest(unittest.TestCase):
                         "the multiply must write a callee-saved home via rax")
 
 
+
+class ArrayInPlaceUpdateTest(unittest.TestCase):
+    """`a[k] = a[k] op e` is one memory-operand ALU instruction, not load-op-store.
+
+    The read-modify-write sweep is the whole array workload class; paying two
+    address computations plus a parked store for every element was a measured
+    25 percent deficit against C on the array_sum benchmark. The fused form
+    computes the address once and updates through it.
+    """
+
+    def program_and_code(self, source: str) -> bytes:
+        """Main's own code bytes, so runtime helpers never satisfy the asserts."""
+        from cairn import codegen as codegen_module
+        from cairn import optimize
+        artifact = codegen_module.generate(optimize.optimize(sema.analyze(parser.parse(source))))
+        labels = artifact.text_labels
+        main_start = labels[codegen_module.function_label("main")]
+        runtime_start = min(offset for name, offset in labels.items()
+                            if name.startswith("cairn.runtime."))
+        text = bytes(artifact.text)
+        return text[main_start:runtime_start]
+
+    def test_a_static_index_update_is_one_memory_operand_alu(self) -> None:
+        code = self.program_and_code(
+            "fn main() -> i64 { var a: [4]i64 = [0; 4]; var r: i64 = 2;"
+            " a[3] = a[3] + r; return 0; }")
+        binary_store = b"\x48\x01\x5d"      # add [rbp+disp8], rbx (r's home)
+        via_rax = b"\x48\x01\x45"           # add [rbp+disp8], rax: a needless copy
+        load_pair = b"\x48\x89\xc1"          # mov rcx, rax: the fused-free shuffle
+        self.assertIn(binary_store, code)
+        self.assertNotIn(via_rax, code)
+        self.assertNotIn(load_pair, code)
+
+    def test_a_static_index_update_folds_a_literal_into_the_instruction(self) -> None:
+        code = self.program_and_code(
+            "fn main() -> i64 { var a: [4]i64 = [0; 4];"
+            " a[3] = a[3] + 7; return 0; }")
+        self.assertIn(b"\x48\x83\x45", code)  # add qword [rbp+disp8], imm8
+
+    def test_a_dynamic_index_update_computes_the_address_once(self) -> None:
+        code = self.program_and_code(
+            "fn main() -> i64 { var a: [4]i64 = [0; 4]; var i: i64 = 0;"
+            " var r: i64 = 2; while i < 4 { a[i] = a[i] + r; i = i + 1; }"
+            " return 0; }")
+        through_pointer = b"\x48\x01\x19"    # add [rcx], rbx (r's home)
+        neg_rax = b"\x48\xf7\xd8"
+        park = b"\x48\x89\x8d"              # mov [rbp+disp32], rcx: the address park
+        self.assertIn(through_pointer, code)
+        self.assertNotIn(park, code)
+        self.assertEqual(code.count(neg_rax), 1)
+
+    def test_a_dynamic_index_update_folds_a_literal_into_the_instruction(self) -> None:
+        code = self.program_and_code(
+            "fn main() -> i64 { var a: [4]i64 = [0; 4]; var i: i64 = 0;"
+            " while i < 4 { a[i] = a[i] + 7; i = i + 1; } return 0; }")
+        self.assertIn(b"\x48\x83\x01\x07", code)  # add qword [rcx], imm8
+        self.assertNotIn(b"\x48\x89\x8d", code)
+
+    def test_a_reversed_commutative_update_fuses_with_the_other_side_only(self) -> None:
+        code = self.program_and_code(
+            "fn main() -> i64 { var a: [4]i64 = [0; 4]; var r: i64 = 2;"
+            " a[3] = r + a[3]; return 0; }")
+        self.assertIn(b"\x48\x01\x5d", code)
+        self.assertNotIn(b"\x48\x89\xc1", code)
+
+    def test_a_subtraction_from_the_element_fuses_only_left_to_right(self) -> None:
+        code = self.program_and_code(
+            "fn main() -> i64 { var a: [4]i64 = [0; 4]; var r: i64 = 2;"
+            " a[3] = a[3] - r; return 0; }")
+        self.assertIn(b"\x48\x29\x5d", code)
+
+    def test_an_index_calling_update_never_fuses(self) -> None:
+        # A called index must run twice exactly as written; fusion would drop a call.
+        source = ("fn pick(x: i64) -> i64 { print(x); return x; }"
+                  "fn main() -> i64 { var a: [4]i64 = [0; 4];"
+                  " a[pick(3)] = a[pick(3)] + 5; return 0; }")
+        self.assertNotIn(b"\x48\x01\x45", self.program_and_code(source))
+
 if __name__ == "__main__":
     unittest.main()
 

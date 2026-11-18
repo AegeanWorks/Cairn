@@ -1,48 +1,16 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-arrays",
+    "task_id": "cairn-speed-2",
     "last_phase": "verify",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1795011395.1406238,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1795015131.4693491,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": [],
-    "completed_at": 1795011395.75578,
-    "completed_head": "0603e6471cf3f94edf4a0f8359e7771c42ce992a",
-    "completed_tree": "8d2c2cf6bf01aaecc9ff90e40cb2b1c22b2b5f84"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-charloop-shave",
-      "phase": "plan",
-      "phase_num": 2,
-      "description": "[1/2] while-true back edge emits a bare jmp instead of movabs/test/jne; [2/2] read_char prologue loads cursor and count with mov_load_rip instead of lea_rip+mov_load",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794936990.8385403,
-      "timestamp_str": "2026-11-17 20:36:30",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "char_stream pays ~14 instructions per byte: the caller back edge lowers the literal-true loop condition to movabs+test+jne (10 wasted bytes + 2 uops per byte), and read_char's prologue loads cursor/count via lea_rip+mov_load pairs (20 bytes) where direct rip loads are 12",
-        "benefits": "every while-true loop in every cairn program drops 2 dead uops on its back edge; read_char's hot fall-through prologue shrinks by 8 instructions-bytes, measurable on the 4M-iteration char_stream scoreboard case",
-        "risks": "contract: emitted code shape changes for while-true loops only - same semantics because the condition is the literal true; dependency: new consumer for the existing mov_load_rip helper only, no new machine helpers; concurrency: none - static single-threaded image; state: cursor/count slot layout unchanged, only their load encoding",
-        "mitigation": "failing-first shape tests for both lowering changes; same-window stash A/B on char_stream with output-identity check; full gate --save --compare plus quiet-window re-run rule; fast revert if A/B shows any regression"
-      },
-      "plan_digest": "fbef14485ea90615eb1ed47bb93dddf06606c7f37e66ad7b4b0451646926f478"
-    },
-    {
-      "task_id": "cairn-charloop-shave",
-      "phase": "verify",
-      "phase_num": 4,
-      "description": "milestone 1 (while-true bare jmp) kept: A/B never regressed across 3 windows, best 12.32->12.01; milestone 2 (rip-direct read_char state) measured 1.22-1.42x slower over 4 windows and reverted; pinned by ReadCharPrologueTest; 1108 tests pass; gate exit 0 (windows load-noisy, A/B is the decision evidence); ends with checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794941845.497877,
-      "timestamp_str": "2026-11-17 21:57:25",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-charloop-shave",
       "phase": "completed",
@@ -306,6 +274,35 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "cairn-speed-2",
+      "phase": "plan",
+      "phase_num": 2,
+      "description": "[1/6] plan measured speed campaign: M1 array address strength reduction (array_sum), M2 binary_gcd/primes codegen review, M3 char_stream path, M4 many_params+nqueens, M5 residual small gaps, M6 docs gate + ADR + close",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795014311.175015,
+      "timestamp_str": "2026-11-18 18:05:11",
+      "agent": "mistral:vibe",
+      "impact_assessment": {
+        "why": "contract: emitted-code changes only in a measured loop, never a semantic rewrite; dependency: the benchmark harness, differential IR oracle and 1227-test suite police the surface; concurrency: single-threaded programs, no new state; state: no state files",
+        "benefits": "contract: closes measured deficits - array_sum -25% vs C, many_params -23% vs C, char_stream -22% vs C++, binary_gcd -20% vs Rust, primes -17% vs Rust, nqueens -13% vs Rust; dependency: general passes (array address strength reduction, spill pruning), not per-benchmark hacks; concurrency: none; state: banner numbers in README only via gate records",
+        "risks": "contract: an unsound rewrite shows up as IR-oracle or twin-output divergence; dependency: shifting helper layout can regress the historic fast paths (ADR-058 lesson: inline read_char made it 78 percent worse); concurrency: none; state: benchmark history grows one record per honest gate",
+        "mitigation": "contract: every milestone lands with the full suite plus a 9-round quiet-window gate, refusal at any regression beyond the 10 percent band; dependency: gate minimums per case guard mandelbrot<=16ms and tak<=11ms as pollution detectors; concurrency: none; state: polluted records removed from history before commit"
+      },
+      "plan_digest": "0bc88bf0f79100240972f64c92d93d8994cc22afaac9def8127691de15a78f63"
+    },
+    {
+      "task_id": "cairn-speed-2",
+      "phase": "verify",
+      "phase_num": 4,
+      "description": "[2/6] M1 array in-place RMW fusion landed: binary_store_reg helper + fused dyn/static element updates, 10 new tests, suite 1237 OK; correctness pinned, perf measured neutral-to-positive (interleaved A/B vs HEAD inside one window)",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795015131.4693491,
+      "timestamp_str": "2026-11-18 18:18:51",
+      "agent": "mistral:vibe"
     }
   ]
 }

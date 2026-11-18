@@ -310,6 +310,38 @@ class Assembler:
         self.emit(bytes([_rex(True, src >> 3, 0, base_code >> 3), 0x89,
                          *_modrm(0, src, base_code)]))
 
+    def binary_store_reg(self, opcode: int, base: str, source: str) -> None:
+        """`op [base], r64`: one in-place ALU update through a pointer register.
+
+        The fused array element update (`a[i] = a[i] op e`) needs exactly this
+        shape: the element address sits in `base`, the other operand in
+        `source`, and the memory-operand form reads, computes and stores in
+        one instruction.
+        """
+        src, base_code = REGISTERS[source], REGISTERS[base]
+        assert base_code != REGISTERS["rsp"]
+        self.emit(bytes([_rex(True, src >> 3, 0, base_code >> 3), opcode,
+                         *_modrm(0, src, base_code)]))
+
+    def group1_store_reg_imm(self, extension: int, base: str, value: int) -> None:
+        """`op [base], imm8/imm32` sign-extended through a pointer register.
+
+        The fused array element update with a literal operand needs no temporary:
+        the imm8 form is two bytes shorter than materialising the constant in a
+        register and is the shape the baselines emit for `a[i] += 1`.
+        """
+        if not -0x80000000 <= value <= 0x7FFFFFFF:
+            raise ValueError("immediate does not fit in 32 signed bits")
+        base_code = REGISTERS[base]
+        assert base_code != REGISTERS["rsp"]
+        rex = _rex(True, 0, 0, base_code >> 3)
+        if -128 <= value <= 127:
+            self.emit(bytes([rex, 0x83, *_modrm(0, extension, base_code)]),
+                      bytes([value & 0xFF]))
+        else:
+            self.emit(bytes([rex, 0x81, *_modrm(0, extension, base_code)]),
+                      (value & 0xFFFFFFFF).to_bytes(4, "little"))
+
     def movzx_load8(self, destination: str, base: str) -> None:
         """`movzx r32, [base]`: read the byte at a pointer register, zero-extended."""
         dst, base_code = REGISTERS[destination], REGISTERS[base]
