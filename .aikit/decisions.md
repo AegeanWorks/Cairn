@@ -855,3 +855,10 @@ array_sum carry the new honest ranges; binary_gcd improved with no code change
 Honest-window criterion (many_params, seven runs): best <= 20 ms accepts, best
 19-34 ms is pollution. Comparing two gates from different windows beats trusting
 one.
+
+Closure proof for the same ADR: every one of the 19 registry cases compiles
+byte-identical at 79af21f and at HEAD (the string-folding shapes never fire on
+registry sources), verified by full-image SHA-256 through a temporary worktree.
+flapping windows mid-gate therefore cannot claim a code regression for these
+cases: the honest 79af21f record is the current tree's measurement. A cross-window
+regression claim needs a byte-difference first.
