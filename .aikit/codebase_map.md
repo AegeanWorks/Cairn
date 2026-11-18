@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `181`
-- **Total Top-Level Functions**: `210`
-- **Total Class Methods**: `948`
-- **Total Source Lines**: `18226`
+- **Total Classes**: `184`
+- **Total Top-Level Functions**: `211`
+- **Total Class Methods**: `974`
+- **Total Source Lines**: `18539`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -25,14 +25,14 @@
 ### [`benchmarks/__init__.py`](benchmarks/__init__.py)
 > *Benchmarks for Cairn: case sources and the harness that measures them.*
 
-**Size**: `1` lines (`77` bytes)
+**Size**: `1` lines
 
 ---
 
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `569` lines (`27392` bytes)
+**Size**: `569` lines
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -65,21 +65,21 @@
 ### [`cairn/__init__.py`](cairn/__init__.py)
 > *Cairn: an agent-first systems language with its own x86-64 backend.*
 
-**Size**: `11` lines (`477` bytes)
+**Size**: `11` lines
 
 ---
 
 ### [`cairn/__main__.py`](cairn/__main__.py)
 > *`python -m cairn` entry point.*
 
-**Size**: `8` lines (`154` bytes)
+**Size**: `8` lines
 
 ---
 
 ### [`cairn/builder.py`](cairn/builder.py)
 > *Build pipeline: source text to executable bytes.*
 
-**Size**: `83` lines (`3023` bytes)
+**Size**: `83` lines
 
 **Classes:**
 - `class Build` - *One successful build: the parsed program, the linked artifact and the image bytes.*
@@ -96,7 +96,7 @@
 ### [`cairn/capabilities.py`](cairn/capabilities.py)
 > *The machine-readable description of what this compiler accepts and emits.*
 
-**Size**: `110` lines (`5453` bytes)
+**Size**: `110` lines
 
 **Functions:**
 - `def _operators()` - *Operators grouped by precedence tier, loosest first.*
@@ -108,7 +108,7 @@
 ### [`cairn/cli.py`](cairn/cli.py)
 > *Command line: build, check and run Cairn programs.*
 
-**Size**: `412` lines (`20147` bytes)
+**Size**: `412` lines
 
 **Functions:**
 - `def _parser()` - *The whole command surface, declared in one place.*
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `3939` lines (`199080` bytes)
+**Size**: `4067` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -196,6 +196,10 @@
   - Method `._emit_expression(expression)` - *Lower one expression, leaving its value in rax.*
   - Method `._emit_index_load(expression)` - *Leave element `index` of the array in rax; bound checks stay compile-time.*
   - Method `._emit_element_store(statement)` - *`a[i] = value;`: fold literal indices, park a dynamic address in the frame.*
+  - Method `._emit_dynamic_element_address(statement)` - *Leave the element's address in rcx for `a[i]` with a non-literal `i`.*
+  - Method `._direct_update_operand(expression)` - *The operand of a fused element update that needs no temporary register.*
+  - Method `._store_immediate_or_register(operator, offset, direct)` - *One frame-slot ALU update whose operand is ready to use.*
+  - Method `._inplace_element(statement)` - *Match `a[i] = a[i] op e` (or `e op a[i]` commutative) for one fused update.*
   - Method `._emit_array_init(statement)` - *Store every element of an array initializer into its consecutive slots.*
   - Method `._array_sizes(function)` - *The frame-slot span of every array binding: base slot -> element count.*
   - Method `._slot_in_array(slot)` - *Whether `slot` is one of a declared array's consecutive frame slots.*
@@ -254,6 +258,7 @@
   - Method `._emit_direct_indirect_call(import_name)` - *An indirect call through the IAT, padded like `_emit_call_site`.*
 
 **Functions:**
+- `def _shape_equal(left, right)` - *Structural equality of two index sub-expressions, spans ignored.*
 - `def function_label(name)` - *The assembler label of a Cairn function.*
 - `def slot_offset(slot)` - *The rbp-relative offset of a frame slot; slot 0 is the first parameter.*
 - `def align16(value)` - *Round a frame size up to the 16-byte stack alignment the ABI requires.*
@@ -268,7 +273,7 @@
 ### [`cairn/codes.py`](cairn/codes.py)
 > *The diagnostic code registry: one record per code the compiler can emit.*
 
-**Size**: `84` lines (`3961` bytes)
+**Size**: `84` lines
 
 **Classes:**
 - `class Code` - *One diagnostic code: its stage family and a one-line statement of what it means.*
@@ -282,7 +287,7 @@
 ### [`cairn/diagnostics.py`](cairn/diagnostics.py)
 > *Diagnostics: every failure carries a stable code, a span and a fix.*
 
-**Size**: `99` lines (`3543` bytes)
+**Size**: `99` lines
 
 **Classes:**
 - `class Span` - *A half-open source range, in offsets and in 1-based line/column pairs.*
@@ -304,7 +309,7 @@
 ### [`cairn/filetable.py`](cairn/filetable.py)
 > *qwenFS toy for Cairn: a deterministic in-memory file table with integer handles.*
 
-**Size**: `198` lines (`8346` bytes)
+**Size**: `198` lines
 
 **Classes:**
 - `class FileTable` - *Deterministic exact-match file table plus a directed link graph.*
@@ -330,7 +335,7 @@
 ### [`cairn/image.py`](cairn/image.py)
 > *Image pieces shared by the backend: read-only data and the linked artifact.*
 
-**Size**: `104` lines (`3604` bytes)
+**Size**: `104` lines
 
 **Classes:**
 - `class ReadOnlyData` - *A byte blob with named offsets, placed in the `.rdata` section.*
@@ -353,7 +358,7 @@
 ### [`cairn/ir.py`](cairn/ir.py)
 > *A deliberately minimal typed SSA IR between the AST and machine code.*
 
-**Size**: `599` lines (`24524` bytes)
+**Size**: `599` lines
 
 **Classes:**
 - `class DivZeroTrap` - *`/ 0` or `i64.min / -1`: the machine's message plus exit code 3.*
@@ -402,7 +407,7 @@
 ### [`cairn/lexer.py`](cairn/lexer.py)
 > *Lexer: source text to a flat token list.*
 
-**Size**: `195` lines (`8331` bytes)
+**Size**: `195` lines
 
 **Classes:**
 - `class Token` - *One lexical unit: its kind, its text, its value when it is an integer, and its span.*
@@ -428,7 +433,7 @@
 ### [`cairn/listing.py`](cairn/listing.py)
 > *Machine-code listing: the emitted bytes, grouped by the label that owns them.*
 
-**Size**: `46` lines (`1977` bytes)
+**Size**: `46` lines
 
 **Functions:**
 - `def _rows(chunk, start)` - *Hex rows with the offset of each row's first byte.*
@@ -439,7 +444,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `600` lines (`27999` bytes)
+**Size**: `632` lines
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -474,6 +479,8 @@
   - Method `.mov_load(destination, base)` - *`mov r64, [base]`: read a qword through a pointer register.*
   - Method `.neg(destination)` - *`neg r64`: twos-complement negation for descending frame indexing.*
   - Method `.mov_store_reg(base, source)` - *`mov [base], r64`: write a qword through a pointer register.*
+  - Method `.binary_store_reg(opcode, base, source)` - *`op [base], r64`: one in-place ALU update through a pointer register.*
+  - Method `.group1_store_reg_imm(extension, base, value)` - *`op [base], imm8/imm32` sign-extended through a pointer register.*
   - Method `.movzx_load8(destination, base)` - *`movzx r32, [base]`: read the byte at a pointer register, zero-extended.*
   - Method `.movzx_load8_sib(destination, base, index)` - *`movzx r32, [base + index]`: one byte load off two pointer registers.*
   - Method `.movzx_from8(destination, source)` - *`movzx r32, r8`: the `& 255` mask of a register's value in one instruction.*
@@ -523,7 +530,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `1403` lines (`63139` bytes)
+**Size**: `1403` lines
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -596,7 +603,7 @@
 ### [`cairn/parser.py`](cairn/parser.py)
 > *Parser: recursive descent over the token list.*
 
-**Size**: `451` lines (`20108` bytes)
+**Size**: `451` lines
 
 **Classes:**
 - `class Parser` - *A cursor over one token list; every parse method consumes what it matches.*
@@ -635,7 +642,7 @@
 ### [`cairn/pe.py`](cairn/pe.py)
 > *PE writer: link an artifact and emit a Windows PE32+ console executable.*
 
-**Size**: `199` lines (`8994` bytes)
+**Size**: `199` lines
 
 **Functions:**
 - `def align(value, boundary)` - *Round `value` up to the next multiple of `boundary`.*
@@ -652,7 +659,7 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `708` lines (`28300` bytes)
+**Size**: `708` lines
 
 **Functions:**
 - `def emit_arg_fill(assembler)` - *Emit `arg_fill`: tokenize the ANSI command line into the static table once.*
@@ -676,7 +683,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `460` lines (`22075` bytes)
+**Size**: `460` lines
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -711,7 +718,7 @@
 ### [`cairn/syntax.py`](cairn/syntax.py)
 > *Syntax tree: one dataclass per construct, each carrying its source span.*
 
-**Size**: `237` lines (`5611` bytes)
+**Size**: `237` lines
 
 **Classes:**
 - `class Node` - *Every node carries the span it was parsed from.*
@@ -745,7 +752,7 @@
 ### [`cairn/values.py`](cairn/values.py)
 > *The six core values, each bound to the command and the test that prove it.*
 
-**Size**: `90` lines (`3845` bytes)
+**Size**: `90` lines
 
 **Classes:**
 - `class Value` - *One core value: the claim, the command that shows it, and the test that defends it.*
@@ -758,7 +765,7 @@
 ### [`cairn/verify.py`](cairn/verify.py)
 > *Verification of a built artifact: structural checks that need no execution.*
 
-**Size**: `255` lines (`11956` bytes)
+**Size**: `255` lines
 
 **Classes:**
 - `class Problem` - *One failed invariant, addressed by its code.*
@@ -786,21 +793,21 @@
 ### [`cairn/version.py`](cairn/version.py)
 > *The one place the compiler version is written.*
 
-**Size**: `5` lines (`104` bytes)
+**Size**: `5` lines
 
 ---
 
 ### [`tests/__init__.py`](tests/__init__.py)
 > *Test package for the Cairn bootstrap compiler.*
 
-**Size**: `1` lines (`53` bytes)
+**Size**: `1` lines
 
 ---
 
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `466` lines (`26206` bytes)
+**Size**: `466` lines
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -857,7 +864,7 @@
 ### [`tests/test_capabilities.py`](tests/test_capabilities.py)
 > *The machine-checkable core: registry, manifest, listing and the stdlib-only proof.*
 
-**Size**: `115` lines (`5061` bytes)
+**Size**: `115` lines
 
 **Classes:**
 - `class RegistryTest` - *ADR-003 makes codes a contract, so all three directions are asserted.*
@@ -885,7 +892,7 @@
 ### [`tests/test_cli.py`](tests/test_cli.py)
 > *CLI tests: exit codes, JSON diagnostics, build output and atomic overwrite.*
 
-**Size**: `302` lines (`14027` bytes)
+**Size**: `302` lines
 
 **Classes:**
 - `class CliTest` - *An agent drives the compiler through this surface, so it is tested as a contract.*
@@ -931,7 +938,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2214` lines (`108722` bytes)
+**Size**: `2292` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -999,6 +1006,15 @@
   - Method `.test_the_mixer_never_materialises_or_spills_its_mask()`
   - Method `.test_the_xor_combines_in_place_right_after_the_shift()`
   - Method `.test_the_merged_mul_stays_in_its_home_register()`
+- `class ArrayInPlaceUpdateTest` - *`a[k] = a[k] op e` is one memory-operand ALU instruction, not load-op-store.*
+  - Method `.program_and_code(source)` - *Main's own code bytes, so runtime helpers never satisfy the asserts.*
+  - Method `.test_a_static_index_update_is_one_memory_operand_alu()`
+  - Method `.test_a_static_index_update_folds_a_literal_into_the_instruction()`
+  - Method `.test_a_dynamic_index_update_computes_the_address_once()`
+  - Method `.test_a_dynamic_index_update_folds_a_literal_into_the_instruction()`
+  - Method `.test_a_reversed_commutative_update_fuses_with_the_other_side_only()`
+  - Method `.test_a_subtraction_from_the_element_fuses_only_left_to_right()`
+  - Method `.test_an_index_calling_update_never_fuses()`
 - `class SelfRecursionInliningTest` - *The left operand of a merge may be a self-call lowered in place, not a real call.*
   - Method `.test_a_merge_left_self_call_is_inlined()`
   - Method `.test_a_comparison_with_a_small_literal_skips_the_rax_load()`
@@ -1177,7 +1193,7 @@
 ### [`tests/test_contract.py`](tests/test_contract.py)
 > *The doc-law contract: SPEC.md, LLM_SYSTEM.md and the manifest describe one language.*
 
-**Size**: `114` lines (`5219` bytes)
+**Size**: `114` lines
 
 **Classes:**
 - `class SpecContractTest` - *SPEC.md names the whole surface: every builtin, limit and import it really has.*
@@ -1203,7 +1219,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1513` lines (`58472` bytes)
+**Size**: `1533` lines
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1296,6 +1312,8 @@
   - Method `.test_nested_indices_index_loads_and_stores_compose()`
   - Method `.test_arrays_in_callee_scopes_survive_their_frame()`
   - Method `.test_index_reads_in_loops_accumulate_the_full_sum()`
+  - Method `.test_read_modify_write_fusions_keep_the_values()`
+  - Method `.test_dynamic_read_modify_write_keeps_the_values()`
   - Method `.test_large_array_spills_beyond_disp8()`
   - Method `.test_array_programs_behave_identically_unoptimised()`
 - `class CommutativePeepholeValueTest` - *The commutative-home fast path and its ZF-fed branch print identical results.*
@@ -1353,7 +1371,7 @@
 ### [`tests/test_filetable.py`](tests/test_filetable.py)
 > *Scripted exactness proofs for the qwenFS toy file table.*
 
-**Size**: `209` lines (`8625` bytes)
+**Size**: `209` lines
 
 **Classes:**
 - `class ScriptedSessionTest`
@@ -1383,7 +1401,7 @@
 ### [`tests/test_ir.py`](tests/test_ir.py)
 > *SSA IR foundation tests: differential execution and invariants.*
 
-**Size**: `278` lines (`9883` bytes)
+**Size**: `278` lines
 
 **Classes:**
 - `class DifferentialTest` - *Compiled machine behaviour and interpreted IR behaviour must agree.*
@@ -1405,7 +1423,7 @@
 ### [`tests/test_lexer.py`](tests/test_lexer.py)
 > *Lexer tests: token shape, spans, comments and the two literal failures.*
 
-**Size**: `108` lines (`4947` bytes)
+**Size**: `108` lines
 
 **Classes:**
 - `class LexerTest` - *The scanner is the first stage an agent's source touches, so its reports must be exact.*
@@ -1431,7 +1449,7 @@
 ### [`tests/test_listing.py`](tests/test_listing.py)
 > *Listing tests: the label-grouped view of the bytes the writer will place.*
 
-**Size**: `27` lines (`956` bytes)
+**Size**: `27` lines
 
 **Classes:**
 - `class ListingTest` - *A corrupt artifact must fail loudly instead of printing negative sizes.*
@@ -1443,7 +1461,7 @@
 ### [`tests/test_llm_card.py`](tests/test_llm_card.py)
 > *LLM card tests: the fenced programs in LLM_SYSTEM.md must actually compile.*
 
-**Size**: `32` lines (`964` bytes)
+**Size**: `32` lines
 
 **Classes:**
 - `class LlmCardTest` - *If the card shows a program, that program is checked.*
@@ -1458,7 +1476,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `249` lines (`11184` bytes)
+**Size**: `304` lines
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1507,13 +1525,25 @@
   - Method `.test_pointer_store_masks_extended_register_bits_into_rex()`
   - Method `.test_pointer_store_swaps_src_bits_into_the_reg_field()`
   - Method `.test_pointer_store_rejects_a_stack_base()`
+- `class AluThroughRegisterPointerTest` - *A read-modify-write through a pointer register: `op [base], r64`.*
+  - Method `.code(build)`
+  - Method `.test_add_through_a_pointer_register()`
+  - Method `.test_sub_through_an_extended_base_masks_into_rex()`
+  - Method `.test_rejects_a_stack_base()`
+- `class AluThroughPointerWithImmediateTest` - *`op qword [base], imm8/imm32` for a fused element update with a literal.*
+  - Method `.code(build)`
+  - Method `.test_add_an_imm8_through_a_pointer_register()`
+  - Method `.test_sub_an_imm8_through_an_extended_base()`
+  - Method `.test_an_imm32_extends_the_displacement_size()`
+  - Method `.test_rejects_an_immediate_wider_than_32_signed_bits()`
+  - Method `.test_rejects_a_stack_base()`
 
 ---
 
 ### [`tests/test_magic_division.py`](tests/test_magic_division.py)
 > *Magic-multiply division: the parameter search is exact, and the bytes back it up.*
 
-**Size**: `226` lines (`10294` bytes)
+**Size**: `226` lines
 
 **Classes:**
 - `class MagicParameterTest` - *The parameter search before any code generation.*
@@ -1543,7 +1573,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `547` lines (`26286` bytes)
+**Size**: `547` lines
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -1619,7 +1649,7 @@
 ### [`tests/test_parser.py`](tests/test_parser.py)
 > *Parser tests: shapes, precedence and the grammar's positioned refusals.*
 
-**Size**: `202` lines (`9788` bytes)
+**Size**: `202` lines
 
 **Classes:**
 - `class ParserTest` - *The tree shape decides code shape, so these assertions are about generated code too.*
@@ -1661,7 +1691,7 @@
 ### [`tests/test_pe.py`](tests/test_pe.py)
 > *Backend and PE tests: labels, fixups, determinism and the produced image's structure.*
 
-**Size**: `165` lines (`7296` bytes)
+**Size**: `165` lines
 
 **Classes:**
 - `class CodegenTest` - *The backend is checked through the artifact it produces.*
@@ -1697,7 +1727,7 @@
 ### [`tests/test_runtime.py`](tests/test_runtime.py)
 > *Tests for the runtime helpers' emitted shape and their static state.*
 
-**Size**: `119` lines (`5811` bytes)
+**Size**: `119` lines
 
 **Classes:**
 - `class StdinRefillTest` - *The stdin refill path pays one cached handle and 64 KiB per syscall.*
@@ -1718,7 +1748,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `260` lines (`13014` bytes)
+**Size**: `260` lines
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -1781,7 +1811,7 @@
 ### [`tests/test_values.py`](tests/test_values.py)
 > *The core values are a contract: six values, each with a live guard and a proving command.*
 
-**Size**: `97` lines (`4066` bytes)
+**Size**: `97` lines
 
 **Classes:**
 - `class CoreValuesTest` - *The six values and their order are frozen; evidence and guards must stay real.*
@@ -1803,7 +1833,7 @@
 ### [`tests/test_verify.py`](tests/test_verify.py)
 > *Verifier tests: every artifact invariant is decided from bytes and names its code.*
 
-**Size**: `116` lines (`5009` bytes)
+**Size**: `116` lines
 
 **Classes:**
 - `class VerifyTest` - *Each test breaks one rule and expects exactly the code that names it.*
