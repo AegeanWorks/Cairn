@@ -3,25 +3,28 @@
   "active_task": {
     "task_id": "cairn-cmov",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1795036221.8321815,
     "owner": "mistral:vibe",
     "started_by": "mistral:vibe",
-    "continuations": []
+    "continuations": [
+      {
+        "agent": "unidentified",
+        "from": "mistral:vibe",
+        "at": 1795037050.8997235
+      }
+    ],
+    "forced_completion": {
+      "agent": "unidentified",
+      "reason": "same single session after compaction; deliverables committed at bd8f112, dirty files verified as re-committed content plus foreign-session archive append and dropped polluted bench record",
+      "at": 1795037050.8997245
+    },
+    "completed_at": 1795037050.8997252,
+    "completed_head": "bd8f11256d136e368415903ca7031fc43262427d",
+    "completed_tree": "9ef91b299736e322aaa9e566a59363d31e0f570d"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-buffered-stdout",
-      "phase": "implementation",
-      "phase_num": 3,
-      "description": "[2/3] implementation lands: out_append/out_flush_work/out_flush in runtime.py, shared 64 KiB buffer+cursot+handle reserved last; print family, exit() and entry epilogue all drain the buffer; flush() builtin in sema/capabilities/docs passing (1156 suite minus 2 doc tests now green; e2e byte-identity green)",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1794947276.964156,
-      "timestamp_str": "2026-11-17 23:27:56",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-buffered-stdout",
       "phase": "verification",
@@ -290,6 +293,24 @@
       "timestamp": 1795036221.8321815,
       "timestamp_str": "2026-11-19 00:10:21",
       "agent": "mistral:vibe"
+    },
+    {
+      "task_id": "cairn-cmov",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-cmov' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795037050.9533877,
+      "timestamp_str": "2026-11-19 00:24:10",
+      "agent": "unidentified",
+      "head": "bd8f11256d136e368415903ca7031fc43262427d",
+      "continued_from": "mistral:vibe",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": true
+      }
     }
   ]
 }

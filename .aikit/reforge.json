@@ -135,7 +135,7 @@
             "tests/test_values.py",
             "tests/test_verify.py"
           ],
-          "packet": "C:\\Users\\Yunus-Emre\\Desktop\\portable_agent_kit\\projects\\cairn\\.aikit\\reforge.reviews\\stage-run-1-1-12eb1fc27562.md",
+          "packet": ".aikit/reforge.reviews/stage-run-1-1-12eb1fc27562.md",
           "redacted": 0,
           "reason": "",
           "method": "host",
@@ -288,7 +288,7 @@
               "tests/test_values.py",
               "tests/test_verify.py"
             ],
-            "packet": "C:\\Users\\Yunus-Emre\\Desktop\\portable_agent_kit\\projects\\cairn\\.aikit\\reforge.reviews\\stage-run-1-1-12eb1fc27562.md",
+            "packet": ".aikit/reforge.reviews/stage-run-1-1-12eb1fc27562.md",
             "redacted": 0,
             "reason": "",
             "method": "host",
@@ -454,7 +454,7 @@
         "tests/test_values.py",
         "tests/test_verify.py"
       ],
-      "packet": "C:\\Users\\Yunus-Emre\\Desktop\\portable_agent_kit\\projects\\cairn\\.aikit\\reforge.reviews\\stage-run-1-1-12eb1fc27562.md",
+      "packet": ".aikit/reforge.reviews/stage-run-1-1-12eb1fc27562.md",
       "redacted": 0,
       "reason": "",
       "method": "host",
@@ -607,7 +607,7 @@
           "tests/test_values.py",
           "tests/test_verify.py"
         ],
-        "packet": "C:\\Users\\Yunus-Emre\\Desktop\\portable_agent_kit\\projects\\cairn\\.aikit\\reforge.reviews\\stage-run-1-1-12eb1fc27562.md",
+        "packet": ".aikit/reforge.reviews/stage-run-1-1-12eb1fc27562.md",
         "redacted": 0,
         "reason": "",
         "method": "host",
