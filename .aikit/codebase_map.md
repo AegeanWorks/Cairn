@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `185`
+- **Total Classes**: `186`
 - **Total Top-Level Functions**: `211`
-- **Total Class Methods**: `981`
-- **Total Source Lines**: `18612`
+- **Total Class Methods**: `988`
+- **Total Source Lines**: `18789`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4067` lines
+**Size**: `4184` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -170,6 +170,8 @@
   - Method `._emit_statement(statement, tail)` - *Lower one statement; `tail` only concerns a final `return`.*
   - Method `._emit_if(statement, tail)` - *`if` as a conditional branch and two labelled bodies.*
   - Method `._emit_select_if(statement)` - *Lower `if t > c { t = t - c; } else { t = t + c; }` as lea, sub, cmov — or refuse.*
+  - Method `._emit_swap_if(statement)` - *Lower the swap shape `if a > b { var t = a; a = b; b = t; }` as two cmovs.*
+  - Method `._read_slots_outside(block, skip, acc)` - *Reads of every slot in `block`, ignoring the `skip` statement's subtree.*
   - Method `._plan_constant_hoists(function)` - *Reserve spare homes for each loop's invariant big literals, or return none.*
   - Method `._loops_within(block)` - *Every While statement at or below `block`, outer loops before nested ones.*
   - Method `._big_literal_counts(loop)` - *Distinct literals outside the immediate range (the movabs-only forms), counted.*
@@ -939,7 +941,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2292` lines
+**Size**: `2344` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1003,6 +1005,12 @@
 - `class LoopConstantHoistTest` - *Countdown loops read their big literals from pre-loaded spare homes.*
   - Method `.test_the_loop_never_rematerialises_its_big_constants()`
   - Method `.test_the_constants_load_into_spare_homes_before_the_loop()`
+- `class SwapSelectTest` - *The gcd swap shape `if a > b { var t = a; a = b; b = t; }` lowers branchless.*
+  - Method `.code(source)` - *Main's own bytes only: label to label, so runtime helpers never match.*
+  - Method `.test_the_swap_shape_fuses_into_two_cmovs_and_no_branch()`
+  - Method `.test_the_temp_being_read_after_the_if_refuses_the_fusion()`
+  - Method `.test_a_two_statement_body_refuses_the_fusion()`
+  - Method `.test_a_condition_on_other_slots_refuses_the_fusion()`
 - `class MergedMaskMixTest` - *A masked xor merged into its home register lowers park-free, in place.*
   - Method `.test_the_mixer_never_materialises_or_spills_its_mask()`
   - Method `.test_the_xor_combines_in_place_right_after_the_shift()`
@@ -1402,7 +1410,7 @@
 ### [`tests/test_ir.py`](tests/test_ir.py)
 > *SSA IR foundation tests: differential execution and invariants.*
 
-**Size**: `281` lines
+**Size**: `289` lines
 
 **Classes:**
 - `class DifferentialTest` - *Compiled machine behaviour and interpreted IR behaviour must agree.*
