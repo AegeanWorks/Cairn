@@ -1,11 +1,11 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-array-scale",
+    "task_id": "cairn-many-params-contract",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795073168.0998142,
+    "updated_at": 1795075882.9802566,
     "owner": "kilo:cairn",
     "started_by": "kilo:cairn",
     "continuations": [],
@@ -15,57 +15,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795073199.1066496,
-    "completed_head": "e42dfa59d1d4c67d232662c56ad81b0d304fdc56",
-    "completed_tree": "66badc99425e8bb7d37dcd1d1d9bcfe4d4d44936"
+    "completed_at": 1795075901.2309155,
+    "completed_head": "be920e2021a542a168e4cca070d71e0a1e6f78e0",
+    "completed_tree": "819d70035358a635ed60cccc777c6b1f9bdd9bdf"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-speed-2",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-speed-2' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795035398.9930825,
-      "timestamp_str": "2026-11-18 23:56:38",
-      "agent": "unidentified",
-      "head": "48b5031320ac3e391a7dd119dc96ddcd02ce610b",
-      "continued_from": "mistral:vibe",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-cmov",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795036214.5078053,
-      "timestamp_str": "2026-11-19 00:10:14",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "binary_gcd loses 15 percent to Rust on the data-dependent swap branch; a cmov select lowers it branchless and generally (any swap-shaped if), with refusals for the t-read-outside zero-read rule",
-        "benefits": "binary_gcd -16.2 best measured interleaved; zero honest regressions; the pass refuses any foreign shape so nothing else changes bytes",
-        "risks": "cmov on a frame slot is illegal (register destination only) - refused; the t-zero-read rule must refuse reads outside the if; flag clobbering by the scratch mov is a non-issue (mov writes no flags) but nonneg facts for the two slots must drop",
-        "mitigation": "refusal tests for the t-read/foreign-condition/two-statement shapes; differential corpus entries for both the fused and refused paths; interleaved A/B + honest gate with pollution rules from ADR-069"
-      }
-    },
-    {
-      "task_id": "cairn-cmov",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/1] verify: cmov swap pass landed (b51be22), differential corpus covers fused + refused paths, suite 1246 OK, ADR-070 + README row, honest gate zero regressions; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795036221.8321815,
-      "timestamp_str": "2026-11-19 00:10:21",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-cmov",
       "phase": "completed",
@@ -491,6 +445,90 @@
       "timestamp_str": "2026-11-19 10:26:39",
       "agent": "kilo:cairn",
       "head": "e42dfa59d1d4c67d232662c56ad81b0d304fdc56",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-many-params-contract",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/3] contract fix (ADR-071's first option): all four many_params twins take the loop bound from argc (n = 10,000,000 + argc - 1, so a bare run is exactly 10M) and the mix body gains a masked product so no compiler can reduce the whole program to a constant; a failing-first RegistryShape test pins the argc-derived bound; [2/3] verify the contract end to end: TwinParityTest all four totals identical, full suite, and a same-seconds interleaved measurement recorded as the new honest ranges; [3/3] README scoreboard row and ADR-074 (citing ADR-071) synced, full gate, commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795074061.2050219,
+      "timestamp_str": "2026-11-19 10:41:01",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "ADR-071 recorded that gcc/g++/rustc fold the entire many_params program to a constant print while Cairn honestly runs the loop, so the case measures nothing about codegen and its 'losses' are an artifact of the twin contract; ADR-071 explicitly offers two fixes: make the result depend on data no optimizer can see across the program, all twins altered together, or retire the case's gaps",
+        "benefits": "many_params becomes a measured case again: all four languages do the same per-iteration work under a runtime bound, so a future codegen change is judged against real baselines; the scoreboard's win/loss list stops carrying a case whose gap could never be closed honestly",
+        "risks": "contract: the printed total changes for every twin at once, so TwinParityTest and the saved benchmark history are the only oracles; a body whose recurrence is still closed-form (polynomial in i) would be folded again, so the recurrence must be non-polynomial; the argc() call is an extra runtime builtin on Cairn's hot path? No - it is evaluated once into a home slot; dependency: none new (argc is an existing builtin in every twin's standard runtime); concurrency: none; state: benchmark_history gains a record; README ranges and the many_params row change",
+        "mitigation": "failing-first registry test pins the argc-derived bound in all four sources; TwinParityTest compiles and runs each twin and compares stdout; the interleaved same-seconds protocol from ADR-069 measures the new ranges, and any window whose many_params best falls outside the new band is treated as pollution; ADR-074 records the contract, and README cites it so no reader compares against the retired numbers"
+      },
+      "plan_digest": "43b004549aee7f2343257d115fc9bd12005fc666f4504ba081fd2b3e9a838f6a",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-many-params-contract",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] delivered: four twins take the bound from argc and keep a masked product in the mix (ADR-074, ADR-071's first remedy); ManyParamsContractTest 3 tests pin the contract in every source, TwinParityTest now covers many_params 4/4 identical stdout; suite 1278 OK; byte identity 18/19 registry cases through a pre-change tree, only many_params changes; 21 interleaved rounds Cairn 20.74 vs C 12.69 best; honest gate Cairn 20.6, rest in band (many_params +55.2 percent is the contract, not code); README row and size note synced; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795075882.9802566,
+      "timestamp_str": "2026-11-19 11:11:22",
+      "agent": "kilo:cairn",
+      "measurements": [
+        {
+          "command": "python benchmarks/run_benchmarks.py --save --compare",
+          "artifact": "the contract change raised Cairn time because the loop is now real work, so the gate flag is expected",
+          "workload": "10M six-argument mix calls with the bound from argc and a masked non-polynomial recurrence",
+          "drift": "55.2",
+          "unit": "ms",
+          "candidate": 20.6,
+          "interleaved": "yes",
+          "baseline": 13.3,
+          "metric": "many_params cairn best ms",
+          "control": "sieve and the 17 non-array cases compile byte-identical and stay in band"
+        },
+        {
+          "command": "python -m unittest tests.test_end_to_end.TwinParityTest",
+          "workload": "bare run with argc 1 and exactly 10M iterations",
+          "drift": "1.0",
+          "unit": "count",
+          "candidate": 7200005110300544.0,
+          "interleaved": "yes",
+          "baseline": 7242931233280.0,
+          "metric": "many_params printed total",
+          "control": "all four twins print the candidate and TwinParityTest asserts it"
+        }
+      ],
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-many-params-contract",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-many-params-contract' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795075901.298884,
+      "timestamp_str": "2026-11-19 11:11:41",
+      "agent": "kilo:cairn",
+      "head": "be920e2021a542a168e4cca070d71e0a1e6f78e0",
       "delivery": {
         "roots": [
           "."
