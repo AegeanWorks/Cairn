@@ -94,6 +94,63 @@ class IndexedElementEncodingTest(unittest.TestCase):
             self.code(lambda a: a.mov_load_indexed("rax", "rsp", "rbx", 3, -64))
 
 
+class SIBByteLoadTest(unittest.TestCase):
+    """`movzx r32,[base+index]` needs the disp8 form for an rbp/r13 base.
+
+    With mod 00, a base whose low bits are 5 means "no base, disp32 follows", and
+    REX.B does not override it, so the short form silently decodes as an indexed
+    load off four bytes of the next instruction (ADR-079).
+    """
+
+    def code(self, base: str, index: str) -> bytes:
+        assembler = Assembler()
+        assembler.movzx_load8_sib("rax", base, index)
+        return bytes(assembler.code)
+
+    def test_a_plain_base_takes_the_five_byte_form(self) -> None:
+        self.assertEqual(self.code("r10", "rax"), b"\x41\x0f\xb6\x04\x02")
+        self.assertEqual(self.code("r12", "r13"), b"\x43\x0f\xb6\x04\x2c")
+
+    def test_an_r13_base_takes_the_disp8_zero_form(self) -> None:
+        self.assertEqual(self.code("r13", "r14"), b"\x43\x0f\xb6\x44\x35\x00")
+
+    def test_an_rbp_base_takes_the_disp8_zero_form(self) -> None:
+        self.assertEqual(self.code("rbp", "rax"), b"\x0f\xb6\x44\x05\x00")
+
+    def test_rsp_is_refused_on_either_side(self) -> None:
+        with self.assertRaises(AssertionError):
+            self.code("rsp", "rax")
+        with self.assertRaises(AssertionError):
+            self.code("rax", "rsp")
+
+
+class RipStateEncodingTest(unittest.TestCase):
+    """`cmp r64,[rip]` and `mov [rip],r64` read and write static state in place."""
+
+    def code(self, build) -> bytes:
+        assembler = Assembler()
+        build(assembler)
+        return bytes(assembler.code)
+
+    def test_cmp_register_with_rip_state(self) -> None:
+        assembler = Assembler()
+        assembler.cmp_reg_rip("rax", "state")
+        self.assertEqual(bytes(assembler.code), b"\x48\x3b\x05\x00\x00\x00\x00")
+        self.assertEqual(assembler.fixups, [(3, "state")])
+
+    def test_cmp_extended_register_with_rip_state_takes_rex_r(self) -> None:
+        assembler = Assembler()
+        assembler.cmp_reg_rip("r14", "state")
+        self.assertEqual(bytes(assembler.code), b"\x4c\x3b\x35\x00\x00\x00\x00")
+        self.assertEqual(assembler.fixups, [(3, "state")])
+
+    def test_store_of_rip_state(self) -> None:
+        assembler = Assembler()
+        assembler.mov_store_rip("r14", "state")
+        self.assertEqual(bytes(assembler.code), b"\x4c\x89\x35\x00\x00\x00\x00")
+        self.assertEqual(assembler.fixups, [(3, "state")])
+
+
 class EncodingTest(unittest.TestCase):
     """Each test names one encoding and its expected bytes."""
 

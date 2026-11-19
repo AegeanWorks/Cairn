@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `192`
+- **Total Classes**: `194`
 - **Total Top-Level Functions**: `212`
-- **Total Class Methods**: `1035`
-- **Total Source Lines**: `19414`
+- **Total Class Methods**: `1049`
+- **Total Source Lines**: `19644`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4319` lines
+**Size**: `4443` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -225,6 +225,7 @@
   - Method `._plan_foreign_copy(callee)` - *The copy's guest, spill and rebind decisions, without emitting anything.*
   - Method `._return_slot_override(callee, guest, alias, copy_home)` - *Whether the copy's final result slot may simply use the return destination.*
   - Method `._ends_in_return(body)` - *Whether a body's last statement returns (the copy honors a return home).*
+  - Method `._promote_stdin_cursor(function)` - *The two spare homes that keep the stdin buffer base and cursor in registers.*
   - Method `._emit_stack_call(expression)` - *Lower a five-or-more argument call: four registers, the rest via the stack.*
   - Method `._is_pure_argument(expression)` - *Whether an argument can bind straight into its ABI register.*
   - Method `._emit_pure_arguments(arguments, skip)` - *Bind call arguments straight into their registers, or return False.*
@@ -449,7 +450,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `685` lines
+**Size**: `707` lines
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -481,6 +482,8 @@
   - Method `.lea_rbp(destination, offset)` - *`lea r64, [rbp+disp]` for a frame address.*
   - Method `.lea_rip(destination, target)` - *`lea r64, [rip+disp32]`, used for read-only data addresses.*
   - Method `.mov_load_rip(destination, target)` - *`mov r64, [rip+disp32]`: read a qword of state without an address register.*
+  - Method `.mov_store_rip(source, target)` - *`mov [rip+disp32], r64`: write a qword of static state, no address register.*
+  - Method `.cmp_reg_rip(left, target)` - *`cmp r64, [rip+disp32]`: compare a register with a qword of static state.*
   - Method `.mov_load(destination, base)` - *`mov r64, [base]`: read a qword through a pointer register.*
   - Method `.mov_store_reg(base, source)` - *`mov [base], r64`: write a qword through a pointer register.*
   - Method `.binary_store_reg(opcode, base, source)` - *`op [base], r64`: one in-place ALU update through a pointer register.*
@@ -955,7 +958,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2611` lines
+**Size**: `2638` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1028,10 +1031,12 @@
 - `class ReadFuseTest` - *`read_char()` fuses its buffered fast path into the call site, drain stays in the helper.*
   - Method `._generate(source)`
   - Method `._calls_to(start, end, assembler, label)` - *Count `call rel32` fixups inside [start, end) that land on `label`.*
-  - Method `.test_the_read_loop_fuses_the_fast_path_and_keeps_one_drain_call()`
+  - Method `.test_the_read_loop_promotes_base_index_and_count()`
+  - Method `.test_two_spares_promote_the_pair_and_compare_against_the_word()`
+  - Method `.test_no_spare_keeps_the_memory_fusion()`
   - Method `.test_a_read_char_inside_another_call_fuses_too()`
   - Method `.test_r10_borrowed_as_an_extra_home_refuses_the_fusion()`
-  - Method `.test_the_read_loop_keeps_the_branch_out_of_the_fast_path()`
+  - Method `.test_a_user_call_in_the_body_keeps_the_memory_fusion()`
   - Method `.test_the_read_loop_never_bumps_the_cursor_with_a_memory_increment()`
   - Method `.test_a_break_only_if_jumps_straight_to_the_break_target()`
 - `class MergedMaskMixTest` - *A masked xor merged into its home register lowers park-free, in place.*
@@ -1527,7 +1532,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `358` lines
+**Size**: `415` lines
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1547,6 +1552,17 @@
   - Method `.test_indexed_group1_immediate_update()`
   - Method `.test_indexed_group1_rejects_wide_literals()`
   - Method `.test_indexed_memory_rejects_rsp()`
+- `class SIBByteLoadTest` - *`movzx r32,[base+index]` needs the disp8 form for an rbp/r13 base.*
+  - Method `.code(base, index)`
+  - Method `.test_a_plain_base_takes_the_five_byte_form()`
+  - Method `.test_an_r13_base_takes_the_disp8_zero_form()`
+  - Method `.test_an_rbp_base_takes_the_disp8_zero_form()`
+  - Method `.test_rsp_is_refused_on_either_side()`
+- `class RipStateEncodingTest` - *`cmp r64,[rip]` and `mov [rip],r64` read and write static state in place.*
+  - Method `.code(build)`
+  - Method `.test_cmp_register_with_rip_state()`
+  - Method `.test_cmp_extended_register_with_rip_state_takes_rex_r()`
+  - Method `.test_store_of_rip_state()`
 - `class EncodingTest` - *Each test names one encoding and its expected bytes.*
   - Method `.code(build)` - *Run a builder function against a fresh assembler and return its bytes.*
   - Method `.test_push_and_pop_extended_registers_mask_the_register_bits()`

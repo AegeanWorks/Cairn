@@ -376,9 +376,12 @@ Rust's 13.4-13.8: it now beats two of the three baselines and trails C by 3.5 pe
 and `str_scan` remain
 the recorded losses, with the mechanisms in the ADR register (`argv_walk`: ADR-059's inline;
 `str_scan`: ADR-060/061's
-NUL-test facts); `char_stream` now rides ADR-072's fused `read_char` fast path —
-two rip loads, one compare, one SIB byte read and one in-place cursor bump with no
-call until a buffer rolls over — and reads 9.4-13.3 ms against C's 7.7-10.7 ms.
+NUL-test facts); `char_stream` rides ADR-072's fused `read_char` fast path and
+ADR-079's promoted cursor — a stdin-reading leaf keeps the buffer base, the cursor
+and the count word in register homes for its whole body, so the hot path is a
+register compare, one SIB byte read and one register increment, with the refill
+still out of line and the cursor stored back on the single epilogue — and reads
+9.4-13.3 ms against C's 7.7-10.7 ms.
 `array_sum` now rides ADR-073's ascending element addressing — element `i` at the
 span's lowest displacement plus `8i`, so a dynamic load, a read-modify-write and a
 literal-or-register store each lower to one indexed memory instruction, with no

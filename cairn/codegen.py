@@ -19,6 +19,7 @@ from cairn import syntax
 from cairn.image import ENTRY_LABEL, Artifact, ReadOnlyData, iat_label
 from cairn.machine import ARGUMENT_REGISTERS, Assembler
 from cairn.optimize import INT64_MIN, has_call, _contains_break_or_continue, _read_slots
+from cairn.sema import BUILTINS
 from cairn.image import WritableData
 from cairn.runtime import (ARG_BYTE_LABEL, ARGC_LABEL, ARGV_LEN0_LABEL,
                            ARGV_PTR0_LABEL, DIV_ZERO_LABEL, OUT_FLUSH_LABEL,
@@ -256,6 +257,12 @@ class CodeGenerator:
     hoist_plans: dict = field(default_factory=dict)
     hoist_imm: dict = field(default_factory=dict)
     hoist_homes: Tuple[str, ...] = ()
+    # A stdin-reading leaf function keeps the stdin buffer base and cursor in these
+    # spare homes for its whole body, storing the cursor back on the single epilogue
+    # (ADR-079). Both are None everywhere else.
+    stdin_base: Optional[str] = None
+    stdin_cursor: Optional[str] = None
+    stdin_count: Optional[str] = None
     # String literals: text -> .rodata label, so equal literals share one blob.
     str_labels: dict = field(default_factory=dict)
     # A foreign-inline copy whose bare-name arguments skip their binds maps the copy's
@@ -352,6 +359,17 @@ class CodeGenerator:
                                      (self.hoist_plans.get(id(loop), [])
                                       for loop in self._loops_within(function.body))
                                      for home in (home for _, home in pairs))
+            # A stdin-reading leaf keeps the buffer base and the cursor in two spare
+            # homes for the whole function (ADR-079): both registers are saved like
+            # slot homes, so the parity count below sees them too.
+            promotion = () if (hold_units or pair_mode) else \
+                self._promote_stdin_cursor(function)
+            promoted = promotion or ()
+            self.stdin_base = promoted[0] if promoted else None
+            self.stdin_cursor = promoted[1] if promoted else None
+            self.stdin_count = promoted[2] if len(promoted) > 2 else None
+            if promoted:
+                self.homes = HOME_REGISTERS[:len(self.homes) + len(promoted)]
             # The hoisted homes ride the save area like slot homes: the parity count
             # that keeps every call 16-aligned must see them too.
             saved_units = len(self.homes) + len(self.hoist_homes)
@@ -396,6 +414,11 @@ class CodeGenerator:
             self._clear_frame(function)
             for index, parameter in enumerate(function.parameters[:len(ARGUMENT_REGISTERS)]):
                 self._store_slot(parameter.slot, ARGUMENT_REGISTERS[index])
+            if self.stdin_cursor is not None:
+                asm.lea_rip(self.stdin_base, STDIN_BUFFER_LABEL)
+                asm.mov_load_rip(self.stdin_cursor, STDIN_CURSOR_LABEL)
+                if self.stdin_count is not None:
+                    asm.mov_load_rip(self.stdin_count, STDIN_COUNT_LABEL)
             self.depth = 0
             self.temporaries = 0
             self.left_hold = None
@@ -407,6 +430,10 @@ class CodeGenerator:
                 asm.mov_imm64("rax", 0)
             self._emit_block(function.body, tail=True)
             asm.label(self.epilogue)
+            if self.stdin_cursor is not None:
+                # Every `return` jumps here, so this one store writes back the
+                # register's cursor on every path out of the function.
+                asm.mov_store_rip(self.stdin_cursor, STDIN_CURSOR_LABEL)
             if hold_units:
                 asm.add_rsp(8 * (hold_units + pad_units))
             elif pad:
@@ -426,11 +453,17 @@ class CodeGenerator:
             self.delta_slot = -1
             self.delta_value = 0
             self.value_slot = -1
+            self.stdin_base = None
+            self.stdin_cursor = None
+            self.stdin_count = None
             self.current = None
             return
         asm.push("rbp")
         asm.mov_reg_reg("rbp", "rsp")
         self.hoist_homes = ()      # every home is a slot home here; nothing to hoist into
+        self.stdin_base = None     # promotion is a homed-frame shape only
+        self.stdin_cursor = None
+        self.stdin_count = None
         if frame:
             asm.sub_rsp(frame)
         self.pad_slots = ()
@@ -2948,6 +2981,36 @@ class CodeGenerator:
             self._emit_call_site(OUT_FLUSH_LABEL)
             return
         if expression.name == "read_char":
+            # Inside a stdin-reading leaf the buffer base and the cursor live in
+            # two registers for the whole body (ADR-079), so the have path is a
+            # compare against the count word, one not-taken branch, one SIB byte
+            # read and one register increment — no memory read-modify-write on the
+            # loop-carried cursor, which ADR-077 measured as the fused path's
+            # bottleneck. The drained path stores the index, calls the helper —
+            # which owns the refill, the byte read and the index bump in memory,
+            # and returns the byte or -1 — then reloads the register and answers
+            # with the helper's value: no second read of the same byte.
+            if self.stdin_cursor is not None and self.temporaries == 0:
+                have = self._fresh("readchar.cursor.have")
+                cursor_done = self._fresh("readchar.cursor.done")
+                if self.stdin_count is not None:
+                    asm.cmp_reg_reg(self.stdin_cursor, self.stdin_count)
+                else:
+                    asm.cmp_reg_rip(self.stdin_cursor, STDIN_COUNT_LABEL)
+                asm.jcc("b", have)
+                asm.mov_store_rip(self.stdin_cursor, STDIN_CURSOR_LABEL)
+                self._emit_call_site(READ_CHAR_LABEL)
+                asm.mov_load_rip(self.stdin_cursor, STDIN_CURSOR_LABEL)
+                if self.stdin_count is not None:
+                    # The helper's refill rewrites the count word; the register
+                    # mirror reloads with the index after every drained call.
+                    asm.mov_load_rip(self.stdin_count, STDIN_COUNT_LABEL)
+                asm.jmp(cursor_done)
+                asm.label(have)
+                asm.movzx_load8_sib("rax", self.stdin_base, self.stdin_cursor)
+                asm.add_imm(self.stdin_cursor, 1)
+                asm.label(cursor_done)
+                return
             # The buffered have-path fuses into the call site: two rip loads, one
             # compare, one SIB byte read and one in-place cursor increment answer
             # with no call. The drained and EOF paths fall to the helper, which
@@ -3347,6 +3410,67 @@ class CodeGenerator:
         """Whether a body's last statement returns (the copy honors a return home)."""
         return bool(body and body.statements
                     and isinstance(body.statements[-1], syntax.Return))
+
+    def _promote_stdin_cursor(self, function: syntax.Function) -> Optional[Tuple[str, str]]:
+        """The two spare homes that keep the stdin buffer base and cursor in registers.
+
+        The rule is whole-function and conservative: every call in the body is a
+        builtin — a user function could be copied inline and rebind guest homes, or
+        could read stdin through the memory word — and at least one of them is
+        `read_char`. Builtins cannot be redefined (`E3012`), so this is exactly the
+        check that the function is a leaf: every runtime helper preserves the
+        callee-saved registers and touches neither the cursor nor the count except
+        through `read_char`, which reloads the index after its refill call.
+
+        The answer holds up to three spare homes: the base, the index, and the
+        count word when a third spare exists. The base holds the buffer address for
+        the whole body, the index mirrors the static cursor word and bumps in place
+        per byte, and a count home replaces the per-byte compare's memory operand.
+        A loop whose constant hoist (ADR-047) already claimed one of them keeps it,
+        so the promotion shrinks to the pair, or does not happen.
+        """
+        spare = tuple(register for register in
+                      HOME_REGISTERS[len(self.homes):len(self.homes) + 3]
+                      if register not in self.hoist_homes)
+        if len(spare) < 2:
+            return None
+        reads_stdin, builtins_only = False, True
+        stack: list = [function.body]
+        while stack:
+            node = stack.pop()
+            if node is None:
+                continue
+            if isinstance(node, syntax.Block):
+                stack.extend(node.statements)
+            elif isinstance(node, (syntax.Let, syntax.Assign)):
+                stack.append(node.value)
+            elif isinstance(node, syntax.Return):
+                stack.append(node.value)
+            elif isinstance(node, syntax.ExprStmt):
+                stack.append(node.expression)
+            elif isinstance(node, syntax.If):
+                stack.extend((node.condition, node.then_block, node.else_block))
+            elif isinstance(node, syntax.While):
+                stack.extend((node.condition, node.body))
+            elif isinstance(node, syntax.For):
+                stack.extend((node.start, node.end, node.body))
+            elif isinstance(node, syntax.Call):
+                if node.name == "read_char":
+                    reads_stdin = True
+                elif node.name not in BUILTINS:
+                    builtins_only = False
+                stack.extend(node.arguments)
+            elif isinstance(node, syntax.Parens):
+                stack.append(node.inner)
+            elif isinstance(node, syntax.Unary):
+                stack.append(node.operand)
+            elif isinstance(node, syntax.Binary):
+                stack.extend((node.left, node.right))
+            elif isinstance(node, syntax.Index):
+                stack.extend((node.operand, node.index))
+            elif isinstance(node, syntax.ArrayLiteral):
+                stack.extend(node.elements)
+        return spare if (reads_stdin and builtins_only) else None
 
     def _emit_stack_call(self, expression: syntax.Call) -> None:
         """Lower a five-or-more argument call: four registers, the rest via the stack.

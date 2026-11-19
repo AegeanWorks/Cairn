@@ -29,6 +29,7 @@ ZF_IMM_EXTENSIONS = (0, 1, 4, 5, 6)
 CONDITIONS = {
     "e": 0x4, "ne": 0x5, "l": 0xC, "le": 0xE, "g": 0xF, "ge": 0xD,
     "z": 0x4, "nz": 0x5, "s": 0x8, "ns": 0x9, "c": 0x2, "nc": 0x3,
+    "b": 0x2, "ae": 0x3,
 }
 CMOV_CONDITIONS = {
     "e": 0x40, "ne": 0x45, "l": 0x4C, "le": 0x4E, "g": 0x4F, "ge": 0x4D,
@@ -281,6 +282,22 @@ class Assembler:
         self.emit(bytes([_rex(True, dst >> 3, 0, 0), 0x8B, 0x00 | ((dst & 7) << 3) | 5]))
         self.rel32(target)
 
+    def mov_store_rip(self, source: str, target: str) -> None:
+        """`mov [rip+disp32], r64`: write a qword of static state, no address register."""
+        src = REGISTERS[source]
+        self.emit(bytes([_rex(True, src >> 3, 0, 0), 0x89, 0x00 | ((src & 7) << 3) | 5]))
+        self.rel32(target)
+
+    def cmp_reg_rip(self, left: str, target: str) -> None:
+        """`cmp r64, [rip+disp32]`: compare a register with a qword of static state.
+
+        The displacement ends the instruction, so the section fixup's usual
+        resolve-from-instruction-end rule holds unchanged.
+        """
+        dst = REGISTERS[left]
+        self.emit(bytes([_rex(True, dst >> 3, 0, 0), 0x3B, 0x00 | ((dst & 7) << 3) | 5]))
+        self.rel32(target)
+
     def mov_load(self, destination: str, base: str) -> None:
         """`mov r64, [base]`: read a qword through a pointer register."""
         dst, base_code = REGISTERS[destination], REGISTERS[base]
@@ -406,19 +423,24 @@ class Assembler:
     def movzx_load8_sib(self, destination: str, base: str, index: str) -> None:
         """`movzx r32, [base + index]`: one byte load off two pointer registers.
 
-        The SIB byte covers base+index*1 with no displacement; a pointer and its
-        index both living in homes folds the whole address into one load. Neither
-        base may be `rsp` and base `rbp` needs the disp32-base form no caller here
-        can reach (rbp is the frame pointer, never a home), so both stay asserts.
+        The SIB byte covers base+index*1; a pointer and its index both living in
+        homes folds the whole address into one load (ADR-079). Neither may be
+        `rsp`. A base whose low three bits are 5 (`rbp`, `r13`) must take the
+        disp8=0 form: with mod 00 that bit pattern means "no base, disp32
+        follows", and REX.B does not change it — the short form silently decodes
+        as `[index + <the next four bytes>]` and faults (ADR-079).
         """
         dst = REGISTERS[destination]
         base_code, index_code = REGISTERS[base], REGISTERS[index]
-        assert base_code not in (REGISTERS["rsp"], REGISTERS["rbp"])
+        assert base_code != REGISTERS["rsp"]
         assert index_code != REGISTERS["rsp"]
+        forced = base_code & 7 == 5
         prefix = bytes([_rex(False, dst >> 3, index_code >> 3, base_code >> 3)]) \
             if (dst >= 8 or index_code >= 8 or base_code >= 8) else b""
-        self.emit(prefix, b"\x0F\xB6", bytes(_modrm(0, dst, 4)),
+        self.emit(prefix, b"\x0F\xB6", bytes(_modrm(1 if forced else 0, dst, 4)),
                   bytes([(index_code & 7) << 3 | (base_code & 7)]))
+        if forced:
+            self.emit(b"\x00")
 
     def movzx_from8(self, destination: str, source: str) -> None:
         """`movzx r32, r8`: the `& 255` mask of a register's value in one instruction.

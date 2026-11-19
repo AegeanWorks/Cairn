@@ -630,12 +630,11 @@ class SwapSelectTest(unittest.TestCase):
 class ReadFuseTest(unittest.TestCase):
     """`read_char()` fuses its buffered fast path into the call site, drain stays in the helper.
 
-    The helper's per-byte cost is a call/ret plus two rip-lea/load pairs and a
-    cursor re-store; ADR-058 measured the refill path inlined as worse, so only
-    the have-path fuses: two rip loads, one compare, one SIB movzx and one
-    in-place memory increment, with the drained-buffer and EOF paths falling to
-    the call. Refusals keep the plain call when the fusion's scratch or the
-    answer register is not free.
+    A stdin-reading leaf keeps the buffer base and the cursor in two spare homes
+    for its whole body (ADR-079), so the hot path is a compare against the count
+    word, one not-taken branch, one SIB byte read and one register increment.
+    Functions that cannot promote keep the memory-shaped fusion; refusals keep the
+    plain call when the fusion's scratch or the answer register is not free.
     """
 
     LOOP = ('fn main() -> i64 {'
@@ -666,23 +665,48 @@ class ReadFuseTest(unittest.TestCase):
         return sum(1 for offset, target in assembler.fixups
                    if target == label and start <= offset - 1 < end)
 
-    def test_the_read_loop_fuses_the_fast_path_and_keeps_one_drain_call(self) -> None:
+    def test_the_read_loop_promotes_base_index_and_count(self) -> None:
         region, assembler, start, end = self._generate(self.LOOP)
-        self.assertIn(b"\x49\x83\x02\x01", region)   # add qword [r10], 1: cursor bump
+        self.assertIn(b"\x4d\x39\xfe", region)   # cmp r14, r15: count in a register
+        self.assertIn(b"\x43\x0f\xb6\x44\x35\x00", region)  # movzx eax, [r13+r14]
+        self.assertIn(b"\x49\x83\xc6\x01", region)      # add r14, 1
+        self.assertIn(b"\x4c\x89\x35", region)   # mov [rip+cursor], r14 at drain/exit
         self.assertEqual(self._calls_to(start, end, assembler, READ_CHAR_LABEL), 1)
 
+    def test_two_spares_promote_the_pair_and_compare_against_the_word(self) -> None:
+        # Four slot homes leave exactly two spares, so the count keeps its memory
+        # operand and the base/index pair still removes the cursor round trip.
+        region, _, _, _ = self._generate(
+            'fn main() -> i64 { var a: i64 = read_char();'
+            ' var b: i64 = read_char(); var c: i64 = 5; var d: i64 = 6;'
+            ' print(a + b + c + d); return 0; }')
+        self.assertIn(b"\x48\x3b\x3d", region)   # cmp rdi, [rip+count]
+        self.assertIn(b"\x0f\xb6\x04", region)   # SIB byte read through the pair
+        self.assertNotIn(b"\x4d\x39", region)
+
+    def test_no_spare_keeps_the_memory_fusion(self) -> None:
+        # Six slot homes leave no spare register, so the function keeps the
+        # memory-shaped fusion rather than sacrificing a value's home.
+        region, _, _, _ = self._generate(
+            'fn main() -> i64 { var a: i64 = read_char(); var b: i64 = 1;'
+            ' var c: i64 = 2; var d: i64 = 3; var e: i64 = 4; var f: i64 = 5;'
+            ' print(a + b + c + d + e + f); return 0; }')
+        self.assertIn(b"\x49\x83\x02\x01", region)   # add qword [r10], 1
+        self.assertNotIn(b"\x43\x0f\xb6\x44\x35\x00", region)
+
     def test_a_read_char_inside_another_call_fuses_too(self) -> None:
-        # The fusion's clobbers (rax, r10, flags) are a subset of the helper
-        # call's own contract, so a call inside another call's argument fuses
-        # the same way: the answer still lands in rax for the argument move.
+        # The fusion's clobbers (rax, flags) are a subset of the helper call's own
+        # contract, so a call inside another call's argument fuses the same way:
+        # the answer still lands in rax for the argument move.
         region, assembler, start, end = self._generate(
             'fn main() -> i64 { print(read_char()); return 0; }')
-        self.assertIn(b"\x49\x83\x02\x01", region)
+        self.assertIn(b"\x0f\xb6\x04", region)   # SIB byte read through the pair
         self.assertEqual(self._calls_to(start, end, assembler, READ_CHAR_LABEL), 1)
 
     def test_r10_borrowed_as_an_extra_home_refuses_the_fusion(self) -> None:
         # r10 carries a live borrowed value across calls (pushed/popped by every
-        # call site); the fused fast path would clobber it with no crossing.
+        # call site); the non-promoted fused fast path would clobber it with no
+        # crossing, so it steps aside for the plain helper call.
         program = sema.analyze(parser.parse(
             'fn main() -> i64 { read_char(); return 0; }'))
         generator = CodeGenerator(assembler=RecordingAssembler())
@@ -695,23 +719,26 @@ class ReadFuseTest(unittest.TestCase):
                                         READ_CHAR_LABEL), 1)
         self.assertNotIn(b"\x49\x83\x02\x01", bytes(generator.assembler.code))
 
-    def test_the_read_loop_keeps_the_branch_out_of_the_fast_path(self) -> None:
-        # The fused cursor bump addresses through a register: the PE linker's
-        # rel32 fixup resolves against the instruction's end, which the
-        # imm8-after-disp32 rip form would violate. The lea+add pair stays.
-        region, _, _, _ = self._generate(self.LOOP)
-        self.assertIn(b"\x49\x83\x02\x01", region)
-        self.assertNotIn(b"\x48\x83\x05", region)
+    def test_a_user_call_in_the_body_keeps_the_memory_fusion(self) -> None:
+        # Promotion is whole-function: a user function could be inlined as a copy
+        # that rebinds guest homes, or could read stdin through the static word,
+        # so a body with any user call keeps the memory-shaped fusion.
+        source = ('fn twice(x: i64) -> i64 { return x + x; }'
+                  ' fn main() -> i64 { var c: i64 = read_char();'
+                  ' print(twice(c)); return 0; }')
+        region, assembler, start, end = self._generate(source)
+        self.assertIn(b"\x49\x83\x02\x01", region)   # add qword [r10], 1
+        self.assertNotIn(b"\x43\x0f\xb6\x44\x35\x00", region)
 
     def test_the_read_loop_never_bumps_the_cursor_with_a_memory_increment(self) -> None:
         # ADR-077: pointer-shaped state with `inc qword [rip+cursor]` measured
-        # 1.45x SLOWER (16.86 vs 11.63 ms best, ten-fastest 17.70 vs 11.87), while
-        # the same pointer state with the lea+add bump measured neutral (11.65,
-        # ten-fastest +1.9 percent). The increment's read-modify-write lengthens
-        # the loop-carried cursor chain that the next iteration's load waits on.
-        # The index-shaped fast path stays; a memory increment must not return.
+        # 1.45x SLOWER (16.86 vs 11.63 ms best, ten-fastest 17.70 vs 11.87). The
+        # increment's read-modify-write lengthens the loop-carried cursor chain
+        # that the next iteration's read waits on. ADR-079's promoted register
+        # carries the bump instead; a memory increment must not return.
         region, _, _, _ = self._generate(self.LOOP)
         self.assertNotIn(b"\x48\xff\x05", region)   # no inc qword [rip+disp32]
+        self.assertNotIn(b"\x49\x83\x02\x01", region)  # no add qword [r10], 1 either
 
     def test_a_break_only_if_jumps_straight_to_the_break_target(self) -> None:
         # `if c < 0 { break; }` inverts: one conditional jump to the break
