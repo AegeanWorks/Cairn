@@ -642,6 +642,12 @@ class TwinParityTest(unittest.TestCase):
     def test_splitmix_twins_print_the_same_total(self) -> None:
         self._assert_par(self.harness.CASES[11])
 
+    def test_many_params_twins_print_the_same_total(self) -> None:
+        # ADR-074: the bound comes from each runtime's argument count, so all four
+        # twins execute the same 10M iterations on a bare run instead of being
+        # folded to a constant by the baselines.
+        self._assert_par(self.harness.CASES[13])
+
 
 NEGATIVE_BIT_TESTS = """
 fn main() -> i64 {

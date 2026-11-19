@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `189`
+- **Total Classes**: `190`
 - **Total Top-Level Functions**: `212`
-- **Total Class Methods**: `1018`
-- **Total Source Lines**: `19176`
+- **Total Class Methods**: `1024`
+- **Total Source Lines**: `19222`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -817,7 +817,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `466` lines
+**Size**: `506` lines
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -859,6 +859,12 @@
 - `class RegistryShapeTest` - *The measured set: which cases the scoreboard commits to, by name and unit.*
   - Method `.test_the_registry_names_every_commitment()`
   - Method `.test_each_case_declares_a_unit_and_a_positive_iteration_count()`
+- `class ManyParamsContractTest` - *ADR-071: no twin may let a compiler fold the whole program to one print.*
+  - Method `.sources()`
+  - Method `.compact(source)` - *One twin's text with the spellings that differ per language removed.*
+  - Method `.test_every_twin_derives_its_bound_from_its_argument_count()`
+  - Method `.test_the_bound_is_the_registry_iteration_count_plus_the_argument_count()`
+  - Method `.test_the_mix_body_is_not_a_closed_form_recurrence()`
 - `class CompareRunsTest` - *The regression watch: a saved run's numbers diffed against the new run.*
   - Method `.test_a_cairn_regression_beyond_the_noise_band_is_flagged()`
   - Method `.test_drift_inside_the_noise_band_is_reported_but_not_flagged()`
@@ -1251,7 +1257,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1533` lines
+**Size**: `1539` lines
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1319,6 +1325,7 @@
   - Method `.test_primes_twins_print_the_same_total()`
   - Method `.test_mandelbrot_twins_print_the_same_total()`
   - Method `.test_splitmix_twins_print_the_same_total()`
+  - Method `.test_many_params_twins_print_the_same_total()`
 - `class FlagFusedConditionRuntimeTest` - *Branches the fuser claims to handle stay semantically exact over negative values.*
   - Method `.test_bit_tests_and_masks_over_negative_values()`
   - Method `.test_short_circuit_branches_skip_call_sides()`

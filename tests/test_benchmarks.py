@@ -400,6 +400,46 @@ class RegistryShapeTest(unittest.TestCase):
             self.assertGreater(case.iterations, 0, case.name)
 
 
+class ManyParamsContractTest(unittest.TestCase):
+    """ADR-071: no twin may let a compiler fold the whole program to one print.
+
+    The bound every twin runs under comes from its runtime's argument count, so it
+    is invisible to a compiler, and a bare run still executes exactly the registry's
+    iteration count. A later edit that freezes the bound back into a literal fails
+    here, before a scoreboard claim can be earned against a constant.
+    """
+
+    def sources(self):
+        case = next(case for case in run_benchmarks.CASES if case.name == "many_params")
+        return [run_benchmarks.ROOT / case.cairn,
+                run_benchmarks.ROOT / case.c_source,
+                run_benchmarks.ROOT / case.cpp_source,
+                run_benchmarks.ROOT / case.rust_source]
+
+    def compact(self, source: Path) -> str:
+        """One twin's text with the spellings that differ per language removed."""
+        text = source.read_text(encoding="utf-8")
+        for noise in ("_", ",", " ", "(", ")", "\n"):
+            text = text.replace(noise, "")
+        return text
+
+    def test_every_twin_derives_its_bound_from_its_argument_count(self) -> None:
+        for source in self.sources():
+            text = source.read_text(encoding="utf-8")
+            self.assertTrue("argc" in text or "args()" in text, source.name)
+
+    def test_the_bound_is_the_registry_iteration_count_plus_the_argument_count(self) -> None:
+        case = next(case for case in run_benchmarks.CASES if case.name == "many_params")
+        for source in self.sources():
+            self.assertIn(f"{case.iterations}+", self.compact(source), source.name)
+
+    def test_the_mix_body_is_not_a_closed_form_recurrence(self) -> None:
+        for source in self.sources():
+            text = source.read_text(encoding="utf-8")
+            self.assertIn("65535", text, source.name)
+            self.assertIn("^", text, source.name)
+
+
 class CompareRunsTest(unittest.TestCase):
     """The regression watch: a saved run's numbers diffed against the new run."""
 
