@@ -327,7 +327,7 @@ a spread:
 | `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.1-16.1 ms | 11.1-13.3 ms | 10.9-13.4 ms | 12.0-14.4 ms | 71,168 bytes |
 | `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 94.3-96.7 ms | 92.5-101.5 ms | 96.4-102.9 ms | 105.9-113.5 ms | 71,168 bytes |
 | `hex_io` | 400,000 hex-format-then-print values | 612-645 ms | 4,764-5,095 ms | 397-467 ms | 677-723 ms | 71,168 bytes |
-| `many_params` | 10,000,000 six-argument mix calls under an `argc`-derived bound (ADR-074) | 20.6-20.8 ms | 12.5-12.7 ms | 14.3-14.8 ms | 13.4-13.8 ms | 136,704 bytes |
+| `many_params` | 10,000,000 six-argument mix calls under an `argc`-derived bound (ADR-074, ADR-075) | 18.2-18.4 ms | 12.5-12.7 ms | 14.3-14.8 ms | 13.4-13.8 ms | 136,704 bytes |
 | `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 20.0-23.7 ms | 18.5-24.2 ms | 19.1-22.5 ms | 25.5-28.4 ms | 71,168 bytes |
 | `char_stream` | 4 MiB piped through `read_char()`, summed | 9.4-13.3 ms (ADR-072 fusion) | 7.7-10.7 ms | 7.4-10.3 ms | 12.9-22.0 ms | 71,168 bytes |
 | `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.9-18.4 ms | 11.8-16.6 ms | 12.2-19.6 ms | 28.2-37.0 ms | 71,168 bytes |
@@ -367,9 +367,11 @@ spread in some sessions; `nqueens`, `binary_gcd`, `call_chain`, `primes`, `mande
 `many_params` (ADR-074 replaced the twin contract that let every baseline fold the
 program to one print: all four twins now take the loop bound from their runtime's
 argument count and keep a masked product in the mix, so a bare run executes the same
-10M iterations everywhere and the 20.6-20.8 ms against C's 12.5-12.7 records a real
-gap — three constants re-materialised and three argument values spilled per iteration
-in Cairn's inlined copy, where gcc keeps them in registers), `argv_walk`
+10M iterations everywhere; ADR-075 then folded each constant into a three-operand
+`imul`, removing three movabs and three operand parks per iteration, so the case reads
+18.2-18.4 ms against C's 12.5-12.7 and the recorded next mechanism is collecting the
+substituted linear terms `144i + 296`, which gcc strength-reduces and Cairn still
+recomputes), `argv_walk`
 and `str_scan` remain
 the recorded losses, with the mechanisms in the ADR register (`argv_walk`: ADR-059's inline;
 `str_scan`: ADR-060/061's

@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `190`
+- **Total Classes**: `191`
 - **Total Top-Level Functions**: `212`
-- **Total Class Methods**: `1024`
-- **Total Source Lines**: `19222`
+- **Total Class Methods**: `1029`
+- **Total Source Lines**: `19289`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4265` lines
+**Size**: `4288` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -165,6 +165,7 @@
   - Method `._combines_in_rax_only(expression, destination, parked_noop)` - *Whether a commutative right operand lowers into rax alone.*
   - Method `._emit_commutative_into(operator, left, right, destination)` - *Fold `left op right` into `destination` for the commutative group.*
   - Method `._stripped(expression)` - *The expression without its wrapping parentheses.*
+  - Method `._literal_multiply_operand(expression)` - *The constant and the other operand of `k * x` or `x * k`, for an imm32 k.*
   - Method `._emit_scaled_product(expression, destination)` - *Lower `name * 3|5|9` as one scaled `lea` into `destination`, or refuse.*
   - Method `._emit_block(block, tail)` - *Emit every statement of a block in order.*
   - Method `._emit_statement(statement, tail)` - *Lower one statement; `tail` only concerns a final `return`.*
@@ -954,7 +955,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2518` lines
+**Size**: `2562` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1150,6 +1151,11 @@
   - Method `.test_a_leaf_function_keeps_its_declaration_order()`
 - `class ImulImmediateShapeTest` - *A value-position `homed * literal` emits the imul, not a constant load.*
   - Method `.test_a_const_multiplied_home_takes_the_three_operand_form()`
+- `class ExpressionTimesLiteralShapeTest` - *`expr * k` folds the constant into the three-operand imul; nothing parks.*
+  - Method `.test_a_computed_left_times_a_literal_uses_the_three_operand_form()`
+  - Method `.test_a_literal_on_the_left_takes_the_same_form()`
+  - Method `.test_a_call_result_times_a_literal_never_parks()`
+  - Method `.test_a_literal_beyond_imm32_keeps_the_general_multiply()`
 - `class CommutativeMergeShapeTest` - *A commutative chain folds every step into the destination register itself.*
   - Method `.test_a_chain_addition_folds_into_the_destination_home()`
   - Method `.test_a_multiply_accumulate_chain_never_parks_its_accumulator()`

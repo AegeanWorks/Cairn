@@ -1192,6 +1192,20 @@ class CodeGenerator:
             expression = expression.inner
         return expression
 
+    def _literal_multiply_operand(self, expression: syntax.Binary):
+        """The constant and the other operand of `k * x` or `x * k`, for an imm32 k.
+
+        Multiplication commutes and a literal has no evaluation to order against, so
+        either side may be the constant. Answers `(None, None)` for every other shape,
+        including a literal outside the three-operand imul's signed 32-bit field.
+        """
+        for literal, operand in ((expression.left, expression.right),
+                                 (expression.right, expression.left)):
+            stripped = self._stripped(literal)
+            if isinstance(stripped, syntax.IntLiteral) and -2 ** 31 <= stripped.value < 2 ** 31:
+                return stripped.value, operand
+        return None, None
+
     def _emit_scaled_product(self, expression: syntax.Binary,
                              destination: str = "rax") -> bool:
         """Lower `name * 3|5|9` as one scaled `lea` into `destination`, or refuse.
@@ -2502,6 +2516,15 @@ class CodeGenerator:
             # survives and no constant register load rides along.
             asm.imul_imm("rax", self._home(expression.left.slot), right.value)
             return
+        if expression.op == "*":
+            constant, operand = self._literal_multiply_operand(expression)
+            if constant is not None:
+                # Any other operand times a constant: compute the operand in rax and
+                # fold the constant into the three-operand imul, so a call result or
+                # a `lea` needs neither a fresh constant register nor a park.
+                self._emit_expression(operand)
+                asm.imul_imm("rax", "rax", constant)
+                return
         if (expression.op in ("+", "-") and isinstance(right, syntax.IntLiteral)
                 and -IMMEDIATE_MAX - 1 <= right.value <= IMMEDIATE_MAX
                 and self._emit_home_offset("rax", expression)):

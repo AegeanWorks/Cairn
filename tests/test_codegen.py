@@ -354,7 +354,9 @@ class ScaledSumTest(unittest.TestCase):
     def test_an_unsupported_factor_still_multiplies(self) -> None:
         body = region_text("fn main() -> i64 { var k: i64 = 7; print(6 * k + 1); return 0; }",
                            "main")
-        self.assertIn(b"\x0f\xaf", body)  # imul stays for factor 6
+        # Factor 6 is not a lea product, so the multiply stays: the constant folds
+        # into the three-operand imul, and no lea lowers it.
+        self.assertIn(bytes([0x48, 0x6B, 0xC0, 0x06]), body)  # imul rax, rax, 6
         self.assertNotIn(b"\x48\x8d", body)  # and no lea
 
     def test_an_unscaled_k_is_left_alone(self) -> None:
@@ -1884,6 +1886,48 @@ class ImulImmediateShapeTest(unittest.TestCase):
         self.assertIn(bytes([0x4C, 0x69, 0xEB, 0xAB, 0x00, 0x00, 0x00]), blob)  # 171
         self.assertNotIn(bytes([0x48, 0xB8, 0x25, 0x00, 0x00, 0x00]), blob)     # no movabs 37
         self.assertNotIn(bytes([0x4C, 0x0F, 0xAF]), blob)        # no two-operand imul
+
+
+class ExpressionTimesLiteralShapeTest(unittest.TestCase):
+    """`expr * k` folds the constant into the three-operand imul; nothing parks.
+
+    A computed operand (a lea, a call result) used to be parked in `[rsp]` while the
+    constant was materialised with a ten-byte movabs, because the three-operand form
+    only fired when the other side was already a home. many_params' inlined mix paid
+    that park three times per iteration (ADR-074).
+    """
+
+    def test_a_computed_left_times_a_literal_uses_the_three_operand_form(self) -> None:
+        blob = region_bytes("fn scale(n: i64) -> i64 { return (n + 1) * 43; }"
+                            " fn main() -> i64 { print(scale(argc())); return 0; }",
+                            "scale")
+        self.assertIn(bytes([0x48, 0x6B, 0xC0, 0x2B]), blob)      # imul rax, rax, 43
+        self.assertNotIn(bytes([0x48, 0x89, 0x04, 0x24]), blob)   # no mov [rsp], rax
+        self.assertNotIn(bytes([0x48, 0xB8, 0x2B, 0x00, 0x00, 0x00,
+                                0x00, 0x00, 0x00, 0x00]), blob)    # no movabs 43
+
+    def test_a_literal_on_the_left_takes_the_same_form(self) -> None:
+        blob = region_bytes("fn scale(n: i64) -> i64 { return 43 * (n + 1); }"
+                            " fn main() -> i64 { print(scale(argc())); return 0; }",
+                            "scale")
+        self.assertIn(bytes([0x48, 0x6B, 0xC0, 0x2B]), blob)
+        self.assertNotIn(bytes([0x48, 0x89, 0x04, 0x24]), blob)
+
+    def test_a_call_result_times_a_literal_never_parks(self) -> None:
+        source = ("fn work(n: i64) -> i64 { if n < 2 { return n; }"
+                  " return work(n - 1) + 1; }"
+                  " fn scale(n: i64) -> i64 { return work(n) * 43; }"
+                  " fn main() -> i64 { print(scale(argc())); return 0; }")
+        blob = region_bytes(source, "scale")
+        self.assertIn(bytes([0xE8]), blob)                        # the call stays
+        self.assertIn(bytes([0x48, 0x6B, 0xC0, 0x2B]), blob)
+        self.assertNotIn(bytes([0x48, 0x89, 0x04, 0x24]), blob)
+
+    def test_a_literal_beyond_imm32_keeps_the_general_multiply(self) -> None:
+        blob = region_bytes("fn scale(n: i64) -> i64 { return (n + 1) * 3000000000; }"
+                            " fn main() -> i64 { print(scale(argc())); return 0; }",
+                            "scale")
+        self.assertIn(bytes([0x48, 0xB8]), blob)                  # movabs: no imm32 form
 
 
 class CommutativeMergeShapeTest(unittest.TestCase):
