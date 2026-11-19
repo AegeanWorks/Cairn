@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-stdin-evidence",
+    "task_id": "cairn-gate-provenance",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795119807.5227587,
+    "updated_at": 1795122397.1946952,
     "owner": "kilo:cairn",
-    "lease_until": 1795127007.5227587,
+    "lease_until": 1795129597.1946952,
     "started_by": "kilo:cairn",
     "continuations": [],
     "workspaces": [
@@ -16,115 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795119808.3159323,
-    "completed_head": "386fc6b85da18c91e055c8e1d508e5bb9032f6e4",
-    "completed_tree": "c272202a86de3b71c8173c5e6c3285246b894cbd"
+    "completed_at": 1795122465.6625638,
+    "completed_head": "16872d6b364e364ae5ebc802656cb98b1f10aebc",
+    "completed_tree": "445d281108663dd31e8dee99dc6ed1a96c66a99b"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-many-params-contract",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] delivered: four twins take the bound from argc and keep a masked product in the mix (ADR-074, ADR-071's first remedy); ManyParamsContractTest 3 tests pin the contract in every source, TwinParityTest now covers many_params 4/4 identical stdout; suite 1278 OK; byte identity 18/19 registry cases through a pre-change tree, only many_params changes; 21 interleaved rounds Cairn 20.74 vs C 12.69 best; honest gate Cairn 20.6, rest in band (many_params +55.2 percent is the contract, not code); README row and size note synced; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795075882.9802566,
-      "timestamp_str": "2026-11-19 11:11:22",
-      "agent": "kilo:cairn",
-      "measurements": [
-        {
-          "command": "python benchmarks/run_benchmarks.py --save --compare",
-          "artifact": "the contract change raised Cairn time because the loop is now real work, so the gate flag is expected",
-          "workload": "10M six-argument mix calls with the bound from argc and a masked non-polynomial recurrence",
-          "drift": "55.2",
-          "unit": "ms",
-          "candidate": 20.6,
-          "interleaved": "yes",
-          "baseline": 13.3,
-          "metric": "many_params cairn best ms",
-          "control": "sieve and the 17 non-array cases compile byte-identical and stay in band"
-        },
-        {
-          "command": "python -m unittest tests.test_end_to_end.TwinParityTest",
-          "workload": "bare run with argc 1 and exactly 10M iterations",
-          "drift": "1.0",
-          "unit": "count",
-          "candidate": 7200005110300544.0,
-          "interleaved": "yes",
-          "baseline": 7242931233280.0,
-          "metric": "many_params printed total",
-          "control": "all four twins print the candidate and TwinParityTest asserts it"
-        }
-      ],
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-many-params-contract",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-many-params-contract' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795075901.298884,
-      "timestamp_str": "2026-11-19 11:11:41",
-      "agent": "kilo:cairn",
-      "head": "be920e2021a542a168e4cca070d71e0a1e6f78e0",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-mul-imm",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] delivered: _literal_multiply_operand plus the rax-then-imul_imm path lower any imm32 constant on either side of a multiply without a constant register or a park; ExpressionTimesLiteralShapeTest 4 falling-first tests; many_params loop 130->76 bytes; suite 1282 OK; 17/19 registry cases byte-identical against be920e2 (many_params and mandelbrot change); 21 interleaved rounds many_params -11.3 percent best and -10.8 ten-fastest, mandelbrot a wash; honest gate many_params 20.6->18.3 (-11.4 percent), rest in band; ScaledSumTest factor-6 encoding pin moved from 0f af to 48 6b c0 06 with the same meaning; ADR-075 and README synced; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795077115.4066718,
-      "timestamp_str": "2026-11-19 11:31:55",
-      "agent": "kilo:cairn",
-      "measurements": [
-        {
-          "command": "21-round interleaved same-seconds A/B",
-          "interleaved": "yes",
-          "workload": "10M six-argument mix calls under the argc bound",
-          "unit": "ms",
-          "drift": "11.3",
-          "artifact": "old vs new exe",
-          "control": "mandelbrot measured 11.68 vs 11.71 in the same rounds and is claimed a wash",
-          "metric": "many_params best ms",
-          "baseline": 20.49,
-          "candidate": 18.17
-        },
-        {
-          "command": "python benchmarks/run_benchmarks.py --save --compare",
-          "interleaved": "yes",
-          "workload": "10M six-argument mix calls under the argc bound",
-          "unit": "ms",
-          "drift": "11.4",
-          "artifact": "improved",
-          "control": "the 17 byte-identical cases stay in band",
-          "metric": "many_params gate best ms",
-          "baseline": 20.6,
-          "candidate": 18.3
-        }
-      ],
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-mul-imm",
       "phase": "phase 2",
@@ -553,6 +449,65 @@
       "timestamp_str": "2026-11-19 23:23:28",
       "agent": "kilo:cairn",
       "head": "386fc6b85da18c91e055c8e1d508e5bb9032f6e4",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-gate-provenance",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/2] record probe_ms and quiet in every saved benchmark record from the run's own many_params best, print the window state on save, and warn on compare when the baseline was loaded; failing-first QuietWindowProvenanceTest; [2/2] suite, ADR-080, README methodology, strict gate",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795121908.4986086,
+      "timestamp_str": "2026-11-19 23:58:28",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "ADR-069's quiet-window rule was applied by hand in three sessions, and a record that does not state how loaded the machine was lets a busy-window flag read exactly like a regression",
+        "benefits": "every future gate record is self-auditing, and --compare names a loaded baseline before its lines, so the byte-identity re-check is prompted instead of remembered",
+        "risks": "contract: the record schema grows two fields (old lines stay valid and read as unknown) and compare gains a warning, never a new failure mode; dependency: none; concurrency: single-writer history; state: no measurement, band or exit-code change",
+        "mitigation": "falling-first tests for the quiet, loaded and unknown outcomes and the warning predicate; the existing compare tests pin the unchanged gating; full suite and the strict project gate"
+      },
+      "plan_digest": "0eadf937744bab1b181fb12974b60eec42585e86fa82854920efdbe260c8d2c6",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-gate-provenance",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] delivered: record_from_reports writes probe_ms and quiet from the run's own many_params best, --save prints the recorded window state, --compare warns before the lines when the newest baseline was loaded; QuietWindowProvenanceTest 4 tests; suite 1301 OK; ADR-080 and the README methodology paragraph synced; no measurement, noise-band or exit-code change; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795122397.1946952,
+      "timestamp_str": "2026-11-20 00:06:37",
+      "agent": "kilo:cairn",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-gate-provenance",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-gate-provenance' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795122466.4028513,
+      "timestamp_str": "2026-11-20 00:07:46",
+      "agent": "kilo:cairn",
+      "head": "16872d6b364e364ae5ebc802656cb98b1f10aebc",
       "delivery": {
         "roots": [
           "."
