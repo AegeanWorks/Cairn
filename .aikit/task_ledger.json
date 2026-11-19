@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-stdin-promote",
-    "last_phase": "phase 2",
+    "task_id": "cairn-stdin-evidence",
+    "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795113505.7752714,
+    "updated_at": 1795119807.5227587,
     "owner": "kilo:cairn",
-    "lease_until": 1795120705.7752714,
+    "lease_until": 1795127007.5227587,
     "started_by": "kilo:cairn",
     "continuations": [],
     "workspaces": [
@@ -16,126 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "impact_assessment": {
-      "why": "ADR-077 established that the fused read_char path is bound by the memory read-modify-write on the static cursor, and the baselines keep the stream pointer in a register for the whole loop; char_stream is the largest recorded gap at 1.38x to C",
-      "benefits": "the hot path drops from nine instructions with a store-forwarding chain to a register compare, one SIB byte read and a register increment; every leaf stdin loop benefits, not just the benchmark; the count home removes one load per byte on top of the pair",
-      "risks": "contract: read_char's answers must not change (byte, -1 at EOF, repeated -1, one syscall per call at a true end), and the promoted registers must be saved and restored like slot homes, including the prologue parity math; dependency: none new, only three assembler encoders whose fixups end the instruction; concurrency: single-threaded; state: only functions that read stdin change bytes",
-      "mitigation": "falling-first shape tests for the triple, the two-spare pair, the no-spare fallback and the user-call refusal; the IR differential corpus and the four stdin end-to-end tests cover the contract; full-image SHA-256 against 420cd32; interleaved same-seconds A/B with a byte-identical control; the honest gate once the machine is quiet"
-    },
-    "completed_at": 1795113579.3141837,
-    "completed_head": "2c767c2eab9b42e8693cb5b9c9b57a71b0d90e45",
-    "completed_tree": "8cad92c11aa8aa234b2aed8b75cb81036f7208b5"
+    "completed_at": 1795119808.3159323,
+    "completed_head": "386fc6b85da18c91e055c8e1d508e5bb9032f6e4",
+    "completed_tree": "c272202a86de3b71c8173c5e6c3285246b894cbd"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-array-scale",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] measurements recorded with drift, workload, control and interleaving (PRINCIPLE-014 R8): suite 1274 OK; 17/19 registry cases byte-identical; honest gate array_sum -12.0 percent improved, sieve within noise; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795073168.0998142,
-      "timestamp_str": "2026-11-19 10:26:08",
-      "agent": "kilo:cairn",
-      "measurements": [
-        {
-          "metric": "array_sum best ms",
-          "drift": "8.3",
-          "command": "31-round interleaved same-seconds A/B",
-          "baseline": 11.76,
-          "artifact": "old vs new exe",
-          "candidate": 10.78,
-          "interleaved": "yes",
-          "control": "sieve best moved 9.14 to 8.88 in the same rounds and is claimed neutral",
-          "unit": "ms",
-          "workload": "65536-element sweep 101 passes"
-        },
-        {
-          "metric": "array_sum ten-fastest mean ms",
-          "drift": "6.9",
-          "command": "31-round interleaved same-seconds A/B",
-          "baseline": 12.82,
-          "artifact": "old vs new exe",
-          "candidate": 11.93,
-          "interleaved": "yes",
-          "control": "sieve ten-fastest mean 9.87 to 9.83 and is claimed neutral",
-          "unit": "ms",
-          "workload": "ten fastest of 31 rounds"
-        },
-        {
-          "metric": "sieve best ms",
-          "drift": "2.8",
-          "command": "31-round interleaved same-seconds A/B",
-          "baseline": 9.14,
-          "artifact": "neutral within noise",
-          "candidate": 8.88,
-          "interleaved": "yes",
-          "control": "array_sum must show the claimed gain and did at -8.3 percent best",
-          "unit": "ms",
-          "workload": "sieve 0..65536 nested stores"
-        },
-        {
-          "metric": "array_sum gate best ms",
-          "drift": "12.0",
-          "command": "python benchmarks/run_benchmarks.py --save --compare",
-          "baseline": 12.9,
-          "artifact": "improved -12.0 percent",
-          "candidate": 11.4,
-          "interleaved": "yes",
-          "control": "sieve gate 9.3 to 9.3 within noise while 17 non-array cases compile byte-identical",
-          "unit": "ms",
-          "workload": "65536-element sweep 101 passes"
-        }
-      ],
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-array-scale",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-array-scale' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795073199.182846,
-      "timestamp_str": "2026-11-19 10:26:39",
-      "agent": "kilo:cairn",
-      "head": "e42dfa59d1d4c67d232662c56ad81b0d304fdc56",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-many-params-contract",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/3] contract fix (ADR-071's first option): all four many_params twins take the loop bound from argc (n = 10,000,000 + argc - 1, so a bare run is exactly 10M) and the mix body gains a masked product so no compiler can reduce the whole program to a constant; a failing-first RegistryShape test pins the argc-derived bound; [2/3] verify the contract end to end: TwinParityTest all four totals identical, full suite, and a same-seconds interleaved measurement recorded as the new honest ranges; [3/3] README scoreboard row and ADR-074 (citing ADR-071) synced, full gate, commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795074061.2050219,
-      "timestamp_str": "2026-11-19 10:41:01",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "ADR-071 recorded that gcc/g++/rustc fold the entire many_params program to a constant print while Cairn honestly runs the loop, so the case measures nothing about codegen and its 'losses' are an artifact of the twin contract; ADR-071 explicitly offers two fixes: make the result depend on data no optimizer can see across the program, all twins altered together, or retire the case's gaps",
-        "benefits": "many_params becomes a measured case again: all four languages do the same per-iteration work under a runtime bound, so a future codegen change is judged against real baselines; the scoreboard's win/loss list stops carrying a case whose gap could never be closed honestly",
-        "risks": "contract: the printed total changes for every twin at once, so TwinParityTest and the saved benchmark history are the only oracles; a body whose recurrence is still closed-form (polynomial in i) would be folded again, so the recurrence must be non-polynomial; the argc() call is an extra runtime builtin on Cairn's hot path? No - it is evaluated once into a home slot; dependency: none new (argc is an existing builtin in every twin's standard runtime); concurrency: none; state: benchmark_history gains a record; README ranges and the many_params row change",
-        "mitigation": "failing-first registry test pins the argc-derived bound in all four sources; TwinParityTest compiles and runs each twin and compares stdout; the interleaved same-seconds protocol from ADR-069 measures the new ranges, and any window whose many_params best falls outside the new band is treated as pollution; ADR-074 records the contract, and README cites it so no reader compares against the retired numbers"
-      },
-      "plan_digest": "43b004549aee7f2343257d115fc9bd12005fc666f4504ba081fd2b3e9a838f6a",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-many-params-contract",
       "phase": "phase 4",
@@ -609,6 +494,65 @@
       "timestamp_str": "2026-11-19 21:39:39",
       "agent": "kilo:cairn",
       "head": "2c767c2eab9b42e8693cb5b9c9b57a71b0d90e45",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-stdin-evidence",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/2] README and ADR-079 cite the controlled interleaved evidence for the stdin promotion (base/index pair measured, the count home noted as unmeasured in a clean window) and record why two gate runs were dropped; [2/2] strict project gate on a clean tree",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795119613.715338,
+      "timestamp_str": "2026-11-19 23:20:13",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "the shipped promotion's performance claim needs its evidence in the docs, and two gate runs were dropped under ADR-069, which a reader must see beside the numbers",
+        "benefits": "the README and ADR state exactly what was measured and against what control, and why no saved gate range was refreshed",
+        "risks": "contract: none, documentation only; dependency: none; concurrency: none; state: no code, image or benchmark record changes",
+        "mitigation": "the numbers cited are the recorded interleaved runs; update_knowledge_base --check validates the ADR register and rendering"
+      },
+      "plan_digest": "15bf69685db0f3e09bd682beb22270f06249b78c55d63cd5eb7ca5f29919e4a8",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-stdin-evidence",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] docs committed as 2009554 and 386fc6b: README and ADR-079 cite the controlled interleaved evidence, name the base/index pair as the measured build, and state why two gate runs were dropped under ADR-069; ADR register and map checks pass; documentation only, no code change; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795119807.5227587,
+      "timestamp_str": "2026-11-19 23:23:27",
+      "agent": "kilo:cairn",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-stdin-evidence",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-stdin-evidence' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795119808.4371853,
+      "timestamp_str": "2026-11-19 23:23:28",
+      "agent": "kilo:cairn",
+      "head": "386fc6b85da18c91e055c8e1d508e5bb9032f6e4",
       "delivery": {
         "roots": [
           "."
