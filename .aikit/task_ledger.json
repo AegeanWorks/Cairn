@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-mandelbrot-division",
+    "task_id": "cairn-charstream-gate",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795125124.9122226,
+    "updated_at": 1795130280.3778536,
     "owner": "kilo:cairn",
-    "lease_until": 1795132324.9122226,
+    "lease_until": 1795137480.3778536,
     "started_by": "kilo:cairn",
     "continuations": [],
     "workspaces": [
@@ -16,96 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795125151.354652,
-    "completed_head": "45a7eb0fb841ebfa13934d8b9fed36a13a91353c",
-    "completed_tree": "2e5f6e13316f47094dd0f131cbd67b016e827f59"
+    "completed_at": 1795130293.3266416,
+    "completed_head": "b36a23afd819654b442e0fa8f6666c489e85eb0c",
+    "completed_tree": "269ff83b6de3c64b06cecc5d6bdddf3c30755c92"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-algebraic-nested",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] delivered: bottom-up chain collection; AlgebraicTest nested-chain test fell-first and passes; many_params loop 76->43 bytes; suite 1283 OK; 18/19 registry cases byte-identical against 4fda3e1; 31 interleaved rounds many_params -27.2 percent best and ten-fastest; honest gate many_params -24.8 to -27.8 percent across two windows, byte-identical flags (splitmix, mandelbrot, fib30, ackermann) resolved by identity plus 31-41 interleaved wash rounds, two polluted records dropped per ADR-069; ADR-076 and README synced; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795079154.8473551,
-      "timestamp_str": "2026-11-19 12:05:54",
-      "agent": "kilo:cairn",
-      "measurements": [
-        {
-          "candidate": 13.37,
-          "workload": "10M six-argument mix calls under the argc bound",
-          "baseline": 18.36,
-          "command": "31-round interleaved same-seconds A/B",
-          "control": "fib30 and ackermann are byte-identical builds and measured -0.1 and +0.5 percent",
-          "unit": "ms",
-          "artifact": "old vs new exe",
-          "interleaved": "yes",
-          "drift": "27.2",
-          "metric": "many_params best ms"
-        },
-        {
-          "candidate": 13.2,
-          "workload": "10M six-argument mix calls under the argc bound",
-          "baseline": 18.3,
-          "command": "python benchmarks/run_benchmarks.py --save --compare",
-          "control": "18 byte-identical cases stay in band after pollution resolution",
-          "unit": "ms",
-          "artifact": "improved",
-          "interleaved": "yes",
-          "drift": "27.8",
-          "metric": "many_params gate best ms"
-        }
-      ],
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-algebraic-nested",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-algebraic-nested' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795079159.920189,
-      "timestamp_str": "2026-11-19 12:05:59",
-      "agent": "kilo:cairn",
-      "head": "83c9cd8abf4ead4a4624000208a126ac91d640a0",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-stdin-pointer",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/3] failing-first shape tests: the fused read_char path is mov rax,[rip+cursor]; cmp rax,[rip+end]; jae drain; movzx eax,[rax]; inc qword [rip+cursor] - five instructions, no lea, no SIB, and the pointer state is cursor/end; assembler byte pins for cmp reg,[rip] and inc [rip]; [2/3] runtime.py stores a cursor pointer and an end pointer (refill sets end = buffer + count) and the helper's have path loads through the cursor; codegen.py fuses the pointer shape; [3/3] suite, stdin e2e (EOF, refill, large pipe, closed stdin), user-code byte identity on the 18 non-char cases plus a diff confined to the read_char helper span, interleaved A/B on char_stream, honest gate, ADR-077, SPEC row and README",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795087195.981414,
-      "timestamp_str": "2026-11-19 14:19:55",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "char_stream is the largest recorded gap: 1.38x to C. The fused have path is eight instructions with two taken branches and a store-to-load forwarding chain on the cursor index; glibc's getc fast path is four instructions over buffer pointers. The index form additionally spends one lea loading the buffer base and one lea addressing the cursor, which the pointer form removes",
-        "benefits": "the have path drops from 8 instructions to 5 (51 to 35 bytes), the dependent chain shortens by one lea+load pair per byte, and read_char's helper gets the same pointer shape on its rare drain path; expected char_stream from 11.8 ms toward C's 8.5; every read_char user benefits, not just the benchmark",
-        "risks": "contract: read_char's observable answers must not change (byte, -1 at EOF, repeated -1, one syscall per call at a true end), and inc leaves CF alone where add set it, so any CF consumer across a call would change; dependency: no new encodings beyond cmp reg,[rip] and inc [rip], whose disp32 is the last field so the existing fixup rule stays valid; concurrency: single-threaded; state: the two writable globals change meaning (index/count to pointer/end), which is internal, but every image's helper bytes change, so byte identity must be argued per region",
-        "mitigation": "falling-first encoding and fusion-shape tests; the existing IR differential corpus and the four stdin end-to-end tests cover the contract; a probe compares user-code regions across all 19 registry cases and reports the differing ranges, which must lie inside the runtime span; interleaved same-seconds A/B on char_stream with a non-stdin negative control; honest gate with the 10 percent band"
-      },
-      "plan_digest": "813f4f1f0a3a960985ae7eb2f5f37a97ebbe103fa4eb399c96a1fcb178f48ca3",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-stdin-pointer",
       "phase": "phase 4",
@@ -516,6 +431,65 @@
       "timestamp_str": "2026-11-20 00:52:32",
       "agent": "kilo:cairn",
       "head": "45a7eb0fb841ebfa13934d8b9fed36a13a91353c",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-charstream-gate",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/2] keep the quiet best-of-11 gate record (probe 13.85 ms) and write its numbers and its byte-identity drift finding into ADR-079; [2/2] validate and commit, ledger cycle, strict gate",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795130226.045181,
+      "timestamp_str": "2026-11-20 02:17:06",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "the char_stream promotion's performance evidence needed a saved gate record, and the record's flags needed an evidence-based explanation so no later reader mistakes drift for a regression",
+        "benefits": "history carries a quiet, 11-round record with its probe, and ADR-079 states the measured char_stream standing and the cross-window drift floor",
+        "risks": "contract: none, one history line plus documentation; dependency: none; concurrency: single-writer history; state: no code or behaviour change",
+        "mitigation": "the flags were checked with full-image SHA-256 against the baseline commit; the record's own [WINDOW] probe states quiet; update_knowledge_base --check validates the register"
+      },
+      "plan_digest": "ff0654e1624ec7ac17f9ef7204d923a181579f1c67c3ba4a331e4516413d0b3c",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-charstream-gate",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] delivered as b36a23a: the quiet best-of-11 gate record (17a5e10, probe 13.85 ms, char_stream 11.05 ms vs C 9.84/C++ 10.01/Rust 14.89) is kept in history, and ADR-079 states its numbers plus the evidence that the record's hex_io and sieve flags are cross-window drift on byte-identical images; no code change; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795130280.3778536,
+      "timestamp_str": "2026-11-20 02:18:00",
+      "agent": "kilo:cairn",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-charstream-gate",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-charstream-gate' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795130293.3925164,
+      "timestamp_str": "2026-11-20 02:18:13",
+      "agent": "kilo:cairn",
+      "head": "b36a23afd819654b442e0fa8f6666c489e85eb0c",
       "delivery": {
         "roots": [
           "."
