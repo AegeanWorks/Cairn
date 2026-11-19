@@ -1,11 +1,11 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-many-params-contract",
-    "last_phase": "phase 4",
+    "task_id": "cairn-mul-imm",
+    "last_phase": "phase 2",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795075882.9802566,
+    "updated_at": 1795077163.523477,
     "owner": "kilo:cairn",
     "started_by": "kilo:cairn",
     "continuations": [],
@@ -15,58 +15,17 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795075901.2309155,
-    "completed_head": "be920e2021a542a168e4cca070d71e0a1e6f78e0",
-    "completed_tree": "819d70035358a635ed60cccc777c6b1f9bdd9bdf"
+    "impact_assessment": {
+      "why": "ADR-074's honest many_params loop showed three movabs constants and three operand parks per iteration in the inlined six-argument mix; the three-operand imul existed but only fired for a homed factor, and this shape is the whole gap the contract change exposed",
+      "benefits": "every computed-factor constant multiply loses a constant load, a park and a two-operand form; many_params measured -11.3 percent best; the same lowering applies to any user program with expr times k",
+      "risks": "contract: the lowering must keep wrapped semantics, evaluation order and traps identical, or the twin parity and differential suites catch it; dependency: machine.py imul_imm only, no new encodings; concurrency: none; state: emitted bytes change for many_params and mandelbrot, so the byte-identity proof and the gate return",
+      "mitigation": "failing-first ExpressionTimesLiteralShapeTest for computed, left-literal, call-result and imm32-refusal shapes; full suite plus twin parity; full-image SHA-256 against be920e2; interleaved A/B with mandelbrot as the negative control; honest gate with the 10 percent band"
+    },
+    "completed_at": 1795077177.8703928,
+    "completed_head": "955375d7ce00d6114f17991eabbec13a249b32e5",
+    "completed_tree": "d3be4fd79458fe50c3621cc58322d42af2849744"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-cmov",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-cmov' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795037050.9533877,
-      "timestamp_str": "2026-11-19 00:24:10",
-      "agent": "unidentified",
-      "head": "bd8f11256d136e368415903ca7031fc43262427d",
-      "continued_from": "mistral:vibe",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": true
-      }
-    },
-    {
-      "task_id": "cairn-select-generalize",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/2] failing-first: generalize branchless select family - single-assignment cmovcc (nqueens leaf shape), swap already landed; [2/2] implementation on 79af21f base + many_params stack-spill probe",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795037210.0874448,
-      "timestamp_str": "2026-11-19 00:26:50",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "nqueens 24.1 vs Rust 20.2 and many_params 13.2 vs C 10.58 hold the two largest remaining gaps; generalizing the select/cmov family removes branch misprediction on leaf selects and targets the 7-arg stack-spill shape",
-        "benefits": "general optimizer rule, not per-benchmark hacks; eligible ifs lower branchless across all cases; expected nqueens -10-15%, many_params path toward C parity",
-        "risks": "contract: refusal on any shape not provably equivalent (side-effect reads, else, partial body); dependency: none new; concurrency: none; state: cmov needs register homes - frame slots refuse",
-        "mitigation": "failing-first SelectionFusionTest; differential corpus entries cover fused and refused shapes; interleaved A/B on load spikes; honest full gate with 10% noise band per G-004"
-      },
-      "plan_digest": "1c12a4d015868d04960f28fccb0dababca9ee98323a4dfea7dcaf81909d3774a"
-    },
-    {
-      "task_id": "cairn-select-generalize",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/1] investigate-first verdict: ADR-071 - all three baselines fold many_params to a compile-time constant (mains are bare prints), so the gap is an unfair twin, not codegen; README rows + losses list synced; cairn-cmov closed (bd8f112); suite 1254 OK; no emitted-bytes change this turn; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795037736.6478553,
-      "timestamp_str": "2026-11-19 00:35:36",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-select-generalize",
       "phase": "completed",
@@ -529,6 +488,90 @@
       "timestamp_str": "2026-11-19 11:11:41",
       "agent": "kilo:cairn",
       "head": "be920e2021a542a168e4cca070d71e0a1e6f78e0",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-mul-imm",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] delivered: _literal_multiply_operand plus the rax-then-imul_imm path lower any imm32 constant on either side of a multiply without a constant register or a park; ExpressionTimesLiteralShapeTest 4 falling-first tests; many_params loop 130->76 bytes; suite 1282 OK; 17/19 registry cases byte-identical against be920e2 (many_params and mandelbrot change); 21 interleaved rounds many_params -11.3 percent best and -10.8 ten-fastest, mandelbrot a wash; honest gate many_params 20.6->18.3 (-11.4 percent), rest in band; ScaledSumTest factor-6 encoding pin moved from 0f af to 48 6b c0 06 with the same meaning; ADR-075 and README synced; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795077115.4066718,
+      "timestamp_str": "2026-11-19 11:31:55",
+      "agent": "kilo:cairn",
+      "measurements": [
+        {
+          "command": "21-round interleaved same-seconds A/B",
+          "interleaved": "yes",
+          "workload": "10M six-argument mix calls under the argc bound",
+          "unit": "ms",
+          "drift": "11.3",
+          "artifact": "old vs new exe",
+          "control": "mandelbrot measured 11.68 vs 11.71 in the same rounds and is claimed a wash",
+          "metric": "many_params best ms",
+          "baseline": 20.49,
+          "candidate": 18.17
+        },
+        {
+          "command": "python benchmarks/run_benchmarks.py --save --compare",
+          "interleaved": "yes",
+          "workload": "10M six-argument mix calls under the argc bound",
+          "unit": "ms",
+          "drift": "11.4",
+          "artifact": "improved",
+          "control": "the 17 byte-identical cases stay in band",
+          "metric": "many_params gate best ms",
+          "baseline": 20.6,
+          "candidate": 18.3
+        }
+      ],
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-mul-imm",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[0/1] impact assessment recorded after the fact (the work landed as 955375d before this plan; no scope beyond it): fold an imm32 constant on either side of a multiply into the three-operand imul so no constant register or operand park is needed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795077163.523477,
+      "timestamp_str": "2026-11-19 11:32:43",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "ADR-074's honest many_params loop showed three movabs constants and three operand parks per iteration in the inlined six-argument mix; the three-operand imul existed but only fired for a homed factor, and this shape is the whole gap the contract change exposed",
+        "benefits": "every computed-factor constant multiply loses a constant load, a park and a two-operand form; many_params measured -11.3 percent best; the same lowering applies to any user program with expr times k",
+        "risks": "contract: the lowering must keep wrapped semantics, evaluation order and traps identical, or the twin parity and differential suites catch it; dependency: machine.py imul_imm only, no new encodings; concurrency: none; state: emitted bytes change for many_params and mandelbrot, so the byte-identity proof and the gate return",
+        "mitigation": "failing-first ExpressionTimesLiteralShapeTest for computed, left-literal, call-result and imm32-refusal shapes; full suite plus twin parity; full-image SHA-256 against be920e2; interleaved A/B with mandelbrot as the negative control; honest gate with the 10 percent band"
+      },
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-mul-imm",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-mul-imm' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795077177.9388723,
+      "timestamp_str": "2026-11-19 11:32:57",
+      "agent": "kilo:cairn",
+      "head": "955375d7ce00d6114f17991eabbec13a249b32e5",
       "delivery": {
         "roots": [
           "."
