@@ -1,11 +1,11 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-mul-imm",
-    "last_phase": "phase 2",
+    "task_id": "cairn-algebraic-nested",
+    "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795077163.523477,
+    "updated_at": 1795079154.8473551,
     "owner": "kilo:cairn",
     "started_by": "kilo:cairn",
     "continuations": [],
@@ -15,64 +15,11 @@
         "path": "projects/cairn"
       }
     ],
-    "impact_assessment": {
-      "why": "ADR-074's honest many_params loop showed three movabs constants and three operand parks per iteration in the inlined six-argument mix; the three-operand imul existed but only fired for a homed factor, and this shape is the whole gap the contract change exposed",
-      "benefits": "every computed-factor constant multiply loses a constant load, a park and a two-operand form; many_params measured -11.3 percent best; the same lowering applies to any user program with expr times k",
-      "risks": "contract: the lowering must keep wrapped semantics, evaluation order and traps identical, or the twin parity and differential suites catch it; dependency: machine.py imul_imm only, no new encodings; concurrency: none; state: emitted bytes change for many_params and mandelbrot, so the byte-identity proof and the gate return",
-      "mitigation": "failing-first ExpressionTimesLiteralShapeTest for computed, left-literal, call-result and imm32-refusal shapes; full suite plus twin parity; full-image SHA-256 against be920e2; interleaved A/B with mandelbrot as the negative control; honest gate with the 10 percent band"
-    },
-    "completed_at": 1795077177.8703928,
-    "completed_head": "955375d7ce00d6114f17991eabbec13a249b32e5",
-    "completed_tree": "d3be4fd79458fe50c3621cc58322d42af2849744"
+    "completed_at": 1795079159.853967,
+    "completed_head": "83c9cd8abf4ead4a4624000208a126ac91d640a0",
+    "completed_tree": "3c337b72e17cd896ebe0c52d93c3f78ff17690a7"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-select-generalize",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-select-generalize' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795038245.7178183,
-      "timestamp_str": "2026-11-19 00:44:05",
-      "agent": "unidentified",
-      "head": "0b82fc37f22fe1ebc329b7c9a3da54a4d0128da6",
-      "continued_from": "mistral:vibe",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-read-fuse",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/3] failing-first tests: read_char fast path fuses into the call site (cursor/count rip loads, movzx from buffer, in-place cursor increment; drain beyond them calls the helper); [2/3] codegen implementation in _emit_call with the helper's exact clobber contract; [3/3] interleaved A/B on char_stream + honest gate + ADR-072 + README sync",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795038256.849054,
-      "timestamp_str": "2026-11-19 00:44:16",
-      "agent": "mistral:vibe",
-      "impact_assessment": {
-        "why": "char_stream is the last large honest gap (12.7 vs C 10.4, -18%): each byte costs a call/ret plus the helper's two rip-lea/load pairs and cursor re-store; ADR-058's full-inline refusal covered the refill path being inline, not the fast path - fusing only the fast path with a drain call keeps refill out of line while cutting the per-byte path from ~15 uops to ~8",
-        "benefits": "general per-call-site win for every read_char loop, not a benchmark special case; expected char_stream -20-35 percent; argv/str paths untouched; the helper stays the drain and EOF path so semantics and byte streams are unchanged",
-        "risks": "contract: emitted rax answer must be byte-identical for have/drain/EOF paths, and the c<0 EOF test must keep hiding -1 (differential corpus + e2e stdout equality bind this); dependency: none new; concurrency: none - single-threaded stdin; state: cursor updates become an in-place memory increment \u0432\u043c\u0435\u0441\u0442\u043e add+store, count/cursor ripples stay static",
-        "mitigation": "failing-first ReadFuseTest (fused site has no call on the hot path, refusals keep it), corpus cases cover fused loop, EOF break, and drain rollover past 64KiB; interleaved A/B old-vs-new same seconds, 9 rounds best-of-3; honest full gate with the 10 percent noise band per G-004; README row + ADR-072 same commit per ADR-064 law"
-      },
-      "plan_digest": "632d945a09d38065a9b6f443a9e2825710effbf95400dfc46f484a74aeace8ac"
-    },
-    {
-      "task_id": "cairn-read-fuse",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/1] implemented: ReadFuseTest 5 tests (fused loop, arg-context fusion, r10-home refusal, break-direct-jump), rip-inc primitive attempted then refused by the linker's fixup contract (imm8 after disp32; reverted to lea+add), corpus read_loop_eof + read_rollover, suite 1247 green ex TwinParity (rustc msvc link env-broken machine-wide, ADR-072 notes it); A/B char_stream -16.7% best -5.8% median, binary_gcd wash, 17/19 registry cases byte-identical; ADR-072 + README rows synced; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795039985.3032997,
-      "timestamp_str": "2026-11-19 01:13:05",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-read-fuse",
       "phase": "phase 4",
@@ -572,6 +519,91 @@
       "timestamp_str": "2026-11-19 11:32:57",
       "agent": "kilo:cairn",
       "head": "955375d7ce00d6114f17991eabbec13a249b32e5",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-algebraic-nested",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/3] failing-first optimizer test for the many_params shape: a collectible chain inside a xor inside a non-merging root chain must collect to one product and one constant; [2/3] collect + / - chains bottom-up in _algebraic_expression so children are visited before the merge test; [3/3] suite, byte-identity proof, interleaved A/B, honest gate with pollution resolutions, ADR-076 and README",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795079134.7803133,
+      "timestamp_str": "2026-11-19 12:05:34",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "ADR-075 left many_params at 18.3 ms because the algebraic pass never visited a chain nested under a chain that could not merge at its own root, which is exactly the inlined mix inside total + (...)",
+        "benefits": "the linear part of the mix collapses to one imul and one add and many_params reads 13.2-13.7 ms, beating C++ and Rust and trailing C by 3.5 percent; the fix is general: any nest of a collectible chain under a non-chain operator now collects",
+        "risks": "contract: the pass must stay ring-exact and must not group or drop effect-bearing terms, or the differential corpus catches it; dependency: none; concurrency: none; state: emitted bytes change only where such a nest exists, proven by 18/19 byte-identical images",
+        "mitigation": "falling-first unit test on the exact shape; full suite and differential corpus; full-image SHA-256 against 4fda3e1; 31-round interleaved A/B; honest gate with byte-identity checks on every flagged case"
+      },
+      "plan_digest": "814d415b2b9c4f3e36847d17f5685df65fd3d4ef4c460377fbb4cc692cd1c021",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-algebraic-nested",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] delivered: bottom-up chain collection; AlgebraicTest nested-chain test fell-first and passes; many_params loop 76->43 bytes; suite 1283 OK; 18/19 registry cases byte-identical against 4fda3e1; 31 interleaved rounds many_params -27.2 percent best and ten-fastest; honest gate many_params -24.8 to -27.8 percent across two windows, byte-identical flags (splitmix, mandelbrot, fib30, ackermann) resolved by identity plus 31-41 interleaved wash rounds, two polluted records dropped per ADR-069; ADR-076 and README synced; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795079154.8473551,
+      "timestamp_str": "2026-11-19 12:05:54",
+      "agent": "kilo:cairn",
+      "measurements": [
+        {
+          "candidate": 13.37,
+          "workload": "10M six-argument mix calls under the argc bound",
+          "baseline": 18.36,
+          "command": "31-round interleaved same-seconds A/B",
+          "control": "fib30 and ackermann are byte-identical builds and measured -0.1 and +0.5 percent",
+          "unit": "ms",
+          "artifact": "old vs new exe",
+          "interleaved": "yes",
+          "drift": "27.2",
+          "metric": "many_params best ms"
+        },
+        {
+          "candidate": 13.2,
+          "workload": "10M six-argument mix calls under the argc bound",
+          "baseline": 18.3,
+          "command": "python benchmarks/run_benchmarks.py --save --compare",
+          "control": "18 byte-identical cases stay in band after pollution resolution",
+          "unit": "ms",
+          "artifact": "improved",
+          "interleaved": "yes",
+          "drift": "27.8",
+          "metric": "many_params gate best ms"
+        }
+      ],
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-algebraic-nested",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-algebraic-nested' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795079159.920189,
+      "timestamp_str": "2026-11-19 12:05:59",
+      "agent": "kilo:cairn",
+      "head": "83c9cd8abf4ead4a4624000208a126ac91d640a0",
       "delivery": {
         "roots": [
           "."
