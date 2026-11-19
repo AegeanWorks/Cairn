@@ -3,8 +3,8 @@
   "active_task": {
     "task_id": "cairn-stdin-promote",
     "last_phase": "phase 2",
-    "active_phase": 2,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1795113505.7752714,
     "owner": "kilo:cairn",
     "lease_until": 1795120705.7752714,
@@ -21,69 +21,12 @@
       "benefits": "the hot path drops from nine instructions with a store-forwarding chain to a register compare, one SIB byte read and a register increment; every leaf stdin loop benefits, not just the benchmark; the count home removes one load per byte on top of the pair",
       "risks": "contract: read_char's answers must not change (byte, -1 at EOF, repeated -1, one syscall per call at a true end), and the promoted registers must be saved and restored like slot homes, including the prologue parity math; dependency: none new, only three assembler encoders whose fixups end the instruction; concurrency: single-threaded; state: only functions that read stdin change bytes",
       "mitigation": "falling-first shape tests for the triple, the two-spare pair, the no-spare fallback and the user-call refusal; the IR differential corpus and the four stdin end-to-end tests cover the contract; full-image SHA-256 against 420cd32; interleaved same-seconds A/B with a byte-identical control; the honest gate once the machine is quiet"
-    }
+    },
+    "completed_at": 1795113579.3141837,
+    "completed_head": "2c767c2eab9b42e8693cb5b9c9b57a71b0d90e45",
+    "completed_tree": "8cad92c11aa8aa234b2aed8b75cb81036f7208b5"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-array-scale",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] measurements qualified (GT-18 re-record): same evidence as the previous checkpoint, drift fields added; suite 1274 OK; 17/19 registry cases byte-identical; honest gate array_sum -12.0 percent improved, sieve within noise; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795073070.8163328,
-      "timestamp_str": "2026-11-19 10:24:30",
-      "agent": "kilo:cairn",
-      "measurements": [
-        {
-          "metric": "array_sum best ms",
-          "candidate": 10.78,
-          "unit": "ms",
-          "baseline": 11.76,
-          "artifact": "old vs new exe",
-          "command": "31-round interleaved same-seconds A/B",
-          "drift": "workload=65536-element sweep 101 passes, same machine load, 10 percent band",
-          "qualified": "no"
-        },
-        {
-          "metric": "array_sum ten-fastest mean ms",
-          "candidate": 11.93,
-          "unit": "ms",
-          "baseline": 12.82,
-          "artifact": "old vs new exe",
-          "command": "31-round interleaved same-seconds A/B",
-          "drift": "workload=ten fastest of 31 rounds, 10 percent band",
-          "qualified": "no"
-        },
-        {
-          "metric": "sieve best ms",
-          "candidate": 8.88,
-          "unit": "ms",
-          "baseline": 9.14,
-          "artifact": "old vs new exe",
-          "command": "31-round interleaved same-seconds A/B",
-          "drift": "workload=sieve 0..65536 nested stores, neutral within noise",
-          "qualified": "no"
-        },
-        {
-          "metric": "array_sum gate best ms",
-          "candidate": 11.4,
-          "unit": "ms",
-          "baseline": 12.9,
-          "artifact": "improved -12.0 percent",
-          "command": "python benchmarks/run_benchmarks.py --save --compare",
-          "drift": "workload=quiet window with many_params 12.97 ms probe, 10 percent band",
-          "qualified": "no"
-        }
-      ],
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-array-scale",
       "phase": "phase 4",
@@ -655,6 +598,23 @@
           "path": "projects/cairn"
         }
       ]
+    },
+    {
+      "task_id": "cairn-stdin-promote",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-stdin-promote' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795113579.3845298,
+      "timestamp_str": "2026-11-19 21:39:39",
+      "agent": "kilo:cairn",
+      "head": "2c767c2eab9b42e8693cb5b9c9b57a71b0d90e45",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
