@@ -440,6 +440,45 @@ class ManyParamsContractTest(unittest.TestCase):
             self.assertIn("^", text, source.name)
 
 
+class QuietWindowProvenanceTest(unittest.TestCase):
+    """A saved record carries the ADR-069 probe, so a loaded baseline stays auditable.
+
+    Without the field, a flag against a baseline measured on a busy machine reads
+    exactly like a regression and has to be diagnosed from memory (the ADR-076 and
+    ADR-078 sessions did that by hand); with it, the harness states the window
+    state whenever it saves, and the compare warns when the baseline was loaded.
+    """
+
+    def record(self, probe):
+        reports = [{"case": run_benchmarks.QUIET_PROBE_CASE,
+                    "cairn": {"best_ms": probe}}]
+        return run_benchmarks.record_from_reports(reports, "gcc", "rustc", 5, True, "g++")
+
+    def test_a_probe_under_the_criterion_marks_the_run_quiet(self) -> None:
+        record = self.record(15.2)
+        self.assertTrue(record["quiet"])
+        self.assertEqual(record["probe_ms"], 15.2)
+
+    def test_a_probe_over_the_criterion_marks_the_run_loaded(self) -> None:
+        record = self.record(74.3)
+        self.assertFalse(record["quiet"])
+        self.assertEqual(record["probe_ms"], 74.3)
+
+    def test_a_run_without_the_probe_answers_unknown(self) -> None:
+        record = run_benchmarks.record_from_reports(
+            [{"case": "fib30", "cairn": {"best_ms": 10.0}}], "gcc", None, 5, True)
+        self.assertIsNone(record["quiet"])
+        self.assertIsNone(record["probe_ms"])
+
+    def test_the_window_note_warns_only_for_a_loaded_baseline(self) -> None:
+        self.assertIsNone(run_benchmarks.window_note(None))
+        self.assertIsNone(run_benchmarks.window_note({"quiet": True, "probe_ms": 15.0}))
+        self.assertIsNone(run_benchmarks.window_note({}))
+        note = run_benchmarks.window_note({"quiet": False, "probe_ms": 74.3})
+        self.assertIn("loaded window", note)
+        self.assertIn("74.3", note)
+
+
 class CompareRunsTest(unittest.TestCase):
     """The regression watch: a saved run's numbers diffed against the new run."""
 

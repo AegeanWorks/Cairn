@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `194`
-- **Total Top-Level Functions**: `212`
-- **Total Class Methods**: `1049`
-- **Total Source Lines**: `19644`
+- **Total Classes**: `195`
+- **Total Top-Level Functions**: `213`
+- **Total Class Methods**: `1054`
+- **Total Source Lines**: `19714`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -32,7 +32,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `569` lines
+**Size**: `600` lines
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -51,6 +51,7 @@
 - `def summarise(samples, iterations)` - *Best, median and per-unit cost from one set of wall-clock samples.*
 - `def verdict(best_cairn, best_c)` - *The measured standing against one baseline: `faster`, `slower`, `tie` or `unavailable`.*
 - `def compare_runs(current, previous, noise)` - *Per-case best-time deltas against a saved run; (readable lines, any regression).*
+- `def window_note(record)` - *A warning when a saved record was measured in a loaded window, else None.*
 - `def latest_history_record(path)` - *The newest valid JSONL record in the history file, or None without one.*
 - `def record_from_reports(reports, compiler, rust_compiler, rounds, optimise, cpp_compiler)` - *One history record: the commit this run measured and each best time by language.*
 - `def save_record(path, record)` - *Append one record as a single JSONL line.*
@@ -821,7 +822,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `506` lines
+**Size**: `545` lines
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -869,6 +870,12 @@
   - Method `.test_every_twin_derives_its_bound_from_its_argument_count()`
   - Method `.test_the_bound_is_the_registry_iteration_count_plus_the_argument_count()`
   - Method `.test_the_mix_body_is_not_a_closed_form_recurrence()`
+- `class QuietWindowProvenanceTest` - *A saved record carries the ADR-069 probe, so a loaded baseline stays auditable.*
+  - Method `.record(probe)`
+  - Method `.test_a_probe_under_the_criterion_marks_the_run_quiet()`
+  - Method `.test_a_probe_over_the_criterion_marks_the_run_loaded()`
+  - Method `.test_a_run_without_the_probe_answers_unknown()`
+  - Method `.test_the_window_note_warns_only_for_a_loaded_baseline()`
 - `class CompareRunsTest` - *The regression watch: a saved run's numbers diffed against the new run.*
   - Method `.test_a_cairn_regression_beyond_the_noise_band_is_flagged()`
   - Method `.test_drift_inside_the_noise_band_is_reported_but_not_flagged()`

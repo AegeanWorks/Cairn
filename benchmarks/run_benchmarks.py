@@ -42,6 +42,12 @@ EXIT_NO_BASELINE = 2
 # flags a change in the Cairn numbers that is bigger than this band.
 NOISE_BAND = 0.10
 HISTORY = ROOT / ".aikit" / "benchmark_history.jsonl"
+# ADR-069's quiet-window probe: a saved run whose `many_params` best is above this
+# threshold was measured while the machine was loaded, and a flag against it may be
+# window noise rather than a regression. The field rides every record so the
+# decision is auditable later.
+QUIET_PROBE_CASE = "many_params"
+QUIET_PROBE_MS = 20.0
 
 C_COMPILERS: Dict[str, List[str]] = {
     "gcc": ["gcc", "-O2", "-o"],
@@ -288,6 +294,17 @@ def compare_runs(current: Dict[str, Dict[str, float]], previous: Dict[str, Dict[
     return lines, regressed
 
 
+def window_note(record: Optional[Dict[str, object]]) -> Optional[str]:
+    """A warning when a saved record was measured in a loaded window, else None."""
+    if not isinstance(record, dict) or record.get("quiet") is not False:
+        return None
+    probe = record.get("probe_ms")
+    measured = f" (probe {probe:.1f} ms)" if isinstance(probe, (int, float)) else ""
+    return ("warning: the saved baseline was measured in a loaded window"
+            f"{measured}, above the {QUIET_PROBE_MS:.0f} ms criterion; a flagged case may be"
+            " window noise - verify byte identity before treating it as a regression")
+
+
 def latest_history_record(path: Path) -> Optional[Dict[str, object]]:
     """The newest valid JSONL record in the history file, or None without one.
 
@@ -328,10 +345,14 @@ def record_from_reports(reports: List[Dict[str, object]], compiler: Optional[str
                          text=True, timeout=10, cwd=str(ROOT))
     if git.returncode == 0:
         commit = git.stdout.strip() or None
+    cairn = bests("cairn")
+    probe = cairn.get(QUIET_PROBE_CASE)
     return {"timestamp": round(time.time(), 3), "commit": commit, "rounds": rounds,
             "optimise": optimise, "c_compiler": compiler, "rust_compiler": rust_compiler,
             "cpp_compiler": cpp_compiler,
-            "cairn": bests("cairn"), "c": bests("c"), "cpp": bests("cpp"),
+            "probe_ms": None if probe is None else round(float(probe), 2),
+            "quiet": None if probe is None else bool(probe <= QUIET_PROBE_MS),
+            "cairn": cairn, "c": bests("c"), "cpp": bests("cpp"),
             "rust": bests("rust")}
 
 
@@ -536,9 +557,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(render(reports, compiler, optimise, rust_compiler, cpp_compiler))
     previous = latest_history_record(HISTORY) if arguments.compare else None
     if arguments.save:
-        save_record(HISTORY, record_from_reports(reports, compiler, rust_compiler,
-                                                 arguments.rounds, optimise, cpp_compiler))
+        record = record_from_reports(reports, compiler, rust_compiler,
+                                     arguments.rounds, optimise, cpp_compiler)
+        save_record(HISTORY, record)
         print(f"[SAVED] {HISTORY.relative_to(ROOT)}")
+        if record.get("quiet") is None:
+            print(f"[WINDOW] no {QUIET_PROBE_CASE} reading; window state unknown")
+        else:
+            state = "quiet" if record["quiet"] else "loaded"
+            print(f"[WINDOW] probe {record['probe_ms']:.1f} ms vs "
+                  f"{QUIET_PROBE_MS:.0f} ms criterion: {state}")
     if arguments.compare:
         if previous is None:
             print("Compare: no earlier saved run; this --save run becomes the baseline.")
@@ -550,6 +578,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print("Compare against the newest saved run"
                   + (f" (commit {previous.get('commit')})"
                      if previous.get("commit") else "") + ":")
+            note = window_note(previous)
+            if note:
+                print(f"  {note}")
             for line in lines:
                 print(f"  {line}")
             if regressed:
