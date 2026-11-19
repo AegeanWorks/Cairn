@@ -3,8 +3,8 @@
   "active_task": {
     "task_id": "cairn-homed-right",
     "last_phase": "phase 4",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1795095788.810059,
     "owner": "kilo:cairn",
     "lease_until": 1795102988.810059,
@@ -15,26 +15,12 @@
         "name": "cairn",
         "path": "projects/cairn"
       }
-    ]
+    ],
+    "completed_at": 1795095838.8519192,
+    "completed_head": "142b6f616e774825f43892e089bef7900077807b",
+    "completed_tree": "6c868715b7c1ae82e260374c4e1c612732f32a92"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-toolchain-doc",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-toolchain-doc' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795067163.2990084,
-      "timestamp_str": "2026-11-19 08:46:03",
-      "agent": "opencode:session",
-      "head": "f94d6d9ba718934d67fdc347ded2c406fc424c84",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-array-scale",
       "phase": "phase 2",
@@ -663,6 +649,23 @@
           "path": "projects/cairn"
         }
       ]
+    },
+    {
+      "task_id": "cairn-homed-right",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-homed-right' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795095839.288367,
+      "timestamp_str": "2026-11-19 16:43:59",
+      "agent": "kilo:cairn",
+      "head": "142b6f616e774825f43892e089bef7900077807b",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
