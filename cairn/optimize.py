@@ -1303,7 +1303,19 @@ def _algebraic_expression(expression):
             return expression
         return None
     if isinstance(expression, syntax.Binary) and expression.op in ("+", "-"):
-        return _collect_chain(expression)
+        # Collect bottom-up: a chain that cannot merge at its own root still has
+        # children worth visiting (an xor or a product can hide a collectible
+        # chain), so recurse first and then try the collection on the updated tree.
+        changed = False
+        for side in ("left", "right"):
+            replacement = _algebraic_expression(getattr(expression, side))
+            if replacement is not None:
+                setattr(expression, side, replacement)
+                changed = True
+        collected = _collect_chain(expression)
+        if collected is not None:
+            return collected
+        return expression if changed else None
     if isinstance(expression, syntax.Binary):
         left = _algebraic_expression(expression.left)
         right = _algebraic_expression(expression.right)

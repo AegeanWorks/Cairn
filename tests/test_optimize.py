@@ -549,6 +549,39 @@ class AlgebraicTest(unittest.TestCase):
                        if isinstance(side, syntax.IntLiteral)]
         self.assertEqual(multipliers, [68])
 
+    def test_a_chain_nested_under_another_operator_still_collects(self) -> None:
+        # The root chain holds a plain term and the xor, so nothing merges at the
+        # root; the chain inside the xor must still be visited and collected.
+        body = optimized_body(
+            'var t: i64 = 5; var i: i64 = 5;'
+            ' var r: i64 = t + ((i * (i + 1) & 65535)'
+            ' ^ (i + 2 + (i + 3) * 43 + (i + 4) * 47 + (i + 5) * 53));')
+
+        def pieces(expression):
+            while isinstance(expression, syntax.Parens):
+                expression = expression.inner
+            if isinstance(expression, syntax.Binary) and expression.op == "+":
+                return pieces(expression.left) + pieces(expression.right)
+            return [expression]
+
+        value = body.statements[2].value
+        while isinstance(value, syntax.Parens):
+            value = value.inner
+        self.assertEqual(value.op, "+")
+        xor = value.right
+        while isinstance(xor, syntax.Parens):
+            xor = xor.inner
+        self.assertEqual(xor.op, "^")
+        terms = pieces(xor.right)
+        constants = sorted(term.value for term in terms
+                           if isinstance(term, syntax.IntLiteral))
+        products = [term for term in terms if isinstance(term, syntax.Binary)]
+        self.assertEqual(constants, [584])
+        self.assertEqual(len(products), 1)
+        multipliers = [side.value for side in (products[0].left, products[0].right)
+                       if isinstance(side, syntax.IntLiteral)]
+        self.assertEqual(multipliers, [144])
+
     def test_cancelling_terms_leave_zero(self) -> None:
         body = optimized_body('var i: i64 = 5; var r: i64 = i * 7 - i * 7;')
         value = body.statements[1].value

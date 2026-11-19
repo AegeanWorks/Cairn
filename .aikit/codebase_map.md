@@ -9,8 +9,8 @@
 - **Total Python Modules**: `46`
 - **Total Classes**: `191`
 - **Total Top-Level Functions**: `212`
-- **Total Class Methods**: `1029`
-- **Total Source Lines**: `19289`
+- **Total Class Methods**: `1030`
+- **Total Source Lines**: `19334`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -540,7 +540,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `1441` lines
+**Size**: `1453` lines
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -1629,7 +1629,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `579` lines
+**Size**: `612` lines
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -1698,6 +1698,7 @@
 - `class AlgebraicTest` - *Distributive expansion and like-term collection must be ring-exact.*
   - Method `.test_like_terms_collect()`
   - Method `.test_distribution_expands_and_collects()`
+  - Method `.test_a_chain_nested_under_another_operator_still_collects()`
   - Method `.test_cancelling_terms_leave_zero()`
   - Method `.test_calls_are_never_grouped_or_duplicated()`
 
