@@ -381,7 +381,9 @@ ADR-079's promoted cursor — a stdin-reading leaf keeps the buffer base, the cu
 and the count word in register homes for its whole body, so the hot path is a
 register compare, one SIB byte read and one register increment, with the refill
 still out of line and the cursor stored back on the single epilogue — and reads
-9.4-13.3 ms against C's 7.7-10.7 ms.
+9.4-13.3 ms against C's 7.7-10.7 ms; a 31-round interleaved same-seconds A/B
+measured the promotion at -12.2 percent best and -10.0 percent on the ten fastest
+runs, with a byte-identical control at +0.3 percent in the same rounds.
 `array_sum` now rides ADR-073's ascending element addressing — element `i` at the
 span's lowest displacement plus `8i`, so a dynamic load, a read-modify-write and a
 literal-or-register store each lower to one indexed memory instruction, with no
