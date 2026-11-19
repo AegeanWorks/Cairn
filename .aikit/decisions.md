@@ -495,7 +495,7 @@ contract, a dependency, a data format or the architecture; IDs are consecutive a
 - **Decision (M2), the bug the work exposed**: the first `arg_byte` call on an unfilled cache answered from garbage - `arg_fill` clobbers rcx (token) and rdx (byte index), and nothing restored them across the fill. The helper now crosses the fill on the stack (two pushes keep the call distance ABI-aligned). Failing-first: the fresh e2e double-print test printed (-1, -1) before, (x, 120) after; the 72-print parity probe differed from the old build only at j = 0, exactly at the fixed call.
 - **Decision verification**: failing-first `ArgByteInlineTest` (four pinned shapes: the two rip-rel slot loads, the folded movzx, the negative-index sign branch, the masked-index drop), 1090 tests OK. Same-window A/B: 22.30 vs 27.49 ms best (-18.9%), median 23.15 vs 29.35 (-21%). Gate `--save --compare` exit 0 at high priority: every case within noise, argv_walk 32.6 -> 20.3 ms (-37.9%) - level with C's 20.1.
 - **Consequences**: argv-table reads stop paying a call per byte whenever the token is the literal 0; other token indexes keep the helper. The AND-mask non-negative fact also arms any future lowering that needs the same proof. Remaining recorded mechanisms: xorshift reassociation (ADR-054), many_params structural folding (staying behind), char_stream (measured level with C on quiet windows, ADR-058).
-## ADR-060: Reuse the subtraction zero flag and canonical multi-byte loop pads
+### ADR-060: Reuse the subtraction zero flag and canonical multi-byte loop pads
 
 Date: closed by task cairn-bgcd-flags (milestones 1/2 ec37041, 2/2 3f052bd). Accepted.
 
@@ -528,7 +528,7 @@ extension must name its clearing discipline (PRINCIPLE-009, PRINCIPLE-003).
 Known shape kept deliberately: the subtraction loop still re-tests `b != 0`
 at the top; removing that recheck requires a nonadjacency data-flow fact
 (sar of an even nonzero value never reaches zero), recorded as future work.
-## ADR-061: The xor-zero store records the non-negative fact
+### ADR-061: The xor-zero store records the non-negative fact
 
 Date: closed by task cairn-nonzero-facts (cd93a03). Accepted.
 
@@ -555,7 +555,7 @@ make. Future work recorded: the subtraction-loop top recheck in
 binary_gcd needs a genuine data-flow pass (sar of even nonzero never
 reaches zero), untouched here.
 
-## ADR-062: The stdin handle lives in static state, refills read 64 KiB
+### ADR-062: The stdin handle lives in static state, refills read 64 KiB
 
 Date: closed by task cairn-stdin-refill (9e6df5b). Accepted.
 
@@ -581,7 +581,7 @@ gate window put char_stream at 12.5 ms against C's 8.50. Most of the old
 gap lived in the per-byte loop, not the refill path, so closing the rest
 needs loop work, not more syscall batching.
 
-## ADR-063: literal loop conditions branch; read_char's state loads stay lea+mov
+### ADR-063: literal loop conditions branch; read_char's state loads stay lea+mov
 
 Date: closed by task cairn-charloop-shave (6e6d087, 6e25d87). Accepted
 (both halves decided on measurement, one accepted, one rejected).
@@ -611,7 +611,7 @@ the interleaved A/B is the recorded decision evidence. Remaining
 char_stream gap to C lives in call/ret and the compare chain, neither
 addressable without cargo-culting shapes this box already rejected.
 
-## ADR-064: the capabilities manifest is the law; the documents bind to it
+### ADR-064: the capabilities manifest is the law; the documents bind to it
 
 Date: closed by task cairn-contract-sync (2354a4f). Accepted.
 
@@ -639,7 +639,7 @@ changes, so they need the contract suite, not a benchmark gate. Full
 generation of the card from the manifest remains available if it drifts
 again, but the binding tests make that measurably unlikely first.
 
-## ADR-065: stdout is one shared 64 KiB buffer, drained by exit, main's return and flush()
+### ADR-065: stdout is one shared 64 KiB buffer, drained by exit, main's return and flush()
 
 Date: task cairn-buffered-stdout. Accepted.
 
@@ -672,7 +672,7 @@ call takes them directly instead of frame slots. New PE bytes change the
 layout, so sub-4% best-of swings in both directions accompany it; the
 regression rule stays: decide on interleaved best-of/median, never on
 one window.
-## ADR-066: a typed SSA IR substrate, proven by differential execution
+### ADR-066: a typed SSA IR substrate, proven by differential execution
 
 Date: task cairn-ir-foundation. Accepted.
 
@@ -726,7 +726,7 @@ regression shield. Production codegen is unchanged, so no benchmark gate
 was required for this task; full suite grew 1156 to 1163 tests, all green.
 
 
-## ADR-067: AST-level pure inlining and algebraic collection inside the optimizer run
+### ADR-067: AST-level pure inlining and algebraic collection inside the optimizer run
 
 Date: task cairn-ir-passes (milestones 1/3 and 2/3 of the general-optimizer
 track). Accepted.
@@ -792,7 +792,7 @@ those deltas are provably not code. A saved record from the first polluted
 window was removed from benchmark_history.jsonl before commit; the re-gate is
 pending the first quiet window and the task stays open for it.
 
-## ADR-068: fixed-size `i64` arrays with frame-slot elements
+### ADR-068: fixed-size `i64` arrays with frame-slot elements
 
 Date: task cairn-arrays (milestones 1-3 of the roadmap's language-expansion
 track). Accepted.
@@ -834,7 +834,7 @@ one fill, 100 read-modify-write passes, one summation pass) and `sieve`
 print the identical totals. Per the standing rule every benchmark case runs in
 the benchmark gate, and the gate record lands with the closing commit.
 
-## ADR-069: element-store address fusion and interleaved benchmark trust
+### ADR-069: element-store address fusion and interleaved benchmark trust
 
 Task cairn-speed-2 [1/3]. `ca[i] = ca[i] op e` folded to one address computation
 and one memory-operand store: `binary_store_reg` in machine.py, fused emission in
@@ -863,7 +863,7 @@ flapping windows mid-gate therefore cannot claim a code regression for these
 cases: the honest 79af21f record is the current tree's measurement. A cross-window
 regression claim needs a byte-difference first.
 
-## ADR-070: the swap shape lowers branchless through one cmov pair
+### ADR-070: the swap shape lowers branchless through one cmov pair
 
 Task cairn-speed-2 [2/3]. `if a > b { var t = a; a = b; b = t; }` — the
 data-dependent swap whose branch mispredicts at the heart of a Stein-GCD
@@ -880,7 +880,7 @@ percent from the Rust twin; the full honest gate then read zero cases
 beyond the noise band versus 79af21f. The pass refuses whenever any input
 of the shape is off, so a refused swap keeps the exact branchy semantics.
 
-## ADR-071: many_params is an unfair twin — every compiler folds it to a constant
+### ADR-071: many_params is an unfair twin — every compiler folds it to a constant
 
 Chasing the many_params gap (Cairn 13.2 ms best vs C 10.58) with codegen work
 started from the disassembly and stopped there: gcc -O2, g++ -O2 and rustc -O
@@ -898,7 +898,7 @@ altered together), or retire the case's "gaps" from the scoreboard with this
 ADR cited. Until that ADR-covered contract change, many_params claims no
 further codegen work.
 
-## ADR-072: the read_char fast path fuses into its call site; a break-only if jumps directly
+### ADR-072: the read_char fast path fuses into its call site; a break-only if jumps directly
 
 Task cairn-read-fuse. `read_char()`'s buffered have-path now answers in the
 caller — two rip loads, one compare, one SIB `movzx` and one in-place cursor
@@ -926,3 +926,10 @@ failing on their baseline builds. The scoped fix, `rust-toolchain.toml`
 selecting `stable-x86_64-pc-windows-gnu` (MinGW's ld), restored every twin
 build; TwinParityTest reads 12/12 after it. Cairn's own pipeline needs no
 external compiler and was verified end to end.
+
+### ADR-073: arrays address ascending: every dynamic element access is one SIB instruction
+- **Date**: 2026-11-19
+- **Status**: Accepted
+- **Context**: Task cairn-array-scale. Element addressing descended with the index: every dynamic path copied the index or lowered it into rax, negated it, formed 'lea rcx,[rbp+rax*8+base]' and then read, updated or stored through rcx, parking the address whenever the value could call. The C twin walks a pointer, and array_sum sat at 11.8-13.7 ms against C's 10.2-11.9. The descending layout was also the only reason an indexed memory operand was out of reach.
+- **Decision**: An array's span now runs from slot_offset(base + size - 1) upward: element i sits at the span's lowest displacement plus 8i (previously base slot minus 8i). Literal indices fold into ascending displacements; a dynamic load is one 'mov r64,[rbp+index*8+disp]'; a read-modify-write, and a store whose value is a literal or a homed name, is one indexed memory-operand ALU/mov. machine.py gains _indexed_memory with mov-load/mov-store/binary/group-1-immediate forms, each pinned byte-for-byte in test_machine; the now-unused neg encoder is removed. A value that may call still parks the computed address, because only then can the value's own lowering clobber it. SPEC 5.2, 6.4 and the section 7 rows and the README scoreboard moved in the same change (ADR-064).
+- **Consequences**: Blast radius proved by full-image SHA-256 through a pre-change tree: 17 of 19 registry cases are byte-identical; only array_sum and sieve change. A 31-round interleaved same-seconds A/B measured array_sum best 11.76->10.78 (-8.3 percent), ten-fastest mean -6.9 percent, median -6.2 percent, and sieve best -2.8 percent with a ten-fastest mean of -0.3 percent (neutral). Earlier loaded windows ranged from -1.1 to -12.9 percent best for array_sum with one +6.1 percent best and a -6.2 percent ten-fastest mean, so the interleaved statistic decides and a lone best does not. The honest gate read array_sum 12.9->11.4 ms (-12.0 percent, improved), sieve -0.2 percent within noise, every other case inside the 10 percent band. That window found no rustc (the rustup shim directory was off PATH); TwinParityTest re-run with it on PATH passed 12/12, so ADR-072's toolchain pin stands. The hot loop is memory-bound (a 512 KiB frame array), so the residual array_sum gap to C (11.4 vs 10.9 in-gate) is L2 latency and disp32 addressing, not arithmetic the emitter can still remove. A second gate run in a loaded window flagged byte-identical cases up to +53.9 percent and its record was dropped under ADR-069's pollution rule.

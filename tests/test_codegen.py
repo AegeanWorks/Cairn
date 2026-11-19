@@ -780,18 +780,20 @@ class ArrayInPlaceUpdateTest(unittest.TestCase):
             "fn main() -> i64 { var a: [4]i64 = [0; 4]; var i: i64 = 0;"
             " var r: i64 = 2; while i < 4 { a[i] = a[i] + r; i = i + 1; }"
             " return 0; }")
-        through_pointer = b"\x48\x01\x19"    # add [rcx], rbx (r's home)
-        neg_rax = b"\x48\xf7\xd8"
+        expected = Assembler()
+        expected.binary_store_indexed(0x01, "rbp", "r12", 3, -32, "rbx")
         park = b"\x48\x89\x8d"              # mov [rbp+disp32], rcx: the address park
-        self.assertIn(through_pointer, code)
+        self.assertIn(bytes(expected.code), code)
         self.assertNotIn(park, code)
-        self.assertEqual(code.count(neg_rax), 1)
+        self.assertNotIn(b"\x48\xf7\xd8", code)
 
     def test_a_dynamic_index_update_folds_a_literal_into_the_instruction(self) -> None:
         code = self.program_and_code(
             "fn main() -> i64 { var a: [4]i64 = [0; 4]; var i: i64 = 0;"
             " while i < 4 { a[i] = a[i] + 7; i = i + 1; } return 0; }")
-        self.assertIn(b"\x48\x83\x01\x07", code)  # add qword [rcx], imm8
+        expected = Assembler()
+        expected.group1_store_indexed_imm(0, "rbp", "rbx", 3, -32, 7)
+        self.assertIn(bytes(expected.code), code)
         self.assertNotIn(b"\x48\x89\x8d", code)
 
     def test_a_reversed_commutative_update_fuses_with_the_other_side_only(self) -> None:
@@ -813,6 +815,92 @@ class ArrayInPlaceUpdateTest(unittest.TestCase):
                   "fn main() -> i64 { var a: [4]i64 = [0; 4];"
                   " a[pick(3)] = a[pick(3)] + 5; return 0; }")
         self.assertNotIn(b"\x48\x01\x45", self.program_and_code(source))
+
+
+class ArrayElementAddressTest(unittest.TestCase):
+    """Element `i` sits at the span's lowest displacement plus `8i`, and rises with `i`.
+
+    The old layout descended with the index, so every dynamic element access paid
+    a register copy and a `neg`; ascending addressing folds the whole access into
+    one SIB memory operand over `rbp` plus the index home.
+    """
+
+    def main_code(self, source: str) -> bytes:
+        """Main's own code bytes, so runtime helpers never satisfy the asserts."""
+        from cairn import codegen as codegen_module
+        from cairn import optimize
+        artifact = codegen_module.generate(optimize.optimize(sema.analyze(parser.parse(source))))
+        labels = artifact.text_labels
+        main_start = labels[codegen_module.function_label("main")]
+        runtime_start = min(offset for name, offset in labels.items()
+                            if name.startswith("cairn.runtime."))
+        return bytes(artifact.text)[main_start:runtime_start]
+
+    def test_a_dynamic_index_load_is_one_sib_load(self) -> None:
+        code = self.main_code(
+            "fn main() -> i64 { var a: [8]i64 = [0; 8]; var i: i64 = 0;"
+            " while i < 8 { print(a[i]); i = i + 1; } return 0; }")
+        expected = Assembler()
+        expected.mov_load_indexed("rax", "rbp", "rbx", 3, -64)
+        self.assertIn(bytes(expected.code), code)
+        self.assertNotIn(b"\x48\xf7\xd8", code)   # neg rax: the descending layout's copy
+
+    def test_a_dynamic_element_update_is_one_sib_alu(self) -> None:
+        code = self.main_code(
+            "fn main() -> i64 { var a: [8]i64 = [0; 8]; var i: i64 = 0;"
+            " while i < 8 { a[i] = a[i] + 7; i = i + 1; } print(a[3]); return 0; }")
+        expected = Assembler()
+        expected.group1_store_indexed_imm(0, "rbp", "rbx", 3, -64, 7)
+        self.assertIn(bytes(expected.code), code)
+        self.assertNotIn(b"\x48\xf7\xd8", code)
+
+    def test_a_literal_store_to_a_dynamic_index_is_one_memory_write(self) -> None:
+        code = self.main_code(
+            "fn main() -> i64 { var a: [8]i64 = [0; 8]; var i: i64 = 0;"
+            " while i < 8 { a[i] = 1; i = i + 1; } print(a[3]); return 0; }")
+        expected = Assembler()
+        expected.mov_store_indexed_imm("rbp", "rbx", 3, -64, 1)
+        self.assertIn(bytes(expected.code), code)
+        self.assertNotIn(b"\x48\x89\x8d", code)   # no parked address
+
+    def test_a_homed_value_store_to_a_dynamic_index_is_one_memory_write(self) -> None:
+        code = self.main_code(
+            "fn main() -> i64 { var a: [8]i64 = [0; 8]; var i: i64 = 0;"
+            " while i < 8 { a[i] = i; i = i + 1; } print(a[3]); return 0; }")
+        expected = Assembler()
+        expected.mov_store_indexed("rbp", "rbx", 3, -64, "rbx")
+        self.assertIn(bytes(expected.code), code)
+        self.assertNotIn(b"\x48\x89\x8d", code)
+
+    def test_a_literal_index_uses_the_ascending_displacement(self) -> None:
+        code = self.main_code(
+            "fn main() -> i64 { var a: [4]i64 = [0; 4]; a[3] = 5;"
+            " print(a[3]); return 0; }")
+        lowest = Assembler()
+        lowest.mov_store_rbp(-32, "rax")     # element 0: the span's lowest slot
+        store = Assembler()
+        store.mov_store_rbp(-8, "rax")       # element 3: three steps above it
+        load = Assembler()
+        load.mov_load_rbp("rax", -8)
+        self.assertIn(bytes(lowest.code), code)
+        self.assertIn(bytes(store.code), code)
+        self.assertIn(bytes(load.code), code)
+
+    def test_an_aggregate_literal_lands_ascending(self) -> None:
+        code = self.main_code(
+            "fn main() -> i64 { var a: [3]i64 = [2, 4, 6];"
+            " print(a[0]); print(a[2]); return 0; }")
+        first = Assembler()
+        first.mov_store_rbp(-24, "rax")      # element 0 of a three-element span
+        low_load = Assembler()
+        low_load.mov_load_rbp("rax", -24)
+        high_load = Assembler()
+        high_load.mov_load_rbp("rax", -8)
+        self.assertIn(bytes(first.code), code)
+        self.assertIn(bytes(low_load.code), code)
+        self.assertIn(bytes(high_load.code), code)
+
+
 
 if __name__ == "__main__":
     unittest.main()

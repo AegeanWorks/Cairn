@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `187`
-- **Total Top-Level Functions**: `211`
-- **Total Class Methods**: `995`
-- **Total Source Lines**: `18936`
+- **Total Classes**: `189`
+- **Total Top-Level Functions**: `212`
+- **Total Class Methods**: `1018`
+- **Total Source Lines**: `19176`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4223` lines
+**Size**: `4265` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -197,6 +197,7 @@
   - Method `._emit_comparison_branch(expression, target, when_true)` - *Compare two operands and branch, using an immediate form when the right side is small.*
   - Method `._emit_expression(expression)` - *Lower one expression, leaving its value in rax.*
   - Method `._emit_index_load(expression)` - *Leave element `index` of the array in rax; bound checks stay compile-time.*
+  - Method `._index_register(expression)` - *The register holding a dynamic index's value when this call returns.*
   - Method `._emit_element_store(statement)` - *`a[i] = value;`: fold literal indices, park a dynamic address in the frame.*
   - Method `._emit_dynamic_element_address(statement)` - *Leave the element's address in rcx for `a[i]` with a non-literal `i`.*
   - Method `._direct_update_operand(expression)` - *The operand of a fused element update that needs no temporary register.*
@@ -263,6 +264,7 @@
 - `def _shape_equal(left, right)` - *Structural equality of two index sub-expressions, spans ignored.*
 - `def function_label(name)` - *The assembler label of a Cairn function.*
 - `def slot_offset(slot)` - *The rbp-relative offset of a frame slot; slot 0 is the first parameter.*
+- `def array_element_base(base, size)` - *The lowest rbp displacement of an array span; element `i` sits at base + 8i.*
 - `def align16(value)` - *Round a frame size up to the 16-byte stack alignment the ABI requires.*
 - `def slot_of(expression)` - *The slot a parenthesised name refers to, or None for every other expression.*
 - `def _is_plus_step(statement, level)` - *Whether the statement is `amount = amount + level` for its own slot.*
@@ -446,7 +448,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `632` lines
+**Size**: `685` lines
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -479,10 +481,15 @@
   - Method `.lea_rip(destination, target)` - *`lea r64, [rip+disp32]`, used for read-only data addresses.*
   - Method `.mov_load_rip(destination, target)` - *`mov r64, [rip+disp32]`: read a qword of state without an address register.*
   - Method `.mov_load(destination, base)` - *`mov r64, [base]`: read a qword through a pointer register.*
-  - Method `.neg(destination)` - *`neg r64`: twos-complement negation for descending frame indexing.*
   - Method `.mov_store_reg(base, source)` - *`mov [base], r64`: write a qword through a pointer register.*
   - Method `.binary_store_reg(opcode, base, source)` - *`op [base], r64`: one in-place ALU update through a pointer register.*
   - Method `.group1_store_reg_imm(extension, base, value)` - *`op [base], imm8/imm32` sign-extended through a pointer register.*
+  - Method `.mov_load_indexed(destination, base, index, scale_log2, displacement)` - *`mov r64, [base + index*2**scale_log2 + disp]`: a frame array element load.*
+  - Method `.binary_store_indexed(opcode, base, index, scale_log2, displacement, source)` - *`op [base + index*scale + disp], r64`: a fused element update, no address register.*
+  - Method `.mov_store_indexed(base, index, scale_log2, displacement, source)` - *`mov [base + index*scale + disp], r64`: a frame array element store in one instruction.*
+  - Method `.mov_store_indexed_imm(base, index, scale_log2, displacement, value)` - *`mov qword [base + index*scale + disp], imm32`: a literal element store.*
+  - Method `.group1_store_indexed_imm(extension, base, index, scale_log2, displacement, value)` - *`op [base + index*scale + disp], imm8/imm32`: a fused element update by a literal.*
+  - Method `._indexed_memory(opcode, reg, base, index, scale_log2, displacement)` - *One 64-bit instruction with `[base + index*2**scale_log2 + disp]` as its operand.*
   - Method `.movzx_load8(destination, base)` - *`movzx r32, [base]`: read the byte at a pointer register, zero-extended.*
   - Method `.movzx_load8_sib(destination, base, index)` - *`movzx r32, [base + index]`: one byte load off two pointer registers.*
   - Method `.movzx_from8(destination, source)` - *`movzx r32, r8`: the `& 255` mask of a register's value in one instruction.*
@@ -686,7 +693,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `460` lines
+**Size**: `462` lines
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -721,7 +728,7 @@
 ### [`cairn/syntax.py`](cairn/syntax.py)
 > *Syntax tree: one dataclass per construct, each carrying its source span.*
 
-**Size**: `237` lines
+**Size**: `238` lines
 
 **Classes:**
 - `class Node` - *Every node carries the span it was parsed from.*
@@ -941,7 +948,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2430` lines
+**Size**: `2518` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1032,6 +1039,14 @@
   - Method `.test_a_reversed_commutative_update_fuses_with_the_other_side_only()`
   - Method `.test_a_subtraction_from_the_element_fuses_only_left_to_right()`
   - Method `.test_an_index_calling_update_never_fuses()`
+- `class ArrayElementAddressTest` - *Element `i` sits at the span's lowest displacement plus `8i`, and rises with `i`.*
+  - Method `.main_code(source)` - *Main's own code bytes, so runtime helpers never satisfy the asserts.*
+  - Method `.test_a_dynamic_index_load_is_one_sib_load()`
+  - Method `.test_a_dynamic_element_update_is_one_sib_alu()`
+  - Method `.test_a_literal_store_to_a_dynamic_index_is_one_memory_write()`
+  - Method `.test_a_homed_value_store_to_a_dynamic_index_is_one_memory_write()`
+  - Method `.test_a_literal_index_uses_the_ascending_displacement()`
+  - Method `.test_an_aggregate_literal_lands_ascending()`
 - `class SelfRecursionInliningTest` - *The left operand of a merge may be a self-call lowered in place, not a real call.*
   - Method `.test_a_merge_left_self_call_is_inlined()`
   - Method `.test_a_comparison_with_a_small_literal_skips_the_rax_load()`
@@ -1493,7 +1508,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `304` lines
+**Size**: `358` lines
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1502,6 +1517,17 @@
   - Method `.test_frame_slot_binary_in_place_beyond_disp8()`
   - Method `.test_frame_slot_group1_imm_in_place()`
   - Method `.test_frame_slot_group1_imm_rejects_wide_literals()`
+- `class IndexedElementEncodingTest` - *An indexed element access is one SIB memory operand over `rbp` and the index.*
+  - Method `.code(build)`
+  - Method `.test_indexed_load_with_disp8()`
+  - Method `.test_indexed_load_with_r12_as_index_and_disp32()`
+  - Method `.test_indexed_binary_update()`
+  - Method `.test_indexed_store_with_r12_source()`
+  - Method `.test_indexed_immediate_store()`
+  - Method `.test_indexed_immediate_store_rejects_wide_literals()`
+  - Method `.test_indexed_group1_immediate_update()`
+  - Method `.test_indexed_group1_rejects_wide_literals()`
+  - Method `.test_indexed_memory_rejects_rsp()`
 - `class EncodingTest` - *Each test names one encoding and its expected bytes.*
   - Method `.code(build)` - *Run a builder function against a fresh assembler and return its bytes.*
   - Method `.test_push_and_pop_extended_registers_mask_the_register_bits()`

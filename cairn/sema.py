@@ -299,6 +299,8 @@ class Analyzer:
         else:
             statement.slot = binding.slot
         size = binding.array_size if binding is not None else None
+        if statement.slot >= 0:
+            statement.array_size = size
         self._check_element_index(statement.index, size)
         self._check_expression(statement.value)
         if (statement.slot >= 0 and size is not None

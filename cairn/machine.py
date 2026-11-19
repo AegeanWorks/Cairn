@@ -288,16 +288,6 @@ class Assembler:
         self.emit(bytes([_rex(True, dst >> 3, 0, base_code >> 3), 0x8B,
                          *_modrm(0, dst, base_code)]))
 
-    def neg(self, destination: str) -> None:
-        """`neg r64`: twos-complement negation for descending frame indexing.
-
-        Frame slots descend with the slot number, so a dynamic array index is
-        negated before the scaled `lea` folds it into the element address.
-        """
-        src = REGISTERS[destination]
-        assert src != REGISTERS["rsp"]
-        self.emit(bytes([_rex(True, 0, 0, src >> 3), 0xF7, *_modrm(3, 3, src)]))
-
     def mov_store_reg(self, base: str, source: str) -> None:
         """`mov [base], r64`: write a qword through a pointer register.
 
@@ -341,6 +331,69 @@ class Assembler:
         else:
             self.emit(bytes([rex, 0x81, *_modrm(0, extension, base_code)]),
                       (value & 0xFFFFFFFF).to_bytes(4, "little"))
+
+    def mov_load_indexed(self, destination: str, base: str, index: str,
+                         scale_log2: int, displacement: int) -> None:
+        """`mov r64, [base + index*2**scale_log2 + disp]`: a frame array element load.
+
+        Element `i` of a frame array is base-displacement plus `8i`, so one SIB
+        load reads it with no address register and no `lea`.
+        """
+        self._indexed_memory(0x8B, REGISTERS[destination], base, index,
+                             scale_log2, displacement)
+
+    def binary_store_indexed(self, opcode: int, base: str, index: str,
+                             scale_log2: int, displacement: int, source: str) -> None:
+        """`op [base + index*scale + disp], r64`: a fused element update, no address register."""
+        self._indexed_memory(opcode, REGISTERS[source], base, index,
+                             scale_log2, displacement)
+
+    def mov_store_indexed(self, base: str, index: str, scale_log2: int,
+                          displacement: int, source: str) -> None:
+        """`mov [base + index*scale + disp], r64`: a frame array element store in one instruction."""
+        self._indexed_memory(0x89, REGISTERS[source], base, index,
+                             scale_log2, displacement)
+
+    def mov_store_indexed_imm(self, base: str, index: str, scale_log2: int,
+                              displacement: int, value: int) -> None:
+        """`mov qword [base + index*scale + disp], imm32`: a literal element store."""
+        if not -0x80000000 <= value <= 0x7FFFFFFF:
+            raise ValueError("immediate does not fit in 32 signed bits")
+        self._indexed_memory(0xC7, 0, base, index, scale_log2, displacement)
+        self.emit((value & 0xFFFFFFFF).to_bytes(4, "little"))
+
+    def group1_store_indexed_imm(self, extension: int, base: str, index: str,
+                                 scale_log2: int, displacement: int, value: int) -> None:
+        """`op [base + index*scale + disp], imm8/imm32`: a fused element update by a literal."""
+        if not -0x80000000 <= value <= 0x7FFFFFFF:
+            raise ValueError("immediate does not fit in 32 signed bits")
+        small = -128 <= value <= 127
+        self._indexed_memory(0x83 if small else 0x81, extension, base, index,
+                             scale_log2, displacement)
+        if small:
+            self.emit(bytes([value & 0xFF]))
+        else:
+            self.emit((value & 0xFFFFFFFF).to_bytes(4, "little"))
+
+    def _indexed_memory(self, opcode: int, reg: int, base: str, index: str,
+                        scale_log2: int, displacement: int) -> None:
+        """One 64-bit instruction with `[base + index*2**scale_log2 + disp]` as its operand.
+
+        `reg` is the ModRM.reg field: a register code for the mov/ALU forms, or a
+        group-1 opcode extension (REX.R stays clear). The base may not be `rsp`,
+        and `rbp` takes the forced-displacement SIB form, so mod 00 never
+        applies. `r12` is a legal index through REX.X, exactly as in `lea_scale`.
+        """
+        base_code, index_code = REGISTERS[base], REGISTERS[index]
+        assert base_code != REGISTERS["rsp"] and index_code != REGISTERS["rsp"]
+        wide = not (-128 <= displacement <= 127)
+        self.emit(bytes([_rex(True, reg >> 3, index_code >> 3, base_code >> 3), opcode,
+                         *_modrm(2 if wide else 1, reg, 4)]),
+                  bytes([(scale_log2 << 6) | (index_code & 7) << 3 | (base_code & 7)]))
+        if wide:
+            self.emit((displacement & 0xFFFFFFFF).to_bytes(4, "little"))
+        else:
+            self.emit(bytes([displacement & 0xFF]))
 
     def movzx_load8(self, destination: str, base: str) -> None:
         """`movzx r32, [base]`: read the byte at a pointer register, zero-extended."""

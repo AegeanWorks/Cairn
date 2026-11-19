@@ -331,8 +331,8 @@ a spread:
 | `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 20.0-23.7 ms | 18.5-24.2 ms | 19.1-22.5 ms | 25.5-28.4 ms | 71,168 bytes |
 | `char_stream` | 4 MiB piped through `read_char()`, summed | 9.4-13.3 ms (ADR-072 fusion) | 7.7-10.7 ms | 7.4-10.3 ms | 12.9-22.0 ms | 71,168 bytes |
 | `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.9-18.4 ms | 11.8-16.6 ms | 12.2-19.6 ms | 28.2-37.0 ms | 71,168 bytes |
-| `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 11.8-13.7 ms | 10.2-11.9 ms | 10.4-11.9 ms | 11.6-13.0 ms | 137,216 bytes |
-| `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 9.4-9.4 ms | 9.6-10.0 ms | 10.1-10.9 ms | 11.2-11.8 ms | 137,216 bytes |
+| `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 10.8-11.4 ms (ADR-073 SIB addressing) | 10.2-11.9 ms | 10.0-11.9 ms | 11.6-13.0 ms | 136,704 bytes |
+| `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 9.3-9.4 ms (ADR-073 SIB addressing) | 9.3-10.0 ms | 10.1-10.9 ms | 11.2-11.8 ms | 136,704 bytes |
 
 The size column is the executable's `.text` frame at the current revision: the runtime helpers (argv arena, 64 KiB stdin state, printers, divide trap) ride in every program, so most cases share the same 71,168-byte base. `array_sum` and sieve reserve 8 MiB of stack in the PE header (ADR-068), so their base carries the bigger frame.
 
@@ -374,6 +374,12 @@ the recorded losses, with the mechanisms in the ADR register (`argv_walk`: ADR-0
 NUL-test facts); `char_stream` now rides ADR-072's fused `read_char` fast path —
 two rip loads, one compare, one SIB byte read and one in-place cursor bump with no
 call until a buffer rolls over — and reads 9.4-13.3 ms against C's 7.7-10.7 ms.
+`array_sum` now rides ADR-073's ascending element addressing — element `i` at the
+span's lowest displacement plus `8i`, so a dynamic load, a read-modify-write and a
+literal-or-register store each lower to one indexed memory instruction, with no
+index negation and no address register — and reads 10.8-11.4 ms against C's
+10.2-11.9 ms; a 31-round interleaved same-seconds A/B measured -8.3 percent best
+and -6.9 percent on the ten fastest runs, while `sieve` measured neutral.
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 `movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics

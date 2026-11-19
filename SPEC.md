@@ -92,7 +92,8 @@ var b: [N]i64 = [e0, e1, ...];
   elements with one literal, `[e0, e1, ...]` lists them in evaluation order every
   element once. N is 1..65536 (`E3014`); a fill or aggregate must match N exactly
   (`E3014`); an empty `[v; 0]` or literal is refused the same way. The elements
-  occupy N consecutive frame slots starting at the binding's own slot.
+  occupy N consecutive frame slots; element 0 sits at the span's lowest address
+  and element `i` eight bytes above it.
 - Arrays never narrow to scalars: a whole-array use as a value is `E3016`, and
   parameters and return types stay `i64` (`E2002` refuses `[N]i64` there).
 - A name already declared in the function cannot be redeclared (`E3006`), including parameters. There is no shadowing.
@@ -158,12 +159,14 @@ a[i] = expr;   store into element i
   array literals may not nest inside one another, and an element is not assignable
   through anything but a plain `a[i] =` statement.
 - A literal index outside `0 .. N-1` is `E3017` at analysis time. A dynamic index is
-  negated, scaled by 8 and displaced by the array's own slot offset, so element `i` sits
+  scaled by 8 and added to the element span's lowest displacement, so element `i` sits
   at the same frame slot a static analysis would name; there is no runtime bounds check,
   and an out-of-range dynamic index addresses foreign frame slots or beyond.
-- Static element stores evaluate the value expression first; dynamic element stores park
-  the element address in a frame scratch slot so the value's own calls and register use
-  cannot clobber it. Evaluation order is index, then value.
+- A static element store writes its frame slot directly. A dynamic one writes through
+  the scaled address; when the value is a literal or a name already in a register, that
+  write is one memory-operand instruction, and otherwise the element address is parked
+  in a frame scratch slot so the value's own calls and register use cannot clobber it.
+  Evaluation order is index, then value.
 
 ## 7. Defined semantics
 
@@ -187,8 +190,8 @@ a[i] = expr;   store into element i
 | Uninitialised reads | Impossible: initializers are mandatory and every frame slot is zeroed on entry |
 | Branch never taken | A binding declared inside it reads as `0` |
 | Undeclared read | Rejected before code generation (`E3007`) |
-| Array element address | Element `i` sits at the base slot's frame displacement minus `8i`; static indices are bounds-checked at analysis time (`E3017`), dynamic indices are never re-checked at runtime |
-| Array element store order | `index`, then `value`; the store address is parked in the frame across the value's evaluation |
+| Array element address | Element `i` sits at the element span's lowest displacement plus `8i`; static indices are bounds-checked at analysis time (`E3017`), dynamic indices are never re-checked at runtime |
+| Array element store order | `index`, then `value`; a literal or register value writes in one indexed memory instruction, any other value's address is parked in the frame across its evaluation |
 
 Folding (`optimize.py`) preserves these answers exactly: it never folds a zero
 divisor or `i64.min / -1`, never drops a `print`, and `while 0` removal plus

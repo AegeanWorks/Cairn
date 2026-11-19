@@ -120,6 +120,17 @@ def slot_offset(slot: int) -> int:
     return -8 * (slot + 1)
 
 
+def array_element_base(base: int, size: int) -> int:
+    """The lowest rbp displacement of an array span; element `i` sits at base + 8i.
+
+    Slots descend with their number, so the span `base .. base + size - 1` runs
+    from `slot_offset(base + size - 1)` up to `slot_offset(base)`. Element 0
+    takes the span's lowest displacement, which lets one scaled `lea` address a
+    dynamic index without a negation.
+    """
+    return slot_offset(base + size - 1)
+
+
 def align16(value: int) -> int:
     """Round a frame size up to the 16-byte stack alignment the ABI requires."""
     return (value + 15) & ~15
@@ -2225,21 +2236,38 @@ class CodeGenerator:
     def _emit_index_load(self, expression: syntax.Index) -> None:
         """Leave element `index` of the array in rax; bound checks stay compile-time.
 
-        A literal index folds into the frame displacement; a dynamic one forms the
-        element address with a scaled `lea` (`index * 8` wraps at 64 bits exactly
-        like the arithmetic it replaces, so negative indices stay one instruction).
+        Element `i` sits at the span's lowest displacement plus `8i`: a literal
+        index folds into the frame displacement, and a dynamic one forms the
+        address with one scaled `lea` — no negation, and no copy either when the
+        index already lives in a home register.
         """
         asm = self.assembler
+        base = array_element_base(expression.slot, expression.size)
         static = expression.index
         while isinstance(static, syntax.Parens):
             static = static.inner
         if isinstance(static, syntax.IntLiteral):
-            asm.mov_load_rbp("rax", slot_offset(expression.slot) - 8 * static.value)
+            asm.mov_load_rbp("rax", base + 8 * static.value)
             return
-        self._emit_into(expression.index, "rax")
-        asm.neg("rax")
-        asm.lea_scale("rcx", "rbp", "rax", 3, slot_offset(expression.slot))
-        asm.mov_load("rax", "rcx")
+        index = self._index_register(expression.index)
+        asm.mov_load_indexed("rax", "rbp", index, 3, base)
+
+    def _index_register(self, expression: Optional[syntax.Expr]) -> str:
+        """The register holding a dynamic index's value when this call returns.
+
+        A homed, non-delta name needs no copy: the scaled `lea` reads the home
+        directly. Anything else lowers into rax first.
+        """
+        stripped = expression
+        while isinstance(stripped, syntax.Parens):
+            stripped = stripped.inner
+        if isinstance(stripped, syntax.Name):
+            if not (stripped.slot == self.delta_slot and self.delta_value):
+                home = self._home(stripped.slot)
+                if home is not None:
+                    return home
+        self._emit_into(expression, "rax")
+        return "rax"
 
     def _emit_element_store(self, statement: syntax.Assign) -> None:
         """`a[i] = value;`: fold literal indices, park a dynamic address in the frame.
@@ -2248,12 +2276,13 @@ class CodeGenerator:
         the value expression can call and clobber every register before the store.
         """
         asm = self.assembler
+        base = array_element_base(statement.slot, statement.array_size)
         static = statement.index
         while isinstance(static, syntax.Parens):
             static = static.inner
         update = self._inplace_element(statement)
         if isinstance(static, syntax.IntLiteral):
-            offset = slot_offset(statement.slot) - 8 * static.value
+            offset = base + 8 * static.value
             if update is not None:
                 operator, other = update
                 direct = self._direct_update_operand(other)
@@ -2270,21 +2299,33 @@ class CodeGenerator:
             operator, other = update
             direct = self._direct_update_operand(other)
             if direct is not None:
-                # Neither operand can call, and a home register survives every
-                # call-free lowering, so the value needs no park: the address
-                # forms once into rcx and the update reads and writes through it.
-                self._emit_dynamic_element_address(statement)
+                # Neither operand can call, so the element update is one indexed
+                # memory-operand ALU instruction: no address register, no park.
+                index = self._index_register(statement.index)
                 kind, operand = direct
                 if kind == "register":
-                    asm.binary_store_reg(UPDATE_OPCODES[operator], "rcx", operand)
+                    asm.binary_store_indexed(UPDATE_OPCODES[operator], "rbp", index,
+                                             3, base, operand)
                 else:
-                    asm.group1_store_reg_imm(UPDATE_OPCODES[operator] >> 3, "rcx", operand)
+                    asm.group1_store_indexed_imm(UPDATE_OPCODES[operator] >> 3, "rbp",
+                                                 index, 3, base, operand)
                 return
             self._emit_dynamic_element_address(statement)
             asm.mov_store_rbp(slot_offset(statement.temp_slot), "rcx")
             self._emit_into(other, "rax")
             asm.mov_load_rbp("rcx", slot_offset(statement.temp_slot))
             asm.binary_store_reg(UPDATE_OPCODES[operator], "rcx", "rax")
+            return
+        direct = self._direct_update_operand(statement.value)
+        if direct is not None:
+            # A literal or homed value has no evaluation to order against, so the
+            # store is one indexed memory write with no address park.
+            index = self._index_register(statement.index)
+            kind, operand = direct
+            if kind == "register":
+                asm.mov_store_indexed("rbp", index, 3, base, operand)
+            else:
+                asm.mov_store_indexed_imm("rbp", index, 3, base, operand)
             return
         self._emit_dynamic_element_address(statement)
         asm.mov_store_rbp(slot_offset(statement.temp_slot), "rcx")
@@ -2294,10 +2335,9 @@ class CodeGenerator:
 
     def _emit_dynamic_element_address(self, statement: syntax.Assign) -> None:
         """Leave the element's address in rcx for `a[i]` with a non-literal `i`."""
-        asm = self.assembler
-        self._emit_into(statement.index, "rax")
-        asm.neg("rax")
-        asm.lea_scale("rcx", "rbp", "rax", 3, slot_offset(statement.slot))
+        base = array_element_base(statement.slot, statement.array_size)
+        index = self._index_register(statement.index)
+        self.assembler.lea_scale("rcx", "rbp", index, 3, base)
 
     def _direct_update_operand(self, expression: Optional[syntax.Expr]):
         """The operand of a fused element update that needs no temporary register.
@@ -2364,7 +2404,8 @@ class CodeGenerator:
     def _emit_array_init(self, statement: syntax.Let) -> None:
         """Store every element of an array initializer into its consecutive slots.
 
-        A same-literal fill longer than the unroll limit becomes one down-counting
+        Element `k` lands at the span's lowest displacement plus `8k`. A
+        same-literal fill longer than the unroll limit becomes one up-counting
         store loop in scratch registers; every other shape stores element by
         element, matching the one-evaluation-per-element semantics.
         """
@@ -2373,6 +2414,7 @@ class CodeGenerator:
         while isinstance(value, syntax.Parens):
             value = value.inner
         elements = value.elements
+        base = array_element_base(statement.slot, statement.array_size)
         fill = None
         if (len(elements) > ARRAY_UNROLL_LIMIT
                 and all(isinstance(element, syntax.IntLiteral)
@@ -2384,16 +2426,16 @@ class CodeGenerator:
             loop = self._fresh("array_fill")
             asm.mov_imm64("rdx", len(elements))
             asm.mov_imm64("rax", fill)
-            asm.lea_rbp("rcx", slot_offset(statement.slot))
+            asm.lea_rbp("rcx", base)
             asm.label(loop)
             asm.mov_store_reg("rcx", "rax")
-            asm.sub_imm("rcx", 8)
+            asm.add_imm("rcx", 8)
             asm.sub_imm("rdx", 1)
             asm.jcc("nz", loop)
             return
         for offset, element in enumerate(elements):
             self._emit_into(element, "rax")
-            asm.mov_store_rbp(slot_offset(statement.slot + offset), "rax")
+            asm.mov_store_rbp(base + 8 * offset, "rax")
 
     def _array_sizes(self, function: syntax.Function) -> dict:
         """The frame-slot span of every array binding: base slot -> element count."""

@@ -143,6 +143,7 @@ class Assign(Stmt):
     slot: int = -1
     index: Optional[Expr] = None
     temp_slot: Optional[int] = None
+    array_size: Optional[int] = None
 
 
 @dataclass

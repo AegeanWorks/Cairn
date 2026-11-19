@@ -40,6 +40,60 @@ class FrameInPlaceEncodingTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.code(lambda a: a.group1_store_rbp_imm(0, -8, 1 << 32))
 
+class IndexedElementEncodingTest(unittest.TestCase):
+    """An indexed element access is one SIB memory operand over `rbp` and the index."""
+
+    def code(self, build) -> bytes:
+        assembler = Assembler()
+        build(assembler)
+        return bytes(assembler.code)
+
+    def test_indexed_load_with_disp8(self) -> None:
+        self.assertEqual(self.code(lambda a: a.mov_load_indexed("rax", "rbp", "rbx", 3, -64)),
+                         b"\x48\x8b\x44\xdd\xc0")
+
+    def test_indexed_load_with_r12_as_index_and_disp32(self) -> None:
+        self.assertEqual(self.code(lambda a: a.mov_load_indexed("rax", "rbp", "r12", 3, -524288)),
+                         b"\x4a\x8b\x84\xe5\x00\x00\xf8\xff")
+
+    def test_indexed_binary_update(self) -> None:
+        self.assertEqual(
+            self.code(lambda a: a.binary_store_indexed(0x01, "rbp", "rbx", 3, -64, "r12")),
+            b"\x4c\x01\x64\xdd\xc0")
+
+    def test_indexed_store_with_r12_source(self) -> None:
+        self.assertEqual(
+            self.code(lambda a: a.mov_store_indexed("rbp", "r12", 3, -524288, "r12")),
+            b"\x4e\x89\xa4\xe5\x00\x00\xf8\xff")
+
+    def test_indexed_immediate_store(self) -> None:
+        self.assertEqual(
+            self.code(lambda a: a.mov_store_indexed_imm("rbp", "rbx", 3, -64, 1)),
+            b"\x48\xc7\x44\xdd\xc0\x01\x00\x00\x00")
+
+    def test_indexed_immediate_store_rejects_wide_literals(self) -> None:
+        with self.assertRaises(ValueError):
+            self.code(lambda a: a.mov_store_indexed_imm("rbp", "rbx", 3, -64, 1 << 32))
+
+    def test_indexed_group1_immediate_update(self) -> None:
+        self.assertEqual(
+            self.code(lambda a: a.group1_store_indexed_imm(0, "rbp", "rbx", 3, -64, 7)),
+            b"\x48\x83\x44\xdd\xc0\x07")
+        self.assertEqual(
+            self.code(lambda a: a.group1_store_indexed_imm(5, "rbp", "rbx", 3, -64, 1000)),
+            b"\x48\x81\x6c\xdd\xc0\xe8\x03\x00\x00")
+
+    def test_indexed_group1_rejects_wide_literals(self) -> None:
+        with self.assertRaises(ValueError):
+            self.code(lambda a: a.group1_store_indexed_imm(0, "rbp", "rbx", 3, -64, 1 << 32))
+
+    def test_indexed_memory_rejects_rsp(self) -> None:
+        with self.assertRaises(AssertionError):
+            self.code(lambda a: a.mov_load_indexed("rax", "rbp", "rsp", 3, -64))
+        with self.assertRaises(AssertionError):
+            self.code(lambda a: a.mov_load_indexed("rax", "rsp", "rbx", 3, -64))
+
+
 class EncodingTest(unittest.TestCase):
     """Each test names one encoding and its expected bytes."""
 
