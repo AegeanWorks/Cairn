@@ -1940,6 +1940,45 @@ class ExpressionTimesLiteralShapeTest(unittest.TestCase):
         self.assertIn(bytes([0x48, 0xB8]), blob)                  # movabs: no imm32 form
 
 
+class HomedRightOperandShapeTest(unittest.TestCase):
+    """A homed right operand combines with the left value already in rax.
+
+    Before this shape existed, `a / b + c` moved the division result to rcx, loaded
+    c into rax and added there (three instructions plus a park when no temporary was
+    free — mandelbrot's `x * y / 2^20 + y0` paid a push/pop pair per iteration).
+    """
+
+    PROGRAM = ('fn main() -> i64 { var a: i64 = 37; var b: i64 = 5;'
+               ' var c: i64 = 3; print(a / b + c); return 0; }')
+
+    def test_a_computed_left_adds_a_homed_name_in_place(self) -> None:
+        blob = region_bytes(self.PROGRAM, "main")
+        self.assertIn(bytes([0x4C, 0x01, 0xE8]), blob)              # add rax, r13
+        self.assertNotIn(bytes([0x48, 0x89, 0xC1, 0x4C, 0x89, 0xE8]), blob)
+
+    def test_a_computed_left_subtracts_a_homed_name_in_place(self) -> None:
+        blob = region_bytes('fn main() -> i64 { var a: i64 = 37; var b: i64 = 5;'
+                            ' var c: i64 = 3; print(a / b - c); return 0; }', "main")
+        self.assertIn(bytes([0x4C, 0x29, 0xE8]), blob)              # sub rax, r13
+        self.assertNotIn(bytes([0x48, 0x89, 0xC1, 0x4C, 0x89, 0xE8]), blob)
+
+    def test_a_computed_left_compares_a_homed_name_in_place(self) -> None:
+        blob = region_bytes('fn main() -> i64 { var a: i64 = 37; var b: i64 = 5;'
+                            ' var c: i64 = 3; print((a / b) < c); return 0; }', "main")
+        self.assertIn(bytes([0x4C, 0x39, 0xE8]), blob)              # cmp rax, r13
+        self.assertNotIn(bytes([0x48, 0x89, 0xC1, 0x4C, 0x89, 0xE8]), blob)
+
+    def test_a_homed_right_after_a_power_of_two_division_never_parks(self) -> None:
+        # The mandelbrot shape: the masked shift-division leaves its result in rax
+        # and y0 is homed, so the very next instruction combines them — there is no
+        # room left between the division tail and the add for a park or a copy.
+        source = ('fn loc(x: i64, y: i64, y0: i64) -> i64 {'
+                  ' return x * y / 1048576 + y0; }'
+                  ' fn main() -> i64 { print(loc(3, 4, 11)); return 0; }')
+        blob = region_bytes(source, "loc")
+        self.assertIn(bytes([0x48, 0xC1, 0xF8, 0x14, 0x4C, 0x01, 0xE8]), blob)
+
+
 class CommutativeMergeShapeTest(unittest.TestCase):
     """A commutative chain folds every step into the destination register itself."""
 

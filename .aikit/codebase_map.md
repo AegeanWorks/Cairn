@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `191`
+- **Total Classes**: `192`
 - **Total Top-Level Functions**: `212`
-- **Total Class Methods**: `1031`
-- **Total Source Lines**: `19344`
+- **Total Class Methods**: `1035`
+- **Total Source Lines**: `19414`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4288` lines
+**Size**: `4319` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -955,7 +955,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2572` lines
+**Size**: `2611` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1157,6 +1157,11 @@
   - Method `.test_a_literal_on_the_left_takes_the_same_form()`
   - Method `.test_a_call_result_times_a_literal_never_parks()`
   - Method `.test_a_literal_beyond_imm32_keeps_the_general_multiply()`
+- `class HomedRightOperandShapeTest` - *A homed right operand combines with the left value already in rax.*
+  - Method `.test_a_computed_left_adds_a_homed_name_in_place()`
+  - Method `.test_a_computed_left_subtracts_a_homed_name_in_place()`
+  - Method `.test_a_computed_left_compares_a_homed_name_in_place()`
+  - Method `.test_a_homed_right_after_a_power_of_two_division_never_parks()`
 - `class CommutativeMergeShapeTest` - *A commutative chain folds every step into the destination register itself.*
   - Method `.test_a_chain_addition_folds_into_the_destination_home()`
   - Method `.test_a_multiply_accumulate_chain_never_parks_its_accumulator()`

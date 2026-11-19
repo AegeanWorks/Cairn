@@ -2572,6 +2572,37 @@ class CodeGenerator:
                 else:
                     asm.binary(ARITHMETIC_OPCODES[expression.op], "rax", left_home)
                 return
+        if (expression.op in IN_PLACE_BINARY_OPS + ("-",)
+                and isinstance(right, syntax.Name)
+                and not (right.slot == self.delta_slot and self.delta_value)
+                and not has_call(expression.left)):
+            right_home = self._home(right.slot)
+            if right_home is not None:
+                # The mirror of the homed-left rule: a homed name on the right is
+                # a pure read, so the computed left may stay in rax and combine
+                # with the home directly. This removes the park into rcx (or the
+                # push/pop fallback) from every `computed op homed` expression,
+                # and for `-` replaces the sub-then-copy pair with one sub.
+                self._emit_expression(expression.left)
+                if expression.op == "-":
+                    asm.binary(0x29, "rax", right_home)
+                elif expression.op == "*":
+                    asm.imul("rax", right_home)
+                else:
+                    asm.binary(ARITHMETIC_OPCODES[expression.op], "rax", right_home)
+                return
+        if (expression.op in COMPARISON_CONDITIONS
+                and isinstance(right, syntax.Name)
+                and not (right.slot == self.delta_slot and self.delta_value)
+                and not has_call(expression.left)):
+            right_home = self._home(right.slot)
+            if right_home is not None:
+                # Same shape for comparisons: compare rax with the home and set,
+                # instead of moving the left value to rcx and comparing there.
+                self._emit_expression(expression.left)
+                asm.cmp_reg_reg("rax", right_home)
+                asm.setcc(COMPARISON_CONDITIONS[expression.op])
+                return
         self._emit_left_operand(expression.left, expression.right)
         held = self.left_hold
         self.left_hold = None
