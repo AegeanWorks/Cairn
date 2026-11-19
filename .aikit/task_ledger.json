@@ -1,69 +1,25 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-read-fuse",
+    "task_id": "cairn-toolchain-doc",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795066244.306654,
-    "owner": "kilo:cairn",
-    "started_by": "mistral:vibe",
-    "continuations": [
-      {
-        "agent": "opencode:session",
-        "from": "mistral:vibe",
-        "at": 1795066133.0605066
-      },
-      {
-        "agent": "kilo:cairn",
-        "from": "opencode:session",
-        "at": 1795066244.306654
-      }
-    ],
+    "updated_at": 1795067152.2924356,
+    "owner": "opencode:session",
+    "started_by": "opencode:session",
+    "continuations": [],
     "workspaces": [
       {
         "name": "cairn",
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795066270.3450248,
-    "completed_head": "4ce07310c6accc7eb904d70722ca79f3fe71d93e",
-    "completed_tree": "5261bf48248e5582f6115f697147c8f7d09d42e0"
+    "completed_at": 1795067163.1575544,
+    "completed_head": "f94d6d9ba718934d67fdc347ded2c406fc424c84",
+    "completed_tree": "02dcd909cad0c2c4521f018013af6de56158147e"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-arrays",
-      "phase": "verify",
-      "phase_num": 4,
-      "description": "[1/3] arrays v1 syntax+sema landed: lexer brackets, _parse_type [N] forms, fill/aggregate literals, index load/store, E3014-E3017, README diagnostics, 15 new tests, suite 100% OK, aikit check cairn 4/4. checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795004618.9823995,
-      "timestamp_str": "2026-11-18 15:23:38",
-      "agent": "mistral:vibe"
-    },
-    {
-      "task_id": "cairn-arrays",
-      "phase": "verify",
-      "phase_num": 4,
-      "description": "[2/3] array element memory, IR oracle, countdown Index soundness fix committed as 1098e5f; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795010412.3040054,
-      "timestamp_str": "2026-11-18 17:00:12",
-      "agent": "mistral:vibe"
-    },
-    {
-      "task_id": "cairn-arrays",
-      "phase": "verify",
-      "phase_num": 4,
-      "description": "[3/3] complete: array benchmarks + twins, docs contract (SPEC/card/capabilities/README), ADR-068, 8 MiB committed stack, quiet-window gate recorded (repeat clean, exit 0); checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795011395.1406238,
-      "timestamp_str": "2026-11-18 17:16:35",
-      "agent": "mistral:vibe"
-    },
     {
       "task_id": "cairn-arrays",
       "phase": "completed",
@@ -319,6 +275,65 @@
       "timestamp_str": "2026-11-19 08:31:10",
       "agent": "kilo:cairn",
       "head": "4ce07310c6accc7eb904d70722ca79f3fe71d93e",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-toolchain-doc",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/1] Cover the post-completion README tree line for rust-toolchain.toml (commit f94d6d9) so the ledger advances past it and check --strict becomes delivery-ready",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795066947.7679787,
+      "timestamp_str": "2026-11-19 08:42:27",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "ADR-419: cairn-read-fuse completed at 4ce0731 but a one-line non-bookkeeping docs commit f94d6d9 followed; strict gate refuses a stale ledger.",
+        "benefits": "README tree lists the GNU Rust toolchain pin needed for twin baselines to link; project becomes delivery-ready.",
+        "risks": "contract: README tree must match files on disk; dependency: none; concurrency: another agent may be active; state: ledger head must advance past f94d6d9.",
+        "mitigation": "verify rust-toolchain.toml exists, run the full 5-gate check, then complete with checklists passed."
+      },
+      "plan_digest": "2601bcc04e75cc573004980e262337f5e066a856c9f84ba5c466f5e1319b6005",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-toolchain-doc",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] verified: rust-toolchain.toml exists and README.md:498 lists it; benchmark pollution run dropped under ADR-069 (history 73->72, byte-identical to HEAD); full suite 1259 OK; 5/5 gates passed; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795067152.2924356,
+      "timestamp_str": "2026-11-19 08:45:52",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-toolchain-doc",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-toolchain-doc' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795067163.2990084,
+      "timestamp_str": "2026-11-19 08:46:03",
+      "agent": "opencode:session",
+      "head": "f94d6d9ba718934d67fdc347ded2c406fc424c84",
       "delivery": {
         "roots": [
           "."
