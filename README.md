@@ -495,6 +495,7 @@ cairn/
 ├── SPEC.md                     <- language law (§-numbered, §16 checklist)
 ├── LLM_SYSTEM.md               <- compressed agent card
 ├── pyproject.toml            <- package metadata and the `cairn` console script
+├── rust-toolchain.toml       <- the GNU Rust toolchain the twin baselines link with
 ├── cairn/                    <- the bootstrap compiler
 │   ├── cli.py                <- build, check, run; exit codes and JSON diagnostics
 │   ├── lexer.py              <- scanner and token model
