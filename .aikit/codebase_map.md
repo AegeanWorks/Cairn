@@ -9,8 +9,8 @@
 - **Total Python Modules**: `46`
 - **Total Classes**: `191`
 - **Total Top-Level Functions**: `212`
-- **Total Class Methods**: `1030`
-- **Total Source Lines**: `19334`
+- **Total Class Methods**: `1031`
+- **Total Source Lines**: `19344`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -955,7 +955,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2562` lines
+**Size**: `2572` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1032,6 +1032,7 @@
   - Method `.test_a_read_char_inside_another_call_fuses_too()`
   - Method `.test_r10_borrowed_as_an_extra_home_refuses_the_fusion()`
   - Method `.test_the_read_loop_keeps_the_branch_out_of_the_fast_path()`
+  - Method `.test_the_read_loop_never_bumps_the_cursor_with_a_memory_increment()`
   - Method `.test_a_break_only_if_jumps_straight_to_the_break_target()`
 - `class MergedMaskMixTest` - *A masked xor merged into its home register lowers park-free, in place.*
   - Method `.test_the_mixer_never_materialises_or_spills_its_mask()`

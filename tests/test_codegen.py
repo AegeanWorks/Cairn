@@ -703,6 +703,16 @@ class ReadFuseTest(unittest.TestCase):
         self.assertIn(b"\x49\x83\x02\x01", region)
         self.assertNotIn(b"\x48\x83\x05", region)
 
+    def test_the_read_loop_never_bumps_the_cursor_with_a_memory_increment(self) -> None:
+        # ADR-077: pointer-shaped state with `inc qword [rip+cursor]` measured
+        # 1.45x SLOWER (16.86 vs 11.63 ms best, ten-fastest 17.70 vs 11.87), while
+        # the same pointer state with the lea+add bump measured neutral (11.65,
+        # ten-fastest +1.9 percent). The increment's read-modify-write lengthens
+        # the loop-carried cursor chain that the next iteration's load waits on.
+        # The index-shaped fast path stays; a memory increment must not return.
+        region, _, _, _ = self._generate(self.LOOP)
+        self.assertNotIn(b"\x48\xff\x05", region)   # no inc qword [rip+disp32]
+
     def test_a_break_only_if_jumps_straight_to_the_break_target(self) -> None:
         # `if c < 0 { break; }` inverts: one conditional jump to the break
         # target, no then-label, no fallthrough jmp after it — no fresh label.
