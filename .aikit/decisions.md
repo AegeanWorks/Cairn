@@ -919,8 +919,10 @@ The only honest-A/B surfaces: char_stream measured -16.7 percent best and
 76-214 ms spikes through every full-suite window, and two gate runs were
 recorded then dropped under the ADR-069 history rule), reading 9.4-11.0 ms
 against C's 7.7-10.7; binary_gcd measured a wash (best -2.0, median +1.9 over
-14 rounds). One machine-level note: rustc's msvc toolchain stopped linking
-mid-session (`where link` resolves only to Git's coreutils `link`), so the
-twin-parity suite and the C/C++/Rust baseline columns are environment-blocked
-until the toolchain's linker is back; Cairn's own pipeline needs no external
-compiler and was verified end to end.
+14 rounds). One machine-level note: rustc's default msvc toolchain cannot
+link on this machine (BuildTools carries no VC/link.exe, and coreutils `link`
+shadows any PATH-provided linker), which surfaced as all 12 twin-parity tests
+failing on their baseline builds. The scoped fix, `rust-toolchain.toml`
+selecting `stable-x86_64-pc-windows-gnu` (MinGW's ld), restored every twin
+build; TwinParityTest reads 12/12 after it. Cairn's own pipeline needs no
+external compiler and was verified end to end.

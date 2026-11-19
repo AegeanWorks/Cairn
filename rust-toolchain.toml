@@ -1,0 +1,5 @@
+[toolchain]
+channel = "stable-x86_64-pc-windows-gnu"
+# The msvc default cannot link on this machine (BuildTools carries no VC/link.exe
+# and coreutils `link` shadows any PATH-provided linker), so all 12 twin-parity
+# tests fail to build their baselines. The gnu toolchain uses MinGW's ld and links.

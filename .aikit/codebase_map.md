@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `186`
+- **Total Classes**: `187`
 - **Total Top-Level Functions**: `211`
-- **Total Class Methods**: `988`
-- **Total Source Lines**: `18789`
+- **Total Class Methods**: `995`
+- **Total Source Lines**: `18936`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -134,7 +134,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4184` lines
+**Size**: `4223` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -941,7 +941,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2344` lines
+**Size**: `2430` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1011,6 +1011,14 @@
   - Method `.test_the_temp_being_read_after_the_if_refuses_the_fusion()`
   - Method `.test_a_two_statement_body_refuses_the_fusion()`
   - Method `.test_a_condition_on_other_slots_refuses_the_fusion()`
+- `class ReadFuseTest` - *`read_char()` fuses its buffered fast path into the call site, drain stays in the helper.*
+  - Method `._generate(source)`
+  - Method `._calls_to(start, end, assembler, label)` - *Count `call rel32` fixups inside [start, end) that land on `label`.*
+  - Method `.test_the_read_loop_fuses_the_fast_path_and_keeps_one_drain_call()`
+  - Method `.test_a_read_char_inside_another_call_fuses_too()`
+  - Method `.test_r10_borrowed_as_an_extra_home_refuses_the_fusion()`
+  - Method `.test_the_read_loop_keeps_the_branch_out_of_the_fast_path()`
+  - Method `.test_a_break_only_if_jumps_straight_to_the_break_target()`
 - `class MergedMaskMixTest` - *A masked xor merged into its home register lowers park-free, in place.*
   - Method `.test_the_mixer_never_materialises_or_spills_its_mask()`
   - Method `.test_the_xor_combines_in_place_right_after_the_shift()`
@@ -1410,7 +1418,7 @@
 ### [`tests/test_ir.py`](tests/test_ir.py)
 > *SSA IR foundation tests: differential execution and invariants.*
 
-**Size**: `289` lines
+**Size**: `311` lines
 
 **Classes:**
 - `class DifferentialTest` - *Compiled machine behaviour and interpreted IR behaviour must agree.*
