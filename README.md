@@ -319,7 +319,7 @@ a spread:
 | `folded_math` | 20,000,000 bit-mixed constant additions | 18.4-20.4 ms | 18.0-22.0 ms | 18.3-22.1 ms | 19.2-23.1 ms | 71,168 bytes |
 | `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-106 ms | 158-164 ms | 160-164 ms | 140-150 ms | 71,168 bytes |
 | `ackermann` | `A(3,9)`, about 25 million calls | 10.2-13.9 ms | 15.2-19.4 ms | 15.4-18.0 ms | 18.4-64.5 ms | 71,680 bytes |
-| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 24.9-26.7 ms | 22.1-25.1 ms | 22.8-24.9 ms | 18.4-20.4 ms | 71,168 bytes |
+| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 17.7-19.0 ms (ADR-088 self-call unrolling) | 22.1-25.1 ms | 22.8-24.9 ms | 18.4-20.4 ms | 71,168 bytes |
 | `binary_gcd` | 1,000,000 Stein-GCD pairs | 147-162 ms | 158-180 ms | 173-181 ms | 139-154 ms | 71,680 bytes |
 | `call_chain` | 20,000,000 three-argument hot-path calls | 45-48 ms | 33-37 ms | 34-37 ms | 74-79 ms | 71,168 bytes |
 | `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 7.8-9.7 ms | 7.7-10.7 ms | 7.7-10.9 ms | 8.6-10.8 ms | 71,168 bytes |
@@ -398,7 +398,9 @@ vectorise; the folding evidence and the retired numbers are in ADR-017, and the 
 rewrite is in ADR-018.
 
 Three later cases widen the measured surface (ADR-026): `nqueens` (bitmask backtracking, many live
-locals per frame — 1.09-1.17x C, 1.21-1.41x Rust, recorded target), `binary_gcd` (subtraction and
+locals per frame — once 1.09-1.17x C and 1.21-1.41x Rust; ADR-088 unrolls its
+twelve-turn bit walk around the recursive call into clones with literal masks, which took
+it to 17.7-19.0 ms, level with Rust and ahead of C and C++), `binary_gcd` (subtraction and
 shift loops with a swap — ADR-027's magic-multiply division removed both `idiv` chains from the LCG
 loop, 190.2 → 178-195 ms, and ADR-029's flag-fused conditions fused every `(x & 1) == 0` branch and
 the conjoined shift loop into `test`/`test_imm` + one `jcc`, 202.1 → 188 ms best: 1.06-1.08x C,

@@ -162,6 +162,124 @@ class RewriteTest(unittest.TestCase):
         self.assertLess(len(codegen.generate(folded).text), len(codegen.generate(plain).text))
 
 
+class ConstantLoopUnrollingTest(unittest.TestCase):
+    """A short constant-trip loop around a self-call becomes clones with literals.
+
+    The measured shape is nqueens' twelve-turn bit walk around a recursive call
+    (ADR-088: -28.7 percent). The pass is deliberately narrow - literal start,
+    literal bound, constant step as the body's last and only write, no jumps, and a
+    body that calls its own function - so it cannot fire on array fills, print loops
+    or any loop whose control it has no evidence for.
+    """
+
+    def program(self, loop: str):
+        text = ("fn f(n: i64) -> i64 {"
+                " if n < 2 { return n; }"
+                " var count: i64 = 0;"
+                f" {loop}"
+                " return count; }"
+                " fn main() -> i64 { print(f(3)); return 0; }")
+        return optimize.optimize(analyze(parse(text)))
+
+    def statements(self, loop: str):
+        return self.program(loop).functions[0].body.statements
+
+    def loops(self, loop: str) -> int:
+        return sum(1 for statement in self.statements(loop)
+                   if isinstance(statement, syntax.While))
+
+    SELF_CALL = ('var bit: i64 = 1; while bit <= 8 {'
+                 ' if (n & bit) != 0 { count = count + f(n - 1); }'
+                 ' bit = bit << 1; }')
+    OTHER_CALL = ('var bit: i64 = 1; while bit <= 8 {'
+                  ' count = count + (n & bit); bit = bit << 1; }')
+    WITH_JUMP = ('var bit: i64 = 1; while bit <= 8 {'
+                 ' if (n & bit) != 0 { break; } count = count + f(n - 1);'
+                 ' bit = bit << 1; }')
+    SECOND_WRITE = ('var bit: i64 = 1; while bit <= 8 {'
+                    ' if (n & bit) == 0 { bit = bit << 1; }'
+                    ' count = count + f(n - 1); bit = bit << 1; }')
+    LONG_TRIP = ('var bit: i64 = 1; while bit <= 65536 {'
+                 ' count = count + f(n - 1); bit = bit << 1; }')
+
+    def calls(self, statements) -> int:
+        """Count the `f(...)` calls anywhere under a statement list."""
+        def in_expression(expression) -> int:
+            if expression is None:
+                return 0
+            if isinstance(expression, syntax.Call):
+                return (expression.name == "f") + sum(in_expression(argument)
+                                                      for argument in expression.arguments)
+            if isinstance(expression, syntax.Parens):
+                return in_expression(expression.inner)
+            if isinstance(expression, syntax.Unary):
+                return in_expression(expression.operand)
+            if isinstance(expression, syntax.Binary):
+                return in_expression(expression.left) + in_expression(expression.right)
+            if isinstance(expression, syntax.Index):
+                return in_expression(expression.operand) + in_expression(expression.index)
+            return 0
+
+        total = 0
+        for statement in statements:
+            if isinstance(statement, (syntax.Let, syntax.Assign, syntax.Return)):
+                total += in_expression(statement.value)
+            elif isinstance(statement, syntax.ExprStmt):
+                total += in_expression(statement.expression)
+            elif isinstance(statement, syntax.If):
+                total += in_expression(statement.condition)
+                if statement.then_block:
+                    total += self.calls(statement.then_block.statements)
+                if statement.else_block:
+                    total += self.calls(statement.else_block.statements)
+            elif isinstance(statement, syntax.While):
+                total += in_expression(statement.condition)
+                if statement.body:
+                    total += self.calls(statement.body.statements)
+        return total
+
+    def test_a_self_calling_constant_loop_unrolls_into_clones(self) -> None:
+        self.assertEqual(self.loops(self.SELF_CALL), 0)
+        self.assertEqual(self.calls(self.statements(self.SELF_CALL)), 4)   # turns 1, 2, 4, 8
+
+    def test_each_clone_substitutes_the_counter_literal(self) -> None:
+        literals = []
+        for statement in self.statements(self.SELF_CALL):
+            if not isinstance(statement, syntax.If):
+                continue
+            condition = statement.condition
+            while isinstance(condition, syntax.Parens):
+                condition = condition.inner
+            masked = condition.left
+            while isinstance(masked, syntax.Parens):
+                masked = masked.inner
+            if not isinstance(masked, syntax.Binary) or masked.op != "&":
+                continue                          # the `n < 2` guard is not a clone
+            literal = masked.right
+            while isinstance(literal, syntax.Parens):
+                literal = literal.inner
+            literals.append(literal.value)
+        self.assertEqual(literals, [1, 2, 4, 8])
+
+    def test_the_counter_keeps_its_post_loop_value(self) -> None:
+        finals = [statement for statement in self.statements(self.SELF_CALL)
+                  if isinstance(statement, syntax.Assign) and statement.name == "bit"]
+        self.assertTrue(finals)
+        self.assertEqual(finals[-1].value.value, 16)
+
+    def test_a_body_without_a_self_call_keeps_its_loop(self) -> None:
+        self.assertEqual(self.loops(self.OTHER_CALL), 1)
+
+    def test_a_jump_in_the_body_keeps_its_loop(self) -> None:
+        self.assertEqual(self.loops(self.WITH_JUMP), 1)
+
+    def test_a_second_write_to_the_counter_keeps_its_loop(self) -> None:
+        self.assertEqual(self.loops(self.SECOND_WRITE), 1)
+
+    def test_a_trip_count_past_the_limit_keeps_its_loop(self) -> None:
+        self.assertEqual(self.loops(self.LONG_TRIP), 1)
+
+
 class CountdownLatchTest(unittest.TestCase):
     """`while v < C` loops whose counter is dead outside the body lower as countdown latches."""
 

@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `198`
-- **Total Top-Level Functions**: `215`
-- **Total Class Methods**: `1065`
-- **Total Source Lines**: `19925`
+- **Total Classes**: `199`
+- **Total Top-Level Functions**: `228`
+- **Total Class Methods**: `1076`
+- **Total Source Lines**: `20345`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -547,7 +547,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `1453` lines
+**Size**: `1755` lines
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -583,6 +583,19 @@
 - `def _increment(name, slot, span)` - *`name = name + 1` on the loop's own slot.*
 - `def _rewrite_continues(block, name, slot)` - *Prefix every `continue` bound to this loop with the increment, in place.*
 - `def _read_slots(expression, acc)` - *Add every slot `expression` reads to `acc`.*
+- `def _stripped(expression)` - *An expression without its wrapping parentheses.*
+- `def _counter_step(statement, slot)` - *The function mapping a counter value to the next when `statement` is its step.*
+- `def _counter_bound(condition)` - *`(limit, inclusive)` for `counter < bound` / `counter <= bound`, else None.*
+- `def _writes_slot(statements, slot)` - *Whether a statement list writes `slot` anywhere below its own level.*
+- `def _calls_named(expression, name)` - *Whether an expression tree calls `name` anywhere.*
+- `def _calls_self(statements, name)` - *Whether a statement list calls the enclosing function `name` anywhere below it.*
+- `def _jumps(statements)` - *Whether a break or a continue appears under a statement list.*
+- `def _clone_with_literal(expression, slot, value)` - *A deep copy of `expression` with every read of `slot` replaced by `value`.*
+- `def _clone_statement(statement, slot, value)` - *A deep copy of one statement with every read of `slot` replaced by `value`.*
+- `def _clone_block(block, slot, value)` - *A deep copy of a block with every read of `slot` replaced by `value`.*
+- `def _unrolled_loop(statement, loop, function_name)` - *The straight-line replacement for a literal-init statement and its loop.*
+- `def apply_constant_loop_unrolling(program)` - *Unroll a short constant-trip while into clones with literal counter values.*
+- `def _unroll_block(block, function_name)` - *Unroll the candidates in one block and in every block below it.*
 - `def apply_copy_propagation(program)` - *Replace `x = t` with t's definition when the copy is t's only read.*
 - `def _propagate_once(root, block)` - *Apply at most one copy propagation under `block`; returns whether one applied.*
 - `def apply_countdown_latches(program)` - *Convert `while v < C` loops with a dead counter into countdown latches.*
@@ -1674,7 +1687,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `612` lines
+**Size**: `730` lines
 
 **Classes:**
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
@@ -1701,6 +1714,18 @@
   - Method `.test_a_call_is_never_removed()`
   - Method `.test_folded_count_reports_what_changed()`
   - Method `.test_constant_heavy_code_generates_fewer_instructions()`
+- `class ConstantLoopUnrollingTest` - *A short constant-trip loop around a self-call becomes clones with literals.*
+  - Method `.program(loop)`
+  - Method `.statements(loop)`
+  - Method `.loops(loop)`
+  - Method `.calls(statements)` - *Count the `f(...)` calls anywhere under a statement list.*
+  - Method `.test_a_self_calling_constant_loop_unrolls_into_clones()`
+  - Method `.test_each_clone_substitutes_the_counter_literal()`
+  - Method `.test_the_counter_keeps_its_post_loop_value()`
+  - Method `.test_a_body_without_a_self_call_keeps_its_loop()`
+  - Method `.test_a_jump_in_the_body_keeps_its_loop()`
+  - Method `.test_a_second_write_to_the_counter_keeps_its_loop()`
+  - Method `.test_a_trip_count_past_the_limit_keeps_its_loop()`
 - `class CountdownLatchTest` - *`while v < C` loops whose counter is dead outside the body lower as countdown latches.*
   - Method `.test_a_counter_loop_counts_down_instead_of_up()`
   - Method `.test_the_loop_condition_shape_survives_the_rewrite()`

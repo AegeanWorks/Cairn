@@ -172,6 +172,7 @@ class Optimizer:
         for function in program.functions:
             function.body = self._block(function.body)
         apply_copy_propagation(program)
+        apply_constant_loop_unrolling(program)
         apply_countdown_latches(program)
         for _ in range(2):
             if not apply_odd_pair_fusion(program):
@@ -658,6 +659,307 @@ def _read_slots(expression, acc: set) -> None:
     elif isinstance(expression, syntax.ArrayLiteral):
         for element in expression.elements:
             _read_slots(element, acc)
+
+
+UNROLL_TRIP_LIMIT = 16
+UNROLL_BODY_STATEMENTS = 8
+
+
+def _stripped(expression):
+    """An expression without its wrapping parentheses."""
+    while isinstance(expression, syntax.Parens):
+        expression = expression.inner
+    return expression
+
+
+def _counter_step(statement: syntax.Stmt, slot: int):
+    """The function mapping a counter value to the next when `statement` is its step."""
+    if not isinstance(statement, syntax.Assign) or statement.slot != slot or statement.index:
+        return None
+    value = _stripped(statement.value)
+    if not isinstance(value, syntax.Binary):
+        return None
+    left = _stripped(value.left)
+    if not isinstance(left, syntax.Name) or left.slot != slot:
+        return None
+    right = _stripped(value.right)
+    if not isinstance(right, syntax.IntLiteral):
+        return None
+    constant = right.value
+    if value.op == "+":
+        return lambda current: current + constant
+    if value.op == "*":
+        return lambda current: current * constant
+    if value.op == "<<":
+        return lambda current: current << constant
+    return None
+
+
+def _counter_bound(condition):
+    """`(limit, inclusive)` for `counter < bound` / `counter <= bound`, else None."""
+    condition = _stripped(condition)
+    if not isinstance(condition, syntax.Binary) or condition.op not in ("<", "<="):
+        return None
+    left = _stripped(condition.left)
+    right = _stripped(condition.right)
+    if not isinstance(left, syntax.Name) or not isinstance(right, syntax.IntLiteral):
+        return None
+    return right.value, condition.op == "<="
+
+
+def _writes_slot(statements, slot: int) -> bool:
+    """Whether a statement list writes `slot` anywhere below its own level."""
+    for statement in statements:
+        if isinstance(statement, syntax.Assign) and statement.slot == slot:
+            return True
+        if isinstance(statement, syntax.Let) and statement.slot == slot:
+            return True
+        if isinstance(statement, syntax.If):
+            if _writes_slot(statement.then_block.statements if statement.then_block else [], slot):
+                return True
+            if _writes_slot(statement.else_block.statements if statement.else_block else [], slot):
+                return True
+        elif isinstance(statement, syntax.While) and statement.body:
+            if _writes_slot(statement.body.statements, slot):
+                return True
+    return False
+
+
+def _calls_named(expression, name: str) -> bool:
+    """Whether an expression tree calls `name` anywhere."""
+    if expression is None:
+        return False
+    if isinstance(expression, syntax.Call):
+        if expression.name == name:
+            return True
+        return any(_calls_named(argument, name) for argument in expression.arguments)
+    if isinstance(expression, syntax.Parens):
+        return _calls_named(expression.inner, name)
+    if isinstance(expression, syntax.Unary):
+        return _calls_named(expression.operand, name)
+    if isinstance(expression, syntax.Binary):
+        return _calls_named(expression.left, name) or _calls_named(expression.right, name)
+    if isinstance(expression, syntax.Index):
+        return _calls_named(expression.operand, name) or _calls_named(expression.index, name)
+    if isinstance(expression, syntax.ArrayLiteral):
+        return any(_calls_named(element, name) for element in expression.elements)
+    return False
+
+
+def _calls_self(statements, name: str) -> bool:
+    """Whether a statement list calls the enclosing function `name` anywhere below it."""
+    for statement in statements:
+        if isinstance(statement, syntax.ExprStmt):
+            if _calls_named(statement.expression, name):
+                return True
+        elif isinstance(statement, (syntax.Let, syntax.Assign)):
+            if _calls_named(statement.value, name):
+                return True
+            if isinstance(statement, syntax.Assign) and _calls_named(statement.index, name):
+                return True
+        elif isinstance(statement, syntax.Return):
+            if _calls_named(statement.value, name):
+                return True
+        elif isinstance(statement, syntax.If):
+            if _calls_named(statement.condition, name):
+                return True
+            if statement.then_block and _calls_self(statement.then_block.statements, name):
+                return True
+            if statement.else_block and _calls_self(statement.else_block.statements, name):
+                return True
+        elif isinstance(statement, syntax.While):
+            if _calls_named(statement.condition, name):
+                return True
+            if statement.body and _calls_self(statement.body.statements, name):
+                return True
+    return False
+
+
+def _jumps(statements) -> bool:
+    """Whether a break or a continue appears under a statement list."""
+    for statement in statements:
+        if isinstance(statement, (syntax.Break, syntax.Continue)):
+            return True
+        if isinstance(statement, syntax.If):
+            if statement.then_block and _jumps(statement.then_block.statements):
+                return True
+            if statement.else_block and _jumps(statement.else_block.statements):
+                return True
+        elif isinstance(statement, syntax.While) and statement.body:
+            if _jumps(statement.body.statements):
+                return True
+    return False
+
+
+def _clone_with_literal(expression, slot: int, value: int):
+    """A deep copy of `expression` with every read of `slot` replaced by `value`."""
+    if isinstance(expression, syntax.Name):
+        if expression.slot == slot:
+            return syntax.IntLiteral(span=expression.span, value=value)
+        return syntax.Name(span=expression.span, name=expression.name, slot=expression.slot)
+    if isinstance(expression, syntax.IntLiteral):
+        return syntax.IntLiteral(span=expression.span, value=expression.value)
+    if isinstance(expression, syntax.StrLiteral):
+        return syntax.StrLiteral(span=expression.span, text=expression.text)
+    if isinstance(expression, syntax.Parens):
+        return syntax.Parens(span=expression.span,
+                             inner=_clone_with_literal(expression.inner, slot, value))
+    if isinstance(expression, syntax.Unary):
+        return syntax.Unary(span=expression.span, op=expression.op,
+                            operand=_clone_with_literal(expression.operand, slot, value))
+    if isinstance(expression, syntax.Binary):
+        return syntax.Binary(span=expression.span, op=expression.op,
+                             left=_clone_with_literal(expression.left, slot, value),
+                             right=_clone_with_literal(expression.right, slot, value))
+    if isinstance(expression, syntax.Call):
+        return syntax.Call(span=expression.span, name=expression.name,
+                           arguments=[_clone_with_literal(argument, slot, value)
+                                      for argument in expression.arguments])
+    if isinstance(expression, syntax.Index):
+        return syntax.Index(span=expression.span,
+                            operand=_clone_with_literal(expression.operand, slot, value),
+                            index=_clone_with_literal(expression.index, slot, value),
+                            slot=expression.slot, size=expression.size)
+    if isinstance(expression, syntax.ArrayLiteral):
+        return syntax.ArrayLiteral(span=expression.span,
+                                   elements=[_clone_with_literal(element, slot, value)
+                                             for element in expression.elements])
+    raise AssertionError(f"unhandled expression {type(expression).__name__}")
+
+
+def _clone_statement(statement: syntax.Stmt, slot: int, value: int) -> syntax.Stmt:
+    """A deep copy of one statement with every read of `slot` replaced by `value`."""
+    if isinstance(statement, syntax.Let):
+        return syntax.Let(span=statement.span, name=statement.name,
+                          mutable=statement.mutable, type_name=statement.type_name,
+                          value=_clone_with_literal(statement.value, slot, value),
+                          slot=statement.slot, array_size=statement.array_size)
+    if isinstance(statement, syntax.Assign):
+        return syntax.Assign(span=statement.span, name=statement.name,
+                             value=_clone_with_literal(statement.value, slot, value),
+                             slot=statement.slot,
+                             index=(None if statement.index is None
+                                    else _clone_with_literal(statement.index, slot, value)),
+                             temp_slot=statement.temp_slot,
+                             array_size=statement.array_size)
+    if isinstance(statement, syntax.Return):
+        return syntax.Return(span=statement.span,
+                             value=_clone_with_literal(statement.value, slot, value))
+    if isinstance(statement, syntax.ExprStmt):
+        return syntax.ExprStmt(span=statement.span,
+                               expression=_clone_with_literal(statement.expression, slot, value))
+    if isinstance(statement, syntax.If):
+        return syntax.If(span=statement.span,
+                         condition=_clone_with_literal(statement.condition, slot, value),
+                         then_block=_clone_block(statement.then_block, slot, value),
+                         else_block=_clone_block(statement.else_block, slot, value))
+    if isinstance(statement, syntax.While):
+        return syntax.While(span=statement.span,
+                            condition=_clone_with_literal(statement.condition, slot, value),
+                            body=_clone_block(statement.body, slot, value),
+                            countdown=statement.countdown)
+    raise AssertionError(f"unhandled statement {type(statement).__name__}")
+
+
+def _clone_block(block, slot: int, value: int):
+    """A deep copy of a block with every read of `slot` replaced by `value`."""
+    if block is None:
+        return None
+    return syntax.Block(span=block.span,
+                        statements=[_clone_statement(statement, slot, value)
+                                    for statement in block.statements])
+
+
+def _unrolled_loop(statement: syntax.Stmt, loop,
+                   function_name: str) -> Optional[List[syntax.Stmt]]:
+    """The straight-line replacement for a literal-init statement and its loop."""
+    if not isinstance(loop, syntax.While) or loop.body is None or not loop.body.statements:
+        return None
+    if not isinstance(statement, (syntax.Let, syntax.Assign)):
+        return None
+    initial = _stripped(statement.value)
+    if not isinstance(initial, syntax.IntLiteral):
+        return None
+    slot = statement.slot
+    body = loop.body.statements
+    if len(body) > UNROLL_BODY_STATEMENTS or _jumps(body):
+        return None
+    if not _calls_self(body, function_name):
+        # Only a body that calls its own function unrolls. That is the backtracking
+        # shape this was measured on (nqueens' twelve-turn loop around a recursive
+        # call, ADR-088: -28.7 percent), and it keeps the pass out of tight
+        # straight-line loops - array fills, print loops - where duplicating the body
+        # would trade instruction-cache room for loop control that is already cheap
+        # relative to the work, without evidence of a gain.
+        return None
+    step = _counter_step(body[-1], slot)
+    bound = _counter_bound(loop.condition)
+    if step is None or bound is None:
+        return None
+    if _writes_slot(body[:-1], slot):
+        return None
+    limit, inclusive = bound
+    values: List[int] = []
+    current = initial.value
+    while (current <= limit) if inclusive else (current < limit):
+        values.append(current)
+        if len(values) > UNROLL_TRIP_LIMIT:
+            return None
+        current = step(current)
+    steps: List[syntax.Stmt] = [statement]
+    for counter in values:
+        for body_statement in body[:-1]:
+            steps.append(_clone_statement(body_statement, slot, counter))
+    steps.append(syntax.Assign(span=loop.span, name=statement.name,
+                               value=syntax.IntLiteral(span=loop.span, value=current),
+                               slot=slot))
+    return steps
+
+
+def apply_constant_loop_unrolling(program: syntax.Program) -> int:
+    """Unroll a short constant-trip while into clones with literal counter values.
+
+    The shape is narrow on purpose: a `var`/`let` initialised to a literal immediately
+    before the loop, a bound condition `counter <op> literal`, and a body whose last
+    statement is the counter's only write, stepping it by a constant through `+`, `*`
+    or `<<`. Each clone substitutes the counter's literal value, so masks and bounds
+    fold into immediates and the shift, the compare and the back edge disappear
+    (ADR-088 measured -28.7 percent on nqueens' twelve-turn loop). Trip counts above
+    :data:`UNROLL_TRIP_LIMIT`, bodies above :data:`UNROLL_BODY_STATEMENTS`, and any
+    body holding a break, a continue or a second write to the counter keep their loop.
+    """
+    unrolled = 0
+    for function in program.functions:
+        unrolled += _unroll_block(function.body, function.name)
+    return unrolled
+
+
+def _unroll_block(block, function_name: str) -> int:
+    """Unroll the candidates in one block and in every block below it."""
+    if block is None:
+        return 0
+    unrolled = 0
+    for statement in block.statements:
+        if isinstance(statement, syntax.If):
+            unrolled += _unroll_block(statement.then_block, function_name)
+            unrolled += _unroll_block(statement.else_block, function_name)
+        elif isinstance(statement, syntax.While):
+            unrolled += _unroll_block(statement.body, function_name)
+    statements: List[syntax.Stmt] = []
+    index = 0
+    while index < len(block.statements):
+        statement = block.statements[index]
+        following = block.statements[index + 1] if index + 1 < len(block.statements) else None
+        replacement = _unrolled_loop(statement, following, function_name)
+        if replacement is None:
+            statements.append(statement)
+            index += 1
+            continue
+        statements.extend(replacement)
+        index += 2
+        unrolled += 1
+    block.statements = statements
+    return unrolled
 
 
 def apply_copy_propagation(program: syntax.Program) -> int:
