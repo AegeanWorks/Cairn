@@ -446,7 +446,11 @@ The comparison never depends on remembering numbers by hand: `python benchmarks/
 --save` appends one JSONL record (commit stamp, every best time, and the ADR-069 quiet-window probe — the `many_params` best against the 20 ms criterion, so a busy-machine record says so) to `.aikit/benchmark_history.jsonl`,
 and `--compare` diffs the current run against the newest saved record per case — warning first when that baseline was measured on a loaded machine — printing each delta —
 `improved`, `within noise`, or `regressed` — and exiting nonzero when a Cairn case regressed beyond
-the noise band. The project rule (recorded as a guideline from the user): after every change to the
+the noise band. Every case is scored on whole-process time, and a minimal program already costs
+millions of cycles to start (ADR-084: Cairn 5.7M, C 8.2M, Rust 11.8M, C++ 17.1M cycles), so
+on a short case the loader is most of the number; `--floors` builds one empty program per
+available language and prints a compute-adjusted table (each best minus its own language's floor)
+as a diagnostic, while the scoreboard and every verdict stay on whole-process time. The project rule (recorded as a guideline from the user): after every change to the
 compiler, run the full benchmark suite again and compare, so winning one case while quietly losing
 another surfaces at the change that caused it.
 

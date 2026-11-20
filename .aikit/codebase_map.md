@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `195`
-- **Total Top-Level Functions**: `213`
-- **Total Class Methods**: `1054`
-- **Total Source Lines**: `19714`
+- **Total Classes**: `196`
+- **Total Top-Level Functions**: `215`
+- **Total Class Methods**: `1058`
+- **Total Source Lines**: `19825`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -32,7 +32,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `600` lines
+**Size**: `675` lines
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -49,6 +49,8 @@
 - `def build_cpp(compiler, source, destination)` - *Compile one C++ case; None when this compiler does not produce an executable.*
 - `def measure(executable, rounds, stdin)` - *Wall-clock milliseconds for each run of one executable.*
 - `def summarise(samples, iterations)` - *Best, median and per-unit cost from one set of wall-clock samples.*
+- `def measure_floors(folder, compiler, cpp_compiler, rust_compiler, rounds, optimise)` - *Each language's startup floor, in ms: an empty program's best time.*
+- `def compute_adjusted(reports, floors)` - *One line per case: each language's best minus that language's startup floor.*
 - `def verdict(best_cairn, best_c)` - *The measured standing against one baseline: `faster`, `slower`, `tie` or `unavailable`.*
 - `def compare_runs(current, previous, noise)` - *Per-case best-time deltas against a saved run; (readable lines, any regression).*
 - `def window_note(record)` - *A warning when a saved record was measured in a loaded window, else None.*
@@ -822,7 +824,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `545` lines
+**Size**: `581` lines
 
 **Classes:**
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
@@ -876,6 +878,11 @@
   - Method `.test_a_probe_over_the_criterion_marks_the_run_loaded()`
   - Method `.test_a_run_without_the_probe_answers_unknown()`
   - Method `.test_the_window_note_warns_only_for_a_loaded_baseline()`
+- `class ComputeAdjustedTest` - *The floors view subtracts each language's own startup, and only that.*
+  - Method `.test_each_language_subtracts_its_own_floor()`
+  - Method `.test_a_missing_floor_omits_the_language_instead_of_guessing()`
+  - Method `.test_a_best_below_the_floor_clamps_at_zero()`
+  - Method `.test_the_floor_sources_are_the_four_empty_programs()`
 - `class CompareRunsTest` - *The regression watch: a saved run's numbers diffed against the new run.*
   - Method `.test_a_cairn_regression_beyond_the_noise_band_is_flagged()`
   - Method `.test_drift_inside_the_noise_band_is_reported_but_not_flagged()`

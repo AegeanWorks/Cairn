@@ -479,6 +479,42 @@ class QuietWindowProvenanceTest(unittest.TestCase):
         self.assertIn("74.3", note)
 
 
+class ComputeAdjustedTest(unittest.TestCase):
+    """The floors view subtracts each language's own startup, and only that.
+
+    Whole-process time is the scoreboard because it is what a user waits for, but a
+    minimal program already costs millions of cycles (ADR-084), so a codegen delta
+    on a short case is invisible in the total. This view is diagnostic: it must
+    subtract each language's own floor, never another language's, and never turn a
+    missing measurement into a number.
+    """
+
+    REPORTS = [
+        {"case": "short", "cairn": {"best_ms": 11.0}, "c": {"best_ms": 12.0},
+         "cpp": {"best_ms": 20.0}, "rust": {"best_ms": 14.0}},
+        {"case": "no_rust", "cairn": {"best_ms": 9.0}, "c": {"best_ms": 10.0}},
+    ]
+
+    def test_each_language_subtracts_its_own_floor(self) -> None:
+        floors = {"cairn": 5.0, "c": 8.0, "cpp": 17.0, "rust": 11.0}
+        lines = run_benchmarks.compute_adjusted(self.REPORTS, floors)
+        self.assertIn("short        cairn 6.00  c 4.00  cpp 3.00  rust 3.00 ms", lines)
+        self.assertIn("no_rust      cairn 4.00  c 2.00 ms", lines)
+
+    def test_a_missing_floor_omits_the_language_instead_of_guessing(self) -> None:
+        lines = run_benchmarks.compute_adjusted(self.REPORTS, {"cairn": 5.0})
+        self.assertIn("short        cairn 6.00 ms", lines)
+
+    def test_a_best_below_the_floor_clamps_at_zero(self) -> None:
+        lines = run_benchmarks.compute_adjusted(
+            [{"case": "odd", "cairn": {"best_ms": 3.0}}], {"cairn": 5.0})
+        self.assertIn("cairn 0.00", lines[0])
+
+    def test_the_floor_sources_are_the_four_empty_programs(self) -> None:
+        self.assertEqual(set(run_benchmarks.FLOOR_SOURCES), {"cairn", "c", "cpp", "rust"})
+        self.assertIn("print(0)", run_benchmarks.FLOOR_SOURCES["cairn"])
+
+
 class CompareRunsTest(unittest.TestCase):
     """The regression watch: a saved run's numbers diffed against the new run."""
 

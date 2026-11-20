@@ -249,6 +249,66 @@ def summarise(samples: List[float], iterations: int) -> Dict[str, float]:
     }
 
 
+FLOOR_SOURCES = {
+    "cairn": "fn main() -> i64 { print(0); return 0; }\n",
+    "c": "#include <stdio.h>\nint main(void) { printf(\"0\"); return 0; }\n",
+    "cpp": "#include <iostream>\nint main() { std::cout << \"0\"; return 0; }\n",
+    "rust": "fn main() { print!(\"0\"); }\n",
+}
+
+
+def measure_floors(folder: Path, compiler: Optional[str], cpp_compiler: Optional[str],
+                   rust_compiler: Optional[str], rounds: int,
+                   optimise: bool = True) -> Dict[str, float]:
+    """Each language's startup floor, in ms: an empty program's best time.
+
+    Every case is scored on whole-process time, and a minimal program already
+    costs 5-17M cycles depending on its runtime's own startup (ADR-084). Measuring
+    the floor lets a codegen change be judged on compute instead of on a total the
+    loader dominates, without changing the scoreboard itself.
+    """
+    floors: Dict[str, float] = {}
+    cairn_source = folder / "floor.crn"
+    cairn_source.write_text(FLOOR_SOURCES["cairn"], encoding="utf-8")
+    cairn_exe = folder / "floor.cairn.exe"
+    build_cairn(cairn_source, cairn_exe, optimise)
+    floors["cairn"] = min(measure(cairn_exe, rounds))
+    builders = (("c", compiler, build_c, "floor.c"),
+                ("cpp", cpp_compiler, build_cpp, "floor.cpp"),
+                ("rust", rust_compiler, build_rust, "floor.rs"))
+    for language, found, builder, filename in builders:
+        if not found:
+            continue
+        source = folder / filename
+        source.write_text(FLOOR_SOURCES[language], encoding="utf-8")
+        exe = folder / f"floor.{language}.exe"
+        if builder(found, source, exe) is not None:
+            floors[language] = min(measure(exe, rounds))
+    return floors
+
+
+def compute_adjusted(reports: List[Dict[str, object]],
+                     floors: Dict[str, float]) -> List[str]:
+    """One line per case: each language's best minus that language's startup floor.
+
+    Diagnostic only - the scoreboard and every verdict stay on whole-process best
+    times, because that is what a user waits for. On a short case the loader's
+    share is most of the number, so this column is where a codegen change shows.
+    """
+    lines = []
+    for report in reports:
+        parts = []
+        for language in ("cairn", "c", "cpp", "rust"):
+            data = report.get(language)
+            floor = floors.get(language)
+            if not isinstance(data, dict) or floor is None:
+                continue
+            parts.append(f"{language} {max(float(data['best_ms']) - floor, 0.0):.2f}")
+        if parts:
+            lines.append(f"{str(report['case']):12s} " + "  ".join(parts) + " ms")
+    return lines
+
+
 def verdict(best_cairn: Optional[float], best_c: Optional[float]) -> str:
     """The measured standing against one baseline: `faster`, `slower`, `tie` or `unavailable`.
 
@@ -518,6 +578,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--save", action="store_true",
                         help="append this run's best times and commit to "
                              f"{HISTORY.relative_to(ROOT)}")
+    parser.add_argument("--floors", action="store_true",
+                        help="also measure each language's empty-program startup floor and "
+                             "print a compute-adjusted (best minus floor) table; diagnostic "
+                             "only, the scoreboard keeps whole-process times")
     parser.add_argument("--compare", action="store_true",
                         help="diff this run's Cairn best times against the newest saved "
                              "record and exit 1 on a regression beyond the noise band")
@@ -530,6 +594,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         reports = [benchmark_case(case, compiler, arguments.rounds, Path(folder), optimise,
                                   rust_compiler=rust_compiler, cpp_compiler=cpp_compiler)
                    for case in CASES]
+        floors = measure_floors(Path(folder), compiler, cpp_compiler, rust_compiler,
+                                arguments.rounds, optimise) if arguments.floors else None
     verdicts = [str(report.get("verdict")) for report in reports]
     rust_verdicts = [str(report.get("verdict_rust")) for report in reports]
     cpp_verdicts = [str(report.get("verdict_cpp")) for report in reports]
@@ -555,6 +621,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                           "cases": reports}, indent=2))
     else:
         print(render(reports, compiler, optimise, rust_compiler, cpp_compiler))
+        if floors:
+            print()
+            print("Startup floor (empty program best): "
+                  + "  ".join(f"{language} {value:.2f} ms"
+                              for language, value in floors.items()))
+            print("Compute-adjusted (best minus that language's floor; diagnostic only, "
+                  "the scoreboard is whole-process time):")
+            for line in compute_adjusted(reports, floors):
+                print(f"  {line}")
     previous = latest_history_record(HISTORY) if arguments.compare else None
     if arguments.save:
         record = record_from_reports(reports, compiler, rust_compiler,
