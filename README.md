@@ -323,7 +323,7 @@ a spread:
 | `binary_gcd` | 1,000,000 Stein-GCD pairs | 147-162 ms | 158-180 ms | 173-181 ms | 139-154 ms | 71,680 bytes |
 | `call_chain` | 20,000,000 three-argument hot-path calls | 45-48 ms | 33-37 ms | 34-37 ms | 74-79 ms | 71,168 bytes |
 | `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 7.8-9.7 ms | 7.7-10.7 ms | 7.7-10.9 ms | 8.6-10.8 ms | 71,168 bytes |
-| `primes` | trial division over 2..300000 | 25.1-27.2 ms | 24.5-27.3 ms | 24.1-26.3 ms | 18.9-23.2 ms | 71,168 bytes |
+| `primes` | trial division over 2..300000 | 17.9-19.1 ms (ADR-085 32-bit divide) | 24.5-27.3 ms | 24.1-26.3 ms | 18.9-23.2 ms | 71,168 bytes |
 | `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.1-16.1 ms | 11.1-13.3 ms | 10.9-13.4 ms | 12.0-14.4 ms | 71,168 bytes |
 | `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 94.3-96.7 ms | 92.5-101.5 ms | 96.4-102.9 ms | 105.9-113.5 ms | 71,168 bytes |
 | `hex_io` | 400,000 hex-format-then-print values | 612-645 ms | 4,764-5,095 ms | 397-467 ms | 677-723 ms | 71,168 bytes |
@@ -419,8 +419,10 @@ board now reports the gap to all three compilers on every run.
 
 Four later cases widen the measured surface again (ADR-030): `tak` (three-argument
 data-dependent recursion — won outright against both baselines, 7.5 ms vs C 8.4-9.1 and Rust
-9.6-9.9), `primes` (trial division over 2..300000 — ties C at 25.0 vs 24.5 ms, both lowering
-modulo the same magic-multiply way, behind Rust's 19.1), `mandelbrot` (four 960x540 fixed-point
+9.6-9.9), `primes` (trial division over 2..300000 — once tied C at 25.0 vs 24.5 ms because
+every runtime-divisor modulo paid a 64-bit `idiv`; ADR-085's guarded 32-bit `div`
+took the case to 17.9-19.1 ms, ahead of C and C++ and level with Rust, which had
+already narrowed the same modulo through its value-range analysis), `mandelbrot` (four 960x540 fixed-point
 escape frames — 13.5 ms vs C 10.8, the inner multiply/shift merge chain is the visible gap) and
 `splitmix` (100,000,000 wrapping 64-bit mixes, whose first standing of 165.9 ms vs C 98.7 and
 Rust 113.8 was rematerialized loop-invariant constants, the early recorded mechanism). Writing

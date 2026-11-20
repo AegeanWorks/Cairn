@@ -259,6 +259,36 @@ class PowerOfTwoDivisionTest(unittest.TestCase):
         self.assertIn(b"\x48\xf7", body)  # the idiv form stays for divisor -4
 
 
+class WideDivisionGuardTest(unittest.TestCase):
+    """A runtime division takes 32-bit `div` behind a two-compare guard (ADR-085).
+
+    `div r/m32` measured -29 percent cycles against `idiv r/m64` on this machine, so
+    the emission guards both operands into [0, 2**31) and falls to the 64-bit path
+    for anything else - including negatives, which the unsigned compares catch.
+    """
+
+    RUNTIME = ("fn probe(n: i64, d: i64) -> i64 { return n % d; }"
+               "fn main() -> i64 { print(probe(100, 7)); return 0; }")
+
+    def test_a_runtime_divisor_takes_the_guarded_narrow_form(self) -> None:
+        body = region_text(self.RUNTIME, "probe")
+        self.assertIn(bytes([0x48, 0x81, 0xF8, 0xFF, 0xFF, 0xFF, 0x7F]), body)  # cmp rax, 2**31-1
+        self.assertIn(bytes([0x0F, 0x87]), body)                            # ja wide
+        self.assertIn(bytes([0xF7, 0xF6]), body)                            # div esi
+        self.assertIn(bytes([0x48, 0xF7, 0xFE]), body)                      # idiv rsi stays
+
+    def test_the_guard_uses_unsigned_compares_so_negatives_go_wide(self) -> None:
+        # `ja` after cmp is unsigned: a negative operand reads as huge and takes the
+        # 64-bit path. `jg` would let a negative divisor through and divide wrongly.
+        body = region_text(self.RUNTIME, "probe")
+        self.assertNotIn(bytes([0x0F, 0x8F]), body)   # no signed jg at the guard
+
+    def test_a_literal_divisor_keeps_its_magic_or_shift_form(self) -> None:
+        body = region_text("fn probe(n: i64) -> i64 { return n / 3; }"
+                           "fn main() -> i64 { print(probe(100)); return 0; }", "probe")
+        self.assertNotIn(bytes([0x48, 0x81, 0xF8, 0xFF, 0xFF, 0xFF, 0x7F]), body)
+
+
 class HalvingPairLoopTest(unittest.TestCase):
     """The fused odd-pair collatz body lowers to one branchless halving pass.
 

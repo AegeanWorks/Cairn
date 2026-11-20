@@ -29,7 +29,7 @@ ZF_IMM_EXTENSIONS = (0, 1, 4, 5, 6)
 CONDITIONS = {
     "e": 0x4, "ne": 0x5, "l": 0xC, "le": 0xE, "g": 0xF, "ge": 0xD,
     "z": 0x4, "nz": 0x5, "s": 0x8, "ns": 0x9, "c": 0x2, "nc": 0x3,
-    "b": 0x2, "ae": 0x3,
+    "b": 0x2, "ae": 0x3, "a": 0x7, "be": 0x6,
 }
 CMOV_CONDITIONS = {
     "e": 0x40, "ne": 0x45, "l": 0x4C, "le": 0x4E, "g": 0x4F, "ge": 0x4D,
@@ -597,6 +597,18 @@ class Assembler:
         extension = 0x7 if signed else 0x6
         self.emit(bytes([_rex(True, 0, 0, code >> 3), 0xF7,
                          0xC0 | (extension << 3) | (code & 7)]))
+
+    def divide32(self, reg: str) -> None:
+        """`div r/m32`: unsigned 32-bit division of edx:eax, quotient eax, remainder edx.
+
+        A 32-bit divide is much cheaper than the 64-bit `idiv` (ADR-085 measured a
+        purpose-built trial-division twin at -29 percent cycles), so the compiler
+        takes this form behind a guard that proves both operands fit: the caller
+        sets edx to zero and rax to the zero-extended dividend.
+        """
+        code = REGISTERS[reg]
+        prefix = bytes([_rex(False, 0, 0, code >> 3)]) if code >= 8 else b""
+        self.emit(prefix, bytes([0xF7, 0xC0 | (0x6 << 3) | (code & 7)]))
 
     def unary(self, extension: int, reg: str) -> None:
         """`F7 /n` forms: not (2), neg (3)."""

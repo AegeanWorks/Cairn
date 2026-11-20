@@ -2905,17 +2905,36 @@ class CodeGenerator:
         return True
 
     def _emit_division(self, operator: str, nonnegative_divisor: bool = False) -> None:
-        """Signed division with an explicit zero-divisor trap, quotient or remainder.
+        """Signed division with a guarded 32-bit fast path and an explicit zero trap.
 
-        `idiv` faults on `INT64_MIN / -1` as well as on a zero divisor, so both
-        route to the `DIV_ZERO` helper the folding pass already preserves. When the
-        divisor provably holds a non-negative value (a literal seed kept through
-        positive updates), the `-1` divisor and `INT64_MIN` dividend probes are
-        unreachable and the zero trap alone stands guard.
+        `div r/m32` is much cheaper than `idiv r/m64` (a purpose-built trial-division
+        twin measured -29 percent cycles, ADR-085), so a two-compare guard takes the
+        32-bit unsigned form whenever the dividend is in `[0, 2**31)` and the divisor
+        in `(0, 2**31)`; the compares are perfectly predictable in that regime. Every
+        other shape - negative, zero, or wide operands - falls to the 64-bit path,
+        which owns both traps: a zero divisor and `INT64_MIN / -1`, since `idiv`
+        faults on both and Cairn defines both as `DIV_ZERO`. When the divisor
+        provably holds a non-negative value (a literal seed kept through positive
+        updates), the `-1` divisor and `INT64_MIN` dividend probes are unreachable
+        and the zero trap alone stands guard.
         """
         asm = self.assembler
         asm.test("rax")
         asm.jcc("z", DIV_ZERO_LABEL)
+        wide = self._fresh("div.wide")
+        done = self._fresh("div.wide.done")
+        asm.cmp_imm("rax", 2147483647)   # divisor in (0, 2**31): catches negatives too
+        asm.jcc("a", wide)
+        asm.cmp_imm("rcx", 2147483647)   # dividend in [0, 2**31)
+        asm.jcc("a", wide)
+        asm.mov_reg_reg(SCRATCH, "rax")
+        asm.xor_zero("rdx")
+        asm.mov_reg_reg("rax", "rcx")
+        asm.divide32(SCRATCH)
+        if operator == "%":
+            asm.mov_reg_reg("rax", "rdx")
+        asm.jmp(done)
+        asm.label(wide)
         if not nonnegative_divisor:
             no_overflow = self._fresh("div.no_overflow")
             asm.cmp_imm("rax", -1)
@@ -2930,6 +2949,7 @@ class CodeGenerator:
         asm.divide(SCRATCH, signed=True)
         if operator == "%":
             asm.mov_reg_reg("rax", "rdx")
+        asm.label(done)
 
     def _emit_and(self, expression: syntax.Binary) -> None:
         """`&&`: the right side is evaluated only when the left side is non-zero."""

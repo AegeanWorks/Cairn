@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `196`
+- **Total Classes**: `198`
 - **Total Top-Level Functions**: `215`
-- **Total Class Methods**: `1058`
-- **Total Source Lines**: `19825`
+- **Total Class Methods**: `1065`
+- **Total Source Lines**: `19925`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -137,7 +137,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4443` lines
+**Size**: `4463` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -218,7 +218,7 @@
   - Method `._scaled_sum_terms(expression)` - *The scaled-item pattern of a `+` expression: `(Name, scale_log2, addend, with_base)`.*
   - Method `._emit_scaled_sum(expression)` - *Lower `c1 + k*c2` (either operand order) as one scaled `lea`; True when emitted.*
   - Method `._emit_home_sum(expression)` - *Lower `a + b` with both names homed as one `lea rax, [a + b]`; True when emitted.*
-  - Method `._emit_division(operator, nonnegative_divisor)` - *Signed division with an explicit zero-divisor trap, quotient or remainder.*
+  - Method `._emit_division(operator, nonnegative_divisor)` - *Signed division with a guarded 32-bit fast path and an explicit zero trap.*
   - Method `._emit_and(expression)` - *`&&`: the right side is evaluated only when the left side is non-zero.*
   - Method `._emit_or(expression)` - *`||`: the right side is evaluated only when the left side is zero.*
   - Method `._emit_call(expression, copy_home)` - *Evaluate arguments left to right, place them in the ABI registers, then call.*
@@ -453,7 +453,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `707` lines
+**Size**: `719` lines
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -520,6 +520,7 @@
   - Method `.setcc(condition)` - *`setcc al` followed by `movzx rax, al`: a comparison result as 0 or 1 in rax.*
   - Method `.cqo()` - *Sign-extend rax into rdx:rax before a signed division.*
   - Method `.divide(reg, signed)` - *`idiv`/`div r64`; the caller sets rdx and rax.*
+  - Method `.divide32(reg)` - *`div r/m32`: unsigned 32-bit division of edx:eax, quotient eax, remainder edx.*
   - Method `.unary(extension, reg)` - *`F7 /n` forms: not (2), neg (3).*
   - Method `.shift_cl(extension)` - *`shl` (4), shr (5) or sar (7) of rax by cl.*
   - Method `.shift_imm(extension, reg, count)` - *`shl` (4) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip.*
@@ -972,7 +973,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2638` lines
+**Size**: `2668` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1004,6 +1005,10 @@
   - Method `.test_a_remainder_by_two_masks_instead_of_dividing()`
   - Method `.test_a_non_power_of_two_literal_still_divides()`
   - Method `.test_a_negative_power_of_two_still_divides()`
+- `class WideDivisionGuardTest` - *A runtime division takes 32-bit `div` behind a two-compare guard (ADR-085).*
+  - Method `.test_a_runtime_divisor_takes_the_guarded_narrow_form()`
+  - Method `.test_the_guard_uses_unsigned_compares_so_negatives_go_wide()`
+  - Method `.test_a_literal_divisor_keeps_its_magic_or_shift_form()`
 - `class HalvingPairLoopTest` - *The fused odd-pair collatz body lowers to one branchless halving pass.*
   - Method `.test_a_fused_pair_lowers_branchless()`
   - Method `.test_the_steps_counter_pays_both_steps_with_one_adc()`
@@ -1288,7 +1293,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1539` lines
+**Size**: `1563` lines
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1301,6 +1306,7 @@
   - Method `.test_recursion_and_loop_control()`
   - Method `.test_countdown_latches_match_count_up_semantics()`
   - Method `.test_power_of_two_division_truncates_like_the_machine_would()`
+  - Method `.test_runtime_division_answers_on_both_the_narrow_and_wide_paths()`
   - Method `.test_division_by_zero_is_a_trap_with_a_message_and_exit_code_3()`
   - Method `.test_traps_behave_identically_without_the_folding_pass()`
   - Method `.test_run_forwards_the_programs_own_exit_code()`
@@ -1546,7 +1552,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `415` lines
+**Size**: `429` lines
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1577,6 +1583,9 @@
   - Method `.test_cmp_register_with_rip_state()`
   - Method `.test_cmp_extended_register_with_rip_state_takes_rex_r()`
   - Method `.test_store_of_rip_state()`
+- `class NarrowDivisionEncodingTest` - *`div r/m32` is one F7 /6 form, with a REX prefix only for an extended register.*
+  - Method `.code(register)`
+  - Method `.test_plain_and_extended_forms()`
 - `class EncodingTest` - *Each test names one encoding and its expected bytes.*
   - Method `.code(build)` - *Run a builder function against a fresh assembler and return its bytes.*
   - Method `.test_push_and_pop_extended_registers_mask_the_register_bits()`

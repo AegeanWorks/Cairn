@@ -248,6 +248,30 @@ class EndToEndTest(unittest.TestCase):
             "-4", "-1",       # -9 / 2, -9 % 2
         ]) + "\n")
 
+    def test_runtime_division_answers_on_both_the_narrow_and_wide_paths(self) -> None:
+        # The guarded fast path covers a dividend in [0, 2**31) with a divisor in
+        # (0, 2**31); wide values, negative dividends and negative divisors must all
+        # fall to the 64-bit path and still truncate exactly like the machine
+        # (ADR-085).
+        completed = self.execute(
+            "fn main() -> i64 { var a: i64 = 100; var b: i64 = 7;"
+            " print(a / b); print(a % b);"
+            " var big: i64 = 5000000000; print(big / b); print(big % b);"
+            " var huge: i64 = 3000000000; print(big / huge); print(big % huge);"
+            " var neg: i64 = -100; print(neg / b); print(neg % b);"
+            " print(a / (0 - b)); print(a % (0 - b));"
+            " print(2147483647 / 1); print(2147483648 / 1); print(2147483647 % 3);"
+            " return 0; }")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout.splitlines(), [
+            "14", "2",                    # the narrow path
+            "714285714", "2",             # dividend above 2**31
+            "1", "2000000000",            # divisor above 2**31
+            "-14", "-2",                  # negative dividend
+            "-14", "2",                   # negative divisor
+            "2147483647", "2147483648", "1",  # both sides of the boundary
+        ])
+
     def test_division_by_zero_is_a_trap_with_a_message_and_exit_code_3(self) -> None:
         completed = self.execute(DIVIDE_BY_ZERO)
         self.assertEqual(completed.returncode, 3)
@@ -1493,7 +1517,8 @@ class StringBuiltinsTest(EndToEndTest):
             " check(str_byte(\"abc\", 2), 99); check(str_len(\"abc\"), 9); return 0; }")
         self.assertEqual(completed.returncode, 1)
         self.assertEqual(completed.stdout, "fail\n")
-
+
+
 
 @WINDOWS_ONLY
 class StdoutBufferTest(EndToEndTest):

@@ -151,6 +151,20 @@ class RipStateEncodingTest(unittest.TestCase):
         self.assertEqual(assembler.fixups, [(3, "state")])
 
 
+class NarrowDivisionEncodingTest(unittest.TestCase):
+    """`div r/m32` is one F7 /6 form, with a REX prefix only for an extended register."""
+
+    def code(self, register: str) -> bytes:
+        assembler = Assembler()
+        assembler.divide32(register)
+        return bytes(assembler.code)
+
+    def test_plain_and_extended_forms(self) -> None:
+        self.assertEqual(self.code("rsi"), b"\xf7\xf6")
+        self.assertEqual(self.code("rcx"), b"\xf7\xf1")
+        self.assertEqual(self.code("r12"), b"\x41\xf7\xf4")
+
+
 class EncodingTest(unittest.TestCase):
     """Each test names one encoding and its expected bytes."""
 
