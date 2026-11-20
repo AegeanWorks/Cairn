@@ -2251,7 +2251,12 @@ class CodeGenerator:
                 asm.cmp_imm("rax", right.value)
         else:
             self._emit_left_operand(expression.left, expression.right)
-            asm.cmp_reg_reg("rcx", "rax")
+            # A non-leaf right operand parks the left value in a temporary, so the
+            # comparison must read that register; rcx is stale there. Mirrors the
+            # value path in _emit_binary and the division/shift tails.
+            held = self.left_hold
+            self.left_hold = None
+            asm.cmp_reg_reg(held if held is not None else "rcx", "rax")
         asm.jcc(condition, target)
 
     def _emit_expression(self, expression: Optional[syntax.Expr]) -> None:

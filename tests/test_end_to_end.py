@@ -328,6 +328,28 @@ class EndToEndTest(unittest.TestCase):
         completed = self.execute(source)
         self.assertEqual(completed.stdout.splitlines(), ["1", "0", "1", "0", "1"])
 
+    def test_a_two_sided_comparison_branches_on_its_held_left_operand(self) -> None:
+        source = """
+fn main() -> i64 {
+    var i: i64 = 46;
+    var t: i64 = -6895097110744979126;
+    var y: i64 = 0;
+    if t > (i & 65535) { y = 1; } else { y = 2; }
+    print(y);
+    if t < (i & 65535) { y = 3; } else { y = 4; }
+    print(y);
+    var k: i64 = 0;
+    while t > (i & 65535) && k < 5 {
+        k = k + 1;
+    }
+    print(k);
+    return 0;
+}
+"""
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "2\n3\n0\n")
+
     def test_four_argument_call_uses_every_argument_register(self) -> None:
         source = ("fn quad(a: i64, b: i64, c: i64, d: i64) -> i64 { "
                   "return a * 1000 + b * 100 + c * 10 + d; } "

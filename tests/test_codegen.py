@@ -490,6 +490,22 @@ def count_test_imms(blob: bytes) -> int:
                if blob[index] == 0xF6 and (blob[index + 1] & 0xC0) == 0xC0)
 
 
+class ComparisonBranchHoldTest(unittest.TestCase):
+    """A two-sided comparison branches on the left value where the lowering left it."""
+
+    def test_a_non_leaf_right_operand_never_compares_a_stale_rcx(self) -> None:
+        source = ("fn main() -> i64 { var i: i64 = 46; var t: i64 = -3; var y: i64 = 0; "
+                  "if t > (i & 65535) { y = 1; } return y; }")
+        self.assertNotIn(b"\x48\x39\xc1", region_of(source),
+                         "a non-leaf right operand parks the left value in a temporary, "
+                         "so comparing rcx reads a stale register")
+
+    def test_a_loop_condition_never_compares_a_stale_rcx(self) -> None:
+        source = ("fn main() -> i64 { var i: i64 = 0; var t: i64 = -3; var y: i64 = 0; "
+                  "while t > (i & 65535) { y = y + 1; i = i + 1; } return y; }")
+        self.assertNotIn(b"\x48\x39\xc1", region_of(source))
+
+
 class FlagFusedConditionTest(unittest.TestCase):
     """Bit-test and short-circuit conditions branch from their flags, never setcc."""
 

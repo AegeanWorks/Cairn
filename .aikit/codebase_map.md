@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `199`
+- **Total Classes**: `200`
 - **Total Top-Level Functions**: `228`
-- **Total Class Methods**: `1076`
-- **Total Source Lines**: `20345`
+- **Total Class Methods**: `1079`
+- **Total Source Lines**: `20388`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -137,7 +137,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4463` lines
+**Size**: `4468` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -986,7 +986,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2668` lines
+**Size**: `2684` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1042,6 +1042,9 @@
   - Method `.test_a_wider_mask_counts_to_eight()`
   - Method `.test_a_mask_beyond_imm32_lands_in_a_scratch_register()`
   - Method `.test_an_unequal_compare_against_a_nonzero_literal_still_divides()`
+- `class ComparisonBranchHoldTest` - *A two-sided comparison branches on the left value where the lowering left it.*
+  - Method `.test_a_non_leaf_right_operand_never_compares_a_stale_rcx()`
+  - Method `.test_a_loop_condition_never_compares_a_stale_rcx()`
 - `class FlagFusedConditionTest` - *Bit-test and short-circuit conditions branch from their flags, never setcc.*
   - Method `.test_a_bit_test_condition_branches_from_the_flags()`
   - Method `.test_conjoined_bit_tests_branch_from_two_flag_pairs()`
@@ -1306,7 +1309,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1563` lines
+**Size**: `1585` lines
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1328,6 +1331,7 @@
   - Method `.test_min_int_divided_by_minus_one_traps_like_division_by_zero()`
   - Method `.test_min_int64_prints_with_its_sign()`
   - Method `.test_comparison_and_logical_operators_yield_one_or_zero()`
+  - Method `.test_a_two_sided_comparison_branches_on_its_held_left_operand()`
   - Method `.test_four_argument_call_uses_every_argument_register()`
   - Method `.test_print_inside_an_argument_list_evaluates_left_to_right()`
   - Method `.test_calls_preserve_locals_held_in_callee_saved_registers()`
