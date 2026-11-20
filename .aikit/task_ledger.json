@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-induction-ceiling",
+    "task_id": "cairn-mandelbrot-thread",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795155435.4248786,
+    "updated_at": 1795158657.9625986,
     "owner": "kilo:cairn",
-    "lease_until": 1795162635.4248786,
+    "lease_until": 1795165857.9625986,
     "started_by": "kilo:cairn",
     "continuations": [],
     "workspaces": [
@@ -16,114 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795155477.6959267,
-    "completed_head": "51918241ab819021e7072eaa292fdb9cefeadfa0",
-    "completed_tree": "d0e7f2912fae0d9dbad33f898af415b379e19d82"
+    "completed_at": 1795158672.0540915,
+    "completed_head": "b874fb93bd6dafeba87c5e1fe3651c00d6356639",
+    "completed_tree": "f740136226ea188702e4c4b192644543c4fedd54"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-homed-right",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] delivered: homed-right in-place combine for + & | ^ * - and comparisons; falling-first HomedRightOperandShapeTest 4 tests; suite 1288 OK; 17/19 registry cases byte-identical against 1457723, only nqueens and mandelbrot change; 31-round interleaved A/B nqueens -3.8 percent best and -2.4 ten-fastest, mandelbrot a wash (+2.5 best, -0.6 ten-fastest), call_chain byte-identical control swung +5.0 best; two polluted gate windows dropped under ADR-069; ADR-078 synced; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795095788.810059,
-      "timestamp_str": "2026-11-19 16:43:08",
-      "agent": "kilo:cairn",
-      "measurements": [
-        {
-          "baseline": 31.48,
-          "control": "call_chain is byte-identical and swung +5.0 percent best in the same rounds",
-          "interleaved": "yes",
-          "candidate": 30.27,
-          "metric": "nqueens best ms",
-          "workload": "nqueens benchmark, byte-changed case",
-          "command": "31-round interleaved same-seconds A/B",
-          "unit": "ms",
-          "drift": "3.8"
-        },
-        {
-          "baseline": 11.44,
-          "control": "call_chain byte-identical control swung +5.0 percent best",
-          "artifact": "wash, loop is latency-bound",
-          "interleaved": "yes",
-          "candidate": 11.72,
-          "metric": "mandelbrot best ms",
-          "workload": "mandelbrot benchmark, byte-changed case",
-          "command": "31-round interleaved same-seconds A/B",
-          "unit": "ms",
-          "drift": "2.5"
-        }
-      ],
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-homed-right",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-homed-right' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795095839.288367,
-      "timestamp_str": "2026-11-19 16:43:59",
-      "agent": "kilo:cairn",
-      "head": "142b6f616e774825f43892e089bef7900077807b",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-stdin-promote",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] delivered: stdin-reading leaf functions promote base, cursor and count into spare homes (ADR-079); the fused site is cmp/jb/movzx SIB/add with the refill call out of line and the index stored on the single epilogue; two bugs caught by existing oracles before shipping (double-read after drain, caught by the IR differential corpus; r13-base SIB encoding, caught by the stdin e2e and fixed with disp8=0, pinned by SIBByteLoadTest); suite 1297 OK, TwinParity 13/13, 18/19 registry images byte-identical (only char_stream changes); interleaved pair-only A/B -10.0 percent ten-fastest with a +0.3 percent control; loaded windows read triple best 11.77 vs old 12.65 and C 11.65; a fresh honest gate record is pending a quiet window; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795113482.1443174,
-      "timestamp_str": "2026-11-19 21:38:02",
-      "agent": "kilo:cairn",
-      "measurements": [
-        {
-          "candidate": 18.42,
-          "unit": "ms",
-          "artifact": "pair-only promotion build",
-          "baseline": 20.47,
-          "metric": "char_stream ten-fastest mean ms",
-          "control": "primes best moved 32.50 to 32.60 (+0.3 percent) in the same rounds",
-          "workload": "4 MiB piped stdin summed through read_char in a leaf main",
-          "command": "31-round interleaved same-seconds A/B",
-          "interleaved": "yes",
-          "drift": "10.0"
-        },
-        {
-          "candidate": 11.77,
-          "unit": "ms",
-          "baseline": 12.65,
-          "metric": "char_stream best ms",
-          "control": "C baseline measured 11.65 best in the same rounds",
-          "workload": "4 MiB piped stdin summed through read_char",
-          "command": "31-round four-way interleaved A/B in a loaded window",
-          "interleaved": "yes",
-          "drift": "7.0"
-        }
-      ],
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-stdin-promote",
       "phase": "phase 2",
@@ -465,6 +362,65 @@
       "timestamp_str": "2026-11-20 09:17:57",
       "agent": "kilo:cairn",
       "head": "51918241ab819021e7072eaa292fdb9cefeadfa0",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-mandelbrot-thread",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/2] measure the two remaining per-pixel levers as hand twins (rotated entry test, strength reduction) with a paired protocol, and measure the empty-program startup floor; [2/2] decide and record",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795158639.7600129,
+      "timestamp_str": "2026-11-20 10:10:39",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "ADR-082 closed mandelbrot but left two disassembly-visible per-pixel differences unmeasured, and the suite needs to know how much of a short case is startup",
+        "benefits": "a decisive close on mandelbrot's per-pixel thread and two methodology facts (startup floor, short-case resolution) that explain the cross-window drift",
+        "risks": "contract: the hand twins must print the identical total, and the rotated twin's legality rests on the zeroed accumulators; dependency: none; concurrency: none; state: no compiler change",
+        "mitigation": "identical printed totals, paired same-round ratios over 31 rounds, and an empty-program control built by the same compilers"
+      },
+      "plan_digest": "b19f8a92833997ae2d23ca2d3d0cfdb976a405c2b1c2ade076f7985649462aa4",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-mandelbrot-thread",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] measured and closed, no compiler change: rotated twin 1.0050 paired ratio (+0.5 percent) and strength-reduced 1.0071 (+0.7 percent) over 31 paired rounds with p10-p90 0.85-1.15; empty Cairn program 9.32M cycles median against mandelbrot's 24M, so ~40 percent of the case is startup and the loop is ~7 cycles per pixel on a 6-7 cycle dependency chain; ADR-083 records the close and the two methodology facts; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795158657.9625986,
+      "timestamp_str": "2026-11-20 10:10:57",
+      "agent": "kilo:cairn",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-mandelbrot-thread",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-mandelbrot-thread' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795158672.1138587,
+      "timestamp_str": "2026-11-20 10:11:12",
+      "agent": "kilo:cairn",
+      "head": "b874fb93bd6dafeba87c5e1fe3651c00d6356639",
       "delivery": {
         "roots": [
           "."
