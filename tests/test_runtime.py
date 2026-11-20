@@ -115,5 +115,47 @@ class StdoutBufferTest(unittest.TestCase):
         self.assertIn(iat_label("WriteFile"), referenced,
                       "the flush drains the buffer with WriteFile")
 
+class PowerOfTwoPrinterTest(unittest.TestCase):
+    """The fixed-width printers mask and shift instead of dividing by a power of two.
+
+    A `div r64` is a slow, serially dependent instruction: print_hex peeled eleven
+    nibbles with eleven of them, and print_char paid one just to isolate a byte.
+    Masking the remainder and shifting the quotient keeps the exact unsigned
+    semantics with three cheap ALU operations and no divide latency.
+    """
+
+    @staticmethod
+    def helper_code(label: str) -> bytes:
+        assembler = Assembler()
+        runtime.emit_runtime(assembler, ReadOnlyData(), WritableData())
+        bounds = sorted(offset for name, offset in assembler.labels.items()
+                        if name.startswith("cairn."))
+        start = assembler.labels[label]
+        end = next(offset for offset in bounds if offset > start)
+        return bytes(assembler.code[start:end])
+
+    @staticmethod
+    def has_divide(code: bytes) -> bool:
+        return any(code[index] == 0xF7 and index + 1 < len(code)
+                   and (code[index + 1] & 0x38) == 0x30
+                   for index in range(len(code)))
+
+    def test_print_hex_peels_a_nibble_with_and_and_shr(self) -> None:
+        code = self.helper_code(runtime.PRINT_HEX_LABEL)
+        self.assertIn(bytes([0x48, 0x83, 0xE2, 0x0F]), code,
+                      "the nibble is the low four bits: and rdx, 15")
+        self.assertIn(bytes([0x48, 0xC1, 0xE8, 0x04]), code,
+                      "the next nibble is a logical shift: shr rax, 4")
+        self.assertFalse(self.has_divide(code),
+                         "print_hex must not peel nibbles with a serial div")
+
+    def test_print_char_masks_the_low_byte(self) -> None:
+        code = self.helper_code(runtime.PRINT_CHAR_LABEL)
+        self.assertIn(bytes([0x48, 0x81, 0xE2, 0xFF, 0, 0, 0]), code,
+                      "the byte is the low eight bits: and rdx, 255")
+        self.assertFalse(self.has_divide(code),
+                         "print_char must not divide just to isolate a byte")
+
+
 if __name__ == "__main__":
     unittest.main()

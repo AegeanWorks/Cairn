@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `200`
+- **Total Classes**: `201`
 - **Total Top-Level Functions**: `228`
-- **Total Class Methods**: `1079`
-- **Total Source Lines**: `20388`
+- **Total Class Methods**: `1083`
+- **Total Source Lines**: `20432`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -523,7 +523,7 @@
   - Method `.divide32(reg)` - *`div r/m32`: unsigned 32-bit division of edx:eax, quotient eax, remainder edx.*
   - Method `.unary(extension, reg)` - *`F7 /n` forms: not (2), neg (3).*
   - Method `.shift_cl(extension)` - *`shl` (4), shr (5) or sar (7) of rax by cl.*
-  - Method `.shift_imm(extension, reg, count)` - *`shl` (4) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip.*
+  - Method `.shift_imm(extension, reg, count)` - *`shl` (4), `shr` (5) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip.*
   - Method `.add_imm8(reg, value)` - *`add r8, imm8`, used to turn a digit into ASCII.*
   - Method `.nop_pad(size)` - *`size` bytes of padding as canonical multi-byte nops.*
   - Method `.store_byte(base, source)` - *`mov [base], r8`.*
@@ -690,7 +690,7 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `708` lines
+**Size**: `710` lines
 
 **Functions:**
 - `def emit_arg_fill(assembler)` - *Emit `arg_fill`: tokenize the ANSI command line into the static table once.*
@@ -1865,7 +1865,7 @@
 ### [`tests/test_runtime.py`](tests/test_runtime.py)
 > *Tests for the runtime helpers' emitted shape and their static state.*
 
-**Size**: `119` lines
+**Size**: `161` lines
 
 **Classes:**
 - `class StdinRefillTest` - *The stdin refill path pays one cached handle and 64 KiB per syscall.*
@@ -1880,6 +1880,11 @@
   - Method `.test_the_stdout_state_rides_the_writable_blob()`
   - Method `.test_every_printer_routes_through_out_append()`
   - Method `.test_out_flush_carries_a_cached_handle_and_the_write()`
+- `class PowerOfTwoPrinterTest` - *The fixed-width printers mask and shift instead of dividing by a power of two.*
+  - Method `.helper_code(label)`
+  - Method `.has_divide(code)`
+  - Method `.test_print_hex_peels_a_nibble_with_and_and_shr()`
+  - Method `.test_print_char_masks_the_low_byte()`
 
 ---
 

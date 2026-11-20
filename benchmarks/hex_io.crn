@@ -1,7 +1,8 @@
 // Hex formatting throughput: every iteration prints one value in lowercase hex plus a
 // newline, the per-value output the three baselines issue with one formatted call. Cairn
 // pays two unbuffered writes per value (hex, then newline); batching the newline into the
-// hex buffer is a recorded future optimisation. The checksum is a dependent xor chain so
+// hex buffer remains a recorded future optimisation (ADR-091 removed the printer divides).
+// The checksum is a dependent xor chain so
 // no loop can be deleted, and every value stays below 2^44 so no twin overflows.
 // Twin of hex_io.c, hex_io.cpp and hex_io.rs; all four print the identical checksum.
 fn main() -> i64 {

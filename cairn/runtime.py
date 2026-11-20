@@ -507,18 +507,18 @@ def emit_print_i64(assembler: Assembler) -> None:
 def emit_print_char(assembler: Assembler) -> None:
     """Emit `print_char`: write the low byte of rax to stdout, no newline.
 
-    The byte is isolated by an unsigned division by 256 (the remainder is `rax & 0xFF`) and
-    appended to the shared stdout buffer as one byte. The clobbered `rax` never escapes: the
-    code generator pops the caller's saved value after the call.
+    A division by 256 is a power of two, so the byte is the remainder `rax & 0xFF`: one
+    register copy and one mask replace a slow `div r64`. The byte is appended to the shared
+    stdout buffer. The clobbered `rax` never escapes: the code generator pops the caller's
+    saved value after the call.
     """
     assembler.label(PRINT_CHAR_LABEL)
     assembler.push("rbp")
     assembler.mov_reg_reg("rbp", "rsp")
     assembler.sub_rsp(FRAME_SIZE)
     assembler.lea_rbp("rcx", BYTE_SLOT)
-    assembler.xor_zero("rdx")
-    assembler.mov_imm32("r10", 256)
-    assembler.divide("r10", signed=False)
+    assembler.mov_reg_reg("rdx", "rax")
+    assembler.arith_imm(4, "rdx", 0xFF)       # and rdx, 255: the remainder mod 256
     assembler.store_byte("rcx", "dl")
     assembler.lea_rbp("rax", BYTE_SLOT)
     assembler.mov_imm32("rdx", 1)
@@ -531,8 +531,10 @@ def emit_print_char(assembler: Assembler) -> None:
 def emit_print_hex(assembler: Assembler) -> None:
     """Emit `print_hex`: write rax in lowercase hex, no newline, no leading zeros.
 
-    The nibbles fall out right-to-left of unsigned divisions by 16 (remainder and shift in
-    one `div`), each turned into ASCII by a conditional move — `+ 0x30`, or `+ 0x57` when the
+    Sixteen is a power of two, so each nibble is the low four bits (`value & 15`) and the
+    next value is a logical shift right by four. Eleven serial `div r64` instructions become
+    eleven and/shift pairs with no divide latency, preserving the unsigned 64-bit reading.
+    Each nibble is turned into ASCII by a conditional move — `+ 0x30`, or `+ 0x57` when the
     nibble cleared 10 — and appended to the shared stdout buffer. Zero prints as a single `0`.
     """
     assembler.label(PRINT_HEX_LABEL)
@@ -540,11 +542,11 @@ def emit_print_hex(assembler: Assembler) -> None:
     assembler.mov_reg_reg("rbp", "rsp")
     assembler.sub_rsp(FRAME_SIZE)
     assembler.lea_rbp("rcx", BUFFER_TOP)
-    assembler.mov_imm32("r10", 16)
     assembler.xor_zero("r11")
     assembler.label("print_hex.digits")
-    assembler.xor_zero("rdx")
-    assembler.divide("r10", signed=False)
+    assembler.mov_reg_reg("rdx", "rax")
+    assembler.arith_imm(4, "rdx", 15)         # and rdx, 15: the low nibble
+    assembler.shift_imm(5, "rax", 4)          # shr rax, 4: the unsigned quotient
     assembler.mov_reg_reg("r9", "rdx")
     assembler.add_imm8("dl", 0x30)
     assembler.add_imm8("r9b", 0x57)

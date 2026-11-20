@@ -620,7 +620,7 @@ class Assembler:
         self.emit(b"\x48\xD3", bytes([0xC0 | (extension << 3)]))
 
     def shift_imm(self, extension: int, reg: str, count: int) -> None:
-        """`shl` (4) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip.
+        """`shl` (4), `shr` (5) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip.
 
         A count of one uses the shorter `D1 /n` form, which every division-by-two step emits.
         """
