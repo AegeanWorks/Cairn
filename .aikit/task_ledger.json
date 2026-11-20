@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-argv-promote",
+    "task_id": "cairn-argv-miss",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795193177.4128335,
+    "updated_at": 1795195693.142619,
     "owner": "kilo:cairn",
-    "lease_until": 1795200377.4128335,
+    "lease_until": 1795202893.142619,
     "started_by": "kilo:cairn",
     "continuations": [],
     "workspaces": [
@@ -16,83 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795193189.6679213,
-    "completed_head": "f8164f1c5a82699e8191b384dcd9f00c85aa1943",
-    "completed_tree": "b796ac0dfeb5d362fe477fb1942be0fb885396e1"
+    "completed_at": 1795195734.047383,
+    "completed_head": "492d75b8db0c75e6bfd3b1be720c103980d75502",
+    "completed_tree": "391a62c3ea793522edf8ebf37d949bcfef721f4f"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-mandelbrot-division",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] measured refusal, nothing shipped (ADR-081, 45a7eb0): the cmov quotient shape is four instructions against five but the same eighteen bytes, measures within the noise floor on mandelbrot (+0.4 percent cycle median, byte-identical control swinging 4.2 percent), and measures inside that same floor on a purpose-built division microbenchmark; the disassembly instead shows mandelbrot is about ten cycles per pixel with the inner loop rarely entered, so the cost is the per-pixel px * 16384 - 4194304 imul that gcc strength-reduces to an increment; code reverted, tests left unchanged; recorded next lever is loop induction-variable strength reduction; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795125124.9122226,
-      "timestamp_str": "2026-11-20 00:52:04",
-      "agent": "kilo:cairn",
-      "measurements": [
-        {
-          "baseline": 20.8,
-          "metric": "mandelbrot cycle median",
-          "workload": "four 960x540 frames in 2^21 fixed point",
-          "control": "nqueens is byte-identical and swung +1.2 percent median and +4.2 percent best in the same protocol",
-          "command": "QueryProcessCycleTime, 21 runs per build",
-          "unit": "millions of cycles",
-          "drift": "0.4",
-          "candidate": 20.9,
-          "interleaved": "yes"
-        }
-      ],
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-mandelbrot-division",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-mandelbrot-division' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795125152.5421152,
-      "timestamp_str": "2026-11-20 00:52:32",
-      "agent": "kilo:cairn",
-      "head": "45a7eb0fb841ebfa13934d8b9fed36a13a91353c",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-charstream-gate",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/2] keep the quiet best-of-11 gate record (probe 13.85 ms) and write its numbers and its byte-identity drift finding into ADR-079; [2/2] validate and commit, ledger cycle, strict gate",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795130226.045181,
-      "timestamp_str": "2026-11-20 02:17:06",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "the char_stream promotion's performance evidence needed a saved gate record, and the record's flags needed an evidence-based explanation so no later reader mistakes drift for a regression",
-        "benefits": "history carries a quiet, 11-round record with its probe, and ADR-079 states the measured char_stream standing and the cross-window drift floor",
-        "risks": "contract: none, one history line plus documentation; dependency: none; concurrency: single-writer history; state: no code or behaviour change",
-        "mitigation": "the flags were checked with full-image SHA-256 against the baseline commit; the record's own [WINDOW] probe states quiet; update_knowledge_base --check validates the register"
-      },
-      "plan_digest": "ff0654e1624ec7ac17f9ef7204d923a181579f1c67c3ba4a331e4516413d0b3c",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-charstream-gate",
       "phase": "phase 4",
@@ -455,6 +383,78 @@
       "timestamp_str": "2026-11-20 19:46:29",
       "agent": "kilo:cairn",
       "head": "f8164f1c5a82699e8191b384dcd9f00c85aa1943",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-argv-miss",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/2] simulate the case to get the true miss rate, then implement the inline -1 behind a fill-flag load; [2/2] measure it across protocols and decide",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795195635.4329576,
+      "timestamp_str": "2026-11-20 20:27:15",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "the fused arg_byte miss path calls a helper only to learn whether the lazy fill ran, and the case takes that path often",
+        "benefits": "would remove a call from a frequently taken branch if the effect is real",
+        "risks": "contract: the inline -1 is only correct once the fill flag is set, or the first reads answer -1 wrongly; dependency: needs the cache label exported to codegen; concurrency: none; state: only programs calling arg_byte change bytes",
+        "mitigation": "checksum identity from an identical path, the true miss rate from a direct simulation, and repeated measurements with identical-binary controls"
+      },
+      "plan_digest": "341dd918bab9b4a28b0b6e7a07bc1af486a401243d652e05862ae193f6d94688",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-argv-miss",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] measured refusal, code reverted (ADR-087): simulation shows 5,120,000 misses, 40 percent of iterations; the implementation removed the helper call behind a fill-flag load with an identical checksum and a byte-identical hot path, but six measurement protocols disagreed in sign (+7.7, +3.8, -5.6, +8.2, -2.8, +11.8 percent) while identical-binary controls spanned -2.7 to +12.9 percent, so the effect is below this machine's resolution; recorded that the miss rate is 40 percent (correcting ADR-086's fifth) and that the next step is a controlled instrument, not a lowering; no code or test change shipped; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795195693.142619,
+      "timestamp_str": "2026-11-20 20:28:13",
+      "agent": "kilo:cairn",
+      "measurements": [
+        {
+          "interleaved": "yes",
+          "command": "paired blocks, balanced rotation, equal-path rotation, long probe, and ABBA pairing",
+          "baseline": 1.0,
+          "drift": "0.0",
+          "unit": "ratio",
+          "control": "identical binaries spanned -2.7 to +12.9 percent in the same protocols",
+          "metric": "argv_walk new/old ratio across six protocols",
+          "workload": "12.8M arg_byte reads and a 128M-iteration probe, identical paths of equal length",
+          "candidate": 1.0
+        }
+      ],
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-argv-miss",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-argv-miss' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795195734.1675391,
+      "timestamp_str": "2026-11-20 20:28:54",
+      "agent": "kilo:cairn",
+      "head": "492d75b8db0c75e6bfd3b1be720c103980d75502",
       "delivery": {
         "roots": [
           "."
