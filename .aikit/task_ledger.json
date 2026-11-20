@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-hex-mask-shift",
+    "task_id": "cairn-hex-newline",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795215950.1155918,
+    "updated_at": 1795217033.772441,
     "owner": "opencode:session",
-    "lease_until": 1795223150.1155918,
+    "lease_until": 1795224233.772441,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,83 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795215953.0998538,
-    "completed_head": "5bfb5364f9e980c20a01fa78911581e684d8642c",
-    "completed_tree": "01889b61d9945c785e93ac3b453b73024ba8cf8d"
+    "completed_at": 1795217034.3110633,
+    "completed_head": "4039dfc495706f15755abb3cbd34b0f4551d1580",
+    "completed_tree": "9d8b11ffd8f0b0a9243a9c42d867da43e93a9889"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-narrow-division",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] delivered: guarded 32-bit div; primes 23.72->17.94 ms best (-24.4 percent) and 24.56->19.14 ten-fastest (-22.1 percent) over 31 interleaved rounds with a byte-identical control at -0.5 percent; suite 1333 OK; 18/19 registry images byte-identical against 90e37a4 (only primes changes); machine, codegen and boundary end-to-end tests pin the two paths and the unsigned guard; ADR-085 and the README band synced; one file was normalised CRLF->LF and the ADR says so; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795188266.5818481,
-      "timestamp_str": "2026-11-20 18:24:26",
-      "agent": "kilo:cairn",
-      "measurements": [
-        {
-          "drift": "24.4",
-          "unit": "ms",
-          "control": "nqueens byte-identical build moved -0.5 percent in the same rounds",
-          "command": "31-round interleaved same-seconds A/B",
-          "baseline": 23.72,
-          "workload": "trial division 2..300000 with a runtime divisor",
-          "candidate": 17.94,
-          "metric": "primes best ms",
-          "interleaved": "yes"
-        }
-      ],
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-narrow-division",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-narrow-division' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795188284.3049548,
-      "timestamp_str": "2026-11-20 18:24:44",
-      "agent": "kilo:cairn",
-      "head": "200217a09789a72481c5d87db5b92d961cda122b",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-argv-promote",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/2] inspect the fused arg_byte fast path against gcc's disassembly and implement argv[0] pointer/length promotion with lazy-fill reloads; [2/2] measure honestly and decide",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795193136.5438457,
-      "timestamp_str": "2026-11-20 19:45:36",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "argv_walk is the second-largest adjusted compute gap and the fused path pays two rip loads per read where gcc keeps both words in registers",
-        "benefits": "would remove two L1 loads per arg_byte read if the reads were the cost",
-        "risks": "contract: the pair must refresh after any fill-capable call or later reads use a stale zero length; the case's checksum depends on argv[0], so the measurement must hold the path fixed; dependency: none; concurrency: none; state: only programs calling arg_byte change bytes",
-        "mitigation": "identical-total check from the same path, alternating same-path blocks, an identical-binary control for the protocol, and a long-path run that removes the miss path entirely"
-      },
-      "plan_digest": "5ee35200dbf80cb5a21afa584977fef3d0890ea3193fb4a2c793772bbd82535f",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-argv-promote",
       "phase": "phase 4",
@@ -456,6 +384,65 @@
       "timestamp_str": "2026-11-21 02:05:53",
       "agent": "opencode:session",
       "head": "5bfb5364f9e980c20a01fa78911581e684d8642c",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-hex-newline",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/1] add a print_hex_line runtime twin that stores the newline just above the hex digits, and a codegen peephole that emits it for an adjacent discarded print_hex(x); print_char(10) pair; pin with failing-first shape and refusal tests, prove byte-identical output and a paired A/B win, record ADR and G-004 diff",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795216690.6320236,
+      "timestamp_str": "2026-11-21 02:18:10",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "ADR-035 and the hex_io benchmark source record the second out_append per line as the remaining hex output cost; a paired A/B measured two appends at 31.53 ms best",
+        "benefits": "one append per line instead of two; paired interleaved A/B measured 31.53 to 26.76 ms best (-15.1 percent) with byte-identical 400,000-line output",
+        "risks": "contract: language semantics and IR translation must stay unchanged; dependency: the new helper reuses existing assembler methods, no new instruction; concurrency: none; state: no new static state, the newline lives in the existing frame buffer",
+        "mitigation": "the peephole is in codegen only so sema and ir see the original statements; refusal tests for a non-newline char and a used hex result; existing end-to-end and twin parity tests; full suite and gates"
+      },
+      "plan_digest": "68fa029921a193ae0c651829bcb8d32295f8ad0dc61e29b8d0165fbbf164e472",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-hex-newline",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] committed as 4039dfc: print_hex_line stores the newline at BUFFER_TOP above the digits and a codegen peephole emits it for adjacent discarded print_hex(x) and print_char(10), so one out_append serves both; failing-first codegen test plus two refusal tests pass; full 400,000-line output byte-identical; paired interleaved A/B 31.53 to 26.76 ms best (-15.1 percent); G-004 compare recorded hex_io 42.5 to 32.3 ms (-24.0 percent, outside the noise band) and the clean 17a5e10 baseline was restored; ADR-092 and README synced; full suite and 5/5 project gates passed; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795217033.772441,
+      "timestamp_str": "2026-11-21 02:23:53",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-hex-newline",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-hex-newline' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795217034.4464834,
+      "timestamp_str": "2026-11-21 02:23:54",
+      "agent": "opencode:session",
+      "head": "4039dfc495706f15755abb3cbd34b0f4551d1580",
       "delivery": {
         "roots": [
           "."
