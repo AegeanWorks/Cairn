@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-narrow-division",
+    "task_id": "cairn-argv-promote",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795188266.5818481,
+    "updated_at": 1795193177.4128335,
     "owner": "kilo:cairn",
-    "lease_until": 1795195466.5818481,
+    "lease_until": 1795200377.4128335,
     "started_by": "kilo:cairn",
     "continuations": [],
     "workspaces": [
@@ -16,70 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795188284.2378292,
-    "completed_head": "200217a09789a72481c5d87db5b92d961cda122b",
-    "completed_tree": "521550125fe9b99e19534417143443d9b42bfda1"
+    "completed_at": 1795193189.6679213,
+    "completed_head": "f8164f1c5a82699e8191b384dcd9f00c85aa1943",
+    "completed_tree": "b796ac0dfeb5d362fe477fb1942be0fb885396e1"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-gate-provenance",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] delivered: record_from_reports writes probe_ms and quiet from the run's own many_params best, --save prints the recorded window state, --compare warns before the lines when the newest baseline was loaded; QuietWindowProvenanceTest 4 tests; suite 1301 OK; ADR-080 and the README methodology paragraph synced; no measurement, noise-band or exit-code change; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795122397.1946952,
-      "timestamp_str": "2026-11-20 00:06:37",
-      "agent": "kilo:cairn",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-gate-provenance",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-gate-provenance' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795122466.4028513,
-      "timestamp_str": "2026-11-20 00:07:46",
-      "agent": "kilo:cairn",
-      "head": "16872d6b364e364ae5ebc802656cb98b1f10aebc",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-mandelbrot-division",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/2] absolute-path measurement of gcc's mandelbrot inner loop and its division shape; [2/2] implement the cmov quotient form, verify it, and decide on evidence",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795125103.3139722,
-      "timestamp_str": "2026-11-20 00:51:43",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "mandelbrot is the largest per-case gap to C (1.1x) and its inner loop divides by 2**20 every iteration, where gcc's cmov-shaped quotient looked one instruction and one cycle better",
-        "benefits": "a shorter quotient shape on every x / 2**k with an unknown sign, and a disassembly-backed account of where mandelbrot's time actually goes",
-        "risks": "contract: the quotient must stay exactly truncating for negative dividends, or the differential corpus and every twin catches it; dependency: none (lea_imm, cmov and test already exist); concurrency: none; state: emitted bytes change for every unknown-sign power-of-two quotient",
-        "mitigation": "falling-first shape tests for the cmov form, the wide-power fallback and the remainder chain; the IR differential corpus plus twin parity for semantics; the registry gate, a cycle-count microbenchmark with an identical-binary control, and an objdump comparison against gcc"
-      },
-      "plan_digest": "aada6214a3596f7b1ae3bd7c45bbf57ffeaf3783f37c95bab8b28fa7de71f6e1",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-mandelbrot-division",
       "phase": "phase 4",
@@ -442,6 +383,78 @@
       "timestamp_str": "2026-11-20 18:24:44",
       "agent": "kilo:cairn",
       "head": "200217a09789a72481c5d87db5b92d961cda122b",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-argv-promote",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/2] inspect the fused arg_byte fast path against gcc's disassembly and implement argv[0] pointer/length promotion with lazy-fill reloads; [2/2] measure honestly and decide",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795193136.5438457,
+      "timestamp_str": "2026-11-20 19:45:36",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "argv_walk is the second-largest adjusted compute gap and the fused path pays two rip loads per read where gcc keeps both words in registers",
+        "benefits": "would remove two L1 loads per arg_byte read if the reads were the cost",
+        "risks": "contract: the pair must refresh after any fill-capable call or later reads use a stale zero length; the case's checksum depends on argv[0], so the measurement must hold the path fixed; dependency: none; concurrency: none; state: only programs calling arg_byte change bytes",
+        "mitigation": "identical-total check from the same path, alternating same-path blocks, an identical-binary control for the protocol, and a long-path run that removes the miss path entirely"
+      },
+      "plan_digest": "5ee35200dbf80cb5a21afa584977fef3d0890ea3193fb4a2c793772bbd82535f",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-argv-promote",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] measured refusal, code reverted (ADR-086): the promoted build emitted a six-instruction loop with no rip loads, printed the identical total from the same path, and measured 1.077 median paired ratio (7.7 percent slower) on the shipped miss-heavy path, while a 104-character path that never misses measured equal or better; the identical-binary control for the protocol read -0.6 percent median and +0.2 percent fastest-five; the case is branch-bound, so removing two L1 loads buys nothing and the two post-miss reloads cost a little; no test or code change shipped; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795193177.4128335,
+      "timestamp_str": "2026-11-20 19:46:17",
+      "agent": "kilo:cairn",
+      "measurements": [
+        {
+          "metric": "argv_walk paired new/old ratio",
+          "baseline": 1.0,
+          "control": "identical binaries in the same alternating protocol read median -0.6 percent and fastest-five +0.2 percent",
+          "candidate": 1.077,
+          "workload": "12.8M arg_byte reads on a 52-character path, 19 percent of indexes past the token",
+          "interleaved": "yes",
+          "command": "15 alternating same-path blocks, min of two runs each",
+          "drift": "7.7",
+          "unit": "ratio"
+        }
+      ],
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-argv-promote",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-argv-promote' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795193189.7904203,
+      "timestamp_str": "2026-11-20 19:46:29",
+      "agent": "kilo:cairn",
+      "head": "f8164f1c5a82699e8191b384dcd9f00c85aa1943",
       "delivery": {
         "roots": [
           "."
