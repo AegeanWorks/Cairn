@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-mandelbrot-thread",
+    "task_id": "cairn-floors-view",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795158657.9625986,
+    "updated_at": 1795160878.992293,
     "owner": "kilo:cairn",
-    "lease_until": 1795165857.9625986,
+    "lease_until": 1795168078.992293,
     "started_by": "kilo:cairn",
     "continuations": [],
     "workspaces": [
@@ -16,75 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795158672.0540915,
-    "completed_head": "b874fb93bd6dafeba87c5e1fe3651c00d6356639",
-    "completed_tree": "f740136226ea188702e4c4b192644543c4fedd54"
+    "completed_at": 1795160889.3470595,
+    "completed_head": "2e8bf8058a2b050d06aa7c57c8b9ee6898ac99e9",
+    "completed_tree": "0447d31887aa1f7e4e1f0c9d13c8b24d56aeaa6d"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-stdin-promote",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[0/1] impact assessment recorded after the fact (the work landed as 120021e before this plan; no scope beyond it): promote the stdin buffer base, cursor index and count word into spare callee-saved homes for a leaf function that reads stdin",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795113505.7752714,
-      "timestamp_str": "2026-11-19 21:38:25",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "ADR-077 established that the fused read_char path is bound by the memory read-modify-write on the static cursor, and the baselines keep the stream pointer in a register for the whole loop; char_stream is the largest recorded gap at 1.38x to C",
-        "benefits": "the hot path drops from nine instructions with a store-forwarding chain to a register compare, one SIB byte read and a register increment; every leaf stdin loop benefits, not just the benchmark; the count home removes one load per byte on top of the pair",
-        "risks": "contract: read_char's answers must not change (byte, -1 at EOF, repeated -1, one syscall per call at a true end), and the promoted registers must be saved and restored like slot homes, including the prologue parity math; dependency: none new, only three assembler encoders whose fixups end the instruction; concurrency: single-threaded; state: only functions that read stdin change bytes",
-        "mitigation": "falling-first shape tests for the triple, the two-spare pair, the no-spare fallback and the user-call refusal; the IR differential corpus and the four stdin end-to-end tests cover the contract; full-image SHA-256 against 420cd32; interleaved same-seconds A/B with a byte-identical control; the honest gate once the machine is quiet"
-      },
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-stdin-promote",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-stdin-promote' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795113579.3845298,
-      "timestamp_str": "2026-11-19 21:39:39",
-      "agent": "kilo:cairn",
-      "head": "2c767c2eab9b42e8693cb5b9c9b57a71b0d90e45",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-stdin-evidence",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/2] README and ADR-079 cite the controlled interleaved evidence for the stdin promotion (base/index pair measured, the count home noted as unmeasured in a clean window) and record why two gate runs were dropped; [2/2] strict project gate on a clean tree",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795119613.715338,
-      "timestamp_str": "2026-11-19 23:20:13",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "the shipped promotion's performance claim needs its evidence in the docs, and two gate runs were dropped under ADR-069, which a reader must see beside the numbers",
-        "benefits": "the README and ADR state exactly what was measured and against what control, and why no saved gate range was refreshed",
-        "risks": "contract: none, documentation only; dependency: none; concurrency: none; state: no code, image or benchmark record changes",
-        "mitigation": "the numbers cited are the recorded interleaved runs; update_knowledge_base --check validates the ADR register and rendering"
-      },
-      "plan_digest": "15bf69685db0f3e09bd682beb22270f06249b78c55d63cd5eb7ca5f29919e4a8",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-stdin-evidence",
       "phase": "phase 4",
@@ -421,6 +357,78 @@
       "timestamp_str": "2026-11-20 10:11:12",
       "agent": "kilo:cairn",
       "head": "b874fb93bd6dafeba87c5e1fe3651c00d6356639",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-floors-view",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/2] measure the empty-program startup floor for all four languages by cycles and test whether Cairn's image size contributes; [2/2] add --floors with a compute-adjusted diagnostic table, unit tests, ADR-084 and README",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795160642.8420649,
+      "timestamp_str": "2026-11-20 10:44:02",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "ADR-079/081/082/083 each found a real but unreadable 0.5-1 percent delta on totals dominated by process startup, and the floor's size and asymmetry across languages were unmeasured",
+        "benefits": "a documented, equal-footing view of compute per case, and the honest finding that short-case wins partly ride Cairn's cheaper startup",
+        "risks": "contract: no scoreboard, verdict, strict, save or compare semantics change; the new view is diagnostic and clamped; dependency: none; concurrency: none; state: records and history untouched",
+        "mitigation": "cycle-level measurement with empty-program controls per toolchain, an image-size probe, four unit tests for the subtraction and its edge cases, and the full suite"
+      },
+      "plan_digest": "c003bd143ad0d94f1428f3b5da6c3a6893475858059f1d99231463258deb36d8",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-floors-view",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] delivered as 2e8bf80: floors measured (cycles median/best) Cairn 5.71M/4.94M, C 8.17M/7.40M, C++ 17.12M/14.93M, Rust 11.76M/10.58M; image size proven irrelevant (13,824-byte build starts identically to the 136,704-byte one); --floors prints the floor line and a compute-adjusted diagnostic table while every scoreboard/verdict/strict/save/compare path stays on whole-process time; 4 unit tests plus the full suite (1305 OK); ADR-084 and README methodology synced; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795160878.992293,
+      "timestamp_str": "2026-11-20 10:47:58",
+      "agent": "kilo:cairn",
+      "measurements": [
+        {
+          "baseline": 5.71,
+          "unit": "millions of cycles",
+          "drift": "0.4",
+          "interleaved": "yes",
+          "control": "a 13,824-byte Cairn image measured 5.78M against the 136,704-byte build's 5.86M, so image size is not the floor",
+          "workload": "minimal print(0) per language, 41 rounds each",
+          "command": "QueryProcessCycleTime per process",
+          "candidate": 8.17,
+          "metric": "empty-program cycles median"
+        }
+      ],
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-floors-view",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-floors-view' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795160889.4036503,
+      "timestamp_str": "2026-11-20 10:48:09",
+      "agent": "kilo:cairn",
+      "head": "2e8bf8058a2b050d06aa7c57c8b9ee6898ac99e9",
       "delivery": {
         "roots": [
           "."
