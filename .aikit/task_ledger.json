@@ -1,85 +1,32 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-shift-loop",
+    "task_id": "cairn-branch-hold",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795201459.1627252,
-    "owner": "kilo:cairn",
-    "lease_until": 1795208659.1627252,
+    "updated_at": 1795214418.818754,
+    "owner": "opencode:session",
+    "lease_until": 1795221618.818754,
     "started_by": "kilo:cairn",
-    "continuations": [],
+    "continuations": [
+      {
+        "agent": "opencode:session",
+        "from": "kilo:cairn",
+        "at": 1795214418.818754
+      }
+    ],
     "workspaces": [
       {
         "name": "cairn",
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795201476.1107073,
-    "completed_head": "cefb508aebb0de72347ee5d25f2e423cf27be85b",
-    "completed_tree": "7398b70527dd7002d74180aed4d521a4bdcd078a"
+    "completed_at": 1795214425.6420996,
+    "completed_head": "cceebbdffe647fbb622e84198f555f1f3a984537",
+    "completed_tree": "3f888b290d59bdfb1ec787ee45978e634b66c201"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-mandelbrot-thread",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] measured and closed, no compiler change: rotated twin 1.0050 paired ratio (+0.5 percent) and strength-reduced 1.0071 (+0.7 percent) over 31 paired rounds with p10-p90 0.85-1.15; empty Cairn program 9.32M cycles median against mandelbrot's 24M, so ~40 percent of the case is startup and the loop is ~7 cycles per pixel on a 6-7 cycle dependency chain; ADR-083 records the close and the two methodology facts; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795158657.9625986,
-      "timestamp_str": "2026-11-20 10:10:57",
-      "agent": "kilo:cairn",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-mandelbrot-thread",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-mandelbrot-thread' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795158672.1138587,
-      "timestamp_str": "2026-11-20 10:11:12",
-      "agent": "kilo:cairn",
-      "head": "b874fb93bd6dafeba87c5e1fe3651c00d6356639",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-floors-view",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/2] measure the empty-program startup floor for all four languages by cycles and test whether Cairn's image size contributes; [2/2] add --floors with a compute-adjusted diagnostic table, unit tests, ADR-084 and README",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795160642.8420649,
-      "timestamp_str": "2026-11-20 10:44:02",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "ADR-079/081/082/083 each found a real but unreadable 0.5-1 percent delta on totals dominated by process startup, and the floor's size and asymmetry across languages were unmeasured",
-        "benefits": "a documented, equal-footing view of compute per case, and the honest finding that short-case wins partly ride Cairn's cheaper startup",
-        "risks": "contract: no scoreboard, verdict, strict, save or compare semantics change; the new view is diagnostic and clamped; dependency: none; concurrency: none; state: records and history untouched",
-        "mitigation": "cycle-level measurement with empty-program controls per toolchain, an image-size probe, four unit tests for the subtraction and its edge cases, and the full suite"
-      },
-      "plan_digest": "c003bd143ad0d94f1428f3b5da6c3a6893475858059f1d99231463258deb36d8",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-floors-view",
       "phase": "phase 4",
@@ -468,6 +415,66 @@
       "timestamp_str": "2026-11-20 22:04:36",
       "agent": "kilo:cairn",
       "head": "cefb508aebb0de72347ee5d25f2e423cf27be85b",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-branch-hold",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/1] fix the comparison-branch lowering so a left operand held in a temporary register is the one compared, then pin it with a runtime test and a shape test and record the ADR",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795210975.9268563,
+      "timestamp_str": "2026-11-21 00:42:55",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "a miscompile: _emit_comparison_branch calls _emit_left_operand then always compares rcx, but _emit_left_operand puts a non-leaf right operand's left value in a temporary and sets left_hold, so the branch compared a stale rcx (if t > (i & 65535) with t negative took the true branch; the value form of the same compare was correct)",
+        "benefits": "correct control flow for every if/while whose comparison has a non-leaf right operand and a non-leaf left operand; the value-form and branch-form lowerings then agree",
+        "risks": "contract: generated bytes change only at such compares; dependency: none; concurrency: cairn tree is clean and no other task is active; state: ledger only",
+        "mitigation": "honour left_hold exactly as _emit_binary already does, pin the shape and the runtime answer, run the full suite and the benchmark diff"
+      },
+      "plan_digest": "e6816990b8b2aa68a4578654404ff02352f666002ce0ebecf71594d1130420d0",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-branch-hold",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] committed as cceebbd: _emit_comparison_branch now consumes self.left_hold and clears it before cmp, falling back to rcx, so a left value parked in a temporary by a non-leaf right operand is the one branched on; failing-first proof on HEAD showed all three new tests failing (end-to-end 1/4/5 against the correct 2/3/0), with all three passing after the fix; full suite 1366 OK; 5/5 project gates passed; ADR-090 records the fix and the two G-004 benchmark runs that read +9.6 to +613 percent under host contention (compile times ~10x, short cases worst) with the clean 17a5e10 baseline restored and the loaded logs kept outside the tree; no speed claim; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795214418.818754,
+      "timestamp_str": "2026-11-21 01:40:18",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ],
+      "continued_from": "kilo:cairn"
+    },
+    {
+      "task_id": "cairn-branch-hold",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-branch-hold' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795214425.7576182,
+      "timestamp_str": "2026-11-21 01:40:25",
+      "agent": "opencode:session",
+      "head": "cceebbdffe647fbb622e84198f555f1f3a984537",
       "delivery": {
         "roots": [
           "."
