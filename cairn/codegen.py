@@ -251,6 +251,12 @@ class CodeGenerator:
     value_slot: int = -1
     hold_units: int = 0
     nonnegative_slots: set = field(default_factory=set)
+    # In-bounds string index facts. string_slots are locals known to hold a string
+    # literal's address; len_of_string maps a slot holding str_len(s) back to s's slot;
+    # in_string_slots maps a guarded index to the string slot whose length bounds it.
+    string_slots: set = field(default_factory=set)
+    len_of_string: dict = field(default_factory=dict)
+    in_string_slots: dict = field(default_factory=dict)
     # Loop-invariant hoisting: hoist_plans maps one While statement's identity to its
     # (value, home) pairs, hoist_imm is the active value-to-home map while a hoisted
     # loop's body lowers, and hoist_homes lists the registers the prologue must save.
@@ -1301,7 +1307,48 @@ class CodeGenerator:
             # position; everything before it must still jump out of the block.
             last = tail and index == len(statements) - 1
             self._emit_statement(statement, last)
+            self._invalidate_string_facts(statement)
             index += 1
+
+    def _invalidate_string_facts(self, statement: syntax.Stmt) -> None:
+        """A store to a fact-bearing slot ends whatever the slot proved."""
+        # A Let is the defining write that *creates* a fact, so it must not erase it;
+        # reassignment is the only way a fact-bearing slot can be invalidated.
+        if not isinstance(statement, syntax.Assign):
+            return
+        slot = statement.slot
+        self.in_string_slots.pop(slot, None)
+        self.len_of_string.pop(slot, None)
+        self.string_slots.discard(slot)
+
+    def _record_string_fact(self, statement: syntax.Let) -> None:
+        """Recognise `s = "literal"` and `len = str_len(s)` for bound facts."""
+        value = statement.value
+        while isinstance(value, syntax.Parens):
+            value = value.inner
+        if isinstance(value, syntax.StrLiteral):
+            self.string_slots.add(statement.slot)
+            return
+        if (isinstance(value, syntax.Call) and value.name == "str_len"
+                and len(value.arguments) == 1):
+            argument = value.arguments[0]
+            while isinstance(argument, syntax.Parens):
+                argument = argument.inner
+            if (isinstance(argument, syntax.Name)
+                    and argument.slot in self.string_slots):
+                self.len_of_string[statement.slot] = argument.slot
+
+    def _string_bounds(self, condition: Optional[syntax.Expr]) -> dict:
+        """An index below a str_len value is in bounds, provided it is non-negative."""
+        if not isinstance(condition, syntax.Binary) or condition.op != "<":
+            return {}
+        left = self._stripped(condition.left)
+        right = self._stripped(condition.right)
+        if (isinstance(left, syntax.Name) and isinstance(right, syntax.Name)
+                and right.slot in self.len_of_string
+                and left.slot in self.nonnegative_slots):
+            return {left.slot: self.len_of_string[right.slot]}
+        return {}
 
     @staticmethod
     def _builtin_statement(statement: syntax.Stmt, name: str) -> bool:
@@ -1326,6 +1373,7 @@ class CodeGenerator:
             if statement.array_size is not None:
                 self._emit_array_init(statement)
             else:
+                self._record_string_fact(statement)
                 self._emit_value(statement.slot, statement.value)
         elif isinstance(statement, syntax.Assign):
             if statement.index is not None:
@@ -1760,8 +1808,14 @@ class CodeGenerator:
         facts = self._guard_nonnegative(statement.condition)
         restored = self.nonnegative_slots
         self.nonnegative_slots = restored | set(facts)
+        bounds = self._string_bounds(statement.condition)
+        restored_bounds = self.in_string_slots
+        if bounds:
+            self.in_string_slots = dict(restored_bounds)
+            self.in_string_slots.update(bounds)
         self._emit_block(statement.body)
         self.nonnegative_slots = restored
+        self.in_string_slots = restored_bounds
         self.break_targets.pop()
         self.continue_targets.pop()
         asm.label(latch)
@@ -3197,12 +3251,18 @@ class CodeGenerator:
                     # sign test stays unless the index is provably non-negative
                     # (the same fact the division guards ride on) — a negative
                     # index must never reach the address.
-                    if index.slot in self.nonnegative_slots:
+                    in_bounds = (isinstance(pointer, syntax.Name)
+                                 and self.in_string_slots.get(index.slot) == pointer.slot)
+                    if index.slot in self.nonnegative_slots or in_bounds:
                         asm.movzx_load8_sib("rax", base, index_home)
                     else:
                         asm.test(index_home)
                         asm.jcc("s", miss)
                         asm.movzx_load8_sib("rax", base, index_home)
+                    if in_bounds:
+                        # A str_len guard keeps j below the terminator, so the byte
+                        # cannot be NUL and the -1 miss path is unreachable.
+                        return
                     asm.test("rax")
                     asm.jcc("nz", done)
                     asm.label(miss)

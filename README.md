@@ -375,10 +375,10 @@ its own root, so the substituted linear terms collect to `144i + 584` - one `imu
 one `add` - and the case reads 13.2-13.7 ms against C's 12.5-12.7, C++'s 14.3-14.8 and
 Rust's 13.4-13.8: it now beats two of the three baselines and trails C by 3.5 percent),
 `argv_walk`
-and `str_scan` remain
-the recorded losses, with the mechanisms in the ADR register (`argv_walk`: ADR-059's inline;
-`str_scan`: ADR-060/061's
-NUL-test facts); `char_stream` rides ADR-072's fused `read_char` fast path and
+remains a recorded loss (ADR-059's inline); `str_scan` keeps its NUL-test facts in
+ADR-060/061 and ADR-093 adds a `str_len`-guarded in-bounds fact that removes the dead
+NUL test from the byte scan, a paired A/B with a +1.3 percent control measured -10.3
+percent; `char_stream` rides ADR-072's fused `read_char` fast path and
 ADR-079's promoted cursor — a stdin-reading leaf keeps the buffer base, the cursor
 and the count word in register homes for its whole body, so the hot path is a
 register compare, one SIB byte read and one register increment, with the refill

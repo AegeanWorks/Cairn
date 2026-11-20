@@ -1284,6 +1284,41 @@ class PrintHexNewlineFusionTest(unittest.TestCase):
         self.assertNotIn("cairn.runtime.print_hex_line", targets)
 
 
+class StringInBoundsIndexTest(unittest.TestCase):
+    """A str_len-guarded index needs no NUL test on each in-bounds byte."""
+
+    SOURCE = (
+        'fn main() -> i64 { let s: i64 = "abcdefgh"; '
+        'let len: i64 = str_len(s); var total: i64 = 0; var j: i64 = 0; '
+        'while j < len { total = total + str_byte(s, j); j = j + 1; } '
+        'print(total); return 0; }')
+
+    def test_a_length_guarded_scan_has_no_nul_test(self) -> None:
+        blob = region_of(self.SOURCE)
+        self.assertNotIn(b"\x48\x85\xc0", blob,
+                         "an in-bounds byte is never NUL, so test rax,rax is dead")
+        self.assertNotIn(b"\x48\xb8\xff\xff\xff\xff\xff\xff\xff\xff", blob,
+                         "the NUL -> -1 miss constant is unreachable in the scan")
+
+    def test_an_unguarded_read_keeps_its_nul_test(self) -> None:
+        source = ('fn main() -> i64 { let s: i64 = "abcdefgh"; '
+                  'print(str_byte(s, 3)); return 0; }')
+        blob = region_of(source)
+        self.assertIn(b"\x48\xb8\xff\xff\xff\xff\xff\xff\xff\xff", blob,
+                      "an unproven index keeps the -1 miss path")
+
+    def test_an_inclusive_guard_keeps_its_nul_test(self) -> None:
+        # j <= len can reach the terminator, so it must not earn the fact.
+        source = (
+            'fn main() -> i64 { let s: i64 = "abcdefgh"; '
+            'let len: i64 = str_len(s); var total: i64 = 0; var j: i64 = 0; '
+            'while j <= len { total = total + str_byte(s, j); j = j + 1; } '
+            'print(total); return 0; }')
+        blob = region_of(source)
+        self.assertIn(b"\x48\xb8\xff\xff\xff\xff\xff\xff\xff\xff", blob,
+                      "the terminator is in range of an inclusive guard")
+
+
 class PairDeltaInliningTest(unittest.TestCase):
     """A two-parameter all-return-tree recursion inlines as pure text copies.
 

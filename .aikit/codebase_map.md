@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `202`
+- **Total Classes**: `203`
 - **Total Top-Level Functions**: `228`
-- **Total Class Methods**: `1089`
-- **Total Source Lines**: `20517`
+- **Total Class Methods**: `1096`
+- **Total Source Lines**: `20623`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -137,7 +137,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4504` lines
+**Size**: `4564` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -171,6 +171,9 @@
   - Method `._literal_multiply_operand(expression)` - *The constant and the other operand of `k * x` or `x * k`, for an imm32 k.*
   - Method `._emit_scaled_product(expression, destination)` - *Lower `name * 3|5|9` as one scaled `lea` into `destination`, or refuse.*
   - Method `._emit_block(block, tail)` - *Emit every statement of a block in order.*
+  - Method `._invalidate_string_facts(statement)` - *A store to a fact-bearing slot ends whatever the slot proved.*
+  - Method `._record_string_fact(statement)` - *Recognise `s = "literal"` and `len = str_len(s)` for bound facts.*
+  - Method `._string_bounds(condition)` - *An index below a str_len value is in bounds, provided it is non-negative.*
   - Method `._builtin_statement(statement, name)` - *Is this a discarded call to a one-argument builtin?*
   - Method `._literal_argument(statement)` - *The integer a builtin statement is called with, if it is a literal.*
   - Method `._emit_statement(statement, tail)` - *Lower one statement; `tail` only concerns a final `return`.*
@@ -988,7 +991,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2719` lines
+**Size**: `2754` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1129,6 +1132,10 @@
   - Method `.test_hex_then_newline_uses_the_fused_helper()`
   - Method `.test_a_non_newline_character_does_not_fuse()`
   - Method `.test_a_used_hex_result_does_not_fuse()`
+- `class StringInBoundsIndexTest` - *A str_len-guarded index needs no NUL test on each in-bounds byte.*
+  - Method `.test_a_length_guarded_scan_has_no_nul_test()`
+  - Method `.test_an_unguarded_read_keeps_its_nul_test()`
+  - Method `.test_an_inclusive_guard_keeps_its_nul_test()`
 - `class PairDeltaInliningTest` - *A two-parameter all-return-tree recursion inlines as pure text copies.*
   - Method `._pair_labels(source, name)`
   - Method `.test_pair_copies_carry_no_stack_state()`
@@ -1316,7 +1323,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1585` lines
+**Size**: `1596` lines
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1452,6 +1459,7 @@
   - Method `.test_escapes_decode_into_the_output()`
   - Method `.test_str_len_counts_to_the_terminator()`
   - Method `.test_str_byte_reads_inside_and_reports_outside()`
+  - Method `.test_a_guarded_scan_and_an_out_of_range_read_agree()`
   - Method `.test_equal_literals_share_one_blob()`
   - Method `.test_str_byte_with_a_calling_index_takes_the_helper_path()`
   - Method `.test_an_assert_helper_prints_and_exits_on_mismatch()`

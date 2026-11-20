@@ -1511,6 +1511,17 @@ class StringBuiltinsTest(EndToEndTest):
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "104\n105\n-1\n-1\n")
 
+    def test_a_guarded_scan_and_an_out_of_range_read_agree(self) -> None:
+        # The in-bounds fact is scoped to the guarded loop: each byte inside it must
+        # be its ASCII value, while the terminator at len still answers -1 afterwards.
+        completed = self.execute(
+            "fn main() -> i64 { let s: i64 = \"abc\"; let len: i64 = str_len(s);"
+            " var total: i64 = 0; var j: i64 = 0;"
+            " while j < len { total = total + str_byte(s, j); j = j + 1; }"
+            " print(total); print(str_byte(s, len)); return 0; }")
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "294\n-1\n")
+
     def test_equal_literals_share_one_blob(self) -> None:
         # Two mentions of the same text must land on one rodata blob; reading both
         # pointers' bytes proves the second mention still names live data.
