@@ -1249,6 +1249,41 @@ class BuiltinPrintHelpersTest(unittest.TestCase):
         self.assertIn("cairn.runtime.print_hex", targets)
 
 
+class PrintHexNewlineFusionTest(unittest.TestCase):
+    """A hex value immediately followed by a newline uses one fused helper.
+
+    The two builtins still mean what they always did; this is a code-generation peephole
+    only, so the IR and the interpreter keep seeing the original two statements.
+    """
+
+    @staticmethod
+    def call_targets(source: str) -> set:
+        program = sema.analyze(parser.parse(source))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        return {label for _, label in artifact.fixups}
+
+    def test_hex_then_newline_uses_the_fused_helper(self) -> None:
+        targets = self.call_targets(
+            "fn main() -> i64 { print_hex(255); print_char(10); return 0; }")
+        self.assertIn("cairn.runtime.print_hex_line", targets,
+                      "the newline rides in the hex helper's buffer")
+        self.assertNotIn("cairn.runtime.print_char", targets,
+                         "the separate newline call is gone")
+
+    def test_a_non_newline_character_does_not_fuse(self) -> None:
+        targets = self.call_targets(
+            "fn main() -> i64 { print_hex(255); print_char(32); return 0; }")
+        self.assertIn("cairn.runtime.print_char", targets)
+        self.assertNotIn("cairn.runtime.print_hex_line", targets)
+
+    def test_a_used_hex_result_does_not_fuse(self) -> None:
+        targets = self.call_targets(
+            "fn main() -> i64 { var x: i64 = print_hex(255); print_char(10); print(x); return 0; }")
+        self.assertIn("cairn.runtime.print_hex", targets)
+        self.assertIn("cairn.runtime.print_char", targets)
+        self.assertNotIn("cairn.runtime.print_hex_line", targets)
+
+
 class PairDeltaInliningTest(unittest.TestCase):
     """A two-parameter all-return-tree recursion inlines as pure text copies.
 

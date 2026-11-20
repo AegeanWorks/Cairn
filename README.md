@@ -338,8 +338,8 @@ The size column is the executable's `.text` frame at the current revision: the r
 
 Standings per case (Cairn vs the fastest baseline on that case): `collatz`, `ackermann`, `tak`,
 `folded_math` and `splitmix` are won outright against all three baselines; `hex_io` wins against
-C and Rust (C++'s formatted write buffers better and stays ahead; ADR-091 replaced the
-printers' power-of-two divides with mask and shift, a paired A/B measured -19.9 percent);
+C, C++ and Rust after ADR-091's mask-and-shift printers (-19.9 percent paired A/B) and
+ADR-092's newline carrying in the hex buffer (-15.1 percent paired A/B);
 `fib30` sits inside
 C/C++'s spread; `xorshift` is a measured tie — the implementations sit within
 about one percent of each other around 300 ms, with the best run flipping between them, which

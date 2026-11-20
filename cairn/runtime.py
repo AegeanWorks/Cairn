@@ -14,6 +14,7 @@ DIV_ZERO_MESSAGE = b"cairn: runtime error: divide by zero\n"
 PRINT_LABEL = "cairn.runtime.print_i64"
 PRINT_CHAR_LABEL = "cairn.runtime.print_char"
 PRINT_HEX_LABEL = "cairn.runtime.print_hex"
+PRINT_HEX_LINE_LABEL = "cairn.runtime.print_hex_line"
 DIV_ZERO_LABEL = "cairn.runtime.div_zero"
 ARGC_LABEL = "cairn.runtime.argc"
 ARG_BYTE_LABEL = "cairn.runtime.arg_byte"
@@ -528,22 +529,27 @@ def emit_print_char(assembler: Assembler) -> None:
     assembler.ret()
 
 
-def emit_print_hex(assembler: Assembler) -> None:
-    """Emit `print_hex`: write rax in lowercase hex, no newline, no leading zeros.
+def emit_print_hex(assembler: Assembler, label: str = PRINT_HEX_LABEL,
+                   with_newline: bool = False) -> None:
+    """Emit a lowercase-hex printer, with the newline riding in the same buffer on request.
 
     Sixteen is a power of two, so each nibble is the low four bits (`value & 15`) and the
     next value is a logical shift right by four. Eleven serial `div r64` instructions become
     eleven and/shift pairs with no divide latency, preserving the unsigned 64-bit reading.
     Each nibble is turned into ASCII by a conditional move — `+ 0x30`, or `+ 0x57` when the
     nibble cleared 10 — and appended to the shared stdout buffer. Zero prints as a single `0`.
+
+    The `print_hex_line` twin stores one more byte just below the digits and makes a single
+    `out_append` call, so `print_hex(x); print_char(10)` costs one append instead of two.
     """
-    assembler.label(PRINT_HEX_LABEL)
+    digits_label = "print_hex_line.digits" if with_newline else "print_hex.digits"
+    assembler.label(label)
     assembler.push("rbp")
     assembler.mov_reg_reg("rbp", "rsp")
     assembler.sub_rsp(FRAME_SIZE)
     assembler.lea_rbp("rcx", BUFFER_TOP)
     assembler.xor_zero("r11")
-    assembler.label("print_hex.digits")
+    assembler.label(digits_label)
     assembler.mov_reg_reg("rdx", "rax")
     assembler.arith_imm(4, "rdx", 15)         # and rdx, 15: the low nibble
     assembler.shift_imm(5, "rax", 4)          # shr rax, 4: the unsigned quotient
@@ -556,7 +562,14 @@ def emit_print_hex(assembler: Assembler) -> None:
     assembler.store_byte("rcx", "dl")
     assembler.step("r11", decrement=False)
     assembler.test("rax")
-    assembler.jcc("nz", "print_hex.digits")
+    assembler.jcc("nz", digits_label)
+    if with_newline:
+        # Digits were written downward from BUFFER_TOP, so the byte just above the
+        # most significant digit is BUFFER_TOP itself: the newline trails the value.
+        assembler.lea_rbp("r8", BUFFER_TOP)
+        assembler.mov_imm32("r9", 0x0A)
+        assembler.store_byte("r8", "r9b")
+        assembler.step("r11", decrement=False)
     assembler.mov_reg_reg("rax", "rcx")
     assembler.mov_reg_reg("rdx", "r11")
     assembler.call(OUT_APPEND_LABEL)
@@ -683,6 +696,7 @@ def emit_runtime(assembler: Assembler, rodata: ReadOnlyData,
     emit_print_i64(assembler)
     emit_print_char(assembler)
     emit_print_hex(assembler)
+    emit_print_hex(assembler, PRINT_HEX_LINE_LABEL, with_newline=True)
     emit_print_str(assembler)
     emit_str_len(assembler)
     emit_str_byte(assembler)
@@ -697,7 +711,7 @@ __all__ = [
     "ARGC_LABEL", "ARG_BYTE_LABEL", "ARG_FILL_LABEL", "ARGV_ARENA_LABEL",
     "ARGV_CACHE_LABEL", "ARGV_LEN0_LABEL", "ARGV_PTR0_LABEL",
     "DIV_ZERO_DATA_LABEL", "DIV_ZERO_LABEL", "DIV_ZERO_MESSAGE",
-    "NEWLINE_LABEL", "PRINT_CHAR_LABEL", "PRINT_HEX_LABEL", "PRINT_LABEL",
+    "NEWLINE_LABEL", "PRINT_CHAR_LABEL", "PRINT_HEX_LABEL", "PRINT_HEX_LINE_LABEL", "PRINT_LABEL",
     "PRINT_STR_LABEL", "READ_CHAR_LABEL", "STDIN_BUFFER_LABEL", "STDIN_COUNT_LABEL",
     "STDIN_CURSOR_LABEL", "STR_BYTE_LABEL", "STR_LEN_LABEL",
     "OUT_APPEND_LABEL", "OUT_FLUSH_LABEL", "OUT_FLUSH_WORK_LABEL",

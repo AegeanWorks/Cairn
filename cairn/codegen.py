@@ -23,7 +23,7 @@ from cairn.sema import BUILTINS
 from cairn.image import WritableData
 from cairn.runtime import (ARG_BYTE_LABEL, ARGC_LABEL, ARGV_LEN0_LABEL,
                            ARGV_PTR0_LABEL, DIV_ZERO_LABEL, OUT_FLUSH_LABEL,
-                           PRINT_CHAR_LABEL, PRINT_HEX_LABEL, PRINT_LABEL,
+                           PRINT_CHAR_LABEL, PRINT_HEX_LABEL, PRINT_HEX_LINE_LABEL, PRINT_LABEL,
                            PRINT_STR_LABEL, READ_CHAR_LABEL, STDIN_BUFFER_LABEL,
                            STDIN_COUNT_LABEL, STDIN_CURSOR_LABEL, STR_BYTE_LABEL,
                            STR_LEN_LABEL, emit_runtime)
@@ -1277,11 +1277,47 @@ class CodeGenerator:
         """
         if block is None:
             return
-        for index, statement in enumerate(block.statements):
+        statements = block.statements
+        index = 0
+        while index < len(statements):
+            statement = statements[index]
+            # A hex value immediately followed by a newline is the dump idiom. Both are
+            # expression statements, so neither result is read; the newline can ride in
+            # the hex helper's frame buffer and the pair makes one append, not two.
+            if (index + 1 < len(statements)
+                    and self._builtin_statement(statement, "print_hex")
+                    and self._builtin_statement(statements[index + 1], "print_char")
+                    and self._literal_argument(statements[index + 1]) == 10):
+                self._emit_expression(statement.expression.arguments[0])
+                asm = self.assembler
+                asm.push("rax")
+                self.depth += 8
+                self._emit_call_site(PRINT_HEX_LINE_LABEL)
+                asm.pop("rax")
+                self.depth -= 8
+                index += 2
+                continue
             # Only the block's last statement falls through into its parent's tail
             # position; everything before it must still jump out of the block.
-            last = tail and index == len(block.statements) - 1
+            last = tail and index == len(statements) - 1
             self._emit_statement(statement, last)
+            index += 1
+
+    @staticmethod
+    def _builtin_statement(statement: syntax.Stmt, name: str) -> bool:
+        """Is this a discarded call to a one-argument builtin?"""
+        return (isinstance(statement, syntax.ExprStmt)
+                and isinstance(statement.expression, syntax.Call)
+                and statement.expression.name == name
+                and len(statement.expression.arguments) == 1)
+
+    @staticmethod
+    def _literal_argument(statement: syntax.ExprStmt) -> Optional[int]:
+        """The integer a builtin statement is called with, if it is a literal."""
+        value = statement.expression.arguments[0]
+        while isinstance(value, syntax.Parens):
+            value = value.inner
+        return value.value if isinstance(value, syntax.IntLiteral) else None
 
     def _emit_statement(self, statement: syntax.Stmt, tail: bool = False) -> None:
         """Lower one statement; `tail` only concerns a final `return`."""

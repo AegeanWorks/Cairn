@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `201`
+- **Total Classes**: `202`
 - **Total Top-Level Functions**: `228`
-- **Total Class Methods**: `1083`
-- **Total Source Lines**: `20432`
+- **Total Class Methods**: `1089`
+- **Total Source Lines**: `20517`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -137,7 +137,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4468` lines
+**Size**: `4504` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -171,6 +171,8 @@
   - Method `._literal_multiply_operand(expression)` - *The constant and the other operand of `k * x` or `x * k`, for an imm32 k.*
   - Method `._emit_scaled_product(expression, destination)` - *Lower `name * 3|5|9` as one scaled `lea` into `destination`, or refuse.*
   - Method `._emit_block(block, tail)` - *Emit every statement of a block in order.*
+  - Method `._builtin_statement(statement, name)` - *Is this a discarded call to a one-argument builtin?*
+  - Method `._literal_argument(statement)` - *The integer a builtin statement is called with, if it is a literal.*
   - Method `._emit_statement(statement, tail)` - *Lower one statement; `tail` only concerns a final `return`.*
   - Method `._emit_if(statement, tail)` - *`if` as a conditional branch and two labelled bodies.*
   - Method `._emit_select_if(statement)` - *Lower `if t > c { t = t - c; } else { t = t + c; }` as lea, sub, cmov — or refuse.*
@@ -690,7 +692,7 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `710` lines
+**Size**: `724` lines
 
 **Functions:**
 - `def emit_arg_fill(assembler)` - *Emit `arg_fill`: tokenize the ANSI command line into the static table once.*
@@ -702,7 +704,7 @@
 - `def emit_out_flush_work(assembler)` - *Emit `out_flush.work`: one WriteFile for everything the cursor holds.*
 - `def emit_print_i64(assembler)` - *Emit `print_i64`: write rax in decimal plus a newline.*
 - `def emit_print_char(assembler)` - *Emit `print_char`: write the low byte of rax to stdout, no newline.*
-- `def emit_print_hex(assembler)` - *Emit `print_hex`: write rax in lowercase hex, no newline, no leading zeros.*
+- `def emit_print_hex(assembler, label, with_newline)` - *Emit a lowercase-hex printer, with the newline riding in the same buffer on request.*
 - `def emit_print_str(assembler)` - *Emit `print_str`: write the NUL-terminated text at rax to stdout, no newline.*
 - `def emit_str_len(assembler)` - *Emit `str_len`: the number of bytes in the NUL-terminated text at rax.*
 - `def emit_str_byte(assembler)` - *Emit `str_byte(s, j)`: byte j of the text at rcx, or -1.*
@@ -986,7 +988,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2684` lines
+**Size**: `2719` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1122,6 +1124,11 @@
   - Method `.test_the_helpers_are_emitted_into_every_executable()`
   - Method `.test_print_char_calls_its_helper_with_the_stack_round_trip()`
   - Method `.test_print_hex_calls_its_helper()`
+- `class PrintHexNewlineFusionTest` - *A hex value immediately followed by a newline uses one fused helper.*
+  - Method `.call_targets(source)`
+  - Method `.test_hex_then_newline_uses_the_fused_helper()`
+  - Method `.test_a_non_newline_character_does_not_fuse()`
+  - Method `.test_a_used_hex_result_does_not_fuse()`
 - `class PairDeltaInliningTest` - *A two-parameter all-return-tree recursion inlines as pure text copies.*
   - Method `._pair_labels(source, name)`
   - Method `.test_pair_copies_carry_no_stack_state()`
