@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `47`
-- **Total Classes**: `212`
-- **Total Top-Level Functions**: `244`
-- **Total Class Methods**: `1137`
-- **Total Source Lines**: `21469`
+- **Total Classes**: `213`
+- **Total Top-Level Functions**: `249`
+- **Total Class Methods**: `1148`
+- **Total Source Lines**: `21710`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
@@ -579,7 +579,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `1965` lines
+**Size**: `2103` lines
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -640,6 +640,11 @@
 - `def apply_odd_pair_fusion(program)` - *Fuse collatz-shaped odd steps with the halving that follows them, loop-wide.*
 - `def _flatten(statements)` - *Splice a branch selected by folding into its parent, since Cairn has one flat scope.*
 - `def _reachable(statements)` - *Drop statements after one that cannot fall through: `return`, `break`, `continue`.*
+- `def _shift_lowbit_clear(expression, slot)` - *True for `((slot & 1) == 0)` in either operand order.*
+- `def _is_shift_loop(statement, slot)` - *True for `while ((slot & 1) == 0) { slot = slot >> 1; }` exactly.*
+- `def _zero_comparison(expression, slot, op)` - *True for `slot != 0` or `slot == 0` (either operand order).*
+- `def _count_jumps(statements, kinds)`
+- `def apply_bottom_test_rotation(program)` - *Rotate `while (x != 0) { P; if (x == 0) break; S }` into a bottom-test loop.*
 - `def optimize(program)` - *Run one folding pass over a checked program, then convert counter loops.*
 - `def _linear_product(expression, slot)` - *The multiplier when expression is multiplier * slot, in either order.*
 - `def _linear_in_index(expression, slot)` - *(multiplier, offset) when expression is multiplier * slot + offset.*
@@ -1381,7 +1386,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1604` lines
+**Size**: `1623` lines
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1389,6 +1394,7 @@
   - Method `._cleanup()` - *Remove the built executable and its folder.*
   - Method `.build(source)` - *Compile source text and return the executable path.*
   - Method `.execute(source)` - *Run a compiled program, capturing both streams.*
+  - Method `.test_bottom_test_rotation_preserves_the_value()`
   - Method `.test_hello_prints_an_expression()`
   - Method `.test_arithmetic_truncates_shifts_and_returns_the_exit_code()`
   - Method `.test_recursion_and_loop_control()`
@@ -1774,7 +1780,7 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `771` lines
+**Size**: `855` lines
 
 **Classes:**
 - `class InductionStrengthReductionTest` - *A linear function of a counted index stays in an incremented local.*
@@ -1863,6 +1869,17 @@
   - Method `.test_a_chain_nested_under_another_operator_still_collects()`
   - Method `.test_cancelling_terms_leave_zero()`
   - Method `.test_calls_are_never_grouped_or_duplicated()`
+- `class BottomTestRotationTest` - *A trailing-zero loop lets a `while x != 0 { ... break ... }` rotate once.*
+  - Method `.body(source)`
+  - Method `.constant_condition_loops(statements)`
+  - Method `.test_rotates_the_exact_shape()`
+  - Method `.count_shift_loops(statements)`
+  - Method `.test_refuses_without_a_preceding_shift_loop()`
+  - Method `.test_refuses_a_different_loop_condition()`
+  - Method `.test_refuses_a_different_break_condition()`
+  - Method `.test_refuses_without_a_trailing_shift_loop()`
+  - Method `.test_refuses_a_continue_in_the_body()`
+  - Method `.test_refuses_a_second_break()`
 
 **Functions:**
 - `def folded_value(op, left, right)` - *`fold_constant` for one pair, through the public entry point.*
