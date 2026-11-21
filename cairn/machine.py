@@ -753,6 +753,16 @@ class Assembler:
         self.emit(bytes([0xF3, rex, 0x0F, 0x7F, modrm, sib]),
                   (offset & 0xFFFFFFFF).to_bytes(4, "little"))
 
+    def popcnt(self, destination: str, source: str) -> None:
+        """`popcnt r64, r/m64` (F3 REX.W 0F B8 /r): one instruction set-bit count.
+
+        POPCNT is part of the ABM extension present on every modern x86-64; the
+        helper that uses it documents the requirement (ADR-102).
+        """
+        dst, src = REGISTERS[destination], REGISTERS[source]
+        rex = _rex(True, dst >> 3, 0, src >> 3)
+        self.emit(bytes([0xF3, rex, 0x0F, 0xB8, 0xC0 | ((dst & 7) << 3) | (src & 7)]))
+
     def hlt(self) -> None:
         """`hlt`, used only on unreachable paths such as after ExitProcess."""
         self.emit(b"\xF4")

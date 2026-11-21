@@ -457,5 +457,14 @@ class Sse2VectorMethodTest(unittest.TestCase):
             b"\xf3\x42\x0f\x7f\x84\xe5\x00\x00\xf8\xff")
 
 
+class PopcntMethodTest(unittest.TestCase):
+    """POPCNT is one fixed byte pattern with the F3 and REX.W prefixes."""
+
+    def test_popcnt_of_a_register(self) -> None:
+        assembler = Assembler()
+        assembler.popcnt("rax", "rax")
+        self.assertEqual(bytes(assembler.code), b"\xf3\x48\x0f\xb8\xc0")
+
+
 if __name__ == "__main__":
     unittest.main()

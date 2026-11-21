@@ -1285,6 +1285,17 @@ class PrintHexNewlineFusionTest(unittest.TestCase):
         self.assertNotIn("cairn.runtime.print_hex_line", targets)
 
 
+class PopcountPopcntTest(unittest.TestCase):
+    """The set-bit helper should use the POPCNT instruction, not the SWAR chain."""
+
+    def test_the_helper_emits_popcnt(self) -> None:
+        source = "fn main() -> i64 { print(popcount(255)); return 0; }"
+        program = sema.analyze(parser.parse(source))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertIn(b"\xf3\x48\x0f\xb8", bytes(artifact.text),
+                      "popcnt r64, r/m64 replaces the portable mask chain")
+
+
 class PopcountBuiltinTest(unittest.TestCase):
     """popcount dispatches to its own runtime helper with the standard stack round-trip."""
 

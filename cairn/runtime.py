@@ -588,27 +588,7 @@ def emit_popcount(assembler: Assembler) -> None:
     helper clobbers rdx and r10, both inside the runtime call contract.
     """
     assembler.label(POPCOUNT_LABEL)
-    assembler.mov_imm64("r10", 0x5555555555555555)
-    assembler.mov_reg_reg("rdx", "rax")
-    assembler.shift_imm(5, "rax", 1)
-    assembler.binary(0x21, "rax", "r10")
-    assembler.binary(0x21, "rdx", "r10")
-    assembler.binary(0x01, "rax", "rdx")
-    assembler.mov_imm64("r10", 0x3333333333333333)
-    assembler.mov_reg_reg("rdx", "rax")
-    assembler.shift_imm(5, "rax", 2)
-    assembler.binary(0x21, "rax", "r10")
-    assembler.binary(0x21, "rdx", "r10")
-    assembler.binary(0x01, "rax", "rdx")
-    assembler.mov_reg_reg("rdx", "rax")
-    assembler.shift_imm(5, "rax", 4)
-    assembler.binary(0x01, "rdx", "rax")
-    assembler.mov_imm64("r10", 0x0F0F0F0F0F0F0F0F)
-    assembler.binary(0x21, "rdx", "r10")
-    assembler.mov_imm64("r10", 0x0101010101010101)
-    assembler.imul("rdx", "r10")
-    assembler.shift_imm(5, "rdx", 56)
-    assembler.mov_reg_reg("rax", "rdx")
+    assembler.popcnt("rax", "rax")
     assembler.ret()
 
 

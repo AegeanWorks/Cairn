@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `47`
-- **Total Classes**: `209`
+- **Total Classes**: `211`
 - **Total Top-Level Functions**: `242`
-- **Total Class Methods**: `1129`
-- **Total Source Lines**: `21373`
+- **Total Class Methods**: `1132`
+- **Total Source Lines**: `21383`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
@@ -477,7 +477,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `762` lines
+**Size**: `772` lines
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -564,6 +564,7 @@
   - Method `.paddq_reg(destination, source)` - *`paddq xmm, xmm` (66 0F D4 /r): two wrapping i64 adds in one instruction.*
   - Method `.movdqu_load_indexed(destination, base, index, scale_log2, offset)` - *`movdqu xmm, [base + index*scale + disp32]` (F3 0F 6F /r), unaligned 16B.*
   - Method `.movdqu_store_indexed(base, index, scale_log2, offset, source)` - *`movdqu [base + index*scale + disp32], xmm` (F3 0F 7F /r), unaligned 16B.*
+  - Method `.popcnt(destination, source)` - *`popcnt r64, r/m64` (F3 REX.W 0F B8 /r): one instruction set-bit count.*
   - Method `.hlt()` - *`hlt`, used only on unreachable paths such as after ExitProcess.*
 
 **Functions:**
@@ -726,7 +727,7 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `760` lines
+**Size**: `740` lines
 
 **Functions:**
 - `def emit_arg_fill(assembler)` - *Emit `arg_fill`: tokenize the ANSI command line into the static table once.*
@@ -1029,7 +1030,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2818` lines
+**Size**: `2829` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1170,6 +1171,8 @@
   - Method `.test_hex_then_newline_uses_the_fused_helper()`
   - Method `.test_a_non_newline_character_does_not_fuse()`
   - Method `.test_a_used_hex_result_does_not_fuse()`
+- `class PopcountPopcntTest` - *The set-bit helper should use the POPCNT instruction, not the SWAR chain.*
+  - Method `.test_the_helper_emits_popcnt()`
 - `class PopcountBuiltinTest` - *popcount dispatches to its own runtime helper with the standard stack round-trip.*
   - Method `.test_the_helper_is_emitted_and_called()`
 - `class ArrayVectorTest` - *A counted array read-modify-write loop uses two SSE2 lanes.*
@@ -1632,7 +1635,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `461` lines
+**Size**: `470` lines
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1725,6 +1728,8 @@
   - Method `.test_paddq_adds_two_lanes()`
   - Method `.test_unaligned_load_through_a_scaled_index()`
   - Method `.test_unaligned_store_through_a_scaled_index()`
+- `class PopcntMethodTest` - *POPCNT is one fixed byte pattern with the F3 and REX.W prefixes.*
+  - Method `.test_popcnt_of_a_register()`
 
 ---
 

@@ -186,7 +186,7 @@ a[i] = expr;   store into element i
 | `str_byte(s, j)` | The byte at `j` into the NUL-terminated literal `s`, or `-1` for a negative `j` or when the byte at `j` is the NUL terminator; reading past the terminator is undefined |
 | Output buffering | Every printer appends to one shared 64 KiB stdout buffer, drained at once when it fills, when `exit(code)` runs and when `main` returns; inter-source byte order is preserved either way |
 | `flush()` | Writes out everything the shared buffer holds through one `WriteFile` and answers how many bytes went out; `0` on an empty buffer |
-| `popcount(x)` | The number of set bits in `x`'s unsigned 64-bit reading, from portable SWAR machine code |
+| `popcount(x)` | The number of set bits in `x`'s unsigned 64-bit reading, emitted as one POPCNT instruction; requires an x86-64 CPU with ABM/POPCNT (all such CPUs since 2008) |
 | Right shift | Arithmetic (`>>` keeps the sign); shift counts mask to 63 in folding and hardware |
 | Uninitialised reads | Impossible: initializers are mandatory and every frame slot is zeroed on entry |
 | Branch never taken | A binding declared inside it reads as `0` |
