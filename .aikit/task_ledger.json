@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-parity-full",
+    "task_id": "cairn-bswap-verdict",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795264273.7767339,
+    "updated_at": 1795266222.7518964,
     "owner": "kilo:cairn",
-    "lease_until": 1795271473.7767339,
+    "lease_until": 1795273422.7518964,
     "started_by": "kilo:cairn",
     "continuations": [],
     "workspaces": [
@@ -16,63 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795264280.6431406,
-    "completed_head": "5c1292bd7b7a7c778e2235ca6d0ad56cf7123b4a",
-    "completed_tree": "442ca4aa2a10583c5cc73de62f39b843638e89d5"
+    "completed_at": 1795266226.6834588,
+    "completed_head": "0ceb0dc4f1ce05ef967c4434992af96e818304b2",
+    "completed_tree": "73af887c35173337f5a7b8b26f7777efb8ce52f5"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-clz-builtin",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[2/3] clz builtin committed with four-language benchmark; verdict ALL WON over 21 cases; full suite 1441 OK",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795247385.1082811,
-      "timestamp_str": "2026-11-21 10:49:45",
-      "agent": "opencode:session",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-clz-builtin",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[2/3] committed; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795247385.624868,
-      "timestamp_str": "2026-11-21 10:49:45",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-clz-builtin",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-clz-builtin' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795247386.0613732,
-      "timestamp_str": "2026-11-21 10:49:46",
-      "agent": "opencode:session",
-      "head": "66ab1c152e7906749f00e804b627e9c51ec1618c",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-clz-inline",
       "phase": "phase 2",
@@ -393,6 +341,65 @@
       "timestamp": 1795265826.1840286,
       "timestamp_str": "2026-11-21 15:57:06",
       "agent": "unidentified"
+    },
+    {
+      "task_id": "cairn-bswap-verdict",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/1] record the bswap measurement that ADR-111 promised: the full 23-case paired run aborted on a hex_io C-twin timeout under concurrent host load, so the paired tool was run over the bswap case alone for 48 interleaved rounds, returning c=0.388 tie, cpp=1.133 tie and rust=1.174 tie in a 0.285-1.204 control band; bswap shipped inline so no pre/post A/B applies; the all-case ALL WON read stays pending a quiet window",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795265931.265384,
+      "timestamp_str": "2026-11-21 15:58:51",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "ADR-111 ended with the authoritative 48-round verdict and A/B as the next measurement step, and the bswap decision (keep or change the lowering) needs that evidence recorded in the ADR and ledger",
+        "benefits": "the bswap case has an interleaved 48-round verdict on the record, the ADR no longer leaves the measurement dangling, and the outstanding full-registry re-run is named explicitly",
+        "risks": "contract: documentation and ledger only, no code or benchmark number changes; dependency: none; concurrency: the measurement was taken under concurrent host load, so the wide control band is recorded rather than hidden; state: ledger gains one completion record",
+        "mitigation": "record the exact ratios and the aborted full-run condition; do not claim an all-case ALL WON; the paired tool remains unchanged for a quiet-window re-run"
+      },
+      "plan_digest": "292d9b572e2ad8185f114f0dbe2ffa48c2545786344d1bf7093a95b8d82066df",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-bswap-verdict",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] measurement recorded in ADR-111; aikit check --allow-dirty 5/5 gates passed (hygiene, guidelines, secrets, dependencies, full suite); checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795266222.7518964,
+      "timestamp_str": "2026-11-21 16:03:42",
+      "agent": "kilo:cairn",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-bswap-verdict",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-bswap-verdict' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795266227.4481897,
+      "timestamp_str": "2026-11-21 16:03:47",
+      "agent": "kilo:cairn",
+      "head": "0ceb0dc4f1ce05ef967c4434992af96e818304b2",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
     }
   ]
 }
