@@ -6,14 +6,14 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `46`
-- **Total Classes**: `207`
-- **Total Top-Level Functions**: `235`
-- **Total Class Methods**: `1120`
-- **Total Source Lines**: `21169`
+- **Total Python Modules**: `47`
+- **Total Classes**: `208`
+- **Total Top-Level Functions**: `241`
+- **Total Class Methods**: `1125`
+- **Total Source Lines**: `21304`
 
 ## 🧭 Map Coverage
-- **Indexed**: python (`46` module(s))
+- **Indexed**: python (`47` module(s))
 - **Not indexed by this map**: cpp (`38` file(s)), rust (`19` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
@@ -26,6 +26,21 @@
 > *Benchmarks for Cairn: case sources and the harness that measures them.*
 
 **Size**: `1` lines
+
+---
+
+### [`benchmarks/paired.py`](benchmarks/paired.py)
+> *Deterministic paired A/B verdict for the benchmark registry.*
+
+**Size**: `116` lines
+
+**Functions:**
+- `def timed(executable, stdin)` - *One wall-clock run; returns milliseconds and stdout for parity checks.*
+- `def gap(left, right, rounds, stdin)` - *Median ratio left/right and its samples (lower = left faster).*
+- `def band(samples)` - *The central 80 percent of an identical-binary control run.*
+- `def verdict(gap_value, control_band)` - *Win only when the gap is clearly outside the control band.*
+- `def measure_case(case, folder, rounds)` - *Build every twin for one case and measure its gaps with a control band.*
+- `def main(argv)`
 
 ---
 
@@ -859,9 +874,15 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `581` lines
+**Size**: `600` lines
 
 **Classes:**
+- `class PairedVerdictTest` - *A win is a gap outside the identical-binary band, not a raw best time.*
+  - Method `.test_an_identical_binary_is_a_tie()`
+  - Method `.test_a_gap_inside_the_band_is_a_tie()`
+  - Method `.test_a_clear_gap_below_the_band_is_a_win()`
+  - Method `.test_a_clear_gap_above_the_band_is_a_loss()`
+  - Method `.test_the_control_band_trims_extremes()`
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
   - Method `.test_summary_reports_best_median_worst_and_per_unit_cost()`
   - Method `.test_zero_iterations_does_not_divide()`

@@ -8,7 +8,26 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from benchmarks import run_benchmarks
+from benchmarks import paired, run_benchmarks
+
+
+class PairedVerdictTest(unittest.TestCase):
+    """A win is a gap outside the identical-binary band, not a raw best time."""
+
+    def test_an_identical_binary_is_a_tie(self) -> None:
+        self.assertEqual(paired.verdict(1.002, (0.98, 1.02)), "tie")
+
+    def test_a_gap_inside_the_band_is_a_tie(self) -> None:
+        self.assertEqual(paired.verdict(0.95, (0.94, 1.06)), "tie")
+
+    def test_a_clear_gap_below_the_band_is_a_win(self) -> None:
+        self.assertEqual(paired.verdict(0.88, (0.98, 1.02)), "faster")
+
+    def test_a_clear_gap_above_the_band_is_a_loss(self) -> None:
+        self.assertEqual(paired.verdict(1.12, (0.98, 1.02)), "slower")
+
+    def test_the_control_band_trims_extremes(self) -> None:
+        self.assertEqual(paired.band([float(i) for i in range(1, 21)]), (2.0, 19.0))
 
 
 class SummaryTest(unittest.TestCase):
