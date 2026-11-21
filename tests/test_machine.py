@@ -484,5 +484,14 @@ class TzcntMethodTest(unittest.TestCase):
         self.assertEqual(bytes(assembler.code), b"\xf3\x48\x0f\xbc\xc0")
 
 
+class BswapMethodTest(unittest.TestCase):
+    """BSWAP is one fixed byte pattern with the REX.W prefix."""
+
+    def test_bswap_of_a_register(self) -> None:
+        assembler = Assembler()
+        assembler.bswap("rax")
+        self.assertEqual(bytes(assembler.code), b"\x48\x0f\xc8")
+
+
 if __name__ == "__main__":
     unittest.main()

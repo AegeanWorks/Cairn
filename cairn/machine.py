@@ -784,6 +784,16 @@ class Assembler:
         rex = _rex(True, dst >> 3, 0, src >> 3)
         self.emit(bytes([0xF3, rex, 0x0F, 0xBC, 0xC0 | ((dst & 7) << 3) | (src & 7)]))
 
+    def bswap(self, register: str) -> None:
+        """`bswap r64` (REX.W 0F C8 +rd): reverse the eight bytes in place.
+
+        BSWAP is baseline x86-64, so no CPU feature check is needed (ADR-111).
+        The call site lowers inline, so no runtime helper is needed.
+        """
+        reg = REGISTERS[register]
+        rex = _rex(True, 0, 0, reg >> 3)
+        self.emit(bytes([rex, 0x0F, 0xC8 | (reg & 7)]))
+
     def hlt(self) -> None:
         """`hlt`, used only on unreachable paths such as after ExitProcess."""
         self.emit(b"\xF4")

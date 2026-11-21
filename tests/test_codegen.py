@@ -1347,6 +1347,21 @@ class CtzTzcntTest(unittest.TestCase):
         self.assertNotIn("cairn.runtime.ctz", {label for _, label in artifact.fixups})
 
 
+class BswapInlineTest(unittest.TestCase):
+    """bswap lowers inline to one BSWAP, with no runtime call round-trip."""
+
+    def test_the_bswap_bytes_appear_inline(self) -> None:
+        program = sema.analyze(parser.parse("fn main() -> i64 { print(bswap(255)); return 0; }"))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertIn(b"\x48\x0f\xc8", bytes(artifact.text))
+
+    def test_no_runtime_helper_is_emitted_or_called(self) -> None:
+        program = sema.analyze(parser.parse("fn main() -> i64 { print(bswap(255)); return 0; }"))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertNotIn("cairn.runtime.bswap", artifact.text_labels)
+        self.assertNotIn("cairn.runtime.bswap", {label for _, label in artifact.fixups})
+
+
 class ArrayVectorTest(unittest.TestCase):
     """A counted array read-modify-write loop uses two SSE2 lanes."""
 

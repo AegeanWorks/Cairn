@@ -1,0 +1,15 @@
+// Byte-order reversal throughput over ten million derived values. bswap(x)
+// reverses the eight bytes of x's i64 reading and is the newest language surface.
+// The dependent sum keeps the loop alive in every twin, and all four print the
+// same total. Twin of bswap.c, bswap.cpp and bswap.rs.
+fn main() -> i64 {
+    var total: i64 = 0;
+    var i: i64 = 0;
+    while i < 10000000 {
+        var v: i64 = (i * 2654435761) ^ (i >> 3);
+        total = (total + bswap(v)) & 9223372036854775807;
+        i = i + 1;
+    }
+    print(total);
+    return 0;
+}

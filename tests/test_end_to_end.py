@@ -1530,6 +1530,14 @@ class StringBuiltinsTest(EndToEndTest):
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "104\n105\n-1\n-1\n")
 
+    def test_bswap_reverses_the_eight_bytes(self) -> None:
+        source = ("fn main() -> i64 { print(bswap(0)); print(bswap(1));"
+                  " print(bswap(-1)); print(bswap(1 << 56)); return 0; }")
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout.splitlines(),
+                         ["0", "72057594037927936", "-1", "1"])
+
     def test_ctz_counts_trailing_zeros_of_the_unsigned_reading(self) -> None:
         source = ("fn main() -> i64 { print(ctz(0)); print(ctz(1));"
                   " print(ctz(2)); print(ctz(8)); print(ctz(-1));"

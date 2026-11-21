@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `47`
-- **Total Classes**: `218`
+- **Total Classes**: `220`
 - **Total Top-Level Functions**: `250`
-- **Total Class Methods**: `1163`
-- **Total Source Lines**: `21843`
+- **Total Class Methods**: `1170`
+- **Total Source Lines**: `21897`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
-- **Not indexed by this map**: cpp (`44` file(s)), rust (`22` file(s))
+- **Not indexed by this map**: cpp (`46` file(s)), rust (`23` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -49,7 +49,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `684` lines
+**Size**: `686` lines
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -154,7 +154,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4743` lines
+**Size**: `4747` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -479,7 +479,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `793` lines
+**Size**: `803` lines
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -569,6 +569,7 @@
   - Method `.popcnt(destination, source)` - *`popcnt r64, r/m64` (F3 REX.W 0F B8 /r): one instruction set-bit count.*
   - Method `.lzcnt(destination, source)` - *`lzcnt r64, r/m64` (F3 REX.W 0F BD /r): one leading-zero count.*
   - Method `.tzcnt(destination, source)` - *`tzcnt r64, r/m64` (F3 REX.W 0F BC /r): one trailing-zero count.*
+  - Method `.bswap(register)` - *`bswap r64` (REX.W 0F C8 +rd): reverse the eight bytes in place.*
   - Method `.hlt()` - *`hlt`, used only on unreachable paths such as after ExitProcess.*
 
 **Functions:**
@@ -1046,7 +1047,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2870` lines
+**Size**: `2885` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1198,6 +1199,9 @@
   - Method `.test_the_lzcnt_bytes_appear_inline()`
 - `class CtzTzcntTest` - *ctz lowers inline to one TZCNT, with no runtime call round-trip.*
   - Method `.test_the_tzcnt_bytes_appear_inline()`
+  - Method `.test_no_runtime_helper_is_emitted_or_called()`
+- `class BswapInlineTest` - *bswap lowers inline to one BSWAP, with no runtime call round-trip.*
+  - Method `.test_the_bswap_bytes_appear_inline()`
   - Method `.test_no_runtime_helper_is_emitted_or_called()`
 - `class ArrayVectorTest` - *A counted array read-modify-write loop uses two SSE2 lanes.*
   - Method `.test_an_even_trip_count_uses_paddq()`
@@ -1397,7 +1401,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1641` lines
+**Size**: `1649` lines
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1534,6 +1538,7 @@
   - Method `.test_escapes_decode_into_the_output()`
   - Method `.test_str_len_counts_to_the_terminator()`
   - Method `.test_str_byte_reads_inside_and_reports_outside()`
+  - Method `.test_bswap_reverses_the_eight_bytes()`
   - Method `.test_ctz_counts_trailing_zeros_of_the_unsigned_reading()`
   - Method `.test_clz_counts_leading_zeros_of_the_unsigned_reading()`
   - Method `.test_popcount_counts_set_bits_over_the_unsigned_reading()`
@@ -1662,7 +1667,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `488` lines
+**Size**: `497` lines
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1761,6 +1766,8 @@
   - Method `.test_lzcnt_of_a_register()`
 - `class TzcntMethodTest` - *TZCNT is one fixed byte pattern with the F3 and REX.W prefixes.*
   - Method `.test_tzcnt_of_a_register()`
+- `class BswapMethodTest` - *BSWAP is one fixed byte pattern with the REX.W prefix.*
+  - Method `.test_bswap_of_a_register()`
 
 ---
 
@@ -2013,7 +2020,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `278` lines
+**Size**: `284` lines
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -2037,6 +2044,8 @@
   - Method `.test_clz_rejects_a_wrong_arity()`
   - Method `.test_ctz_is_a_one_argument_builtin()`
   - Method `.test_ctz_rejects_a_wrong_arity()`
+  - Method `.test_bswap_is_a_one_argument_builtin()`
+  - Method `.test_bswap_rejects_a_wrong_arity()`
   - Method `.test_print_char_and_print_hex_are_one_argument_builtins()`
   - Method `.test_new_builtins_take_exactly_one_argument()`
   - Method `.test_new_builtins_are_callable_not_values_redefinable()`

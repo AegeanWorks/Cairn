@@ -13,3 +13,4 @@ node_modules/
 # AIKit transient state
 .aikit/*.log
 .aikit/reforge.reviews/
+.aikit/cache/

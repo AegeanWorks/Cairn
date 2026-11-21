@@ -98,6 +98,7 @@ fn main() -> i64 {
   `popcount(x)` returns the number of set bits in `x`'s unsigned 64-bit reading.
   `clz(x)` returns the number of leading zeros in that reading (64 for zero).
   `ctz(x)` returns the number of trailing zeros in that reading (64 for zero).
+  `bswap(x)` returns `x` with its eight bytes reversed.
   Input: `argc()` is the token count with the program path included (the C convention);
   `arg_byte(i, j)` is byte `j` (zero-indexed) of argument `i`'s content with quotes
   stripped, or -1 past the token; `read_char()` is the next stdin byte, or -1 at end
