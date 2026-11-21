@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-bottom-guard-refusal",
+    "task_id": "cairn-array-simd",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795224621.4672105,
+    "updated_at": 1795226309.6640153,
     "owner": "opencode:session",
-    "lease_until": 1795231821.4672105,
+    "lease_until": 1795233509.6640153,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,70 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795224621.8373442,
-    "completed_head": "7c8327ae24abe759ac524749aca5fee1ad06a839",
-    "completed_tree": "7fbbc099d69225fe7e5af791d1a0d26f75751859"
+    "completed_at": 1795226321.2403653,
+    "completed_head": "715b168599f626ee34828123a698398e3bd452df",
+    "completed_tree": "080bcfb93fb1f69972ffa3f301643a9e84430167"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-hex-newline",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/1] add a print_hex_line runtime twin that stores the newline just above the hex digits, and a codegen peephole that emits it for an adjacent discarded print_hex(x); print_char(10) pair; pin with failing-first shape and refusal tests, prove byte-identical output and a paired A/B win, record ADR and G-004 diff",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795216690.6320236,
-      "timestamp_str": "2026-11-21 02:18:10",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "ADR-035 and the hex_io benchmark source record the second out_append per line as the remaining hex output cost; a paired A/B measured two appends at 31.53 ms best",
-        "benefits": "one append per line instead of two; paired interleaved A/B measured 31.53 to 26.76 ms best (-15.1 percent) with byte-identical 400,000-line output",
-        "risks": "contract: language semantics and IR translation must stay unchanged; dependency: the new helper reuses existing assembler methods, no new instruction; concurrency: none; state: no new static state, the newline lives in the existing frame buffer",
-        "mitigation": "the peephole is in codegen only so sema and ir see the original statements; refusal tests for a non-newline char and a used hex result; existing end-to-end and twin parity tests; full suite and gates"
-      },
-      "plan_digest": "68fa029921a193ae0c651829bcb8d32295f8ad0dc61e29b8d0165fbbf164e472",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-hex-newline",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] committed as 4039dfc: print_hex_line stores the newline at BUFFER_TOP above the digits and a codegen peephole emits it for adjacent discarded print_hex(x) and print_char(10), so one out_append serves both; failing-first codegen test plus two refusal tests pass; full 400,000-line output byte-identical; paired interleaved A/B 31.53 to 26.76 ms best (-15.1 percent); G-004 compare recorded hex_io 42.5 to 32.3 ms (-24.0 percent, outside the noise band) and the clean 17a5e10 baseline was restored; ADR-092 and README synced; full suite and 5/5 project gates passed; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795217033.772441,
-      "timestamp_str": "2026-11-21 02:23:53",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-hex-newline",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-hex-newline' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795217034.4464834,
-      "timestamp_str": "2026-11-21 02:23:54",
-      "agent": "opencode:session",
-      "head": "4039dfc495706f15755abb3cbd34b0f4551d1580",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-strlen-bounds",
       "phase": "phase 2",
@@ -403,6 +344,65 @@
       "timestamp_str": "2026-11-21 04:30:21",
       "agent": "opencode:session",
       "head": "7c8327ae24abe759ac524749aca5fee1ad06a839",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-array-simd",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/1] vectorize the counted array read-modify-write loop with SSE2 so two i64 elements are updated by one paddq, with new documented assembler methods and byte tests, failing-first shape and refusal tests, a paired A/B with identical-binary control, ADR and G-004 diff",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795226052.4994338,
+      "timestamp_str": "2026-11-21 04:54:12",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "the full benchmark on a quiet window still listed array_sum as slower than C and C++ and disassembly showed gcc uses movdqu/paddq to update two elements per iteration while Cairn was scalar",
+        "benefits": "array_sum best time fell 8.00 to 7.22 ms (-9.8 percent) and ten-fastest 8.22 to 7.38 ms (-10.2 percent) with identical output",
+        "risks": "contract: wrapping i64 sums and byte-identical output; dependency: five new SSE2 emitter methods are part of the x86-64 baseline; concurrency: none; state: no new runtime state",
+        "mitigation": "strict match on an even, zero-based, unit-step loop with an invariant addend, refusals for odd bounds and non-invariant addends, byte-level assembler tests, and end-to-end plus IR differential verification"
+      },
+      "plan_digest": "b081558b948f5416a546dbbeb3d7c7b62318cd7a72835e19bed15d2ff6eb0ba6",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-array-simd",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] committed as 1491ebc: five documented SSE2 emitter methods (GPR movq, punpcklqdq, paddq, unaligned indexed movdqu load/store) with byte tests; codegen vectorizes an even, zero-based, unit-step array add loop into a two-lane loop and refuses odd bounds, non-invariant addends and odd entry values; a GPR-source encoding bug was caught by a value check and fixed to 66 REX.W 0F 6E; 1052 end-to-end/IR/codegen/machine tests pass; paired A/B with controls measured -9.8 percent best and -10.2 percent ten-fastest with identical output; ADR-099 and README synced; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795226309.6640153,
+      "timestamp_str": "2026-11-21 04:58:29",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-array-simd",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-array-simd' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795226321.3451352,
+      "timestamp_str": "2026-11-21 04:58:41",
+      "agent": "opencode:session",
+      "head": "715b168599f626ee34828123a698398e3bd452df",
       "delivery": {
         "roots": [
           "."
