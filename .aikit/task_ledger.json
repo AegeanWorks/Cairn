@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-bottom-test-rotation",
+    "task_id": "cairn-clz-builtin",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795245876.8660185,
+    "updated_at": 1795247385.624868,
     "owner": "opencode:session",
-    "lease_until": 1795253076.8660185,
+    "lease_until": 1795254585.624868,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,87 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795245877.197166,
-    "completed_head": "695a31aa61d8c772fc47b04023ad67c80316ae62",
-    "completed_tree": "05904cac512034bdc70bdb5ae0a521e0b6eea3ac"
+    "completed_at": 1795247386.003609,
+    "completed_head": "66ab1c152e7906749f00e804b627e9c51ec1618c",
+    "completed_tree": "18e9dd2ab1ddbe99acbc0af055d159f5bd9f5041"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-popcnt-fast",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-popcnt-fast' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795231127.7217536,
-      "timestamp_str": "2026-11-21 06:18:47",
-      "agent": "opencode:session",
-      "head": "5f6342bf379a59dccc08daac96c3b660814210fa",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-charstdin-fix",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/1] fix the char_stream benchmark stdin so the C and C++ getchar twins read the full 4 MiB instead of stopping at the Windows text-mode EOF byte",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795232165.3745205,
-      "timestamp_str": "2026-11-21 06:36:05",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "the paired verdict flagged char_stream as the only real loss and twin outputs showed C/C++ processed 26 bytes while Cairn processed 4 MiB",
-        "benefits": "all four twins now agree; Cairn wins with 9.11 ms against C 74.64, C++ 72.54, Rust 13.10",
-        "risks": "contract: twin parity; dependency: none; concurrency: none; state: saved history records from the old stream are superseded",
-        "mitigation": "two failing-first tests pin the absence of 0x1A and the declared byte count, and ADR-103 withdraws the old finding"
-      },
-      "plan_digest": "de2843754c7c353031e0eef2181debcfbabbae6c298a33b941589e48a72616f8",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-charstdin-fix",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] committed the stdin fix; full suite and strict gates green; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795232165.8800254,
-      "timestamp_str": "2026-11-21 06:36:05",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-charstdin-fix",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-charstdin-fix' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795232166.3763914,
-      "timestamp_str": "2026-11-21 06:36:06",
-      "agent": "opencode:session",
-      "head": "effda8e56dd4a31a8faba364af1be36973fadf2b",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-mandel-investigation",
       "phase": "phase 2",
@@ -395,6 +319,82 @@
       "timestamp_str": "2026-11-21 10:24:37",
       "agent": "opencode:session",
       "head": "695a31aa61d8c772fc47b04023ad67c80316ae62",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-clz-builtin",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/3] add clz(x) as a builtin: sema arity, LZCNT emitter, runtime helper, codegen dispatch, failing-first tests at each layer",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795246032.070291,
+      "timestamp_str": "2026-11-21 10:27:12",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "the authoritative verdict is ALL WON after the rotation pass, so the objective calls for one new function",
+        "benefits": "a leading-zero builtin mapped to one LZCNT instruction, with portable/intrinsic twins for measurement",
+        "risks": "contract: clz returns the leading-zero count of the unsigned 64-bit reading, 64 for zero; dependency: LZCNT/ABM like POPCNT; concurrency: none; state: none",
+        "mitigation": "failing-first sema/machine/codegen/value tests, twin parity, full suite, strict gates, and a controlled paired measurement before any speed claim"
+      },
+      "plan_digest": "1431b83c214c7484df1d36d37152caa46016ed6aaf076f0b965318f403fb0e80",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-clz-builtin",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[2/3] clz builtin committed with four-language benchmark; verdict ALL WON over 21 cases; full suite 1441 OK",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795247385.1082811,
+      "timestamp_str": "2026-11-21 10:49:45",
+      "agent": "opencode:session",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-clz-builtin",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[2/3] committed; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795247385.624868,
+      "timestamp_str": "2026-11-21 10:49:45",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-clz-builtin",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-clz-builtin' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795247386.0613732,
+      "timestamp_str": "2026-11-21 10:49:46",
+      "agent": "opencode:session",
+      "head": "66ab1c152e7906749f00e804b627e9c51ec1618c",
       "delivery": {
         "roots": [
           "."
