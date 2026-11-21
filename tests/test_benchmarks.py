@@ -606,5 +606,45 @@ class CompareRunsTest(unittest.TestCase):
             self.assertIsNone(run_benchmarks.latest_history_record(Path(folder) / "none.jsonl"))
 
 
+class InterleavedWindowTest(unittest.TestCase):
+    """Control band and baseline gaps must come from the same wall-clock window."""
+
+    def test_every_key_is_sampled_each_round_in_alternating_order(self) -> None:
+        calls = []
+
+        def timer(name):
+            def sample():
+                calls.append(name)
+                return 1.0
+            return sample
+
+        timers = {name: timer(name) for name in ("a", "b", "c")}
+        samples = paired.measure_interleaved(timers, 4)
+        self.assertEqual(samples, {"a": [1.0] * 4, "b": [1.0] * 4, "c": [1.0] * 4})
+        self.assertEqual(
+            calls,
+            ["a", "b", "c", "c", "b", "a", "a", "b", "c", "c", "b", "a"],
+        )
+
+    def test_a_shared_window_cancels_a_host_load_spike(self) -> None:
+        # A load spike hits every key in round 2 equally. Because control and
+        # baseline share a window, every ratio is unchanged and the verdict is
+        # stable -- the failure mode of the old two-phase measurement.
+        samples = {
+            "cairn": [10, 10, 100, 10, 10],
+            "copy": [10, 10, 100, 10, 10],
+            "c": [11, 11, 110, 11, 11],
+        }
+        control, gaps = paired.verdicts_from_samples(samples)
+        self.assertEqual(control, (1.0, 1.0))
+        self.assertEqual(gaps["c"][1], "faster")
+
+    def test_missing_baselines_are_skipped(self) -> None:
+        samples = {"cairn": [10] * 5, "copy": [10] * 5}
+        control, gaps = paired.verdicts_from_samples(samples)
+        self.assertEqual(control, (1.0, 1.0))
+        self.assertEqual(gaps, {})
+
+
 if __name__ == "__main__":
     unittest.main()

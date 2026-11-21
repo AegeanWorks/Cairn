@@ -15,7 +15,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from benchmarks import run_benchmarks as harness
@@ -65,18 +65,50 @@ def verdict(gap_value: float, control_band: Tuple[float, float]) -> str:
     return "tie"
 
 
+def measure_interleaved(timers: Dict[str, Callable[[], float]],
+                        rounds: int) -> Dict[str, List[float]]:
+    """Sample every timer in alternating order across the same rounds.
+
+    Returning one sample per key per round keeps the control and all baselines in
+    a single wall-clock window: a load spike hits a whole round's samples, so it
+    cancels in every ratio instead of separating the control band from a baseline
+    measured in a later phase.
+    """
+    names = list(timers)
+    samples: Dict[str, List[float]] = {name: [] for name in names}
+    for index in range(rounds):
+        order = names if index % 2 == 0 else list(reversed(names))
+        for name in order:
+            samples[name].append(timers[name]())
+    return samples
+
+
+def verdicts_from_samples(samples: Dict[str, List[float]],
+                          baselines: Tuple[str, ...] = ("c", "cpp", "rust")
+                          ) -> Tuple[Tuple[float, float], Dict[str, Tuple[float, str]]]:
+    """Derive the control band and baseline verdicts from interleaved samples."""
+    control = [c / co for c, co in zip(samples["cairn"], samples["copy"])]
+    control_band = band(control)
+    gaps: Dict[str, Tuple[float, str]] = {}
+    for name in baselines:
+        if name not in samples:
+            continue
+        values = [c / b for c, b in zip(samples["cairn"], samples[name])]
+        measured = statistics.median(values)
+        gaps[name] = (round(measured, 3), verdict(measured, control_band))
+    return control_band, gaps
+
+
 def measure_case(case, folder: Path, rounds: int = ROUNDS) -> Dict[str, object]:
-    """Build every twin for one case and measure its gaps with a control band."""
+    """Build every twin for one case and measure all gaps in one interleaved window."""
     cairn = folder / f"{case.name}.cairn.exe"
     harness.build_cairn(harness.ROOT / case.cairn, cairn)
     copy = folder / f"{case.name}.copy.exe"
     shutil.copyfile(cairn, copy)
-    _, control_samples = gap(cairn, copy, rounds, case.stdin)
-    control_band = band(control_samples)
-    report: Dict[str, object] = {"case": case.name,
-                                 "control": (round(control_band[0], 3),
-                                             round(control_band[1], 3)),
-                                 "gaps": {}}
+    timers: Dict[str, Callable[[], float]] = {
+        "cairn": lambda: timed(cairn, case.stdin)[0],
+        "copy": lambda: timed(copy, case.stdin)[0],
+    }
     builders = {"c": (harness.build_c, harness.find_c_compiler()),
                 "cpp": (harness.build_cpp, harness.find_cpp_compiler()),
                 "rust": (harness.build_rust, harness.find_rust_compiler())}
@@ -88,10 +120,11 @@ def measure_case(case, folder: Path, rounds: int = ROUNDS) -> Dict[str, object]:
         other = folder / f"{case.name}.{language}.exe"
         if builder(compiler, harness.ROOT / source, other) is None:
             continue
-        measured, _ = gap(cairn, other, rounds, case.stdin)
-        report["gaps"][language] = (round(measured, 3),
-                                    verdict(measured, control_band))
-    return report
+        timers[language] = lambda exe=other: timed(exe, case.stdin)[0]
+    control_band, gaps = verdicts_from_samples(measure_interleaved(timers, rounds))
+    return {"case": case.name,
+            "control": (round(control_band[0], 3), round(control_band[1], 3)),
+            "gaps": gaps}
 
 
 def main(argv=None) -> int:
