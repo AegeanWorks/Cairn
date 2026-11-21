@@ -26,7 +26,8 @@ ROUNDS = 16
 def timed(executable: Path, stdin: Optional[bytes]) -> Tuple[float, bytes]:
     """One wall-clock run; returns milliseconds and stdout for parity checks."""
     started = time.perf_counter()
-    completed = subprocess.run([str(executable)], capture_output=True, input=stdin)
+    completed = subprocess.run([str(executable)], capture_output=True, input=stdin,
+                               timeout=120)
     if completed.returncode != 0:
         raise RuntimeError(f"{executable.name} exited {completed.returncode}")
     return (time.perf_counter() - started) * 1000, completed.stdout
