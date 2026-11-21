@@ -6,7 +6,7 @@ would compute, including wrapping arithmetic, arithmetic right shift, and the di
 trap. `print` is an effect, so no rewrite may drop or duplicate a call.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import List, Optional, Tuple
 
 from cairn import syntax
@@ -182,6 +182,7 @@ class Optimizer:
             for function in program.functions:
                 function.body = self._block(function.body)
         apply_copy_propagation(program)
+        apply_induction_strength_reduction(program)
         return program
 
     def _block(self, block: Optional[syntax.Block]) -> Optional[syntax.Block]:
@@ -1240,6 +1241,215 @@ def _reachable(statements: List[syntax.Stmt]) -> List[syntax.Stmt]:
 def optimize(program: syntax.Program) -> syntax.Program:
     """Run one folding pass over a checked program, then convert counter loops."""
     return Optimizer().run(program)
+
+
+def _linear_product(expression, slot: int):
+    """The multiplier when expression is multiplier * slot, in either order."""
+    value = _peel_parens(expression)
+    if not isinstance(value, syntax.Binary) or value.op != "*":
+        return None
+    left = _peel_parens(value.left)
+    right = _peel_parens(value.right)
+    if isinstance(left, syntax.Name) and left.slot == slot and isinstance(right, syntax.IntLiteral):
+        return right.value
+    if isinstance(right, syntax.Name) and right.slot == slot and isinstance(left, syntax.IntLiteral):
+        return left.value
+    return None
+
+
+def _linear_in_index(expression, slot: int):
+    """(multiplier, offset) when expression is multiplier * slot + offset."""
+    value = _peel_parens(expression)
+    if not isinstance(value, syntax.Binary):
+        return None
+    if value.op == "+":
+        left = _peel_parens(value.left)
+        right = _peel_parens(value.right)
+        if isinstance(right, syntax.IntLiteral):
+            multiplier = _linear_product(left, slot)
+            if multiplier is not None:
+                return multiplier, right.value
+        if isinstance(left, syntax.IntLiteral):
+            multiplier = _linear_product(right, slot)
+            if multiplier is not None:
+                return multiplier, left.value
+    if value.op == "*":
+        multiplier = _linear_product(value, slot)
+        if multiplier is not None:
+            return multiplier, 0
+    return None
+
+
+def _rewrite_linear(expression, slot: int, replacements: dict):
+    """Replace every matched linear expression with its induction local."""
+    if expression is None:
+        return None, 0
+    if isinstance(expression, syntax.Parens):
+        inner, count = _rewrite_linear(expression.inner, slot, replacements)
+        return syntax.Parens(span=expression.span, inner=inner), count
+    term = _linear_in_index(expression, slot)
+    if term is not None and term in replacements:
+        return syntax.Name(span=expression.span, name="__induction",
+                           slot=replacements[term]), 1
+    if isinstance(expression, syntax.Binary):
+        left, first = _rewrite_linear(expression.left, slot, replacements)
+        right, second = _rewrite_linear(expression.right, slot, replacements)
+        if first or second:
+            return syntax.Binary(span=expression.span, op=expression.op,
+                                 left=left, right=right), first + second
+        return expression, 0
+    if isinstance(expression, syntax.Unary):
+        operand, count = _rewrite_linear(expression.operand, slot, replacements)
+        if count:
+            return syntax.Unary(span=expression.span, op=expression.op, operand=operand), count
+        return expression, 0
+    if isinstance(expression, syntax.Call):
+        arguments, total = [], 0
+        for argument in expression.arguments:
+            rewritten, count = _rewrite_linear(argument, slot, replacements)
+            arguments.append(rewritten)
+            total += count
+        if total:
+            return syntax.Call(span=expression.span, name=expression.name,
+                               arguments=arguments), total
+        return expression, 0
+    if isinstance(expression, syntax.Index):
+        operand, first = _rewrite_linear(expression.operand, slot, replacements)
+        index, second = _rewrite_linear(expression.index, slot, replacements)
+        if first or second:
+            return syntax.Index(span=expression.span, operand=operand, index=index,
+                                slot=expression.slot, size=expression.size), first + second
+        return expression, 0
+    return expression, 0
+
+
+def _collect_linear(expression, slot: int, found: set) -> None:
+    if expression is None:
+        return
+    term = _linear_in_index(expression, slot)
+    if term is not None:
+        found.add(term)
+        return          # the whole node is replaced; its children are not read
+    if isinstance(expression, syntax.Parens):
+        _collect_linear(expression.inner, slot, found)
+    elif isinstance(expression, syntax.Binary):
+        _collect_linear(expression.left, slot, found)
+        _collect_linear(expression.right, slot, found)
+    elif isinstance(expression, syntax.Unary):
+        _collect_linear(expression.operand, slot, found)
+    elif isinstance(expression, syntax.Call):
+        for argument in expression.arguments:
+            _collect_linear(argument, slot, found)
+    elif isinstance(expression, syntax.Index):
+        _collect_linear(expression.operand, slot, found)
+        _collect_linear(expression.index, slot, found)
+
+
+def _statement_expression(statement: syntax.Stmt):
+    if isinstance(statement, (syntax.Let, syntax.Assign)):
+        return statement.value
+    if isinstance(statement, syntax.ExprStmt):
+        return statement.expression
+    if isinstance(statement, syntax.If):
+        return statement.condition
+    return None
+
+
+def _strength_reduction_plan(statement: syntax.While):
+    """(index slot, linear terms) for a strict counted loop with no control flow."""
+    condition = statement.condition
+    if not (isinstance(condition, syntax.Binary) and condition.op == "<"
+            and isinstance(condition.left, syntax.Name)):
+        return None
+    index_slot = condition.left.slot
+    body = statement.body
+    if body is None or len(body.statements) < 2:
+        return None
+    last = body.statements[-1]
+    if not (isinstance(last, syntax.Assign) and last.slot == index_slot
+            and isinstance(last.value, syntax.Binary) and last.value.op == "+"):
+        return None
+    step = _stripped(last.value.right)
+    if not isinstance(step, syntax.IntLiteral) or step.value != 1:
+        return None
+    if _contains_break_or_continue(body):
+        return None
+    terms = set()
+    for inner in body.statements[:-1]:
+        if isinstance(inner, syntax.If):
+            return None
+        _collect_linear(_statement_expression(inner), index_slot, terms)
+    if not terms:
+        return None
+    return index_slot, sorted(terms)
+
+
+def apply_induction_strength_reduction(program: syntax.Program) -> int:
+    """Keep linear functions of a counted index in one incremented local each.
+
+    Wrapping i64 arithmetic makes `offset + multiplier * i` exact when i starts at
+    zero and steps by one: a local initialized to offset and incremented by multiplier
+    on every trip holds the same value at every read. Only strict `<` count loops
+    with a literal unit step and no break or continue qualify.
+    """
+    changed = 0
+    for function in program.functions:
+        blocks = []
+
+        def collect(block):
+            if block is None:
+                return
+            blocks.append(block)
+            for statement in block.statements:
+                for attribute in ("body", "then_block", "else_block"):
+                    collect(getattr(statement, attribute, None))
+
+        collect(function.body)
+        for block in blocks:
+            output = []
+            for statement in block.statements:
+                plan = (_strength_reduction_plan(statement)
+                        if isinstance(statement, syntax.While) else None)
+                if plan:
+                    index_slot, terms = plan
+                    initializers = []
+                    increments = []
+                    replacements = {}
+                    for multiplier, offset in terms:
+                        slot = function.slots
+                        function.slots += 1
+                        name = f"__induction_{slot}"
+                        replacements[(multiplier, offset)] = slot
+                        initializers.append(syntax.Let(
+                            span=statement.span, name=name, mutable=True, type_name="i64",
+                            value=syntax.IntLiteral(span=statement.span, value=offset),
+                            slot=slot, array_size=None))
+                        increments.append(syntax.Assign(
+                            span=statement.span, name=name, slot=slot,
+                            value=syntax.Binary(
+                                span=statement.span, op="+",
+                                left=syntax.Name(span=statement.span, name=name, slot=slot),
+                                right=syntax.IntLiteral(span=statement.span, value=multiplier)),
+                            index=None, temp_slot=None, array_size=None))
+                    body = statement.body
+                    rewritten = []
+                    for inner in body.statements[:-1]:
+                        if isinstance(inner, (syntax.Let, syntax.Assign)):
+                            value, _ = _rewrite_linear(inner.value, index_slot, replacements)
+                            rewritten.append(replace(inner, value=value))
+                        elif isinstance(inner, syntax.ExprStmt):
+                            expression, _ = _rewrite_linear(inner.expression, index_slot, replacements)
+                            rewritten.append(replace(inner, expression=expression))
+                        else:
+                            rewritten.append(inner)
+                    rewritten.append(body.statements[-1])
+                    rewritten.extend(increments)
+                    body.statements = rewritten
+                    output.extend(initializers)
+                    changed += 1
+                output.append(statement)
+            block.statements = output
+    return changed
 
 
 INLINE_EXPANSION_NODES = 512

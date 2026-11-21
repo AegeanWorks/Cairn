@@ -27,6 +27,47 @@ def optimized_body(source: str) -> syntax.Block:
     return syntax.Block(span=statements[-1].span, statements=statements[:-1])
 
 
+class InductionStrengthReductionTest(unittest.TestCase):
+    """A linear function of a counted index stays in an incremented local."""
+
+    SOURCE = (
+        "var n: i64 = argc(); var i: i64 = 0; var total: i64 = 0;"
+        " while i < n { total = total + (144 * i + 584); i = i + 1; }"
+        " print(total);")
+
+    @staticmethod
+    def literal_values(body: syntax.Block):
+        return [statement.value.value for statement in body.statements
+                if isinstance(statement, syntax.Let)
+                and isinstance(statement.value, syntax.IntLiteral)]
+
+    def test_the_linear_term_is_hoisted_and_incremented(self) -> None:
+        body = optimized_body(self.SOURCE)
+        self.assertIn(584, self.literal_values(body),
+                      "the linear term's offset initializes the induction local")
+        loop = next(statement for statement in body.statements
+                    if isinstance(statement, syntax.While))
+        increments = [statement for statement in loop.body.statements
+                      if isinstance(statement, syntax.Assign)
+                      and isinstance(statement.value, syntax.Binary)
+                      and statement.value.op == "+"
+                      and isinstance(statement.value.right, syntax.IntLiteral)
+                      and statement.value.right.value == 144]
+        self.assertTrue(increments, "the loop adds the multiplier to the local each trip")
+
+    def test_a_non_unit_step_is_refused(self) -> None:
+        source = self.SOURCE.replace("i = i + 1;", "i = i + 2;")
+        body = optimized_body(source)
+        self.assertNotIn(584, self.literal_values(body))
+
+    def test_a_break_in_the_body_is_refused(self) -> None:
+        source = self.SOURCE.replace(
+            "total = total + (144 * i + 584);",
+            "total = total + (144 * i + 584); if total > 10 { break; }")
+        body = optimized_body(source)
+        self.assertNotIn(584, self.literal_values(body))
+
+
 class FoldTest(unittest.TestCase):
     """Folding must match the machine exactly, including wrapping and the division trap."""
 

@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `204`
-- **Total Top-Level Functions**: `228`
-- **Total Class Methods**: `1100`
-- **Total Source Lines**: `20725`
+- **Total Classes**: `205`
+- **Total Top-Level Functions**: `235`
+- **Total Class Methods**: `1104`
+- **Total Source Lines**: `20976`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -554,7 +554,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `1755` lines
+**Size**: `1965` lines
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -616,6 +616,13 @@
 - `def _flatten(statements)` - *Splice a branch selected by folding into its parent, since Cairn has one flat scope.*
 - `def _reachable(statements)` - *Drop statements after one that cannot fall through: `return`, `break`, `continue`.*
 - `def optimize(program)` - *Run one folding pass over a checked program, then convert counter loops.*
+- `def _linear_product(expression, slot)` - *The multiplier when expression is multiplier * slot, in either order.*
+- `def _linear_in_index(expression, slot)` - *(multiplier, offset) when expression is multiplier * slot + offset.*
+- `def _rewrite_linear(expression, slot, replacements)` - *Replace every matched linear expression with its induction local.*
+- `def _collect_linear(expression, slot, found)`
+- `def _statement_expression(statement)`
+- `def _strength_reduction_plan(statement)` - *(index slot, linear terms) for a strict counted loop with no control flow.*
+- `def apply_induction_strength_reduction(program)` - *Keep linear functions of a counted index in one incremented local each.*
 - `def _node_count(expression)` - *How many expression nodes one tree carries.*
 - `def _clone_expression(expression)` - *A deep copy of one expression node tree.*
 - `def _single_return_bodies(program)` - *Callees whose body is exactly one `return <expr>;`, within the inline budget.*
@@ -1711,9 +1718,14 @@
 ### [`tests/test_optimize.py`](tests/test_optimize.py)
 > *Optimiser tests: folding arithmetic, refusals and effect preservation.*
 
-**Size**: `730` lines
+**Size**: `771` lines
 
 **Classes:**
+- `class InductionStrengthReductionTest` - *A linear function of a counted index stays in an incremented local.*
+  - Method `.literal_values(body)`
+  - Method `.test_the_linear_term_is_hoisted_and_incremented()`
+  - Method `.test_a_non_unit_step_is_refused()`
+  - Method `.test_a_break_in_the_body_is_refused()`
 - `class FoldTest` - *Folding must match the machine exactly, including wrapping and the division trap.*
   - Method `.test_arithmetic_wraps_at_the_i64_boundary()`
   - Method `.test_division_truncates_toward_zero_and_remainder_follows_the_dividend()`

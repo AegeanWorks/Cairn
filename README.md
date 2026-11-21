@@ -373,7 +373,9 @@ argument count and keep a masked product in the mix, so a bare run executes the 
 `imul`, and ADR-076 made the algebraic pass recurse into a chain that cannot merge at
 its own root, so the substituted linear terms collect to `144i + 584` - one `imul` and
 one `add` - and the case reads 13.2-13.7 ms against C's 12.5-12.7, C++'s 14.3-14.8 and
-Rust's 13.4-13.8: it now beats two of the three baselines and trails C by 3.5 percent),
+Rust's 13.4-13.8: it beat two of the three baselines and trailed C by 3.5 percent until
+ADR-097 kept `144i + 584` in an incremented local, a paired A/B with a +0.6 percent
+control measuring -10.8 percent),
 `argv_walk`
 remains a recorded loss (ADR-059's inline); `str_scan` keeps its NUL-test facts in
 ADR-060/061 and ADR-093 adds a `str_len`-guarded in-bounds fact that removes the dead
