@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-paired-map",
+    "task_id": "cairn-bottom-test-rotation",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795241778.837779,
+    "updated_at": 1795245876.8660185,
     "owner": "opencode:session",
-    "lease_until": 1795248978.837779,
+    "lease_until": 1795253076.8660185,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,89 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_without_impact_assessment": true,
-    "completed_at": 1795241779.17606,
-    "completed_head": "59a14d9f657764e7362ee1e83ae03ac0d2db0297",
-    "completed_tree": "74066abd6af2d4b83ce10699d644ce590f3467e3"
+    "completed_at": 1795245877.197166,
+    "completed_head": "695a31aa61d8c772fc47b04023ad67c80316ae62",
+    "completed_tree": "05904cac512034bdc70bdb5ae0a521e0b6eea3ac"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-popcount-docs",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] all 1397 tests pass; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795230865.6945226,
-      "timestamp_str": "2026-11-21 06:14:25",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-popcount-docs",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-popcount-docs' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795230866.1574094,
-      "timestamp_str": "2026-11-21 06:14:26",
-      "agent": "opencode:session",
-      "head": "84a5ca4dffdbfdbc0228b21912b0ac5fbb558f27",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-popcnt-fast",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/1] replace the popcount SWAR helper with a single POPCNT instruction and document the CPU requirement",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795231126.787917,
-      "timestamp_str": "2026-11-21 06:18:46",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "the new popcount function trailed Rust by 24 percent with the portable SWAR chain",
-        "benefits": "a controlled A/B measured 38 percent faster and the case now beats all three baselines",
-        "risks": "contract: identical checksums; dependency: POPCNT/ABM CPU feature, documented in SPEC; concurrency: none; state: none",
-        "mitigation": "failing-first byte and shape tests plus end-to-end value tests and the four-language twin parity case"
-      },
-      "plan_digest": "449a84a045d04e98a2564d781a9eef76b9b3235053c14d721a0b817aac2a2f3c",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-popcnt-fast",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] 24-round paired A/B control 0.989 / candidate 0.615, checksums identical; full suite and gates green; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795231127.2037606,
-      "timestamp_str": "2026-11-21 06:18:47",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-popcnt-fast",
       "phase": "completed",
@@ -397,6 +319,82 @@
       "timestamp_str": "2026-11-21 09:16:19",
       "agent": "opencode:session",
       "head": "59a14d9f657764e7362ee1e83ae03ac0d2db0297",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-bottom-test-rotation",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/2] add a restricted AST loop-rotation pass so binary_gcd's subtraction loop uses one zero-test and an unconditional back-edge",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795242371.9606283,
+      "timestamp_str": "2026-11-21 09:26:11",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "binary_gcd is the last genuine Rust loss (~6%) exposed by the corrected verdict; its loop re-tests the condition on the back edge",
+        "benefits": "closes the last Rust gap; general provable loop rotation for the trailing-zero shift shape",
+        "risks": "contract: optimize() output shape; dependency: none; concurrency: none; state: none",
+        "mitigation": "fire only on the exact provable shape (x != 0 loop, x == 0 break, idempotent shift loop, no continue/return, preceding shift loop); failing-first fire and refusal tests plus value parity; full suite and strict gates"
+      },
+      "plan_digest": "a07505bbc32c05c42886b65c64357fa4500131a769f025e653957a3d04873249",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-bottom-test-rotation",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[2/2] ADR-107; rotation fires only on binary_gcd; authoritative verdict ALL WON; full suite 1435 OK",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795245876.483756,
+      "timestamp_str": "2026-11-21 10:24:36",
+      "agent": "opencode:session",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-bottom-test-rotation",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[2/2] committed; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795245876.8660185,
+      "timestamp_str": "2026-11-21 10:24:36",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-bottom-test-rotation",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-bottom-test-rotation' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795245877.2472787,
+      "timestamp_str": "2026-11-21 10:24:37",
+      "agent": "opencode:session",
+      "head": "695a31aa61d8c772fc47b04023ad67c80316ae62",
       "delivery": {
         "roots": [
           "."
