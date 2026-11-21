@@ -25,30 +25,6 @@
       "task_id": "cairn-clz-builtin",
       "phase": "phase 2",
       "phase_num": 2,
-      "description": "[1/3] add clz(x) as a builtin: sema arity, LZCNT emitter, runtime helper, codegen dispatch, failing-first tests at each layer",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795246032.070291,
-      "timestamp_str": "2026-11-21 10:27:12",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "the authoritative verdict is ALL WON after the rotation pass, so the objective calls for one new function",
-        "benefits": "a leading-zero builtin mapped to one LZCNT instruction, with portable/intrinsic twins for measurement",
-        "risks": "contract: clz returns the leading-zero count of the unsigned 64-bit reading, 64 for zero; dependency: LZCNT/ABM like POPCNT; concurrency: none; state: none",
-        "mitigation": "failing-first sema/machine/codegen/value tests, twin parity, full suite, strict gates, and a controlled paired measurement before any speed claim"
-      },
-      "plan_digest": "1431b83c214c7484df1d36d37152caa46016ed6aaf076f0b965318f403fb0e80",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-clz-builtin",
-      "phase": "phase 2",
-      "phase_num": 2,
       "description": "[2/3] clz builtin committed with four-language benchmark; verdict ALL WON over 21 cases; full suite 1441 OK",
       "files_affected": [],
       "status": "in_progress",
@@ -406,6 +382,17 @@
         ],
         "forced": false
       }
+    },
+    {
+      "task_id": "chore-1795265826",
+      "phase": "chore",
+      "phase_num": 1,
+      "description": "record the bswap 48-round verdict and the all-case verdict pending a quiet window",
+      "status": "completed",
+      "chore": true,
+      "timestamp": 1795265826.1840286,
+      "timestamp_str": "2026-11-21 15:57:06",
+      "agent": "unidentified"
     }
   ]
 }
