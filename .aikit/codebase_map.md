@@ -9,8 +9,8 @@
 - **Total Python Modules**: `47`
 - **Total Classes**: `211`
 - **Total Top-Level Functions**: `242`
-- **Total Class Methods**: `1132`
-- **Total Source Lines**: `21383`
+- **Total Class Methods**: `1134`
+- **Total Source Lines**: `21396`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
@@ -47,7 +47,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `677` lines
+**Size**: `680` lines
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -876,7 +876,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `600` lines
+**Size**: `610` lines
 
 **Classes:**
 - `class PairedVerdictTest` - *A win is a gap outside the identical-binary band, not a raw best time.*
@@ -923,6 +923,8 @@
   - Method `.test_detected_cpp_compiler_is_one_of_the_known_families()`
 - `class RegistryShapeTest` - *The measured set: which cases the scoreboard commits to, by name and unit.*
   - Method `.test_the_registry_names_every_commitment()`
+  - Method `.test_char_stream_stdin_has_no_windows_eof_byte()`
+  - Method `.test_char_stream_stdin_matches_its_declared_size()`
   - Method `.test_each_case_declares_a_unit_and_a_positive_iteration_count()`
 - `class ManyParamsContractTest` - *ADR-071: no twin may let a compiler fold the whole program to one print.*
   - Method `.sources()`

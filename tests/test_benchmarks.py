@@ -413,6 +413,16 @@ class RegistryShapeTest(unittest.TestCase):
                                  "many_params", "argv_walk", "char_stream", "str_scan",
                                  "array_sum", "sieve", "popcount"])
 
+    def test_char_stream_stdin_has_no_windows_eof_byte(self) -> None:
+        case = next(case for case in run_benchmarks.CASES if case.name == "char_stream")
+        self.assertNotIn(0x1A, case.stdin,
+                         "0x1A is text-mode EOF on the Windows CRT, so C and C++ "
+                         "twins would read only the bytes before it")
+
+    def test_char_stream_stdin_matches_its_declared_size(self) -> None:
+        case = next(case for case in run_benchmarks.CASES if case.name == "char_stream")
+        self.assertEqual(len(case.stdin), case.iterations)
+
     def test_each_case_declares_a_unit_and_a_positive_iteration_count(self) -> None:
         for case in run_benchmarks.CASES:
             self.assertTrue(case.unit, case.name)

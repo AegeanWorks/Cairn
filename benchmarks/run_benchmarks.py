@@ -114,7 +114,10 @@ CASES: Tuple[Case, ...] = (
          "benchmarks/argv_walk.rs", "benchmarks/argv_walk.cpp", 12_800_000, "reads"),
     Case("char_stream", "benchmarks/char_stream.crn", "benchmarks/char_stream.c",
          "benchmarks/char_stream.rs", "benchmarks/char_stream.cpp", 4_194_304, "bytes",
-         bytes(range(256)) * 16_384),
+         # 0x1A is text-mode EOF on the Windows CRT: the C and C++ getchar twins
+         # would stop after the 26th byte and the scoreboard would compare a
+         # 26-byte read against Cairn's full 4 MiB stream.
+         (bytes(i for i in range(256) if i != 0x1A) * 16_500)[:4_194_304]),
     Case("str_scan", "benchmarks/str_scan.crn", "benchmarks/str_scan.c",
          "benchmarks/str_scan.rs", "benchmarks/str_scan.cpp", 12_800_000, "reads"),
     Case("array_sum", "benchmarks/array_sum.crn", "benchmarks/array_sum.c",

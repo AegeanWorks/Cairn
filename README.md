@@ -330,7 +330,7 @@ a spread:
 | `hex_io` | 400,000 hex-format-then-print values | 612-645 ms | 4,764-5,095 ms | 397-467 ms | 677-723 ms | 71,168 bytes |
 | `many_params` | 10,000,000 six-argument mix calls under an `argc`-derived bound (ADR-074, ADR-075, ADR-076) | 13.2-13.7 ms | 12.5-12.7 ms | 14.3-14.8 ms | 13.4-13.8 ms | 136,704 bytes |
 | `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 20.0-23.7 ms | 18.5-24.2 ms | 19.1-22.5 ms | 25.5-28.4 ms | 71,168 bytes |
-| `char_stream` | 4 MiB piped through `read_char()`, summed | 9.4-13.3 ms (ADR-072 fusion) | 7.7-10.7 ms | 7.4-10.3 ms | 12.9-22.0 ms | 71,168 bytes |
+| `char_stream` | 4 MiB piped through `read_char()`, summed (ADR-103 stream) | 9.1 ms | 74.6 ms | 72.5 ms | 13.1 ms | 136,704 bytes |
 | `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.9-18.4 ms | 11.8-16.6 ms | 12.2-19.6 ms | 28.2-37.0 ms | 71,168 bytes |
 | `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 10.8-11.4 ms (ADR-073 SIB addressing) | 10.2-11.9 ms | 10.0-11.9 ms | 11.6-13.0 ms | 136,704 bytes |
 | `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 9.3-9.4 ms (ADR-073 SIB addressing) | 9.3-10.0 ms | 10.1-10.9 ms | 11.2-11.8 ms | 136,704 bytes |
