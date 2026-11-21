@@ -27,7 +27,7 @@ class PairedVerdictTest(unittest.TestCase):
         self.assertEqual(paired.verdict(1.12, (0.98, 1.02)), "slower")
 
     def test_the_control_band_trims_extremes(self) -> None:
-        self.assertEqual(paired.band([float(i) for i in range(1, 21)]), (2.0, 19.0))
+        self.assertEqual(paired.band([float(i) for i in range(1, 21)]), (3.0, 18.0))
 
 
 class SummaryTest(unittest.TestCase):
