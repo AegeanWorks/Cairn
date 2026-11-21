@@ -385,7 +385,9 @@ register compare, one SIB byte read and one register increment, with the refill
 still out of line and the cursor stored back on the single epilogue — and reads
 9.4-13.3 ms against C's 7.7-10.7 ms; a 31-round interleaved same-seconds A/B
 measured the promoted base/index pair at -12.2 percent best and -10.0 percent on the ten fastest
-runs, with a byte-identical control at +0.3 percent in the same rounds.
+runs, with a byte-identical control at +0.3 percent in the same rounds. ADR-095 rotates
+the scan so the EOF guard is the back-edge and the add falls into the next fetch; a paired
+A/B with a -0.1 percent control measured -4.8 percent best on the 4 MiB stream.
 `array_sum` now rides ADR-073's ascending element addressing — element `i` at the
 span's lowest displacement plus `8i`, so a dynamic load, a read-modify-write and a
 literal-or-register store each lower to one indexed memory instruction, with no

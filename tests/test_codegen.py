@@ -1284,6 +1284,33 @@ class PrintHexNewlineFusionTest(unittest.TestCase):
         self.assertNotIn("cairn.runtime.print_hex_line", targets)
 
 
+class StdinScanRotationTest(unittest.TestCase):
+    """A read_char scan rotates so the EOF check is the loop's back-edge."""
+
+    SOURCE = (
+        "fn main() -> i64 { var total: i64 = 0;"
+        " while true { var c: i64 = read_char();"
+        " if c < 0 { break; } total = total + c; }"
+        " print(total); return 0; }")
+
+    def test_the_scan_uses_a_rotated_back_edge(self) -> None:
+        program = sema.analyze(parser.parse(self.SOURCE))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertTrue(any(name.startswith("stdin_scan.add") for name in artifact.text_labels),
+                        "the scan body should fall through into the next fetch, "
+                        "with the EOF guard as the only back-edge")
+
+    def test_a_non_scan_loop_is_not_rotated(self) -> None:
+        source = (
+            "fn main() -> i64 { var total: i64 = 0; var i: i64 = 0;"
+            " while true { total = total + i; i = i + 1;"
+            " if i > 4 { break; } } print(total); return 0; }")
+        program = sema.analyze(parser.parse(source))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertFalse(any(name.startswith("stdin_scan.add")
+                             for name in artifact.text_labels))
+
+
 class StringInBoundsIndexTest(unittest.TestCase):
     """A str_len-guarded index needs no NUL test on each in-bounds byte."""
 

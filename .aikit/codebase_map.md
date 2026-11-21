@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `203`
+- **Total Classes**: `204`
 - **Total Top-Level Functions**: `228`
-- **Total Class Methods**: `1096`
-- **Total Source Lines**: `20623`
+- **Total Class Methods**: `1100`
+- **Total Source Lines**: `20725`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -137,7 +137,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4564` lines
+**Size**: `4639` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -188,6 +188,7 @@
   - Method `._count_in(expression, counter)`
   - Method `._emit_while(statement)` - *Load the loop's plan-hoisted constants into their spare homes, then lower.*
   - Method `._lowers_as_real_body()` - *Whether emission runs in the real body of a fully-homed, pair-free function.*
+  - Method `._try_emit_stdin_scan(statement)` - *Rotate `while true { c = read_char(); if c < 0 break; total += c }`.*
   - Method `._emit_while_body(statement)` - *`while` with its own break and continue targets.*
   - Method `._try_emit_halving_loop(statement)` - *Emit a fused odd-pair body as one unconditional half-step, or refuse.*
   - Method `._is_nonnegative(slot)` - *Whether the slot provably holds a non-negative value at this emit point.*
@@ -267,6 +268,7 @@
   - Method `._statement_touches_branch(block, slot)` - *Whether any statement of a nested block, at any depth, touches `slot`.*
   - Method `._cleared_before_use(body, slot)` - *Whether a top-level assignment to `slot` comes before anything can touch it.*
   - Method `._body_may_hold(body)` - *Whether any merge in this body keeps its left value across a right operand that calls.*
+  - Method `._emit_read_char_into(destination, done)` - *Emit the promoted stdin read into `destination`, or refuse.*
   - Method `._emit_call_site(target)` - *A call, padded so rsp is 16-byte aligned as the ABI requires.*
   - Method `._emit_direct_indirect_call(import_name)` - *An indirect call through the IAT, padded like `_emit_call_site`.*
 
@@ -991,7 +993,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2754` lines
+**Size**: `2781` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1132,6 +1134,9 @@
   - Method `.test_hex_then_newline_uses_the_fused_helper()`
   - Method `.test_a_non_newline_character_does_not_fuse()`
   - Method `.test_a_used_hex_result_does_not_fuse()`
+- `class StdinScanRotationTest` - *A read_char scan rotates so the EOF check is the loop's back-edge.*
+  - Method `.test_the_scan_uses_a_rotated_back_edge()`
+  - Method `.test_a_non_scan_loop_is_not_rotated()`
 - `class StringInBoundsIndexTest` - *A str_len-guarded index needs no NUL test on each in-bounds byte.*
   - Method `.test_a_length_guarded_scan_has_no_nul_test()`
   - Method `.test_an_unguarded_read_keeps_its_nul_test()`

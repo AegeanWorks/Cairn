@@ -1756,8 +1756,72 @@ class CodeGenerator:
         return (self.inline_depth == 0 and self.delta_value == 0
                 and self.value_slot == -1 and self.hold_units == 0)
 
+    def _try_emit_stdin_scan(self, statement: syntax.While) -> bool:
+        """Rotate `while true { c = read_char(); if c < 0 break; total += c }`.
+
+        The generic lowering fetches at the top and ends in an unconditional jump.
+        Here the EOF guard is the only back-edge: the body falls through into the
+        next fetch, the same shape gcc gives a getchar loop. The first fetch is
+        hoisted out so every repeated iteration enters at the test stage.
+        """
+        if not (isinstance(statement.condition, syntax.IntLiteral)
+                and statement.condition.value != 0):
+            return False
+        body = statement.body
+        if body is None or len(body.statements) != 3:
+            return False
+        read, guard, update = body.statements
+        if not (isinstance(read, syntax.Let) and isinstance(read.value, syntax.Call)
+                and read.value.name == "read_char" and not read.value.arguments):
+            return False
+        if not (isinstance(guard, syntax.If)
+                and isinstance(guard.condition, syntax.Binary)
+                and guard.condition.op == "<"
+                and isinstance(guard.condition.left, syntax.Name)
+                and guard.condition.left.slot == read.slot
+                and isinstance(guard.condition.right, syntax.IntLiteral)
+                and guard.condition.right.value == 0
+                and guard.then_block is not None
+                and guard.else_block is None
+                and len(guard.then_block.statements) == 1
+                and isinstance(guard.then_block.statements[0], syntax.Break)):
+            return False
+        if not (isinstance(update, syntax.Assign)
+                and isinstance(update.value, syntax.Binary)
+                and update.value.op == "+"
+                and isinstance(update.value.left, syntax.Name)
+                and isinstance(update.value.right, syntax.Name)):
+            return False
+        if {update.value.left.slot, update.value.right.slot} != {update.slot, read.slot}:
+            return False
+        total_home = self._home(update.slot)
+        if total_home is None or total_home == "rax":
+            return False
+        if self.stdin_cursor is None or self.temporaries != 0:
+            return False
+        asm = self.assembler
+        test_label = self._fresh("stdin_scan.test")
+        add_label = self._fresh("stdin_scan.add")
+        fetch_label = self._fresh("stdin_scan.fetch")
+        end_label = self._fresh("stdin_scan.end")
+        # One fetch site: the entry jumps into it, the body falls through into it
+        # after the add, and the EOF guard is the only repeated back-edge.
+        asm.jmp(fetch_label)
+        asm.label(add_label)
+        asm.binary(0x01, total_home, "rax")
+        asm.label(fetch_label)
+        if not self._emit_read_char_into("rax", done=test_label):
+            return False
+        asm.label(test_label)
+        asm.cmp_imm("rax", 0)
+        asm.jcc("ge", add_label)
+        asm.label(end_label)
+        return True
+
     def _emit_while_body(self, statement: syntax.While) -> None:
         """`while` with its own break and continue targets."""
+        if self._try_emit_stdin_scan(statement):
+            return
         asm = self.assembler
         start = self._fresh("while.start")
         end = self._fresh("while.end")
@@ -3096,36 +3160,9 @@ class CodeGenerator:
             self._emit_call_site(OUT_FLUSH_LABEL)
             return
         if expression.name == "read_char":
-            # Inside a stdin-reading leaf the buffer base and the cursor live in
-            # two registers for the whole body (ADR-079), so the have path is a
-            # compare against the count word, one not-taken branch, one SIB byte
-            # read and one register increment — no memory read-modify-write on the
-            # loop-carried cursor, which ADR-077 measured as the fused path's
-            # bottleneck. The drained path stores the index, calls the helper —
-            # which owns the refill, the byte read and the index bump in memory,
-            # and returns the byte or -1 — then reloads the register and answers
-            # with the helper's value: no second read of the same byte.
-            if self.stdin_cursor is not None and self.temporaries == 0:
-                have = self._fresh("readchar.cursor.have")
-                cursor_done = self._fresh("readchar.cursor.done")
-                if self.stdin_count is not None:
-                    asm.cmp_reg_reg(self.stdin_cursor, self.stdin_count)
-                else:
-                    asm.cmp_reg_rip(self.stdin_cursor, STDIN_COUNT_LABEL)
-                asm.jcc("b", have)
-                asm.mov_store_rip(self.stdin_cursor, STDIN_CURSOR_LABEL)
-                self._emit_call_site(READ_CHAR_LABEL)
-                asm.mov_load_rip(self.stdin_cursor, STDIN_CURSOR_LABEL)
-                if self.stdin_count is not None:
-                    # The helper's refill rewrites the count word; the register
-                    # mirror reloads with the index after every drained call.
-                    asm.mov_load_rip(self.stdin_count, STDIN_COUNT_LABEL)
-                asm.jmp(cursor_done)
-                asm.label(have)
-                asm.movzx_load8_sib("rax", self.stdin_base, self.stdin_cursor)
-                asm.add_imm(self.stdin_cursor, 1)
-                asm.label(cursor_done)
+            if self._emit_read_char_into("rax"):
                 return
+            # Otherwise fall through to the generic fused/call path below.
             # The buffered have-path fuses into the call site: two rip loads, one
             # compare, one SIB byte read and one in-place cursor increment answer
             # with no call. The drained and EOF paths fall to the helper, which
@@ -4519,6 +4556,44 @@ class CodeGenerator:
             return False
 
         return walk(body)
+
+    def _emit_read_char_into(self, destination: str,
+                             done: Optional[str] = None) -> bool:
+        """Emit the promoted stdin read into `destination`, or refuse.
+
+        Inside a stdin-reading leaf the buffer base and cursor live in two registers
+        for the whole body (ADR-079), so the have path is a compare against the count
+        word, one not-taken branch, one SIB byte read and one register increment. The
+        drained path stores the index, calls the helper — which owns the refill, the
+        byte read and the index bump in memory, and returns the byte or -1 — then
+        reloads the registers and answers with the helper's value. A caller may pass
+        its own continuation label so the have path falls straight into the next
+        stage of a rotated loop instead of jumping to a private join.
+        """
+        if self.stdin_cursor is None or self.temporaries != 0:
+            return False
+        asm = self.assembler
+        have = self._fresh("readchar.cursor.have")
+        cursor_done = done or self._fresh("readchar.cursor.done")
+        if self.stdin_count is not None:
+            asm.cmp_reg_reg(self.stdin_cursor, self.stdin_count)
+        else:
+            asm.cmp_reg_rip(self.stdin_cursor, STDIN_COUNT_LABEL)
+        asm.jcc("b", have)
+        asm.mov_store_rip(self.stdin_cursor, STDIN_CURSOR_LABEL)
+        self._emit_call_site(READ_CHAR_LABEL)
+        asm.mov_load_rip(self.stdin_cursor, STDIN_CURSOR_LABEL)
+        if self.stdin_count is not None:
+            # The helper's refill rewrites the count word; the register mirror
+            # reloads with the index after every drained call.
+            asm.mov_load_rip(self.stdin_count, STDIN_COUNT_LABEL)
+        asm.jmp(cursor_done)
+        asm.label(have)
+        asm.movzx_load8_sib(destination, self.stdin_base, self.stdin_cursor)
+        asm.add_imm(self.stdin_cursor, 1)
+        if done is None:
+            asm.label(cursor_done)
+        return True
 
     def _emit_call_site(self, target: str) -> None:
         """A call, padded so rsp is 16-byte aligned as the ABI requires."""
