@@ -342,7 +342,7 @@ a spread:
 
 The size column is the executable's `.text` frame at the current revision: the runtime helpers (argv arena, 64 KiB stdin state, printers, divide trap) ride in every program, so most cases share the same 71,168-byte base. `array_sum` and sieve reserve 8 MiB of stack in the PE header (ADR-068), and `many_params` links the argument arena for its `argc`-derived bound (ADR-074), so their base carries the bigger frame.
 
-`popcount`, `clz`, `ctz` and `bswap` are the single-instruction bit cases (ADR-101 to ADR-111): each lowers to one x86-64 instruction, and the authoritative 23-case verdict measures each faster than C and tied with C++ and Rust. `rotl` (one ROL, ADR-114) is the newest; its first 48-round paired run reads a tie against all three baselines.
+`popcount`, `clz`, `ctz` and `bswap` are the single-instruction bit cases (ADR-101 to ADR-111): each lowers to one x86-64 instruction, and the authoritative 23-case verdict measures each faster than C and tied with C++ and Rust. `rotl` (one ROL, ADR-114) is the newest; ADR-115 and ADR-116 shrank its hot loop from 18 to 13 instructions (no push/pop around the count, no redundant `& 63`, the accumulator mask applied in place), and its measured verdicts read as ties against all three baselines.
 
 Standings per case (Cairn vs the fastest baseline on that case): `collatz`, `ackermann`, `tak`,
 `folded_math` and `splitmix` are won outright against all three baselines; `hex_io` wins against

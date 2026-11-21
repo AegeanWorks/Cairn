@@ -1365,6 +1365,22 @@ class BswapInlineTest(unittest.TestCase):
 class RotlInlineTest(unittest.TestCase):
     """rotl lowers inline to one ROL rax, cl, with no runtime call round-trip."""
 
+    BENCHMARK_SHAPE = (
+        "fn main() -> i64 { var total: i64 = 0; var i: i64 = 0;"
+        " while i < 10000000 {"
+        " total = (total + rotl(i, i & 63)) & 9223372036854775807;"
+        " i = i + 1; } print(total); return 0; }")
+
+    def _loop_body(self, source: str) -> bytes:
+        program = sema.analyze(parser.parse(source))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        labels = artifact.text_labels
+        start = next(offset for name, offset in labels.items()
+                     if name.startswith("while.start"))
+        end = next(offset for name, offset in labels.items()
+                   if name.startswith("while.latch"))
+        return bytes(artifact.text)[start:end]
+
     def test_the_rotate_bytes_appear_inline(self) -> None:
         program = sema.analyze(parser.parse("fn main() -> i64 { print(rotl(255, 4)); return 0; }"))
         artifact = CodeGenerator(assembler=Assembler()).generate(program)
@@ -1375,6 +1391,56 @@ class RotlInlineTest(unittest.TestCase):
         artifact = CodeGenerator(assembler=Assembler()).generate(program)
         self.assertNotIn("cairn.runtime.rotl", artifact.text_labels)
         self.assertNotIn("cairn.runtime.rotl", {label for _, label in artifact.fixups})
+
+    def test_a_leaf_value_with_a_call_free_count_pays_no_stack_traffic(self) -> None:
+        """ADR-115: the value is a leaf and the count cannot call, so the rotate
+        reads the value after the count is in cl instead of pushing it."""
+        body = self._loop_body(self.BENCHMARK_SHAPE)
+        self.assertIn(b"\x48\xd3\xc0", body)
+        self.assertNotIn(b"\x50", body)              # push rax
+        self.assertNotIn(b"\x58", body)              # pop rax
+
+    def test_an_inline_builtin_does_not_park_the_left_operand(self) -> None:
+        """ADR-115: a builtin that lowers inline never calls, so the enclosing
+        binary operator keeps its left value in a register, not a stack pad."""
+        body = self._loop_body(self.BENCHMARK_SHAPE)
+        self.assertNotIn(b"\x48\x89\x04\x24", body)  # mov [rsp], rax
+        self.assertNotIn(b"\x48\x8b\x0c\x24", body)  # mov rcx, [rsp]
+
+    def _text(self, source: str) -> bytes:
+        program = sema.analyze(parser.parse(source))
+        return bytes(CodeGenerator(assembler=Assembler()).generate(program).text)
+
+    def test_a_63_mask_on_the_count_is_folded_away(self) -> None:
+        """ADR-116: ROL masks its count to six bits, so `n & 63` changes nothing."""
+        plain = self._text(
+            "fn main() -> i64 { var x: i64 = 9; var v: i64 = 5;"
+            " print(rotl(v, x)); return 0; }")
+        masked = self._text(
+            "fn main() -> i64 { var x: i64 = 9; var v: i64 = 5;"
+            " print(rotl(v, x & 63)); return 0; }")
+        self.assertEqual(plain, masked)
+
+    def test_a_narrower_mask_is_not_folded(self) -> None:
+        """ADR-116: `n & 31` drops bit 5 of the count, so the rotation differs."""
+        plain = self._text(
+            "fn main() -> i64 { var x: i64 = 40; var v: i64 = 5;"
+            " print(rotl(v, x)); return 0; }")
+        masked = self._text(
+            "fn main() -> i64 { var x: i64 = 40; var v: i64 = 5;"
+            " print(rotl(v, x & 31)); return 0; }")
+        self.assertNotEqual(plain, masked)
+
+    def test_the_benchmark_loop_materializes_no_count_mask(self) -> None:
+        """ADR-116: the folded count rides straight into cl, no AND per value."""
+        body = self._loop_body(self.BENCHMARK_SHAPE)
+        self.assertNotIn(b"\x48\x83\xe0\x3f", body)  # and rax, 63
+
+    def test_a_homed_left_sum_combines_with_the_rotate_in_place(self) -> None:
+        """ADR-116: the accumulator is a homed name and the inline rotate cannot
+        call, so the sum adds the home directly instead of copying it to a temp."""
+        body = self._loop_body(self.BENCHMARK_SHAPE)
+        self.assertIn(b"\x48\x01\xd8", body)  # add rax, rbx
 
 
 class ArrayVectorTest(unittest.TestCase):

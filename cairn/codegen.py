@@ -108,6 +108,35 @@ HOME_REGISTERS = ("rbx", "r12", "r13", "r14", "r15", "rdi")
 # machine call clobbers them, so `_emit_call_site` push/pops them around each call.
 EXTRA_HOME_REGISTERS = ("r10", "r11")
 ZERO_EXTEND_MASKS = {255: 8, 65535: 16}
+# Builtins the code generator lowers inline and never turns into a machine call:
+# evaluating one runs no callee and has no effect, so a surrounding expression may
+# keep a value in a register across it and may reorder around it (ADR-115).
+INLINE_ONLY_BUILTINS = frozenset({"clz", "ctz", "bswap", "rotl"})
+
+
+def has_lowering_call(expression: Optional[syntax.Expr]) -> bool:
+    """`has_call`, but the always-inline builtins count as call-free."""
+    return has_call(expression, INLINE_ONLY_BUILTINS)
+
+
+def _rotate_count(expression: syntax.Expr) -> syntax.Expr:
+    """A rotate count with a redundant `& m` removed, where `m & 63 == 63`.
+
+    ROL reads the count's low six bits, so `n & m` with `m & 63 == 63` rotates by
+    exactly what `n` rotates by, for every i64 `n`; a narrower mask (`n & 31`)
+    changes the result and is kept (ADR-116).
+    """
+    while isinstance(expression, syntax.Parens):
+        expression = expression.inner
+    if not isinstance(expression, syntax.Binary) or expression.op != "&":
+        return expression
+    for kept, mask in ((expression.left, expression.right),
+                       (expression.right, expression.left)):
+        while isinstance(mask, syntax.Parens):
+            mask = mask.inner
+        if isinstance(mask, syntax.IntLiteral) and (mask.value & 63) == 63:
+            return kept
+    return expression
 
 
 
@@ -2847,7 +2876,7 @@ class CodeGenerator:
                     asm.binary(ARITHMETIC_OPCODES[expression.op], "rax", "rax")
                 return
             left_home = self._home(left.slot)
-            if left_home is not None and not has_call(expression.right):
+            if left_home is not None and not has_lowering_call(expression.right):
                 # The left operand already lives in a register: compute in place
                 # instead of parking it in rcx and reading it back from there.
                 self._emit_expression(expression.right)
@@ -2856,11 +2885,16 @@ class CodeGenerator:
                 else:
                     asm.binary(ARITHMETIC_OPCODES[expression.op], "rax", left_home)
                 return
-        if (expression.op in IN_PLACE_BINARY_OPS + ("-",)
-                and isinstance(right, syntax.Name)
-                and not (right.slot == self.delta_slot and self.delta_value)
-                and not has_call(expression.left)):
-            right_home = self._home(right.slot)
+        if expression.op in IN_PLACE_BINARY_OPS + ("-",) and not has_lowering_call(expression.left):
+            right_home = None
+            if (isinstance(right, syntax.Name)
+                    and not (right.slot == self.delta_slot and self.delta_value)):
+                right_home = self._home(right.slot)
+            elif isinstance(right, syntax.IntLiteral):
+                # A loop-hoisted constant already lives in a spare home, so a mask
+                # like `& 9223372036854775807` combines in place instead of being
+                # parked into rcx and re-materialised in rax (ADR-116).
+                right_home = self.hoist_imm.get(right.value)
             if right_home is not None:
                 # The mirror of the homed-left rule: a homed name on the right is
                 # a pure read, so the computed left may stay in rax and combine
@@ -2933,7 +2967,7 @@ class CodeGenerator:
         asm = self.assembler
         self.left_hold = None
         pool = self._temp_pool()
-        if self.temporaries < len(pool) and not has_call(right):
+        if self.temporaries < len(pool) and not has_lowering_call(right):
             if is_leaf(right):
                 self._emit_into(left, "rcx")
                 self._emit_expression(right)
@@ -3436,13 +3470,26 @@ class CodeGenerator:
             self.assembler.bswap("rax")
             return
         if expression.name == "rotl":
-            # The value is evaluated into rax and parked while the count is
-            # evaluated; the count lands in cl and `rol rax, cl` does the rotate
-            # (hardware masks it to six bits, so rotl(x, 64) is x).
-            self._emit_expression(expression.arguments[0])
+            # The count is evaluated first when the value is a leaf and the count
+            # cannot call: both are effect-free, the value read touches only rax,
+            # and the count then rides in cl, so no push/pop is needed (ADR-115).
+            # Every other shape keeps left-to-right order: the value parks on the
+            # stack while the count evaluates into cl.
+            value, count = expression.arguments
+            count = _rotate_count(count)
+            if is_leaf(value) and not has_lowering_call(count):
+                if isinstance(count, (syntax.Name, syntax.IntLiteral)):
+                    self._emit_into(count, "rcx")
+                else:
+                    self._emit_expression(count)
+                    asm.mov_reg_reg("rcx", "rax")
+                self._emit_expression(value)
+                asm.rotate_cl(0)
+                return
+            self._emit_expression(value)
             asm.push("rax")
             self.depth += 8
-            self._emit_expression(expression.arguments[1])
+            self._emit_expression(count)
             asm.mov_reg_reg("rcx", "rax")
             asm.pop("rax")
             self.depth -= 8

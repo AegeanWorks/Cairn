@@ -8,9 +8,9 @@
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `47`
 - **Total Classes**: `224`
-- **Total Top-Level Functions**: `251`
-- **Total Class Methods**: `1194`
-- **Total Source Lines**: `22079`
+- **Total Top-Level Functions**: `253`
+- **Total Class Methods**: `1202`
+- **Total Source Lines**: `22204`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
@@ -155,7 +155,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4760` lines
+**Size**: `4807` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -294,6 +294,8 @@
 
 **Functions:**
 - `def _shape_equal(left, right)` - *Structural equality of two index sub-expressions, spans ignored.*
+- `def has_lowering_call(expression)` - *`has_call`, but the always-inline builtins count as call-free.*
+- `def _rotate_count(expression)` - *A rotate count with a redundant `& m` removed, where `m & 63 == 63`.*
 - `def function_label(name)` - *The assembler label of a Cairn function.*
 - `def slot_offset(slot)` - *The rbp-relative offset of a frame slot; slot 0 is the first parameter.*
 - `def array_element_base(base, size)` - *The lowest rbp displacement of an array span; element `i` sits at base + 8i.*
@@ -584,7 +586,7 @@
 ### [`cairn/optimize.py`](cairn/optimize.py)
 > *Optimiser: constant folding and provably safe algebraic simplification.*
 
-**Size**: `2103` lines
+**Size**: `2115` lines
 
 **Classes:**
 - `class Optimizer` - *One folding pass, rewriting expressions in place and returning the same nodes.*
@@ -603,7 +605,7 @@
 - `def truncate_division(left, right)` - *Signed division truncating toward zero, the way `idiv` does.*
 - `def fold_constant(op, left, right)` - *The folded value of `left op right`, or None when folding would change behaviour.*
 - `def fold_unary(op, value)` - *The folded value of a unary operator, or None when it must stay dynamic.*
-- `def has_call(expression)` - *Whether evaluating `expression` can run a call, and therefore an effect.*
+- `def has_call(expression, inline_builtins)` - *Whether evaluating `expression` can run a call, and therefore an effect.*
 - `def _contains_index(expression)` - *Whether an element load sits anywhere under one expression tree.*
 - `def _may_trap(expression)` - *Whether evaluating `expression` can trap on `/` or `%`.*
 - `def _constant(expression)` - *The literal value of an expression, or None when it is not a constant.*
@@ -1055,7 +1057,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2900` lines
+**Size**: `2966` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1212,8 +1214,16 @@
   - Method `.test_the_bswap_bytes_appear_inline()`
   - Method `.test_no_runtime_helper_is_emitted_or_called()`
 - `class RotlInlineTest` - *rotl lowers inline to one ROL rax, cl, with no runtime call round-trip.*
+  - Method `._loop_body(source)`
   - Method `.test_the_rotate_bytes_appear_inline()`
   - Method `.test_no_runtime_helper_is_emitted_or_called()`
+  - Method `.test_a_leaf_value_with_a_call_free_count_pays_no_stack_traffic()` - *ADR-115: the value is a leaf and the count cannot call, so the rotate*
+  - Method `.test_an_inline_builtin_does_not_park_the_left_operand()` - *ADR-115: a builtin that lowers inline never calls, so the enclosing*
+  - Method `._text(source)`
+  - Method `.test_a_63_mask_on_the_count_is_folded_away()` - *ADR-116: ROL masks its count to six bits, so `n & 63` changes nothing.*
+  - Method `.test_a_narrower_mask_is_not_folded()` - *ADR-116: `n & 31` drops bit 5 of the count, so the rotation differs.*
+  - Method `.test_the_benchmark_loop_materializes_no_count_mask()` - *ADR-116: the folded count rides straight into cl, no AND per value.*
+  - Method `.test_a_homed_left_sum_combines_with_the_rotate_in_place()` - *ADR-116: the accumulator is a homed name and the inline rotate cannot*
 - `class ArrayVectorTest` - *A counted array read-modify-write loop uses two SSE2 lanes.*
   - Method `.test_an_even_trip_count_uses_paddq()`
   - Method `.test_an_odd_trip_count_is_refused()`

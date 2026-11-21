@@ -7,7 +7,7 @@ trap. `print` is an effect, so no rewrite may drop or duplicate a call.
 """
 
 from dataclasses import dataclass, field, replace
-from typing import List, Optional, Tuple
+from typing import AbstractSet, List, Optional, Tuple
 
 from cairn import syntax
 from cairn.diagnostics import Span
@@ -85,22 +85,34 @@ def fold_unary(op: str, value: int) -> Optional[int]:
     return None
 
 
-def has_call(expression: Optional[syntax.Expr]) -> bool:
-    """Whether evaluating `expression` can run a call, and therefore an effect."""
+def has_call(expression: Optional[syntax.Expr],
+             inline_builtins: AbstractSet[str] = frozenset()) -> bool:
+    """Whether evaluating `expression` can run a call, and therefore an effect.
+
+    A name in `inline_builtins` is a call the code generator lowers inline and
+    never turns into a machine call (clz, ctz, bswap, rotl), so only its
+    arguments can still call; every other Call runs a callee (ADR-115).
+    """
     if expression is None:
         return False
     if isinstance(expression, syntax.Call):
+        if expression.name in inline_builtins:
+            return any(has_call(argument, inline_builtins)
+                       for argument in expression.arguments)
         return True
     if isinstance(expression, syntax.Parens):
-        return has_call(expression.inner)
+        return has_call(expression.inner, inline_builtins)
     if isinstance(expression, syntax.Unary):
-        return has_call(expression.operand)
+        return has_call(expression.operand, inline_builtins)
     if isinstance(expression, syntax.Binary):
-        return has_call(expression.left) or has_call(expression.right)
+        return (has_call(expression.left, inline_builtins)
+                or has_call(expression.right, inline_builtins))
     if isinstance(expression, syntax.Index):
-        return has_call(expression.operand) or has_call(expression.index)
+        return (has_call(expression.operand, inline_builtins)
+                or has_call(expression.index, inline_builtins))
     if isinstance(expression, syntax.ArrayLiteral):
-        return any(has_call(element) for element in expression.elements)
+        return any(has_call(element, inline_builtins)
+                   for element in expression.elements)
     return False
 
 
