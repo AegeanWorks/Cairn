@@ -461,8 +461,9 @@ def region_bytes(source: str, name: str) -> bytes:
     artifact = CodeGenerator(assembler=assembler).generate(program)
     start = artifact.text_labels[function_label(name)]
     later = sorted(offset for label, offset in artifact.text_labels.items()
-                   if offset > start and label.startswith("fn.")
-                   and label.count(".") == 1)
+                   if offset > start
+                   and ((label.startswith("fn.") and label.count(".") == 1)
+                        or label.startswith("cairn.")))
     return artifact.text[start:later[0] if later else len(artifact.text)]
 
 def region_of(source: str, name: str = "main") -> bytes:

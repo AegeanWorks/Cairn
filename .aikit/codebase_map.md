@@ -10,7 +10,7 @@
 - **Total Classes**: `209`
 - **Total Top-Level Functions**: `242`
 - **Total Class Methods**: `1129`
-- **Total Source Lines**: `21372`
+- **Total Source Lines**: `21373`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
@@ -1029,7 +1029,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2817` lines
+**Size**: `2818` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*

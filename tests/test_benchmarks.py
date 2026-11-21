@@ -411,7 +411,7 @@ class RegistryShapeTest(unittest.TestCase):
                                  "ackermann", "nqueens", "binary_gcd", "call_chain",
                                  "tak", "primes", "mandelbrot", "splitmix", "hex_io",
                                  "many_params", "argv_walk", "char_stream", "str_scan",
-                                 "array_sum", "sieve"])
+                                 "array_sum", "sieve", "popcount"])
 
     def test_each_case_declares_a_unit_and_a_positive_iteration_count(self) -> None:
         for case in run_benchmarks.CASES:
