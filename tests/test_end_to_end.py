@@ -1530,6 +1530,15 @@ class StringBuiltinsTest(EndToEndTest):
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "104\n105\n-1\n-1\n")
 
+    def test_clz_counts_leading_zeros_of_the_unsigned_reading(self) -> None:
+        source = ("fn main() -> i64 { print(clz(0)); print(clz(1));"
+                  " print(clz(255)); print(clz(-1)); print(clz(1 << 40));"
+                  " print(clz(6148914691236517205)); return 0; }")
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout.splitlines(),
+                         ["64", "63", "56", "0", "23", "1"])
+
     def test_popcount_counts_set_bits_over_the_unsigned_reading(self) -> None:
         source = ("fn main() -> i64 { print(popcount(0)); print(popcount(1));"
                   " print(popcount(255)); print(popcount(-1));"

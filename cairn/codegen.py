@@ -22,7 +22,7 @@ from cairn.optimize import INT64_MIN, has_call, _contains_break_or_continue, _re
 from cairn.sema import BUILTINS
 from cairn.image import WritableData
 from cairn.runtime import (ARG_BYTE_LABEL, ARGC_LABEL, ARGV_LEN0_LABEL,
-                           ARGV_PTR0_LABEL, DIV_ZERO_LABEL, OUT_FLUSH_LABEL,
+                           ARGV_PTR0_LABEL, CLZ_LABEL, DIV_ZERO_LABEL, OUT_FLUSH_LABEL,
                            POPCOUNT_LABEL, PRINT_CHAR_LABEL, PRINT_HEX_LABEL, PRINT_HEX_LINE_LABEL, PRINT_LABEL,
                            PRINT_STR_LABEL, READ_CHAR_LABEL, STDIN_BUFFER_LABEL,
                            STDIN_COUNT_LABEL, STDIN_CURSOR_LABEL, STR_BYTE_LABEL,
@@ -3422,6 +3422,10 @@ class CodeGenerator:
         if expression.name == "popcount":
             self._emit_expression(expression.arguments[0])
             self._emit_call_site(POPCOUNT_LABEL)
+            return
+        if expression.name == "clz":
+            self._emit_expression(expression.arguments[0])
+            self._emit_call_site(CLZ_LABEL)
             return
         if expression.name == "print":
             self._emit_expression(expression.arguments[0])

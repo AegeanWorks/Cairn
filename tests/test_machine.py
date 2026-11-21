@@ -466,5 +466,14 @@ class PopcntMethodTest(unittest.TestCase):
         self.assertEqual(bytes(assembler.code), b"\xf3\x48\x0f\xb8\xc0")
 
 
+class LzcntMethodTest(unittest.TestCase):
+    """LZCNT is one fixed byte pattern with the F3 and REX.W prefixes."""
+
+    def test_lzcnt_of_a_register(self) -> None:
+        assembler = Assembler()
+        assembler.lzcnt("rax", "rax")
+        self.assertEqual(bytes(assembler.code), b"\xf3\x48\x0f\xbd\xc0")
+
+
 if __name__ == "__main__":
     unittest.main()

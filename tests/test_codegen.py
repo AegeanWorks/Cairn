@@ -1306,6 +1306,27 @@ class PopcountBuiltinTest(unittest.TestCase):
         self.assertIn("cairn.runtime.popcount", {label for _, label in artifact.fixups})
 
 
+class ClzLzcntTest(unittest.TestCase):
+    """The leading-zero helper should use LZCNT, not a shift loop."""
+
+    def test_the_helper_emits_lzcnt(self) -> None:
+        source = "fn main() -> i64 { print(clz(255)); return 0; }"
+        program = sema.analyze(parser.parse(source))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertIn(b"\xf3\x48\x0f\xbd", bytes(artifact.text),
+                      "lzcnt r64, r/m64 replaces a portable shift loop")
+
+
+class ClzBuiltinTest(unittest.TestCase):
+    """clz dispatches to its own runtime helper with the standard stack round-trip."""
+
+    def test_the_helper_is_emitted_and_called(self) -> None:
+        program = sema.analyze(parser.parse("fn main() -> i64 { print(clz(255)); return 0; }"))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertIn("cairn.runtime.clz", artifact.text_labels)
+        self.assertIn("cairn.runtime.clz", {label for _, label in artifact.fixups})
+
+
 class ArrayVectorTest(unittest.TestCase):
     """A counted array read-modify-write loop uses two SSE2 lanes."""
 

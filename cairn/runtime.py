@@ -16,6 +16,7 @@ PRINT_CHAR_LABEL = "cairn.runtime.print_char"
 PRINT_HEX_LABEL = "cairn.runtime.print_hex"
 PRINT_HEX_LINE_LABEL = "cairn.runtime.print_hex_line"
 POPCOUNT_LABEL = "cairn.runtime.popcount"
+CLZ_LABEL = "cairn.runtime.clz"
 DIV_ZERO_LABEL = "cairn.runtime.div_zero"
 ARGC_LABEL = "cairn.runtime.argc"
 ARG_BYTE_LABEL = "cairn.runtime.arg_byte"
@@ -592,6 +593,16 @@ def emit_popcount(assembler: Assembler) -> None:
     assembler.ret()
 
 
+def emit_clz(assembler: Assembler) -> None:
+    """Emit `clz` as one LZCNT instruction: leading zeros of unsigned rax.
+
+    LZCNT returns 64 for a zero input and is part of ABM, like POPCNT (ADR-108).
+    """
+    assembler.label(CLZ_LABEL)
+    assembler.lzcnt("rax", "rax")
+    assembler.ret()
+
+
 def emit_print_str(assembler: Assembler) -> None:
     """Emit `print_str`: write the NUL-terminated text at rax to stdout, no newline.
 
@@ -713,6 +724,7 @@ def emit_runtime(assembler: Assembler, rodata: ReadOnlyData,
     emit_print_hex(assembler, PRINT_HEX_LINE_LABEL, with_newline=True)
     emit_print_str(assembler)
     emit_popcount(assembler)
+    emit_clz(assembler)
     emit_str_len(assembler)
     emit_str_byte(assembler)
     emit_div_zero(assembler, rodata)
@@ -726,7 +738,7 @@ __all__ = [
     "ARGC_LABEL", "ARG_BYTE_LABEL", "ARG_FILL_LABEL", "ARGV_ARENA_LABEL",
     "ARGV_CACHE_LABEL", "ARGV_LEN0_LABEL", "ARGV_PTR0_LABEL",
     "DIV_ZERO_DATA_LABEL", "DIV_ZERO_LABEL", "DIV_ZERO_MESSAGE",
-    "NEWLINE_LABEL", "POPCOUNT_LABEL", "PRINT_CHAR_LABEL", "PRINT_HEX_LABEL",
+    "CLZ_LABEL", "NEWLINE_LABEL", "POPCOUNT_LABEL", "PRINT_CHAR_LABEL", "PRINT_HEX_LABEL",
     "PRINT_HEX_LINE_LABEL", "PRINT_LABEL",
     "PRINT_STR_LABEL", "READ_CHAR_LABEL", "STDIN_BUFFER_LABEL", "STDIN_COUNT_LABEL",
     "STDIN_CURSOR_LABEL", "STR_BYTE_LABEL", "STR_LEN_LABEL",
@@ -735,6 +747,6 @@ __all__ = [
     "STDOUT_BUFFER_SIZE",
     "emit_arg_fill", "emit_arg_byte", "emit_argc", "emit_div_zero",
     "emit_out_append", "emit_out_flush", "emit_out_flush_work",
-    "emit_popcount", "emit_print_char", "emit_print_hex", "emit_print_i64", "emit_print_str",
+    "emit_clz", "emit_popcount", "emit_print_char", "emit_print_hex", "emit_print_i64", "emit_print_str",
     "emit_read_char", "emit_runtime", "emit_str_byte", "emit_str_len",
 ]

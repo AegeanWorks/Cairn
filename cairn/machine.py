@@ -763,6 +763,16 @@ class Assembler:
         rex = _rex(True, dst >> 3, 0, src >> 3)
         self.emit(bytes([0xF3, rex, 0x0F, 0xB8, 0xC0 | ((dst & 7) << 3) | (src & 7)]))
 
+    def lzcnt(self, destination: str, source: str) -> None:
+        """`lzcnt r64, r/m64` (F3 REX.W 0F BD /r): one leading-zero count.
+
+        LZCNT is part of ABM, like POPCNT: it returns 64 for a zero input, unlike
+        `bsr`, and is present on every x86-64 CPU since 2008 (ADR-108).
+        """
+        dst, src = REGISTERS[destination], REGISTERS[source]
+        rex = _rex(True, dst >> 3, 0, src >> 3)
+        self.emit(bytes([0xF3, rex, 0x0F, 0xBD, 0xC0 | ((dst & 7) << 3) | (src & 7)]))
+
     def hlt(self) -> None:
         """`hlt`, used only on unreachable paths such as after ExitProcess."""
         self.emit(b"\xF4")
