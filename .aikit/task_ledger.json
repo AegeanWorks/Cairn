@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-paired-map",
+    "task_id": "cairn-paired-gates",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795229407.6738188,
+    "updated_at": 1795229428.2604408,
     "owner": "opencode:session",
-    "lease_until": 1795236607.6738188,
+    "lease_until": 1795236628.2604408,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,70 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795229408.0586526,
-    "completed_head": "87c0ef98aac0d7af8688495d5b016d7f1952697c",
-    "completed_tree": "cc13a24beae6a31e0532e05cbb064fe6fea3d8f9"
+    "completed_at": 1795229428.6723435,
+    "completed_head": "624bb585f04c2423cc7330850e9a01a86c4be4bf",
+    "completed_tree": "1f1a82667a932a80c05d1657f1c1a35d09d63d8a"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-bulk-refusal",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/1] record ADR-096: the four-byte bulk stream sum was implemented, caught a cursor bug by IR differential and twin parity, measured 4 percent slower than the rotated loop on a calm host with a -1.3 percent control, and was reverted",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795222977.4228046,
-      "timestamp_str": "2026-11-21 04:02:57",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "char_stream still trailed C by 1.09x and the rotated loop spent two predicted branches per byte, making a bulk path worth a controlled test",
-        "benefits": "a recorded, measured refusal that prevents repeating the experiment",
-        "risks": "contract: none, reverted; dependency: none; concurrency: none; state: ledger only",
-        "mitigation": "the compiler and test changes were restored to the committed revision and the raw A/B logs stay outside the tree"
-      },
-      "plan_digest": "c98f18f85d96b46d1f4fa4325ef010d9cc45b040f241f6bc30345317bc52a89b",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-bulk-refusal",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] committed as c8929fa: ADR-096 records the no-gain measurement (control -1.3 percent, candidate +4.0 percent), the cursor bug the differential tests caught, and the reverted source and test changes; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795222977.8478494,
-      "timestamp_str": "2026-11-21 04:02:57",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-bulk-refusal",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-bulk-refusal' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795222978.3015518,
-      "timestamp_str": "2026-11-21 04:02:58",
-      "agent": "opencode:session",
-      "head": "c8929fa6ba39876a5c1c0c709a2858bafb736282",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-many-induction",
       "phase": "phase 2",
@@ -403,6 +344,65 @@
       "timestamp_str": "2026-11-21 05:50:08",
       "agent": "opencode:session",
       "head": "87c0ef98aac0d7af8688495d5b016d7f1952697c",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-paired-gates",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/1] clear the ledger freshness gate after the paired tool's map refresh",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795229427.7922857,
+      "timestamp_str": "2026-11-21 05:50:27",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "the map commit followed the task completion",
+        "benefits": "gates green",
+        "risks": "contract: none; dependency: none; concurrency: none; state: ledger only",
+        "mitigation": "ledger-only commit"
+      },
+      "plan_digest": "68c6d9a7fcb3a192cf0a36a0e265989e9a79831e11b95a30636ccb30c5edc651",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-paired-gates",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] gates cleared; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795229428.2604408,
+      "timestamp_str": "2026-11-21 05:50:28",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-paired-gates",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-paired-gates' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795229428.728943,
+      "timestamp_str": "2026-11-21 05:50:28",
+      "agent": "opencode:session",
+      "head": "624bb585f04c2423cc7330850e9a01a86c4be4bf",
       "delivery": {
         "roots": [
           "."
