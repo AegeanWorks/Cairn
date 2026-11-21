@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-paired-bandtest",
+    "task_id": "cairn-popcount",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795229523.4178245,
+    "updated_at": 1795230288.6719525,
     "owner": "opencode:session",
-    "lease_until": 1795236723.4178245,
+    "lease_until": 1795237488.6719525,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,70 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795229523.8492992,
-    "completed_head": "3319f67df5ada2b4e3758ce5a5cf8ecda09182e1",
-    "completed_tree": "e99e049e754bab4f3af505a4f67468b309e89f65"
+    "completed_at": 1795230289.0543451,
+    "completed_head": "6e3db7f919381500032201a5b62e6f8b9b6801b6",
+    "completed_tree": "d2e1c4fccfec9c042ad5769376357a61bf793326"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-bottom-guard-refusal",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/1] record ADR-098: moving the stdin buffer guard to the bottom and testing EOF only on refill cut the hot loop to five instructions and one branch but measured neutral in a 48-round paired A/B, so it was reverted",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795224620.9808886,
-      "timestamp_str": "2026-11-21 04:30:20",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "char_stream remained a controlled-A/B loss and its rotated loop spent two branches per byte",
-        "benefits": "a recorded, measured refusal that closes the control-flow rewrite family on this case",
-        "risks": "contract: none, reverted; dependency: none; concurrency: none; state: ledger only",
-        "mitigation": "the compiler and test changes were restored to the committed revision and the raw A/B logs stay outside the tree"
-      },
-      "plan_digest": "e069d6ea1d7df67914f1ab9bd22d768cc299d55386faa23c4d062b346658bb6f",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-bottom-guard-refusal",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] committed as 7c8327a: ADR-098 records the neutral measurement (48-round control +0.3 percent, candidate -1.3 percent best, identical ten-fastest means) and the reverted source and test changes; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795224621.4672105,
-      "timestamp_str": "2026-11-21 04:30:21",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-bottom-guard-refusal",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-bottom-guard-refusal' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795224621.8869724,
-      "timestamp_str": "2026-11-21 04:30:21",
-      "agent": "opencode:session",
-      "head": "7c8327ae24abe759ac524749aca5fee1ad06a839",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-array-simd",
       "phase": "phase 2",
@@ -403,6 +344,65 @@
       "timestamp_str": "2026-11-21 05:52:03",
       "agent": "opencode:session",
       "head": "3319f67df5ada2b4e3758ce5a5cf8ecda09182e1",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-popcount",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/1] add popcount(x) as a builtin with sema/codegen/runtime layers, failing-first tests at each layer, a four-language benchmark case and twin parity, README and ADR; then begin measuring and optimizing it",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795229882.1384254,
+      "timestamp_str": "2026-11-21 05:58:02",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "the paired A/B verdict now reports all 19 cases won or tied against C, C++ and Rust, so the objective calls for one new function to work on",
+        "benefits": "a new language surface with its own measured benchmark, extending Cairn's bit-manipulation story",
+        "risks": "contract: popcount must answer the number of set bits for every i64; dependency: only existing assembler methods for the portable SWAR helper; concurrency: none; state: no new runtime state",
+        "mitigation": "failing-first sema arity tests, codegen helper fixup test, end-to-end value tests against a Python model, and a four-language twin-parity benchmark case"
+      },
+      "plan_digest": "cdfaafccf957387a2dec63906351d09cb7cc03c0f019589e40bce01d18b94bb4",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-popcount",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] committed popcount as a builtin with sema/codegen/runtime layers, a portable SWAR helper, failing-first tests at each layer, a four-language benchmark case and ADR-101; first measurement 21.8 ms beats C 145.3 and C++ 22.5 but trails Rust 17.6 by 24 percent, which is the next speed target; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795230288.6719525,
+      "timestamp_str": "2026-11-21 06:04:48",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-popcount",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-popcount' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795230289.1108046,
+      "timestamp_str": "2026-11-21 06:04:49",
+      "agent": "opencode:session",
+      "head": "6e3db7f919381500032201a5b62e6f8b9b6801b6",
       "delivery": {
         "roots": [
           "."
