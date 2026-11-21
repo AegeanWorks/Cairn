@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-paired-verdict",
+    "task_id": "cairn-paired-timeout",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795229329.4547877,
+    "updated_at": 1795229383.590226,
     "owner": "opencode:session",
-    "lease_until": 1795236529.4547877,
+    "lease_until": 1795236583.590226,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,46 +16,12 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795229329.8486803,
-    "completed_head": "0653314bf8b79f5fc38dce723e7e8bc976218267",
-    "completed_tree": "e368102d6eaad92e4d68568a237851a5f1edbd9a"
+    "completed_without_impact_assessment": true,
+    "completed_at": 1795229383.9868922,
+    "completed_head": "47ce0d2dc487812792131ac7656fcb53ea6d99e4",
+    "completed_tree": "de85dfde959bf59d45840e1da53bc1014e6adb39"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-readchar-refusal",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] committed as 9cdd01f: ADR-094 records the no-gain measurement (20-round control +2.8 percent against candidate -4.2 percent; 40-round control -0.9 percent against candidate +0.1 percent), the reverted compiler and test changes, and the next lever (stdin loop rotation); no source change, gates green; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795219429.7021742,
-      "timestamp_str": "2026-11-21 03:03:49",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-readchar-refusal",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-readchar-refusal' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795219430.5188515,
-      "timestamp_str": "2026-11-21 03:03:50",
-      "agent": "opencode:session",
-      "head": "9cdd01ff82ba3389ad96de640ffd5e3f693bdca9",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-stdin-scan-rotation",
       "phase": "phase 2",
@@ -403,6 +369,41 @@
       "timestamp_str": "2026-11-21 05:48:49",
       "agent": "opencode:session",
       "head": "0653314bf8b79f5fc38dce723e7e8bc976218267",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-paired-timeout",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] committed as 47ce0d2: the paired tool's subprocess.run now carries timeout=120, clearing both gate findings; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795229383.590226,
+      "timestamp_str": "2026-11-21 05:49:43",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-paired-timeout",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-paired-timeout' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795229384.042696,
+      "timestamp_str": "2026-11-21 05:49:44",
+      "agent": "opencode:session",
+      "head": "47ce0d2dc487812792131ac7656fcb53ea6d99e4",
       "delivery": {
         "roots": [
           "."
