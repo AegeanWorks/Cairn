@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-paired-window",
+    "task_id": "cairn-paired-map",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795241753.6887603,
+    "updated_at": 1795241778.837779,
     "owner": "opencode:session",
-    "lease_until": 1795248953.6887603,
+    "lease_until": 1795248978.837779,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,52 +16,12 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795241754.0278099,
-    "completed_head": "f4479a8abdb5843e619ae2863ce2e617e7d4ccae",
-    "completed_tree": "bd537865a5997fa61ce0da866671c1f9b110ef73"
+    "completed_without_impact_assessment": true,
+    "completed_at": 1795241779.17606,
+    "completed_head": "59a14d9f657764e7362ee1e83ae03ac0d2db0297",
+    "completed_tree": "74066abd6af2d4b83ce10699d644ce590f3467e3"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-popcount",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-popcount' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795230289.1108046,
-      "timestamp_str": "2026-11-21 06:04:49",
-      "agent": "opencode:session",
-      "head": "6e3db7f919381500032201a5b62e6f8b9b6801b6",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-popcount-docs",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/1] list the new popcount builtin in SPEC, the system card, the benchmark registry contract and the codebase map",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795230865.2832065,
-      "timestamp_str": "2026-11-21 06:14:25",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "surface rules require every builtin in all published contracts",
-        "benefits": "full suite and gates green",
-        "risks": "contract: docs only; dependency: none; concurrency: none; state: ledger only",
-        "mitigation": "regenerate the map with the canonical tool"
-      },
-      "plan_digest": "53375dc8dd34482fac9000ac66b83a7fa6f38f75006a2c372656335d0758c592",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-popcount-docs",
       "phase": "phase 4",
@@ -402,6 +362,41 @@
       "timestamp_str": "2026-11-21 09:15:54",
       "agent": "opencode:session",
       "head": "f4479a8abdb5843e619ae2863ce2e617e7d4ccae",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-paired-map",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] map refreshed and committed; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795241778.837779,
+      "timestamp_str": "2026-11-21 09:16:18",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-paired-map",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-paired-map' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795241779.2751772,
+      "timestamp_str": "2026-11-21 09:16:19",
+      "agent": "opencode:session",
+      "head": "59a14d9f657764e7362ee1e83ae03ac0d2db0297",
       "delivery": {
         "roots": [
           "."
