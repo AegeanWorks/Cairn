@@ -159,6 +159,17 @@ def find_cpp_compiler() -> Optional[str]:
     return None
 
 
+def decode_output(raw: bytes) -> str:
+    """Decode captured bytes with the universal newlines of a text-mode run.
+
+    The stdin branch must observe the same stdout text as the text-mode branch,
+    or a CRLF-writing twin would diverge from a raw-write twin on any platform
+    whose C runtime translates newlines (ADR-112).
+    """
+    text = raw.decode("utf-8", errors="replace")
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def run_command(argv: Sequence[str], timeout: float,
                 cwd: Optional[Path] = None,
                 stdin: Optional[bytes] = None) -> subprocess.CompletedProcess:
@@ -170,8 +181,8 @@ def run_command(argv: Sequence[str], timeout: float,
     raw = subprocess.run(list(argv), capture_output=True, input=stdin,
                          timeout=timeout, check=False, cwd=cwd)
     return subprocess.CompletedProcess(raw.args, raw.returncode,
-                                       raw.stdout.decode("utf-8", errors="replace"),
-                                       raw.stderr.decode("utf-8", errors="replace"))
+                                       decode_output(raw.stdout),
+                                       decode_output(raw.stderr))
 
 
 def cairn_build_command(source: Path, destination: Path, optimise: bool = True) -> List[str]:

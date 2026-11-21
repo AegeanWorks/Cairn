@@ -30,6 +30,13 @@ class PairedVerdictTest(unittest.TestCase):
         self.assertEqual(paired.band([float(i) for i in range(1, 21)]), (3.0, 18.0))
 
 
+class OutputDecodingTest(unittest.TestCase):
+    """The stdin branch must decode exactly like subprocess's text branch."""
+
+    def test_crlf_and_lone_cr_are_normalized(self) -> None:
+        self.assertEqual(run_benchmarks.decode_output(b"a\r\nb\rc\n"), "a\nb\nc\n")
+
+
 class SummaryTest(unittest.TestCase):
     """The arithmetic an agent reads from a report must be reproducible by hand."""
 

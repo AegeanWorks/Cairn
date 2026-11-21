@@ -646,28 +646,28 @@ class TwinParityTest(unittest.TestCase):
     def _assert_par(self, case) -> None:
         cairn_exe = self.folder / f"{case.name}.cairn.exe"
         self.harness.build_cairn(self.harness.ROOT / case.cairn, cairn_exe)
-        cairn_out = self.harness.run_command([str(cairn_exe)], 300)
+        cairn_out = self.harness.run_command([str(cairn_exe)], 300, stdin=case.stdin)
         self.assertEqual(cairn_out.returncode, 0, case.name)
         expected = cairn_out.stdout
         self.assertTrue(expected.strip(), case.name)
         if self.c_compiler:
             c_exe = self.folder / f"{case.name}.c.exe"
             self.harness.build_c(self.c_compiler, self.harness.ROOT / case.c_source, c_exe)
-            c_out = self.harness.run_command([str(c_exe)], 300)
+            c_out = self.harness.run_command([str(c_exe)], 300, stdin=case.stdin)
             self.assertEqual(c_out.returncode, 0, case.name)
             self.assertEqual(c_out.stdout, expected, f"{case.name}: C twin diverges")
         if self.cpp_compiler:
             cpp_exe = self.folder / f"{case.name}.cpp.exe"
             self.harness.build_cpp(self.cpp_compiler,
                                    self.harness.ROOT / case.cpp_source, cpp_exe)
-            cpp_out = self.harness.run_command([str(cpp_exe)], 300)
+            cpp_out = self.harness.run_command([str(cpp_exe)], 300, stdin=case.stdin)
             self.assertEqual(cpp_out.returncode, 0, case.name)
             self.assertEqual(cpp_out.stdout, expected, f"{case.name}: C++ twin diverges")
         if self.rust_compiler:
             rust_exe = self.folder / f"{case.name}.rust.exe"
             self.harness.build_rust(self.rust_compiler,
                                     self.harness.ROOT / case.rust_source, rust_exe)
-            rust_out = self.harness.run_command([str(rust_exe)], 300)
+            rust_out = self.harness.run_command([str(rust_exe)], 300, stdin=case.stdin)
             self.assertEqual(rust_out.returncode, 0, case.name)
             self.assertEqual(rust_out.stdout, expected, f"{case.name}: Rust twin diverges")
 
@@ -707,11 +707,50 @@ class TwinParityTest(unittest.TestCase):
     def test_splitmix_twins_print_the_same_total(self) -> None:
         self._assert_par(self.harness.CASES[11])
 
+    def test_hex_io_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[12])
+
     def test_many_params_twins_print_the_same_total(self) -> None:
         # ADR-074: the bound comes from each runtime's argument count, so all four
         # twins execute the same 10M iterations on a bare run instead of being
         # folded to a constant by the baselines.
         self._assert_par(self.harness.CASES[13])
+
+    def test_argv_walk_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[14])
+
+    def test_char_stream_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[15])
+
+    def test_str_scan_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[16])
+
+    def test_array_sum_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[17])
+
+    def test_sieve_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[18])
+
+    def test_popcount_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[19])
+
+    def test_clz_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[20])
+
+    def test_ctz_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[21])
+
+    def test_bswap_twins_print_the_same_total(self) -> None:
+        self._assert_par(self.harness.CASES[22])
+
+    def test_every_registered_case_has_a_parity_method(self) -> None:
+        """A registry entry without its own method would never be parity-gated."""
+        expected = {f"test_{case.name}_twins_print_the_same_total"
+                    for case in self.harness.CASES}
+        present = {name for name in dir(type(self))
+                   if name.startswith("test_")
+                   and name.endswith("_twins_print_the_same_total")}
+        self.assertEqual(present, expected)
 
 
 NEGATIVE_BIT_TESTS = """

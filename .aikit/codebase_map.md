@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `47`
-- **Total Classes**: `220`
-- **Total Top-Level Functions**: `250`
-- **Total Class Methods**: `1170`
-- **Total Source Lines**: `21897`
+- **Total Classes**: `221`
+- **Total Top-Level Functions**: `251`
+- **Total Class Methods**: `1182`
+- **Total Source Lines**: `21954`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
@@ -49,7 +49,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `686` lines
+**Size**: `697` lines
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -58,6 +58,7 @@
 - `def find_c_compiler()` - *The first C compiler already installed, or None when the machine has none.*
 - `def find_rust_compiler()` - *The first Rust compiler already installed, or None when the machine has none.*
 - `def find_cpp_compiler()` - *The first C++ compiler already installed, or None when the machine has none.*
+- `def decode_output(raw)` - *Decode captured bytes with the universal newlines of a text-mode run.*
 - `def run_command(argv, timeout, cwd, stdin)` - *Run one command with a hard limit, capturing text.*
 - `def cairn_build_command(source, destination, optimise)` - *The exact `cairn build` command for one case, with the folding pass optional.*
 - `def build_cairn(source, destination, optimise)` - *Compile one Cairn case and return the compile time in milliseconds.*
@@ -887,7 +888,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `650` lines
+**Size**: `657` lines
 
 **Classes:**
 - `class PairedVerdictTest` - *A win is a gap outside the identical-binary band, not a raw best time.*
@@ -896,6 +897,8 @@
   - Method `.test_a_clear_gap_below_the_band_is_a_win()`
   - Method `.test_a_clear_gap_above_the_band_is_a_loss()`
   - Method `.test_the_control_band_trims_extremes()`
+- `class OutputDecodingTest` - *The stdin branch must decode exactly like subprocess's text branch.*
+  - Method `.test_crlf_and_lone_cr_are_normalized()`
 - `class SummaryTest` - *The arithmetic an agent reads from a report must be reproducible by hand.*
   - Method `.test_summary_reports_best_median_worst_and_per_unit_cost()`
   - Method `.test_zero_iterations_does_not_divide()`
@@ -1401,7 +1404,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1649` lines
+**Size**: `1688` lines
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1472,7 +1475,18 @@
   - Method `.test_primes_twins_print_the_same_total()`
   - Method `.test_mandelbrot_twins_print_the_same_total()`
   - Method `.test_splitmix_twins_print_the_same_total()`
+  - Method `.test_hex_io_twins_print_the_same_total()`
   - Method `.test_many_params_twins_print_the_same_total()`
+  - Method `.test_argv_walk_twins_print_the_same_total()`
+  - Method `.test_char_stream_twins_print_the_same_total()`
+  - Method `.test_str_scan_twins_print_the_same_total()`
+  - Method `.test_array_sum_twins_print_the_same_total()`
+  - Method `.test_sieve_twins_print_the_same_total()`
+  - Method `.test_popcount_twins_print_the_same_total()`
+  - Method `.test_clz_twins_print_the_same_total()`
+  - Method `.test_ctz_twins_print_the_same_total()`
+  - Method `.test_bswap_twins_print_the_same_total()`
+  - Method `.test_every_registered_case_has_a_parity_method()` - *A registry entry without its own method would never be parity-gated.*
 - `class FlagFusedConditionRuntimeTest` - *Branches the fuser claims to handle stay semantically exact over negative values.*
   - Method `.test_bit_tests_and_masks_over_negative_values()`
   - Method `.test_short_circuit_branches_skip_call_sides()`
