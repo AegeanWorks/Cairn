@@ -10,7 +10,7 @@
 - **Total Classes**: `208`
 - **Total Top-Level Functions**: `241`
 - **Total Class Methods**: `1125`
-- **Total Source Lines**: `21304`
+- **Total Source Lines**: `21305`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
@@ -32,7 +32,7 @@
 ### [`benchmarks/paired.py`](benchmarks/paired.py)
 > *Deterministic paired A/B verdict for the benchmark registry.*
 
-**Size**: `116` lines
+**Size**: `117` lines
 
 **Functions:**
 - `def timed(executable, stdin)` - *One wall-clock run; returns milliseconds and stdout for parity checks.*
