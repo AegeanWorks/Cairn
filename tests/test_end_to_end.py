@@ -216,6 +216,25 @@ class EndToEndTest(unittest.TestCase):
         return subprocess.run([str(self.build(source))], capture_output=True, text=True,
                               encoding="utf-8", errors="replace", timeout=TIMEOUT_SECONDS)
 
+    def test_bottom_test_rotation_preserves_the_value(self) -> None:
+        # A rotated trailing-zero loop must print the same gcd result as the rolled one.
+        source = """fn main() -> i64 {
+    var a: i64 = 15;
+    var b: i64 = 12;
+    while ((b & 1) == 0) { b = b >> 1; }
+    while b != 0 {
+        if a > b { var t: i64 = a; a = b; b = t; }
+        b = b - a;
+        if b == 0 { break; }
+        while ((b & 1) == 0) { b = b >> 1; }
+    }
+    print(a);
+    return 0;
+}"""
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "3\n")
+
     def test_hello_prints_an_expression(self) -> None:
         completed = self.execute("fn main() -> i64 { print(40 + 2); return 0; }")
         self.assertEqual(completed.returncode, 0)

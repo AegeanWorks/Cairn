@@ -767,5 +767,89 @@ def _peel_name_or_product(expression):
     return expression
 
 
+class BottomTestRotationTest(unittest.TestCase):
+    """A trailing-zero loop lets a `while x != 0 { ... break ... }` rotate once."""
+
+    SOURCE = (
+        "var a: i64 = 15; var b: i64 = 12;"
+        " while ((b & 1) == 0) { b = b >> 1; }"
+        " while b != 0 {"
+        " if a > b { var t: i64 = a; a = b; b = t; }"
+        " b = b - a; if b == 0 { break; }"
+        " while ((b & 1) == 0) { b = b >> 1; }"
+        " } print(a);"
+    )
+
+    def body(self, source):
+        program = optimize.optimize(analyze(parse(f"fn main() -> i64 {{ {source} return 0; }}")))
+        return program.functions[0].body.statements
+
+    def constant_condition_loops(self, statements):
+        found = []
+        for statement in statements:
+            if isinstance(statement, syntax.While):
+                condition = statement.condition
+                if isinstance(condition, syntax.IntLiteral):
+                    found.append(statement)
+                found.extend(self.constant_condition_loops(statement.body.statements))
+            elif isinstance(statement, syntax.If):
+                found.extend(self.constant_condition_loops(statement.then_block.statements))
+        return found
+
+    def test_rotates_the_exact_shape(self) -> None:
+        statements = self.body(self.SOURCE)
+        rotated = self.constant_condition_loops(statements)
+        self.assertEqual(len(rotated), 1)
+        loop = rotated[0]
+        self.assertEqual(loop.condition.value, 1)
+        # the trailing shift loop moved to the front of the rotated body
+        first = loop.body.statements[0]
+        self.assertIsInstance(first, syntax.While)
+        self.assertIsInstance(first.body.statements[0], syntax.Assign)
+        # the preceding shift loop was consumed, so only one remains in the program
+        self.assertEqual(self.count_shift_loops(statements), 1)
+
+    def count_shift_loops(self, statements):
+        total = 0
+        for statement in statements:
+            if isinstance(statement, syntax.While):
+                body = statement.body.statements
+                if (len(body) == 1 and isinstance(body[0], syntax.Assign)
+                        and isinstance(body[0].value, syntax.Binary)
+                        and body[0].value.op == ">>"):
+                    total += 1
+                total += self.count_shift_loops(body)
+            elif isinstance(statement, syntax.If):
+                total += self.count_shift_loops(statement.then_block.statements)
+        return total
+
+    def test_refuses_without_a_preceding_shift_loop(self) -> None:
+        src = self.SOURCE.replace(" while ((b & 1) == 0) { b = b >> 1; } while b != 0",
+                                  " while b != 0", 1)
+        self.assertEqual(self.constant_condition_loops(self.body(src)), [])
+
+    def test_refuses_a_different_loop_condition(self) -> None:
+        src = self.SOURCE.replace("while b != 0", "while b > 0")
+        self.assertEqual(self.constant_condition_loops(self.body(src)), [])
+
+    def test_refuses_a_different_break_condition(self) -> None:
+        src = self.SOURCE.replace("if b == 0 { break; }", "if b < 1 { break; }")
+        self.assertEqual(self.constant_condition_loops(self.body(src)), [])
+
+    def test_refuses_without_a_trailing_shift_loop(self) -> None:
+        src = self.SOURCE.replace(
+            " if b == 0 { break; } while ((b & 1) == 0) { b = b >> 1; }",
+            " if b == 0 { break; }")
+        self.assertEqual(self.constant_condition_loops(self.body(src)), [])
+
+    def test_refuses_a_continue_in_the_body(self) -> None:
+        src = self.SOURCE.replace("b = b - a;", "b = b - a; if b == 7 { continue; }")
+        self.assertEqual(self.constant_condition_loops(self.body(src)), [])
+
+    def test_refuses_a_second_break(self) -> None:
+        src = self.SOURCE.replace("b = b - a;", "b = b - a; if b == 7 { break; }")
+        self.assertEqual(self.constant_condition_loops(self.body(src)), [])
+
+
 if __name__ == "__main__":
     unittest.main()

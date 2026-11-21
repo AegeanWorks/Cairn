@@ -183,6 +183,7 @@ class Optimizer:
                 function.body = self._block(function.body)
         apply_copy_propagation(program)
         apply_induction_strength_reduction(program)
+        apply_bottom_test_rotation(program)
         return program
 
     def _block(self, block: Optional[syntax.Block]) -> Optional[syntax.Block]:
@@ -1236,6 +1237,143 @@ def _reachable(statements: List[syntax.Stmt]) -> List[syntax.Stmt]:
         if isinstance(statement, (syntax.Return, syntax.Break, syntax.Continue)):
             return statements[:index + 1]
     return statements
+
+
+def _shift_lowbit_clear(expression, slot: int) -> bool:
+    """True for `((slot & 1) == 0)` in either operand order."""
+    value = _peel_parens(expression)
+    if not isinstance(value, syntax.Binary) or value.op != "==":
+        return False
+    left, right = _peel_parens(value.left), _peel_parens(value.right)
+    if isinstance(right, syntax.IntLiteral) and right.value == 0:
+        target = left
+    elif isinstance(left, syntax.IntLiteral) and left.value == 0:
+        target = right
+    else:
+        return False
+    target = _peel_parens(target)
+    if not isinstance(target, syntax.Binary) or target.op != "&":
+        return False
+    first, second = _peel_parens(target.left), _peel_parens(target.right)
+    return ((isinstance(first, syntax.Name) and first.slot == slot
+             and isinstance(second, syntax.IntLiteral) and second.value == 1)
+            or (isinstance(second, syntax.Name) and second.slot == slot
+                and isinstance(first, syntax.IntLiteral) and first.value == 1))
+
+
+def _is_shift_loop(statement, slot: int) -> bool:
+    """True for `while ((slot & 1) == 0) { slot = slot >> 1; }` exactly."""
+    if not isinstance(statement, syntax.While) or statement.countdown:
+        return False
+    if not _shift_lowbit_clear(statement.condition, slot):
+        return False
+    body = statement.body
+    if body is None or len(body.statements) != 1:
+        return False
+    store = body.statements[0]
+    if (not isinstance(store, syntax.Assign) or store.slot != slot
+            or store.index is not None or store.temp_slot is not None):
+        return False
+    shift = _peel_parens(store.value)
+    if not isinstance(shift, syntax.Binary) or shift.op != ">>":
+        return False
+    return (isinstance(_peel_parens(shift.left), syntax.Name)
+            and _peel_parens(shift.left).slot == slot
+            and isinstance(_peel_parens(shift.right), syntax.IntLiteral)
+            and _peel_parens(shift.right).value == 1)
+
+
+def _zero_comparison(expression, slot: int, op: str) -> bool:
+    """True for `slot != 0` or `slot == 0` (either operand order)."""
+    value = _peel_parens(expression)
+    if not isinstance(value, syntax.Binary) or value.op != op:
+        return False
+    left, right = _peel_parens(value.left), _peel_parens(value.right)
+    return ((isinstance(left, syntax.Name) and left.slot == slot
+             and isinstance(right, syntax.IntLiteral) and right.value == 0)
+            or (isinstance(right, syntax.Name) and right.slot == slot
+                and isinstance(left, syntax.IntLiteral) and left.value == 0))
+
+
+def _count_jumps(statements, kinds) -> int:
+    total = 0
+    for statement in statements:
+        if any(isinstance(statement, kind) for kind in kinds):
+            total += 1
+        for attribute in ("body", "then_block", "else_block"):
+            child = getattr(statement, attribute, None)
+            if isinstance(child, syntax.Block):
+                total += _count_jumps(child.statements, kinds)
+    return total
+
+
+def apply_bottom_test_rotation(program: syntax.Program) -> int:
+    """Rotate `while (x != 0) { P; if (x == 0) break; S }` into a bottom-test loop.
+
+    `S` is the idempotent trailing-zero loop `while ((x & 1) == 0) { x = x >> 1; }`.
+    It preserves `x != 0` for every i64 (a positive odd value is never shifted, and
+    an arithmetic shift never reaches zero from a negative one), so once the
+    `if (x == 0) break` guard has passed, the condition still holds at the back
+    edge and its re-test is redundant. A preceding `S` makes `x` odd at entry, so
+    moving `S` to the top of the body is observationally identical. The guard is
+    kept, so an even entry value is still normalised exactly once before `P`.
+
+    Only this exact shape fires: any extra break, continue or return, a different
+    condition, or a different trailing statement is refused. The pass runs last,
+    after every other rewrite, so the tested shape is the one codegen will see.
+    """
+    rotated = 0
+    for function in program.functions:
+        block = function.body
+        if block is None:
+            continue
+        index = 1
+        while index < len(block.statements):
+            loop = block.statements[index]
+            if not isinstance(loop, syntax.While) or loop.countdown:
+                index += 1
+                continue
+            condition = loop.condition
+            outer = _peel_parens(condition)
+            if not (isinstance(outer, syntax.Binary) and outer.op == "!="):
+                index += 1
+                continue
+            left, right = _peel_parens(outer.left), _peel_parens(outer.right)
+            if isinstance(left, syntax.Name) and isinstance(right, syntax.IntLiteral) \
+                    and right.value == 0:
+                slot = left.slot
+            elif isinstance(right, syntax.Name) and isinstance(left, syntax.IntLiteral) \
+                    and left.value == 0:
+                slot = right.slot
+            else:
+                index += 1
+                continue
+            if not _is_shift_loop(block.statements[index - 1], slot):
+                index += 1
+                continue
+            body = loop.body
+            if (body is None or len(body.statements) < 3
+                    or not _is_shift_loop(body.statements[-1], slot)):
+                index += 1
+                continue
+            prefix = body.statements[:-1]
+            guards = [position for position, statement in enumerate(prefix)
+                      if isinstance(statement, syntax.If)
+                      and _zero_comparison(statement.condition, slot, "==")
+                      and statement.else_block is None
+                      and statement.then_block is not None
+                      and len(statement.then_block.statements) == 1
+                      and isinstance(statement.then_block.statements[0], syntax.Break)]
+            if (len(guards) != 1 or _count_jumps(prefix, (syntax.Continue, syntax.Return))
+                    or _count_jumps(body.statements, (syntax.Break,)) != 1):
+                index += 1
+                continue
+            trailing = body.statements[-1]
+            body.statements = [trailing] + prefix
+            loop.condition = syntax.IntLiteral(span=condition.span, value=1)
+            block.statements.pop(index - 1)
+            rotated += 1
+    return rotated
 
 
 def optimize(program: syntax.Program) -> syntax.Program:
