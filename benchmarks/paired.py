@@ -72,29 +72,48 @@ def measure_interleaved(timers: Dict[str, Callable[[], float]],
     Returning one sample per key per round keeps the control and all baselines in
     a single wall-clock window: a load spike hits a whole round's samples, so it
     cancels in every ratio instead of separating the control band from a baseline
-    measured in a later phase.
+    measured in a later phase. A key whose run raises TimeoutExpired is dropped
+    from further sampling and from the result, so one stalled baseline reads as
+    unavailable instead of discarding the case's other verdicts (ADR-113).
     """
     names = list(timers)
     samples: Dict[str, List[float]] = {name: [] for name in names}
     for index in range(rounds):
         order = names if index % 2 == 0 else list(reversed(names))
         for name in order:
-            samples[name].append(timers[name]())
+            if name not in samples:
+                continue
+            try:
+                samples[name].append(timers[name]())
+            except subprocess.TimeoutExpired:
+                del samples[name]
     return samples
 
 
 def verdicts_from_samples(samples: Dict[str, List[float]],
                           baselines: Tuple[str, ...] = ("c", "cpp", "rust")
-                          ) -> Tuple[Tuple[float, float], Dict[str, Tuple[float, str]]]:
-    """Derive the control band and baseline verdicts from interleaved samples."""
-    control = [c / co for c, co in zip(samples["cairn"], samples["copy"])]
+                          ) -> Tuple[Optional[Tuple[float, float]],
+                                     Dict[str, Tuple[float, str]]]:
+    """Derive the control band and baseline verdicts from interleaved samples.
+
+    Without a complete Cairn/copy control pair no band exists, so the case reads
+    as unavailable (``None`` and no gaps) instead of producing a verdict the
+    instrument cannot support. A baseline missing from the samples, or holding a
+    different sample count because it was dropped, is skipped the same way.
+    """
+    cairn = samples.get("cairn")
+    copy = samples.get("copy")
+    if not cairn or not copy or len(cairn) != len(copy):
+        return None, {}
+    control = [c / co for c, co in zip(cairn, copy)]
     control_band = band(control)
     gaps: Dict[str, Tuple[float, str]] = {}
     for name in baselines:
-        if name not in samples:
+        values = samples.get(name)
+        if not values or len(values) != len(cairn):
             continue
-        values = [c / b for c, b in zip(samples["cairn"], samples[name])]
-        measured = statistics.median(values)
+        ratios = [c / b for c, b in zip(cairn, values)]
+        measured = statistics.median(ratios)
         gaps[name] = (round(measured, 3), verdict(measured, control_band))
     return control_band, gaps
 
@@ -122,6 +141,8 @@ def measure_case(case, folder: Path, rounds: int = ROUNDS) -> Dict[str, object]:
             continue
         timers[language] = lambda exe=other: timed(exe, case.stdin)[0]
     control_band, gaps = verdicts_from_samples(measure_interleaved(timers, rounds))
+    if control_band is None:
+        return {"case": case.name, "control": None, "gaps": {}}
     return {"case": case.name,
             "control": (round(control_band[0], 3), round(control_band[1], 3)),
             "gaps": gaps}
@@ -136,7 +157,10 @@ def main(argv=None) -> int:
             reports.append(report)
             gaps = " ".join(f"{name}={value:.3f}:{kind}"
                             for name, (value, kind) in report["gaps"].items())
-            print(f"{report['case']:12s} control={report['control']} {gaps}", flush=True)
+            control = ("unavailable (a Cairn run timed out)"
+                       if report["control"] is None else str(report["control"]))
+            print(f"{report['case']:12s} control={control} {gaps}".rstrip(),
+                  flush=True)
     for language in ("c", "cpp", "rust"):
         losses = [report["case"] for report in reports
                   if language in report["gaps"]

@@ -3,6 +3,7 @@
 import contextlib
 import io
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -651,6 +652,34 @@ class InterleavedWindowTest(unittest.TestCase):
         control, gaps = paired.verdicts_from_samples(samples)
         self.assertEqual(control, (1.0, 1.0))
         self.assertEqual(gaps, {})
+
+
+class TimeoutResilienceTest(unittest.TestCase):
+    """One stalled baseline must not discard a whole case's verdict."""
+
+    def test_a_timed_out_key_is_dropped_and_the_other_keys_keep_their_samples(self) -> None:
+        def healthy() -> float:
+            return 1.0
+
+        def stalls() -> float:
+            raise subprocess.TimeoutExpired("slow.exe", 120)
+
+        samples = paired.measure_interleaved(
+            {"cairn": healthy, "copy": healthy, "c": stalls}, 2)
+        self.assertEqual(samples["cairn"], [1.0, 1.0])
+        self.assertEqual(samples["copy"], [1.0, 1.0])
+        self.assertNotIn("c", samples)
+
+    def test_an_incomplete_control_pair_reads_as_unavailable(self) -> None:
+        control, gaps = paired.verdicts_from_samples({"c": [1.0], "cpp": [1.0]})
+        self.assertIsNone(control)
+        self.assertEqual(gaps, {})
+
+    def test_a_dropped_baseline_leaves_the_others_measured(self) -> None:
+        samples = {"cairn": [10, 10], "copy": [10, 10], "c": [11, 11]}
+        control, gaps = paired.verdicts_from_samples(samples)
+        self.assertEqual(control, (1.0, 1.0))
+        self.assertEqual(gaps["c"], (0.909, "faster"))
 
 
 if __name__ == "__main__":

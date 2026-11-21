@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `47`
-- **Total Classes**: `221`
+- **Total Classes**: `222`
 - **Total Top-Level Functions**: `251`
-- **Total Class Methods**: `1182`
-- **Total Source Lines**: `21954`
+- **Total Class Methods**: `1185`
+- **Total Source Lines**: `22007`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
@@ -32,7 +32,7 @@
 ### [`benchmarks/paired.py`](benchmarks/paired.py)
 > *Deterministic paired A/B verdict for the benchmark registry.*
 
-**Size**: `150` lines
+**Size**: `174` lines
 
 **Functions:**
 - `def timed(executable, stdin)` - *One wall-clock run; returns milliseconds and stdout for parity checks.*
@@ -888,7 +888,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `657` lines
+**Size**: `686` lines
 
 **Classes:**
 - `class PairedVerdictTest` - *A win is a gap outside the identical-binary band, not a raw best time.*
@@ -970,6 +970,10 @@
   - Method `.test_every_key_is_sampled_each_round_in_alternating_order()`
   - Method `.test_a_shared_window_cancels_a_host_load_spike()`
   - Method `.test_missing_baselines_are_skipped()`
+- `class TimeoutResilienceTest` - *One stalled baseline must not discard a whole case's verdict.*
+  - Method `.test_a_timed_out_key_is_dropped_and_the_other_keys_keep_their_samples()`
+  - Method `.test_an_incomplete_control_pair_reads_as_unavailable()`
+  - Method `.test_a_dropped_baseline_leaves_the_others_measured()`
 
 ---
 
