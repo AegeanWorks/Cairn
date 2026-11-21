@@ -99,6 +99,7 @@ fn main() -> i64 {
   `clz(x)` returns the number of leading zeros in that reading (64 for zero).
   `ctz(x)` returns the number of trailing zeros in that reading (64 for zero).
   `bswap(x)` returns `x` with its eight bytes reversed.
+  `rotl(x, n)` returns `x` rotated left by `n` (the count masks to 63).
   Input: `argc()` is the token count with the program path included (the C convention);
   `arg_byte(i, j)` is byte `j` (zero-indexed) of argument `i`'s content with quotes
   stripped, or -1 past the token; `read_char()` is the next stdin byte, or -1 at end
@@ -340,6 +341,8 @@ a spread:
 | `popcount` | 10,000,000 derived values, set-bit count summed | 12.2 ms (ADR-102 POPCNT) | 149.2 ms | 21.5 ms | 16.3 ms | 136,704 bytes |
 
 The size column is the executable's `.text` frame at the current revision: the runtime helpers (argv arena, 64 KiB stdin state, printers, divide trap) ride in every program, so most cases share the same 71,168-byte base. `array_sum` and sieve reserve 8 MiB of stack in the PE header (ADR-068), and `many_params` links the argument arena for its `argc`-derived bound (ADR-074), so their base carries the bigger frame.
+
+`popcount`, `clz`, `ctz` and `bswap` are the single-instruction bit cases (ADR-101 to ADR-111): each lowers to one x86-64 instruction, and the authoritative 23-case verdict measures each faster than C and tied with C++ and Rust. `rotl` (one ROL, ADR-114) is the newest; its first 48-round paired run reads a tie against all three baselines.
 
 Standings per case (Cairn vs the fastest baseline on that case): `collatz`, `ackermann`, `tak`,
 `folded_math` and `splitmix` are won outright against all three baselines; `hex_io` wins against

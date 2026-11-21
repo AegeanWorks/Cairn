@@ -15,7 +15,7 @@ from cairn.optimize import INT64_MAX
 BUILTINS = {"print": 1, "print_char": 1, "print_hex": 1,
             "argc": 0, "arg_byte": 2, "read_char": 0, "exit": 1,
             "print_str": 1, "str_len": 1, "str_byte": 2, "flush": 0,
-            "popcount": 1, "clz": 1, "ctz": 1, "bswap": 1}
+            "popcount": 1, "clz": 1, "ctz": 1, "bswap": 1, "rotl": 2}
 # `exit(code)` stops the program, so it has no value: it may sit only as its own
 # statement, like a `return`, and any other position is refused (E3013).
 STOPS_PROGRAM = frozenset({"exit"})

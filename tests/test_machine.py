@@ -493,5 +493,19 @@ class BswapMethodTest(unittest.TestCase):
         self.assertEqual(bytes(assembler.code), b"\x48\x0f\xc8")
 
 
+class RotateClMethodTest(unittest.TestCase):
+    """ROL/ROR rax by cl share the D3 group with a fixed REX.W prefix."""
+
+    def test_rotate_left_of_rax_by_cl(self) -> None:
+        assembler = Assembler()
+        assembler.rotate_cl(0)
+        self.assertEqual(bytes(assembler.code), b"\x48\xd3\xc0")
+
+    def test_rotate_right_of_rax_by_cl(self) -> None:
+        assembler = Assembler()
+        assembler.rotate_cl(1)
+        self.assertEqual(bytes(assembler.code), b"\x48\xd3\xc8")
+
+
 if __name__ == "__main__":
     unittest.main()

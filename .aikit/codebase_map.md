@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `47`
-- **Total Classes**: `222`
+- **Total Classes**: `224`
 - **Total Top-Level Functions**: `251`
-- **Total Class Methods**: `1185`
-- **Total Source Lines**: `22007`
+- **Total Class Methods**: `1194`
+- **Total Source Lines**: `22079`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
-- **Not indexed by this map**: cpp (`46` file(s)), rust (`23` file(s))
+- **Not indexed by this map**: cpp (`48` file(s)), rust (`24` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -49,7 +49,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `697` lines
+**Size**: `699` lines
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -155,7 +155,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4747` lines
+**Size**: `4760` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -480,7 +480,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `803` lines
+**Size**: `811` lines
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -550,6 +550,7 @@
   - Method `.divide32(reg)` - *`div r/m32`: unsigned 32-bit division of edx:eax, quotient eax, remainder edx.*
   - Method `.unary(extension, reg)` - *`F7 /n` forms: not (2), neg (3).*
   - Method `.shift_cl(extension)` - *`shl` (4), shr (5) or sar (7) of rax by cl.*
+  - Method `.rotate_cl(extension)` - *`rol` (0) or `ror` (1) of rax by cl (D3 /0, D3 /1).*
   - Method `.shift_imm(extension, reg, count)` - *`shl` (4), `shr` (5) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip.*
   - Method `.add_imm8(reg, value)` - *`add r8, imm8`, used to turn a digit into ASCII.*
   - Method `.nop_pad(size)` - *`size` bytes of padding as canonical multi-byte nops.*
@@ -888,7 +889,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `686` lines
+**Size**: `687` lines
 
 **Classes:**
 - `class PairedVerdictTest` - *A win is a gap outside the identical-binary band, not a raw best time.*
@@ -1054,7 +1055,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2885` lines
+**Size**: `2900` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1209,6 +1210,9 @@
   - Method `.test_no_runtime_helper_is_emitted_or_called()`
 - `class BswapInlineTest` - *bswap lowers inline to one BSWAP, with no runtime call round-trip.*
   - Method `.test_the_bswap_bytes_appear_inline()`
+  - Method `.test_no_runtime_helper_is_emitted_or_called()`
+- `class RotlInlineTest` - *rotl lowers inline to one ROL rax, cl, with no runtime call round-trip.*
+  - Method `.test_the_rotate_bytes_appear_inline()`
   - Method `.test_no_runtime_helper_is_emitted_or_called()`
 - `class ArrayVectorTest` - *A counted array read-modify-write loop uses two SSE2 lanes.*
   - Method `.test_an_even_trip_count_uses_paddq()`
@@ -1408,7 +1412,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1688` lines
+**Size**: `1700` lines
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1490,6 +1494,7 @@
   - Method `.test_clz_twins_print_the_same_total()`
   - Method `.test_ctz_twins_print_the_same_total()`
   - Method `.test_bswap_twins_print_the_same_total()`
+  - Method `.test_rotl_twins_print_the_same_total()`
   - Method `.test_every_registered_case_has_a_parity_method()` - *A registry entry without its own method would never be parity-gated.*
 - `class FlagFusedConditionRuntimeTest` - *Branches the fuser claims to handle stay semantically exact over negative values.*
   - Method `.test_bit_tests_and_masks_over_negative_values()`
@@ -1557,6 +1562,7 @@
   - Method `.test_str_len_counts_to_the_terminator()`
   - Method `.test_str_byte_reads_inside_and_reports_outside()`
   - Method `.test_bswap_reverses_the_eight_bytes()`
+  - Method `.test_rotl_rotates_left_with_a_masked_count()`
   - Method `.test_ctz_counts_trailing_zeros_of_the_unsigned_reading()`
   - Method `.test_clz_counts_leading_zeros_of_the_unsigned_reading()`
   - Method `.test_popcount_counts_set_bits_over_the_unsigned_reading()`
@@ -1685,7 +1691,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `497` lines
+**Size**: `511` lines
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1786,6 +1792,9 @@
   - Method `.test_tzcnt_of_a_register()`
 - `class BswapMethodTest` - *BSWAP is one fixed byte pattern with the REX.W prefix.*
   - Method `.test_bswap_of_a_register()`
+- `class RotateClMethodTest` - *ROL/ROR rax by cl share the D3 group with a fixed REX.W prefix.*
+  - Method `.test_rotate_left_of_rax_by_cl()`
+  - Method `.test_rotate_right_of_rax_by_cl()`
 
 ---
 
@@ -2038,7 +2047,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `284` lines
+**Size**: `291` lines
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -2064,6 +2073,8 @@
   - Method `.test_ctz_rejects_a_wrong_arity()`
   - Method `.test_bswap_is_a_one_argument_builtin()`
   - Method `.test_bswap_rejects_a_wrong_arity()`
+  - Method `.test_rotl_is_a_two_argument_builtin()`
+  - Method `.test_rotl_rejects_a_wrong_arity()`
   - Method `.test_print_char_and_print_hex_are_one_argument_builtins()`
   - Method `.test_new_builtins_take_exactly_one_argument()`
   - Method `.test_new_builtins_are_callable_not_values_redefinable()`

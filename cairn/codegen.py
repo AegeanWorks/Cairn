@@ -3435,6 +3435,19 @@ class CodeGenerator:
             self._emit_expression(expression.arguments[0])
             self.assembler.bswap("rax")
             return
+        if expression.name == "rotl":
+            # The value is evaluated into rax and parked while the count is
+            # evaluated; the count lands in cl and `rol rax, cl` does the rotate
+            # (hardware masks it to six bits, so rotl(x, 64) is x).
+            self._emit_expression(expression.arguments[0])
+            asm.push("rax")
+            self.depth += 8
+            self._emit_expression(expression.arguments[1])
+            asm.mov_reg_reg("rcx", "rax")
+            asm.pop("rax")
+            self.depth -= 8
+            asm.rotate_cl(0)
+            return
         if expression.name == "print":
             self._emit_expression(expression.arguments[0])
             asm.push("rax")

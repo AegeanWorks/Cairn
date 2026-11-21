@@ -1,0 +1,15 @@
+// Left-rotation throughput over ten million derived values. rotl(x, n) rotates
+// x's i64 reading left by n masked to 63 and is the newest language surface.
+// The dependent sum keeps the loop alive in every twin, and all four print the
+// same total. Twin of rotl.c, rotl.cpp and rotl.rs.
+fn main() -> i64 {
+    var total: i64 = 0;
+    var i: i64 = 0;
+    while i < 10000000 {
+        var v: i64 = (i * 2654435761) ^ (i >> 3);
+        total = (total + rotl(v, i & 63)) & 9223372036854775807;
+        i = i + 1;
+    }
+    print(total);
+    return 0;
+}

@@ -53,7 +53,9 @@ or `-1` when `j` is negative or the byte at `j` is the NUL terminator
 bytes written; `popcount(x)` set-bit count of the unsigned 64-bit reading;
 `clz(x)` leading-zero count of the unsigned 64-bit reading;
 `ctz(x)` trailing-zero count of the unsigned 64-bit reading;
-`bswap(x)` reverses the eight bytes of the i64 reading.
+ `bswap(x)` reverses the eight bytes of the i64 reading;
+ `rotl(x, n)` rotates the i64 reading left by `n`, whose count masks to 63.
+
 Printers share one 64 KiB stdout buffer (drained on exit, on `main`'s return,
 and when full). All return their argument (or the value answered) except
 `exit(code)`, which stops the process at once and is a statement, never a value

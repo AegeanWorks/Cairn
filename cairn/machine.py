@@ -623,6 +623,14 @@ class Assembler:
         """`shl` (4), shr (5) or sar (7) of rax by cl."""
         self.emit(b"\x48\xD3", bytes([0xC0 | (extension << 3)]))
 
+    def rotate_cl(self, extension: int) -> None:
+        """`rol` (0) or `ror` (1) of rax by cl (D3 /0, D3 /1).
+
+        ROL and ROR are baseline x86-64 and mask the count to six bits in
+        hardware, matching Cairn's documented shift-count masking (ADR-114).
+        """
+        self.emit(b"\x48\xD3", bytes([0xC0 | (extension << 3)]))
+
     def shift_imm(self, extension: int, reg: str, count: int) -> None:
         """`shl` (4), `shr` (5) or `sar` (7) of r64 by imm8, so a literal count needs no cl round-trip.
 
