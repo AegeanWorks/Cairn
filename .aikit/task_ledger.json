@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-clz-builtin",
+    "task_id": "cairn-clz-inline",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795247385.624868,
+    "updated_at": 1795248682.7878144,
     "owner": "opencode:session",
-    "lease_until": 1795254585.624868,
+    "lease_until": 1795255882.7878144,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,94 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795247386.003609,
-    "completed_head": "66ab1c152e7906749f00e804b627e9c51ec1618c",
-    "completed_tree": "18e9dd2ab1ddbe99acbc0af055d159f5bd9f5041"
+    "completed_at": 1795248683.2964833,
+    "completed_head": "a75aee80dddc1020ba3fb6fc47685c85fb882b83",
+    "completed_tree": "ead0c1fd1064d6679240d796dfd809844e54396f"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-mandel-investigation",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/1] record ADR-104: three measured mandelbrot lowerings were neutral or slower and were reverted, bounding the remaining gap to the fixed-point dependency chain",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795233213.186365,
-      "timestamp_str": "2026-11-21 06:53:33",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "the paired verdict kept flagging mandelbrot and the cause was unresolved",
-        "benefits": "a recorded, measured boundary for the case",
-        "risks": "contract: docs only; dependency: none; concurrency: none; state: ledger only",
-        "mitigation": "all experiments were scratch-only and reverted"
-      },
-      "plan_digest": "77cd80865523361d7ec5ce6632dab0aa36f5651a11ec90eebffcc6d35c1f99ab",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-mandel-investigation",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] ADR-104 committed; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795233213.6036057,
-      "timestamp_str": "2026-11-21 06:53:33",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-mandel-investigation",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-mandel-investigation' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795233214.0689573,
-      "timestamp_str": "2026-11-21 06:53:34",
-      "agent": "opencode:session",
-      "head": "a57888ed38e139dcef1e9b2665a14f9615f99f34",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-sse2-boundary",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/1] record ADR-105: SSE2 two-pixel mandelbrot needs per-lane escape control that SSE2 lacks a blend for",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795236908.8013856,
-      "timestamp_str": "2026-11-21 07:55:08",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "the remaining mandelbrot gap's untried lever needed its boundary documented",
-        "benefits": "a recorded technical boundary",
-        "risks": "contract: docs only; dependency: none; concurrency: none; state: ledger only",
-        "mitigation": "the tested emitter set was reverted; no compiler change landed"
-      },
-      "plan_digest": "486d7bf71df949a202641cf664351150713d15ab8900618c5b7687b54575881f",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-sse2-boundary",
       "phase": "phase 4",
@@ -395,6 +312,82 @@
       "timestamp_str": "2026-11-21 10:49:46",
       "agent": "opencode:session",
       "head": "66ab1c152e7906749f00e804b627e9c51ec1618c",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-clz-inline",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/2] inline LZCNT into clz call sites instead of the runtime call round-trip",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795247536.853537,
+      "timestamp_str": "2026-11-21 10:52:16",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "clz measures ~13% slower than C++ and ~10% slower than Rust because every call pays a call/ret",
+        "benefits": "one LZCNT per call site with no call, shadow space or ret",
+        "risks": "contract: clz values unchanged; dependency: ABM as before; concurrency: none; state: none",
+        "mitigation": "failing-first shape test pins no runtime label and inline lzcnt; value parity and twin parity; controlled A/B before any claim; full suite and strict gates"
+      },
+      "plan_digest": "1fc212ba93ca2739fa8d5006250cd3e41e44f95f84404c37b651a58f4f566fa1",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-clz-inline",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[2/2] ADR-109; inline LZCNT ~12% faster; clz gaps to C++/Rust closed; full suite 1442 OK",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795248682.216925,
+      "timestamp_str": "2026-11-21 11:11:22",
+      "agent": "opencode:session",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-clz-inline",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[2/2] committed; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795248682.7878144,
+      "timestamp_str": "2026-11-21 11:11:22",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-clz-inline",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-clz-inline' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795248683.4205527,
+      "timestamp_str": "2026-11-21 11:11:23",
+      "agent": "opencode:session",
+      "head": "a75aee80dddc1020ba3fb6fc47685c85fb882b83",
       "delivery": {
         "roots": [
           "."
