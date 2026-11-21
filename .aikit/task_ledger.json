@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-stdin-scan-rotation",
+    "task_id": "cairn-bulk-refusal",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795222186.3424718,
+    "updated_at": 1795222977.8478494,
     "owner": "opencode:session",
-    "lease_until": 1795229386.3424718,
+    "lease_until": 1795230177.8478494,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,70 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795222188.7185256,
-    "completed_head": "763193a7e44b662d295f8493ef2fd00cb05d276d",
-    "completed_tree": "28c8cf047bcfaf5218d232360eecf738b73c6424"
+    "completed_at": 1795222978.2449641,
+    "completed_head": "c8929fa6ba39876a5c1c0c709a2858bafb736282",
+    "completed_tree": "2feb2a8796136f199199f4d349138675099fa86e"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-shift-loop",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/2] read binary_gcd's shift loops and compare them with gcc's emission; [2/2] probe the shr/jnc fusion outside the repo and decide",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795201440.5651956,
-      "timestamp_str": "2026-11-20 22:04:00",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "binary_gcd is one of three remaining Rust losses and its parity-tested shift loops look like a two-instruction fusion",
-        "benefits": "would remove two instructions per shift iteration",
-        "risks": "contract: the fused loop must exit on the first odd value, and reading a stale home would miscompile silently; dependency: needs a homed-and-current proof; concurrency: none; state: emitter only",
-        "mitigation": "probe outside the repository with a printed-total check against the baseline before any timing"
-      },
-      "plan_digest": "8202fe895527c986317df141b5d6c2d0376d78f72f84847e10fd9326aa8f0b15",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-shift-loop",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] probe refused, nothing shipped (ADR-089): both probe variants printed wrong totals against the baseline 8124693; the second has the intended five-byte shr/jnc shape, so the fault is reading a home that is stale for a slot the loop updates through the store path; recorded the prerequisite - a homed-and-current proof from the facts the emitter already uses - and the bounded ceiling (four instructions to two plus an entry test) before any future attempt; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795201459.1627252,
-      "timestamp_str": "2026-11-20 22:04:19",
-      "agent": "kilo:cairn",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-shift-loop",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-shift-loop' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795201476.4108138,
-      "timestamp_str": "2026-11-20 22:04:36",
-      "agent": "kilo:cairn",
-      "head": "cefb508aebb0de72347ee5d25f2e423cf27be85b",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-branch-hold",
       "phase": "phase 2",
@@ -404,6 +345,65 @@
       "timestamp_str": "2026-11-21 03:49:48",
       "agent": "opencode:session",
       "head": "763193a7e44b662d295f8493ef2fd00cb05d276d",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-bulk-refusal",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/1] record ADR-096: the four-byte bulk stream sum was implemented, caught a cursor bug by IR differential and twin parity, measured 4 percent slower than the rotated loop on a calm host with a -1.3 percent control, and was reverted",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795222977.4228046,
+      "timestamp_str": "2026-11-21 04:02:57",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "char_stream still trailed C by 1.09x and the rotated loop spent two predicted branches per byte, making a bulk path worth a controlled test",
+        "benefits": "a recorded, measured refusal that prevents repeating the experiment",
+        "risks": "contract: none, reverted; dependency: none; concurrency: none; state: ledger only",
+        "mitigation": "the compiler and test changes were restored to the committed revision and the raw A/B logs stay outside the tree"
+      },
+      "plan_digest": "c98f18f85d96b46d1f4fa4325ef010d9cc45b040f241f6bc30345317bc52a89b",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-bulk-refusal",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] committed as c8929fa: ADR-096 records the no-gain measurement (control -1.3 percent, candidate +4.0 percent), the cursor bug the differential tests caught, and the reverted source and test changes; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795222977.8478494,
+      "timestamp_str": "2026-11-21 04:02:57",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-bulk-refusal",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-bulk-refusal' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795222978.3015518,
+      "timestamp_str": "2026-11-21 04:02:58",
+      "agent": "opencode:session",
+      "head": "c8929fa6ba39876a5c1c0c709a2858bafb736282",
       "delivery": {
         "roots": [
           "."
