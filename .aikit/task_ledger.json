@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-strlen-bounds",
+    "task_id": "cairn-readchar-refusal",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795218614.7945747,
+    "updated_at": 1795219429.7021742,
     "owner": "opencode:session",
-    "lease_until": 1795225814.7945747,
+    "lease_until": 1795226629.7021742,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,59 +16,12 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795218615.871214,
-    "completed_head": "bcca92e24c3f1ad6b3e4daf993a9c0200c7d5fe8",
-    "completed_tree": "207220365fd2d63812f3063070526fc506277d22"
+    "completed_without_impact_assessment": true,
+    "completed_at": 1795219430.4262033,
+    "completed_head": "9cdd01ff82ba3389ad96de640ffd5e3f693bdca9",
+    "completed_tree": "6f0c22292a3c721246a6c817c5829c810832d3e8"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-argv-miss",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] measured refusal, code reverted (ADR-087): simulation shows 5,120,000 misses, 40 percent of iterations; the implementation removed the helper call behind a fill-flag load with an identical checksum and a byte-identical hot path, but six measurement protocols disagreed in sign (+7.7, +3.8, -5.6, +8.2, -2.8, +11.8 percent) while identical-binary controls spanned -2.7 to +12.9 percent, so the effect is below this machine's resolution; recorded that the miss rate is 40 percent (correcting ADR-086's fifth) and that the next step is a controlled instrument, not a lowering; no code or test change shipped; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795195693.142619,
-      "timestamp_str": "2026-11-20 20:28:13",
-      "agent": "kilo:cairn",
-      "measurements": [
-        {
-          "interleaved": "yes",
-          "command": "paired blocks, balanced rotation, equal-path rotation, long probe, and ABBA pairing",
-          "baseline": 1.0,
-          "drift": "0.0",
-          "unit": "ratio",
-          "control": "identical binaries spanned -2.7 to +12.9 percent in the same protocols",
-          "metric": "argv_walk new/old ratio across six protocols",
-          "workload": "12.8M arg_byte reads and a 128M-iteration probe, identical paths of equal length",
-          "candidate": 1.0
-        }
-      ],
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-argv-miss",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-argv-miss' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795195734.1675391,
-      "timestamp_str": "2026-11-20 20:28:54",
-      "agent": "kilo:cairn",
-      "head": "492d75b8db0c75e6bfd3b1be720c103980d75502",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-unroll",
       "phase": "phase 2",
@@ -430,6 +383,41 @@
       "timestamp_str": "2026-11-21 02:50:16",
       "agent": "opencode:session",
       "head": "bcca92e24c3f1ad6b3e4daf993a9c0200c7d5fe8",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-readchar-refusal",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] committed as 9cdd01f: ADR-094 records the no-gain measurement (20-round control +2.8 percent against candidate -4.2 percent; 40-round control -0.9 percent against candidate +0.1 percent), the reverted compiler and test changes, and the next lever (stdin loop rotation); no source change, gates green; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795219429.7021742,
+      "timestamp_str": "2026-11-21 03:03:49",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-readchar-refusal",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-readchar-refusal' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795219430.5188515,
+      "timestamp_str": "2026-11-21 03:03:50",
+      "agent": "opencode:session",
+      "head": "9cdd01ff82ba3389ad96de640ffd5e3f693bdca9",
       "delivery": {
         "roots": [
           "."
