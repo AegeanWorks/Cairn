@@ -9,8 +9,8 @@
 - **Total Python Modules**: `47`
 - **Total Classes**: `216`
 - **Total Top-Level Functions**: `250`
-- **Total Class Methods**: `1155`
-- **Total Source Lines**: `21783`
+- **Total Class Methods**: `1156`
+- **Total Source Lines**: `21787`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
@@ -735,7 +735,7 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `752` lines
+**Size**: `751` lines
 
 **Functions:**
 - `def emit_arg_fill(assembler)` - *Emit `arg_fill`: tokenize the ANSI command line into the static table once.*
@@ -1045,7 +1045,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2850` lines
+**Size**: `2855` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1192,8 +1192,9 @@
   - Method `.test_the_helper_is_emitted_and_called()`
 - `class ClzLzcntTest` - *The leading-zero helper should use LZCNT, not a shift loop.*
   - Method `.test_the_helper_emits_lzcnt()`
-- `class ClzBuiltinTest` - *clz dispatches to its own runtime helper with the standard stack round-trip.*
-  - Method `.test_the_helper_is_emitted_and_called()`
+- `class ClzBuiltinTest` - *clz lowers inline: one LZCNT at the call site, no runtime call round-trip.*
+  - Method `.test_no_runtime_helper_is_emitted_or_called()`
+  - Method `.test_the_lzcnt_bytes_appear_inline()`
 - `class ArrayVectorTest` - *A counted array read-modify-write loop uses two SSE2 lanes.*
   - Method `.test_an_even_trip_count_uses_paddq()`
   - Method `.test_an_odd_trip_count_is_refused()`
