@@ -1284,6 +1284,32 @@ class PrintHexNewlineFusionTest(unittest.TestCase):
         self.assertNotIn("cairn.runtime.print_hex_line", targets)
 
 
+class ArrayVectorTest(unittest.TestCase):
+    """A counted array read-modify-write loop uses two SSE2 lanes."""
+
+    SOURCE = (
+        "fn main() -> i64 { var a: [16]i64 = [0; 16];"
+        " var r: i64 = 3; var i: i64 = 0;"
+        " i = 0;"
+        " while i < 16 { a[i] = a[i] + r; i = i + 1; }"
+        " print(a[0]); return 0; }")
+
+    def test_an_even_trip_count_uses_paddq(self) -> None:
+        blob = region_of(self.SOURCE)
+        self.assertIn(b"\x66\x0f\xd4", blob,
+                      "two i64 elements should be added by one paddq")
+
+    def test_an_odd_trip_count_is_refused(self) -> None:
+        source = self.SOURCE.replace("while i < 16", "while i < 15")
+        blob = region_of(source)
+        self.assertNotIn(b"\x66\x0f\xd4", blob)
+
+    def test_a_non_invariant_addend_is_refused(self) -> None:
+        source = self.SOURCE.replace("a[i] + r", "a[i] + i")
+        blob = region_of(source)
+        self.assertNotIn(b"\x66\x0f\xd4", blob)
+
+
 class StdinScanRotationTest(unittest.TestCase):
     """A read_char scan rotates so the EOF check is the loop's back-edge."""
 

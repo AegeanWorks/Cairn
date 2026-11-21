@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `46`
-- **Total Classes**: `205`
+- **Total Classes**: `207`
 - **Total Top-Level Functions**: `235`
-- **Total Class Methods**: `1104`
-- **Total Source Lines**: `20976`
+- **Total Class Methods**: `1120`
+- **Total Source Lines**: `21169`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`46` module(s))
@@ -137,7 +137,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4639` lines
+**Size**: `4731` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -188,6 +188,8 @@
   - Method `._count_in(expression, counter)`
   - Method `._emit_while(statement)` - *Load the loop's plan-hoisted constants into their spare homes, then lower.*
   - Method `._lowers_as_real_body()` - *Whether emission runs in the real body of a fully-homed, pair-free function.*
+  - Method `._preceded_by_zero(target, slot)` - *Is `target` immediately preceded in its block by `slot = 0`?*
+  - Method `._try_emit_array_rmw_vector(statement)` - *Lower a counted `a[i] = a[i] + invariant; i = i + 1` loop with two lanes.*
   - Method `._try_emit_stdin_scan(statement)` - *Rotate `while true { c = read_char(); if c < 0 break; total += c }`.*
   - Method `._emit_while_body(statement)` - *`while` with its own break and continue targets.*
   - Method `._try_emit_halving_loop(statement)` - *Emit a fused odd-pair body as one unconditional half-step, or refuse.*
@@ -460,7 +462,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `719` lines
+**Size**: `762` lines
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -542,6 +544,11 @@
   - Method `.align_rsp()` - *`and rsp, -16`, for a helper reached by a jump from an arbitrary stack depth.*
   - Method `.leave_ret()` - *`leave; ret`: restore the caller's frame and return.*
   - Method `.ret()` - *A bare `ret`.*
+  - Method `.movq_from_reg(destination, source)` - *`movq xmm, r64` (66 REX.W 0F 6E /r), the GPR-to-XMM form gcc emits.*
+  - Method `.punpcklqdq(destination, source)` - *`punpcklqdq xmm, xmm` (66 0F 6C): broadcast the low qword to both lanes.*
+  - Method `.paddq_reg(destination, source)` - *`paddq xmm, xmm` (66 0F D4 /r): two wrapping i64 adds in one instruction.*
+  - Method `.movdqu_load_indexed(destination, base, index, scale_log2, offset)` - *`movdqu xmm, [base + index*scale + disp32]` (F3 0F 6F /r), unaligned 16B.*
+  - Method `.movdqu_store_indexed(base, index, scale_log2, offset, source)` - *`movdqu [base + index*scale + disp32], xmm` (F3 0F 7F /r), unaligned 16B.*
   - Method `.hlt()` - *`hlt`, used only on unreachable paths such as after ExitProcess.*
 
 **Functions:**
@@ -1000,7 +1007,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2781` lines
+**Size**: `2807` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1141,6 +1148,10 @@
   - Method `.test_hex_then_newline_uses_the_fused_helper()`
   - Method `.test_a_non_newline_character_does_not_fuse()`
   - Method `.test_a_used_hex_result_does_not_fuse()`
+- `class ArrayVectorTest` - *A counted array read-modify-write loop uses two SSE2 lanes.*
+  - Method `.test_an_even_trip_count_uses_paddq()`
+  - Method `.test_an_odd_trip_count_is_refused()`
+  - Method `.test_a_non_invariant_addend_is_refused()`
 - `class StdinScanRotationTest` - *A read_char scan rotates so the EOF check is the loop's back-edge.*
   - Method `.test_the_scan_uses_a_rotated_back_edge()`
   - Method `.test_a_non_scan_loop_is_not_rotated()`
@@ -1596,7 +1607,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `429` lines
+**Size**: `461` lines
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1682,6 +1693,13 @@
   - Method `.test_an_imm32_extends_the_displacement_size()`
   - Method `.test_rejects_an_immediate_wider_than_32_signed_bits()`
   - Method `.test_rejects_a_stack_base()`
+- `class Sse2VectorMethodTest` - *The five SSE2 encodings the array vectorizer emits, byte for byte.*
+  - Method `.code(build)`
+  - Method `.test_movq_from_a_gpr()`
+  - Method `.test_punpcklqdq_broadcasts_the_low_lane()`
+  - Method `.test_paddq_adds_two_lanes()`
+  - Method `.test_unaligned_load_through_a_scaled_index()`
+  - Method `.test_unaligned_store_through_a_scaled_index()`
 
 ---
 

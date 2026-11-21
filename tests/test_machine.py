@@ -425,5 +425,37 @@ class AluThroughPointerWithImmediateTest(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.code(lambda a: a.group1_store_reg_imm(0, "rsp", 1))
 
+class Sse2VectorMethodTest(unittest.TestCase):
+    """The five SSE2 encodings the array vectorizer emits, byte for byte."""
+
+    def code(self, build) -> bytes:
+        assembler = Assembler()
+        build(assembler)
+        return bytes(assembler.code)
+
+    def test_movq_from_a_gpr(self) -> None:
+        self.assertEqual(self.code(lambda a: a.movq_from_reg("xmm1", "rbx")),
+                         b"\x66\x48\x0f\x6e\xcb")
+
+    def test_punpcklqdq_broadcasts_the_low_lane(self) -> None:
+        self.assertEqual(self.code(lambda a: a.punpcklqdq("xmm1", "xmm1")),
+                         b"\x66\x0f\x6c\xc9")
+
+    def test_paddq_adds_two_lanes(self) -> None:
+        self.assertEqual(self.code(lambda a: a.paddq_reg("xmm0", "xmm1")),
+                         b"\x66\x0f\xd4\xc1")
+
+    def test_unaligned_load_through_a_scaled_index(self) -> None:
+        # movdqu xmm0,[rbp + r12*8 - 524288]
+        self.assertEqual(
+            self.code(lambda a: a.movdqu_load_indexed("xmm0", "rbp", "r12", 3, -524288)),
+            b"\xf3\x42\x0f\x6f\x84\xe5\x00\x00\xf8\xff")
+
+    def test_unaligned_store_through_a_scaled_index(self) -> None:
+        self.assertEqual(
+            self.code(lambda a: a.movdqu_store_indexed("rbp", "r12", 3, -524288, "xmm0")),
+            b"\xf3\x42\x0f\x7f\x84\xe5\x00\x00\xf8\xff")
+
+
 if __name__ == "__main__":
     unittest.main()

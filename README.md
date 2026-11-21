@@ -395,7 +395,9 @@ span's lowest displacement plus `8i`, so a dynamic load, a read-modify-write and
 literal-or-register store each lower to one indexed memory instruction, with no
 index negation and no address register — and reads 10.8-11.4 ms against C's
 10.2-11.9 ms; a 31-round interleaved same-seconds A/B measured -8.3 percent best
-and -6.9 percent on the ten fastest runs, while `sieve` measured neutral.
+and -6.9 percent on the ten fastest runs, while `sieve` measured neutral. ADR-099
+vectorizes the 100-pass sweep with two SSE2 lanes; a controlled A/B measured -9.8
+percent best and -10.2 percent on the ten fastest runs.
 
 The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
 `movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics

@@ -20,6 +20,10 @@ EIGHT_BIT = {
     "r8b": 8, "r9b": 9, "r10b": 10, "r11b": 11,
 }
 
+# The two SSE2 registers the array vectorizer uses: xmm0 is the value lane,
+# xmm1 the broadcast-addend lane. SSE2 is part of the x86-64 baseline.
+XMM_REGISTERS = {"xmm0": 0, "xmm1": 1}
+
 ARGUMENT_REGISTERS = ("rcx", "rdx", "r8", "r9")
 
 # group-1 immediate extensions whose result sets ZF = (register == 0)
@@ -711,9 +715,48 @@ class Assembler:
         """A bare `ret`."""
         self.emit(b"\xC3")
 
+    def movq_from_reg(self, destination: str, source: str) -> None:
+        """`movq xmm, r64` (66 REX.W 0F 6E /r), the GPR-to-XMM form gcc emits."""
+        dst, src = XMM_REGISTERS[destination], REGISTERS[source]
+        rex = _rex(True, 0, 0, src >> 3)
+        self.emit(bytes([0x66, rex, 0x0F, 0x6E, 0xC0 | (dst << 3) | (src & 7)]))
+
+    def punpcklqdq(self, destination: str, source: str) -> None:
+        """`punpcklqdq xmm, xmm` (66 0F 6C): broadcast the low qword to both lanes."""
+        dst, src = XMM_REGISTERS[destination], XMM_REGISTERS[source]
+        self.emit(b"\x66\x0F\x6C", bytes([0xC0 | (dst << 3) | src]))
+
+    def paddq_reg(self, destination: str, source: str) -> None:
+        """`paddq xmm, xmm` (66 0F D4 /r): two wrapping i64 adds in one instruction."""
+        dst, src = XMM_REGISTERS[destination], XMM_REGISTERS[source]
+        self.emit(b"\x66\x0F\xD4", bytes([0xC0 | (dst << 3) | src]))
+
+    def movdqu_load_indexed(self, destination: str, base: str, index: str,
+                            scale_log2: int, offset: int) -> None:
+        """`movdqu xmm, [base + index*scale + disp32]` (F3 0F 6F /r), unaligned 16B."""
+        dst = XMM_REGISTERS[destination]
+        base_code, index_code = REGISTERS[base], REGISTERS[index]
+        rex = _rex(False, 0, (index_code >> 3) & 1, (base_code >> 3) & 1)
+        modrm = 0x80 | (dst << 3) | 4
+        sib = (scale_log2 << 6) | ((index_code & 7) << 3) | (base_code & 7)
+        self.emit(bytes([0xF3, rex, 0x0F, 0x6F, modrm, sib]),
+                  (offset & 0xFFFFFFFF).to_bytes(4, "little"))
+
+    def movdqu_store_indexed(self, base: str, index: str, scale_log2: int,
+                             offset: int, source: str) -> None:
+        """`movdqu [base + index*scale + disp32], xmm` (F3 0F 7F /r), unaligned 16B."""
+        src = XMM_REGISTERS[source]
+        base_code, index_code = REGISTERS[base], REGISTERS[index]
+        rex = _rex(False, 0, (index_code >> 3) & 1, (base_code >> 3) & 1)
+        modrm = 0x80 | (src << 3) | 4
+        sib = (scale_log2 << 6) | ((index_code & 7) << 3) | (base_code & 7)
+        self.emit(bytes([0xF3, rex, 0x0F, 0x7F, modrm, sib]),
+                  (offset & 0xFFFFFFFF).to_bytes(4, "little"))
+
     def hlt(self) -> None:
         """`hlt`, used only on unreachable paths such as after ExitProcess."""
         self.emit(b"\xF4")
 
 
-__all__ = ["ARGUMENT_REGISTERS", "Assembler", "CONDITIONS", "EIGHT_BIT", "REGISTERS"]
+__all__ = ["ARGUMENT_REGISTERS", "Assembler", "CONDITIONS", "EIGHT_BIT",
+           "REGISTERS", "XMM_REGISTERS"]

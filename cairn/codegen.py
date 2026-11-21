@@ -1756,6 +1756,96 @@ class CodeGenerator:
         return (self.inline_depth == 0 and self.delta_value == 0
                 and self.value_slot == -1 and self.hold_units == 0)
 
+    def _preceded_by_zero(self, target: syntax.Stmt, slot: int) -> bool:
+        """Is `target` immediately preceded in its block by `slot = 0`?"""
+
+        def walk(block) -> bool:
+            if block is None:
+                return False
+            for position, statement in enumerate(block.statements):
+                if statement is target:
+                    if position == 0:
+                        return False
+                    previous = block.statements[position - 1]
+                    return (isinstance(previous, (syntax.Let, syntax.Assign))
+                            and previous.slot == slot
+                            and isinstance(previous.value, syntax.IntLiteral)
+                            and previous.value.value == 0)
+                for attribute in ("body", "then_block", "else_block"):
+                    if walk(getattr(statement, attribute, None)):
+                        return True
+            return False
+
+        return walk(self.current.body)
+
+    def _try_emit_array_rmw_vector(self, statement: syntax.While) -> bool:
+        """Lower a counted `a[i] = a[i] + invariant; i = i + 1` loop with two lanes."""
+        condition = statement.condition
+        if not (isinstance(condition, syntax.Binary) and condition.op == "<"
+                and isinstance(condition.left, syntax.Name)):
+            return False
+        index_slot = condition.left.slot
+        bound = self._stripped(condition.right)
+        if not isinstance(bound, syntax.IntLiteral) or bound.value < 2 or bound.value % 2:
+            return False
+        body = statement.body
+        if body is None or len(body.statements) != 2:
+            return False
+        store, step = body.statements
+        if any(isinner for isinner in (isinstance(s, (syntax.Break, syntax.Continue))
+                                       for s in body.statements)):
+            return False
+        if not (isinstance(store, syntax.Assign) and store.index is not None
+                and isinstance(store.value, syntax.Binary) and store.value.op == "+"):
+            return False
+        index = self._stripped(store.index)
+        if not isinstance(index, syntax.Name) or index.slot != index_slot:
+            return False
+        left = self._stripped(store.value.left)
+        right = self._stripped(store.value.right)
+        element = left if isinstance(left, syntax.Index) else (
+            right if isinstance(right, syntax.Index) else None)
+        if element is None:
+            return False
+        addend = right if element is left else left
+        element_index = self._stripped(element.index)
+        if (not isinstance(element_index, syntax.Name)
+                or element_index.slot != index_slot
+                or not isinstance(addend, syntax.Name)
+                or addend.slot == index_slot):
+            return False
+        if not (isinstance(step, syntax.Assign) and step.slot == index_slot
+                and isinstance(step.value, syntax.Binary) and step.value.op == "+"):
+            return False
+        step_left = self._stripped(step.value.left)
+        step_right = self._stripped(step.value.right)
+        if not (isinstance(step_left, syntax.Name) and step_left.slot == index_slot
+                and isinstance(step_right, syntax.IntLiteral) and step_right.value == 1):
+            return False
+        index_home = self._home(index_slot)
+        addend_home = self._home(addend.slot)
+        if (index_home is None or addend_home is None or index_home == addend_home
+                or "r10" in self.extra_homes or "r11" in self.extra_homes):
+            return False
+        if not self._preceded_by_zero(statement, index_slot):
+            return False
+        asm = self.assembler
+        start = self._fresh("vec_rmw.start")
+        end = self._fresh("vec_rmw.end")
+        displacement = array_element_base(store.slot, store.array_size)
+        asm.movq_from_reg("xmm1", addend_home)
+        asm.punpcklqdq("xmm1", "xmm1")
+        asm.label(start)
+        asm.cmp_imm(index_home, bound.value)
+        asm.jcc("ge", end)
+        asm.movdqu_load_indexed("xmm0", "rbp", index_home, 3, displacement)
+        asm.paddq_reg("xmm0", "xmm1")
+        asm.movdqu_store_indexed("rbp", index_home, 3, displacement, "xmm0")
+        asm.add_imm(index_home, 2)
+        asm.jmp(start)
+        asm.label(end)
+        return True
+
     def _try_emit_stdin_scan(self, statement: syntax.While) -> bool:
         """Rotate `while true { c = read_char(); if c < 0 break; total += c }`.
 
@@ -1820,6 +1910,8 @@ class CodeGenerator:
 
     def _emit_while_body(self, statement: syntax.While) -> None:
         """`while` with its own break and continue targets."""
+        if self._try_emit_array_rmw_vector(statement):
+            return
         if self._try_emit_stdin_scan(statement):
             return
         asm = self.assembler
