@@ -1511,6 +1511,14 @@ class StringBuiltinsTest(EndToEndTest):
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(completed.stdout, "104\n105\n-1\n-1\n")
 
+    def test_popcount_counts_set_bits_over_the_unsigned_reading(self) -> None:
+        source = ("fn main() -> i64 { print(popcount(0)); print(popcount(1));"
+                  " print(popcount(255)); print(popcount(-1));"
+                  " print(popcount(6148914691236517205)); return 0; }")
+        completed = self.execute(source)
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "0\n1\n8\n64\n32\n")
+
     def test_a_guarded_scan_and_an_out_of_range_read_agree(self) -> None:
         # The in-bounds fact is scoped to the guarded loop: each byte inside it must
         # be its ASCII value, while the terminator at len still answers -1 afterwards.

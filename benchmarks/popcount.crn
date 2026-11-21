@@ -1,0 +1,15 @@
+// Set-bit throughput over ten million derived values. popcount(x) counts the set
+// bits of x's unsigned 64-bit reading and is the newest language surface. The
+// dependent sum keeps the loop alive in every twin, and all four print the same
+// total. Twin of popcount.c, popcount.cpp and popcount.rs.
+fn main() -> i64 {
+    var total: i64 = 0;
+    var i: i64 = 0;
+    while i < 10000000 {
+        var v: i64 = (i * 2654435761) ^ (i >> 3);
+        total = total + popcount(v);
+        i = i + 1;
+    }
+    print(total);
+    return 0;
+}

@@ -1284,6 +1284,16 @@ class PrintHexNewlineFusionTest(unittest.TestCase):
         self.assertNotIn("cairn.runtime.print_hex_line", targets)
 
 
+class PopcountBuiltinTest(unittest.TestCase):
+    """popcount dispatches to its own runtime helper with the standard stack round-trip."""
+
+    def test_the_helper_is_emitted_and_called(self) -> None:
+        program = sema.analyze(parser.parse("fn main() -> i64 { print(popcount(255)); return 0; }"))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertIn("cairn.runtime.popcount", artifact.text_labels)
+        self.assertIn("cairn.runtime.popcount", {label for _, label in artifact.fixups})
+
+
 class ArrayVectorTest(unittest.TestCase):
     """A counted array read-modify-write loop uses two SSE2 lanes."""
 

@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `47`
-- **Total Classes**: `208`
-- **Total Top-Level Functions**: `241`
-- **Total Class Methods**: `1125`
-- **Total Source Lines**: `21305`
+- **Total Classes**: `209`
+- **Total Top-Level Functions**: `242`
+- **Total Class Methods**: `1129`
+- **Total Source Lines**: `21372`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
-- **Not indexed by this map**: cpp (`38` file(s)), rust (`19` file(s))
+- **Not indexed by this map**: cpp (`40` file(s)), rust (`20` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -47,7 +47,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `675` lines
+**Size**: `677` lines
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -152,7 +152,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4731` lines
+**Size**: `4735` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -726,7 +726,7 @@
 ### [`cairn/runtime.py`](cairn/runtime.py)
 > *Runtime helpers emitted into every executable.*
 
-**Size**: `724` lines
+**Size**: `760` lines
 
 **Functions:**
 - `def emit_arg_fill(assembler)` - *Emit `arg_fill`: tokenize the ANSI command line into the static table once.*
@@ -739,6 +739,7 @@
 - `def emit_print_i64(assembler)` - *Emit `print_i64`: write rax in decimal plus a newline.*
 - `def emit_print_char(assembler)` - *Emit `print_char`: write the low byte of rax to stdout, no newline.*
 - `def emit_print_hex(assembler, label, with_newline)` - *Emit a lowercase-hex printer, with the newline riding in the same buffer on request.*
+- `def emit_popcount(assembler)` - *Emit `popcount`: a portable SWAR count of the set bits of unsigned rax.*
 - `def emit_print_str(assembler)` - *Emit `print_str`: write the NUL-terminated text at rax to stdout, no newline.*
 - `def emit_str_len(assembler)` - *Emit `str_len`: the number of bytes in the NUL-terminated text at rax.*
 - `def emit_str_byte(assembler)` - *Emit `str_byte(s, j)`: byte j of the text at rcx, or -1.*
@@ -750,7 +751,7 @@
 ### [`cairn/sema.py`](cairn/sema.py)
 > *Semantic analysis: names, arity, mutability and return-path checks.*
 
-**Size**: `462` lines
+**Size**: `463` lines
 
 **Classes:**
 - `class Binding` - *One name in a function: its frame slot, whether it can be assigned, and where it began.*
@@ -1028,7 +1029,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2807` lines
+**Size**: `2817` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1169,6 +1170,8 @@
   - Method `.test_hex_then_newline_uses_the_fused_helper()`
   - Method `.test_a_non_newline_character_does_not_fuse()`
   - Method `.test_a_used_hex_result_does_not_fuse()`
+- `class PopcountBuiltinTest` - *popcount dispatches to its own runtime helper with the standard stack round-trip.*
+  - Method `.test_the_helper_is_emitted_and_called()`
 - `class ArrayVectorTest` - *A counted array read-modify-write loop uses two SSE2 lanes.*
   - Method `.test_an_even_trip_count_uses_paddq()`
   - Method `.test_an_odd_trip_count_is_refused()`
@@ -1367,7 +1370,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1596` lines
+**Size**: `1604` lines
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1503,6 +1506,7 @@
   - Method `.test_escapes_decode_into_the_output()`
   - Method `.test_str_len_counts_to_the_terminator()`
   - Method `.test_str_byte_reads_inside_and_reports_outside()`
+  - Method `.test_popcount_counts_set_bits_over_the_unsigned_reading()`
   - Method `.test_a_guarded_scan_and_an_out_of_range_read_agree()`
   - Method `.test_equal_literals_share_one_blob()`
   - Method `.test_str_byte_with_a_calling_index_takes_the_helper_path()`
@@ -1962,7 +1966,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `260` lines
+**Size**: `266` lines
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -1980,6 +1984,8 @@
   - Method `.test_five_arguments_hits_the_four_parameter_limit()`
   - Method `.test_print_is_callable_not_redefinable()`
   - Method `.test_builtin_cannot_be_a_parameter_or_an_assignment_target()`
+  - Method `.test_popcount_is_a_one_argument_builtin()`
+  - Method `.test_popcount_rejects_a_wrong_arity()`
   - Method `.test_print_char_and_print_hex_are_one_argument_builtins()`
   - Method `.test_new_builtins_take_exactly_one_argument()`
   - Method `.test_new_builtins_are_callable_not_values_redefinable()`

@@ -95,6 +95,7 @@ fn main() -> i64 {
 - **Builtins**: `print(x)` writes the decimal form and a newline, and returns `x`;
   `print_char(c)` writes the low byte of `c` (no newline), `print_hex(x)` writes `x` in
   lowercase hex with no leading zeros (no newline); both return their argument.
+  `popcount(x)` returns the number of set bits in `x`'s unsigned 64-bit reading.
   Input: `argc()` is the token count with the program path included (the C convention);
   `arg_byte(i, j)` is byte `j` (zero-indexed) of argument `i`'s content with quotes
   stripped, or -1 past the token; `read_char()` is the next stdin byte, or -1 at end
@@ -333,6 +334,7 @@ a spread:
 | `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.9-18.4 ms | 11.8-16.6 ms | 12.2-19.6 ms | 28.2-37.0 ms | 71,168 bytes |
 | `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 10.8-11.4 ms (ADR-073 SIB addressing) | 10.2-11.9 ms | 10.0-11.9 ms | 11.6-13.0 ms | 136,704 bytes |
 | `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 9.3-9.4 ms (ADR-073 SIB addressing) | 9.3-10.0 ms | 10.1-10.9 ms | 11.2-11.8 ms | 136,704 bytes |
+| `popcount` | 10,000,000 derived values, set-bit count summed | 21.8 ms (portable SWAR) | 145.3 ms | 22.5 ms | 17.6 ms | 136,704 bytes |
 
 The size column is the executable's `.text` frame at the current revision: the runtime helpers (argv arena, 64 KiB stdin state, printers, divide trap) ride in every program, so most cases share the same 71,168-byte base. `array_sum` and sieve reserve 8 MiB of stack in the PE header (ADR-068), and `many_params` links the argument arena for its `argc`-derived bound (ADR-074), so their base carries the bigger frame.
 

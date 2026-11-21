@@ -15,6 +15,7 @@ PRINT_LABEL = "cairn.runtime.print_i64"
 PRINT_CHAR_LABEL = "cairn.runtime.print_char"
 PRINT_HEX_LABEL = "cairn.runtime.print_hex"
 PRINT_HEX_LINE_LABEL = "cairn.runtime.print_hex_line"
+POPCOUNT_LABEL = "cairn.runtime.popcount"
 DIV_ZERO_LABEL = "cairn.runtime.div_zero"
 ARGC_LABEL = "cairn.runtime.argc"
 ARG_BYTE_LABEL = "cairn.runtime.arg_byte"
@@ -578,6 +579,39 @@ def emit_print_hex(assembler: Assembler, label: str = PRINT_HEX_LABEL,
     assembler.ret()
 
 
+def emit_popcount(assembler: Assembler) -> None:
+    """Emit `popcount`: a portable SWAR count of the set bits of unsigned rax.
+
+    Five mask-and-shift stages fold the 64 bits into eight byte lanes, then one
+    multiply by 0x0101...01 sums those lanes into the high byte. No CPU feature
+    check is needed; a POPCNT fast path is the recorded speed follow-up. The
+    helper clobbers rdx and r10, both inside the runtime call contract.
+    """
+    assembler.label(POPCOUNT_LABEL)
+    assembler.mov_imm64("r10", 0x5555555555555555)
+    assembler.mov_reg_reg("rdx", "rax")
+    assembler.shift_imm(5, "rax", 1)
+    assembler.binary(0x21, "rax", "r10")
+    assembler.binary(0x21, "rdx", "r10")
+    assembler.binary(0x01, "rax", "rdx")
+    assembler.mov_imm64("r10", 0x3333333333333333)
+    assembler.mov_reg_reg("rdx", "rax")
+    assembler.shift_imm(5, "rax", 2)
+    assembler.binary(0x21, "rax", "r10")
+    assembler.binary(0x21, "rdx", "r10")
+    assembler.binary(0x01, "rax", "rdx")
+    assembler.mov_reg_reg("rdx", "rax")
+    assembler.shift_imm(5, "rax", 4)
+    assembler.binary(0x01, "rdx", "rax")
+    assembler.mov_imm64("r10", 0x0F0F0F0F0F0F0F0F)
+    assembler.binary(0x21, "rdx", "r10")
+    assembler.mov_imm64("r10", 0x0101010101010101)
+    assembler.imul("rdx", "r10")
+    assembler.shift_imm(5, "rdx", 56)
+    assembler.mov_reg_reg("rax", "rdx")
+    assembler.ret()
+
+
 def emit_print_str(assembler: Assembler) -> None:
     """Emit `print_str`: write the NUL-terminated text at rax to stdout, no newline.
 
@@ -698,6 +732,7 @@ def emit_runtime(assembler: Assembler, rodata: ReadOnlyData,
     emit_print_hex(assembler)
     emit_print_hex(assembler, PRINT_HEX_LINE_LABEL, with_newline=True)
     emit_print_str(assembler)
+    emit_popcount(assembler)
     emit_str_len(assembler)
     emit_str_byte(assembler)
     emit_div_zero(assembler, rodata)
@@ -711,7 +746,8 @@ __all__ = [
     "ARGC_LABEL", "ARG_BYTE_LABEL", "ARG_FILL_LABEL", "ARGV_ARENA_LABEL",
     "ARGV_CACHE_LABEL", "ARGV_LEN0_LABEL", "ARGV_PTR0_LABEL",
     "DIV_ZERO_DATA_LABEL", "DIV_ZERO_LABEL", "DIV_ZERO_MESSAGE",
-    "NEWLINE_LABEL", "PRINT_CHAR_LABEL", "PRINT_HEX_LABEL", "PRINT_HEX_LINE_LABEL", "PRINT_LABEL",
+    "NEWLINE_LABEL", "POPCOUNT_LABEL", "PRINT_CHAR_LABEL", "PRINT_HEX_LABEL",
+    "PRINT_HEX_LINE_LABEL", "PRINT_LABEL",
     "PRINT_STR_LABEL", "READ_CHAR_LABEL", "STDIN_BUFFER_LABEL", "STDIN_COUNT_LABEL",
     "STDIN_CURSOR_LABEL", "STR_BYTE_LABEL", "STR_LEN_LABEL",
     "OUT_APPEND_LABEL", "OUT_FLUSH_LABEL", "OUT_FLUSH_WORK_LABEL",
@@ -719,6 +755,6 @@ __all__ = [
     "STDOUT_BUFFER_SIZE",
     "emit_arg_fill", "emit_arg_byte", "emit_argc", "emit_div_zero",
     "emit_out_append", "emit_out_flush", "emit_out_flush_work",
-    "emit_print_char", "emit_print_hex", "emit_print_i64", "emit_print_str",
+    "emit_popcount", "emit_print_char", "emit_print_hex", "emit_print_i64", "emit_print_str",
     "emit_read_char", "emit_runtime", "emit_str_byte", "emit_str_len",
 ]

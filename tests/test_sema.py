@@ -79,6 +79,12 @@ class SemaTest(unittest.TestCase):
         self.assertEqual(codes("fn f(print: i64) -> i64 { return 0; }"
                                "fn main() -> i64 { return f(1); }"), ["E3012"])
         self.assertEqual(codes("fn main() -> i64 { print = 1; return 0; }"), ["E3012"])
+    def test_popcount_is_a_one_argument_builtin(self) -> None:
+        analyze(parse("fn main() -> i64 { popcount(255); return 0; }"))
+
+    def test_popcount_rejects_a_wrong_arity(self) -> None:
+        self.assertEqual(codes("fn main() -> i64 { popcount(); return 0; }"), ["E3004"])
+
     def test_print_char_and_print_hex_are_one_argument_builtins(self) -> None:
         analyze(parse("fn main() -> i64 { print_char(65); print_hex(255); return 0; }"))
 

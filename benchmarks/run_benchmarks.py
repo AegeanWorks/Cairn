@@ -121,6 +121,8 @@ CASES: Tuple[Case, ...] = (
          "benchmarks/array_sum.rs", "benchmarks/array_sum.cpp", 6_619_136, "elements"),
     Case("sieve", "benchmarks/sieve.crn", "benchmarks/sieve.c",
          "benchmarks/sieve.rs", "benchmarks/sieve.cpp", 65_536, "candidates"),
+    Case("popcount", "benchmarks/popcount.crn", "benchmarks/popcount.c",
+         "benchmarks/popcount.rs", "benchmarks/popcount.cpp", 10_000_000, "values"),
 )
 
 
