@@ -7,14 +7,14 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `47`
-- **Total Classes**: `216`
+- **Total Classes**: `218`
 - **Total Top-Level Functions**: `250`
-- **Total Class Methods**: `1156`
-- **Total Source Lines**: `21787`
+- **Total Class Methods**: `1163`
+- **Total Source Lines**: `21843`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
-- **Not indexed by this map**: cpp (`42` file(s)), rust (`21` file(s))
+- **Not indexed by this map**: cpp (`44` file(s)), rust (`22` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -49,7 +49,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `682` lines
+**Size**: `684` lines
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -154,7 +154,7 @@
 ### [`cairn/codegen.py`](cairn/codegen.py)
 > *Code generation: syntax tree to x86-64, one pass, values in rax.*
 
-**Size**: `4739` lines
+**Size**: `4743` lines
 
 **Classes:**
 - `class CodeGenerator` - *One lowering pass over a checked program.*
@@ -479,7 +479,7 @@
 ### [`cairn/machine.py`](cairn/machine.py)
 > *x86-64 emitter: the instruction subset Cairn lowers to, written as bytes.*
 
-**Size**: `782` lines
+**Size**: `793` lines
 
 **Classes:**
 - `class Assembler` - *A byte buffer with named labels and forward-reference fixups.*
@@ -568,6 +568,7 @@
   - Method `.movdqu_store_indexed(base, index, scale_log2, offset, source)` - *`movdqu [base + index*scale + disp32], xmm` (F3 0F 7F /r), unaligned 16B.*
   - Method `.popcnt(destination, source)` - *`popcnt r64, r/m64` (F3 REX.W 0F B8 /r): one instruction set-bit count.*
   - Method `.lzcnt(destination, source)` - *`lzcnt r64, r/m64` (F3 REX.W 0F BD /r): one leading-zero count.*
+  - Method `.tzcnt(destination, source)` - *`tzcnt r64, r/m64` (F3 REX.W 0F BC /r): one trailing-zero count.*
   - Method `.hlt()` - *`hlt`, used only on unreachable paths such as after ExitProcess.*
 
 **Functions:**
@@ -1045,7 +1046,7 @@
 ### [`tests/test_codegen.py`](tests/test_codegen.py)
 > *Code-generation tests: where a value lives, and what the frame must carry for it.*
 
-**Size**: `2855` lines
+**Size**: `2870` lines
 
 **Classes:**
 - `class RecordingAssembler` - *An assembler that remembers every frame slot it reads or writes per function.*
@@ -1195,6 +1196,9 @@
 - `class ClzBuiltinTest` - *clz lowers inline: one LZCNT at the call site, no runtime call round-trip.*
   - Method `.test_no_runtime_helper_is_emitted_or_called()`
   - Method `.test_the_lzcnt_bytes_appear_inline()`
+- `class CtzTzcntTest` - *ctz lowers inline to one TZCNT, with no runtime call round-trip.*
+  - Method `.test_the_tzcnt_bytes_appear_inline()`
+  - Method `.test_no_runtime_helper_is_emitted_or_called()`
 - `class ArrayVectorTest` - *A counted array read-modify-write loop uses two SSE2 lanes.*
   - Method `.test_an_even_trip_count_uses_paddq()`
   - Method `.test_an_odd_trip_count_is_refused()`
@@ -1393,7 +1397,7 @@
 ### [`tests/test_end_to_end.py`](tests/test_end_to_end.py)
 > *End-to-end tests: build real executables, run them, and assert what they print.*
 
-**Size**: `1632` lines
+**Size**: `1641` lines
 
 **Classes:**
 - `class EndToEndTest` - *Each test compiles a source, writes it to a temporary folder and executes it.*
@@ -1530,6 +1534,7 @@
   - Method `.test_escapes_decode_into_the_output()`
   - Method `.test_str_len_counts_to_the_terminator()`
   - Method `.test_str_byte_reads_inside_and_reports_outside()`
+  - Method `.test_ctz_counts_trailing_zeros_of_the_unsigned_reading()`
   - Method `.test_clz_counts_leading_zeros_of_the_unsigned_reading()`
   - Method `.test_popcount_counts_set_bits_over_the_unsigned_reading()`
   - Method `.test_a_guarded_scan_and_an_out_of_range_read_agree()`
@@ -1657,7 +1662,7 @@
 ### [`tests/test_machine.py`](tests/test_machine.py)
 > *Emitter tests: the exact bytes of the encodings the generator relies on.*
 
-**Size**: `479` lines
+**Size**: `488` lines
 
 **Classes:**
 - `class FrameInPlaceEncodingTest` - *A frame slot's in-place update encodes as one memory-operand instruction.*
@@ -1754,6 +1759,8 @@
   - Method `.test_popcnt_of_a_register()`
 - `class LzcntMethodTest` - *LZCNT is one fixed byte pattern with the F3 and REX.W prefixes.*
   - Method `.test_lzcnt_of_a_register()`
+- `class TzcntMethodTest` - *TZCNT is one fixed byte pattern with the F3 and REX.W prefixes.*
+  - Method `.test_tzcnt_of_a_register()`
 
 ---
 
@@ -2006,7 +2013,7 @@
 ### [`tests/test_sema.py`](tests/test_sema.py)
 > *Semantic tests: every reachable rule, one failing source each.*
 
-**Size**: `272` lines
+**Size**: `278` lines
 
 **Classes:**
 - `class SemaTest` - *Semantic analysis is the last stage that sees names, so its rules are the language's.*
@@ -2028,6 +2035,8 @@
   - Method `.test_popcount_rejects_a_wrong_arity()`
   - Method `.test_clz_is_a_one_argument_builtin()`
   - Method `.test_clz_rejects_a_wrong_arity()`
+  - Method `.test_ctz_is_a_one_argument_builtin()`
+  - Method `.test_ctz_rejects_a_wrong_arity()`
   - Method `.test_print_char_and_print_hex_are_one_argument_builtins()`
   - Method `.test_new_builtins_take_exactly_one_argument()`
   - Method `.test_new_builtins_are_callable_not_values_redefinable()`
