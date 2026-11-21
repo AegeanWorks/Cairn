@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-popcount-docs",
+    "task_id": "cairn-popcnt-fast",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795230865.6945226,
+    "updated_at": 1795231127.2037606,
     "owner": "opencode:session",
-    "lease_until": 1795238065.6945226,
+    "lease_until": 1795238327.2037606,
     "started_by": "opencode:session",
     "continuations": [],
     "workspaces": [
@@ -16,70 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795230866.10053,
-    "completed_head": "84a5ca4dffdbfdbc0228b21912b0ac5fbb558f27",
-    "completed_tree": "17ed88007443d1ca3987f6a6abf75c7d4e4b52a5"
+    "completed_at": 1795231127.6655247,
+    "completed_head": "5f6342bf379a59dccc08daac96c3b660814210fa",
+    "completed_tree": "83a3e20cdc7c0413290e717a861dc077e3508ff4"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-paired-verdict",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/1] add a deterministic paired-A/B verdict tool to the benchmark harness because two consecutive quiet-window full runs produced contradictory verdicts on byte-identical builds; the tool interleaves Cairn with each baseline and reports an identical-binary control band so 'won' is established against measured noise",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795228802.0148885,
-      "timestamp_str": "2026-11-21 05:40:02",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "the single-run harness verdict flipped between sessions on identical builds, so further speed claims and the all-won condition cannot be arbitrated",
-        "benefits": "a reproducible verdict with a measured noise floor",
-        "risks": "contract: read-only measurement tool, no compiler change; dependency: reuses the existing harness builders and compilers; concurrency: none; state: writes no benchmark records",
-        "mitigation": "unit tests pin the interleaved ratio and control math, and the tool is additive to run_benchmarks.py"
-      },
-      "plan_digest": "366ebdc22ed95f809d456722a6f98e473a693c92a17bff48aff693e3b31fc9d2",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-paired-verdict",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] committed a deterministic paired A/B verdict tool: benchmarks/paired.py interleaves Cairn with a copy and each baseline, derives a central-80-percent control band, and calls a case faster/slower/tie only outside that band; five unit tests pin the arithmetic; the first 10-round run reported C++ won on all 19 cases with C and Rust provisional; ADR-100 records why the old single-run verdict was noise-dominated; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795229329.4547877,
-      "timestamp_str": "2026-11-21 05:48:49",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-paired-verdict",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-paired-verdict' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795229329.9061923,
-      "timestamp_str": "2026-11-21 05:48:49",
-      "agent": "opencode:session",
-      "head": "0653314bf8b79f5fc38dce723e7e8bc976218267",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-paired-timeout",
       "phase": "phase 4",
@@ -403,6 +344,65 @@
       "timestamp_str": "2026-11-21 06:14:26",
       "agent": "opencode:session",
       "head": "84a5ca4dffdbfdbc0228b21912b0ac5fbb558f27",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-popcnt-fast",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/1] replace the popcount SWAR helper with a single POPCNT instruction and document the CPU requirement",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795231126.787917,
+      "timestamp_str": "2026-11-21 06:18:46",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "the new popcount function trailed Rust by 24 percent with the portable SWAR chain",
+        "benefits": "a controlled A/B measured 38 percent faster and the case now beats all three baselines",
+        "risks": "contract: identical checksums; dependency: POPCNT/ABM CPU feature, documented in SPEC; concurrency: none; state: none",
+        "mitigation": "failing-first byte and shape tests plus end-to-end value tests and the four-language twin parity case"
+      },
+      "plan_digest": "449a84a045d04e98a2564d781a9eef76b9b3235053c14d721a0b817aac2a2f3c",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-popcnt-fast",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/1] 24-round paired A/B control 0.989 / candidate 0.615, checksums identical; full suite and gates green; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795231127.2037606,
+      "timestamp_str": "2026-11-21 06:18:47",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-popcnt-fast",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-popcnt-fast' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795231127.7217536,
+      "timestamp_str": "2026-11-21 06:18:47",
+      "agent": "opencode:session",
+      "head": "5f6342bf379a59dccc08daac96c3b660814210fa",
       "delivery": {
         "roots": [
           "."
