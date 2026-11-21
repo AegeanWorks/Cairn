@@ -1,13 +1,13 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-bswap-verdict",
+    "task_id": "cairn-paired-resilient",
     "last_phase": "phase 4",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795266222.7518964,
+    "updated_at": 1795270469.210994,
     "owner": "kilo:cairn",
-    "lease_until": 1795273422.7518964,
+    "lease_until": 1795277669.210994,
     "started_by": "kilo:cairn",
     "continuations": [],
     "workspaces": [
@@ -16,70 +16,11 @@
         "path": "projects/cairn"
       }
     ],
-    "completed_at": 1795266226.6834588,
-    "completed_head": "0ceb0dc4f1ce05ef967c4434992af96e818304b2",
-    "completed_tree": "73af887c35173337f5a7b8b26f7777efb8ce52f5"
+    "completed_at": 1795270469.7144916,
+    "completed_head": "8a9619581ba946c49392d913ac95d20c24ed6f70",
+    "completed_tree": "b857695084d65c23f93497e1a375ef951edff9c7"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-clz-inline",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/2] inline LZCNT into clz call sites instead of the runtime call round-trip",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795247536.853537,
-      "timestamp_str": "2026-11-21 10:52:16",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "clz measures ~13% slower than C++ and ~10% slower than Rust because every call pays a call/ret",
-        "benefits": "one LZCNT per call site with no call, shadow space or ret",
-        "risks": "contract: clz values unchanged; dependency: ABM as before; concurrency: none; state: none",
-        "mitigation": "failing-first shape test pins no runtime label and inline lzcnt; value parity and twin parity; controlled A/B before any claim; full suite and strict gates"
-      },
-      "plan_digest": "1fc212ba93ca2739fa8d5006250cd3e41e44f95f84404c37b651a58f4f566fa1",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-clz-inline",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[2/2] ADR-109; inline LZCNT ~12% faster; clz gaps to C++/Rust closed; full suite 1442 OK",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795248682.216925,
-      "timestamp_str": "2026-11-21 11:11:22",
-      "agent": "opencode:session",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-clz-inline",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[2/2] committed; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795248682.7878144,
-      "timestamp_str": "2026-11-21 11:11:22",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-clz-inline",
       "phase": "completed",
@@ -394,6 +335,65 @@
       "timestamp_str": "2026-11-21 16:03:47",
       "agent": "kilo:cairn",
       "head": "0ceb0dc4f1ce05ef967c4434992af96e818304b2",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-paired-resilient",
+      "phase": "phase 2",
+      "phase_num": 2,
+      "description": "[1/2] failing-first: the paired verdict drops a baseline whose run times out instead of aborting the whole case, and a lost control pair reports the case as unavailable; [2/2] ADR-113, suite and gates, commit, then run the 23-case 48-round verdict in the background and record it",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795269854.822781,
+      "timestamp_str": "2026-11-21 17:04:14",
+      "agent": "kilo:cairn",
+      "impact_assessment": {
+        "why": "the authoritative 23-case paired run aborted mid-run when hex_io's portable C twin, normally 5-7 s, hit the 120 s per-run timeout under concurrent host load; one slow baseline discarded eleven cases that had already measured cleanly",
+        "benefits": "a case with one unavailable baseline still reports verdicts for the remaining languages, so a single timeout no longer voids an entire authoritative verdict run under load",
+        "risks": "contract: measure_interleaved may omit a timed-out key and verdicts_from_samples returns no band when the control pair is incomplete; callers are measure_case and main only; dependency: none new, subprocess.TimeoutExpired is already raised by timed(); concurrency: each key is guarded independently inside the interleaved round, so other keys keep their samples; state: none",
+        "mitigation": "failing-first tests pin the dropped key and the missing-control result; the existing order and spike-cancellation tests must stay green; full suite and project gates before the commit"
+      },
+      "plan_digest": "4b5411f0c8b64f76c985621ace9a221a9a501a0dfe5e8f77daf0336a61813e74",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-paired-resilient",
+      "phase": "phase 4",
+      "phase_num": 4,
+      "description": "[1/2] committed 8a96195: measure_interleaved drops a timed-out key, verdicts_from_samples reads an incomplete control pair as unavailable, main prints control=unavailable; TimeoutResilienceTest 3 failing-first tests red then green, existing interleaved/paired tests stay green; checklists: passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795270469.210994,
+      "timestamp_str": "2026-11-21 17:14:29",
+      "agent": "kilo:cairn",
+      "checklists": "passed",
+      "workspaces": [
+        {
+          "name": "cairn",
+          "path": "projects/cairn"
+        }
+      ]
+    },
+    {
+      "task_id": "cairn-paired-resilient",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-paired-resilient' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795270469.7921574,
+      "timestamp_str": "2026-11-21 17:14:29",
+      "agent": "kilo:cairn",
+      "head": "8a9619581ba946c49392d913ac95d20c24ed6f70",
       "delivery": {
         "roots": [
           "."
