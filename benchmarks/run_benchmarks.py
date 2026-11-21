@@ -128,6 +128,8 @@ CASES: Tuple[Case, ...] = (
          "benchmarks/popcount.rs", "benchmarks/popcount.cpp", 10_000_000, "values"),
     Case("clz", "benchmarks/clz.crn", "benchmarks/clz.c",
          "benchmarks/clz.rs", "benchmarks/clz.cpp", 10_000_000, "values"),
+    Case("ctz", "benchmarks/ctz.crn", "benchmarks/ctz.c",
+         "benchmarks/ctz.rs", "benchmarks/ctz.cpp", 10_000_000, "values"),
 )
 
 

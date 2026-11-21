@@ -97,6 +97,7 @@ fn main() -> i64 {
   lowercase hex with no leading zeros (no newline); both return their argument.
   `popcount(x)` returns the number of set bits in `x`'s unsigned 64-bit reading.
   `clz(x)` returns the number of leading zeros in that reading (64 for zero).
+  `ctz(x)` returns the number of trailing zeros in that reading (64 for zero).
   Input: `argc()` is the token count with the program path included (the C convention);
   `arg_byte(i, j)` is byte `j` (zero-indexed) of argument `i`'s content with quotes
   stripped, or -1 past the token; `read_char()` is the next stdin byte, or -1 at end

@@ -1,0 +1,15 @@
+// Trailing-zero throughput over ten million derived values. ctz(x) counts the
+// trailing zeros of x's unsigned 64-bit reading (64 for x == 0) and is the newest
+// language surface. The dependent sum keeps the loop alive in every twin, and
+// all four print the same total. Twin of ctz.c, ctz.cpp and ctz.rs.
+fn main() -> i64 {
+    var total: i64 = 0;
+    var i: i64 = 0;
+    while i < 10000000 {
+        var v: i64 = (i * 2654435761) ^ (i >> 3);
+        total = total + ctz(v);
+        i = i + 1;
+    }
+    print(total);
+    return 0;
+}

@@ -188,6 +188,7 @@ a[i] = expr;   store into element i
 | `flush()` | Writes out everything the shared buffer holds through one `WriteFile` and answers how many bytes went out; `0` on an empty buffer |
 | `popcount(x)` | The number of set bits in `x`'s unsigned 64-bit reading, emitted as one POPCNT instruction; requires an x86-64 CPU with ABM/POPCNT (all such CPUs since 2008) |
 | `clz(x)` | The number of leading zeros in `x`'s unsigned 64-bit reading (64 for zero), emitted as one LZCNT instruction; requires the same ABM extension as POPCNT |
+| `ctz(x)` | The number of trailing zeros in `x`'s unsigned 64-bit reading (64 for zero), emitted as one TZCNT instruction; requires an x86-64 CPU with BMI1 (all such CPUs since 2013) |
 | Right shift | Arithmetic (`>>` keeps the sign); shift counts mask to 63 in folding and hardware |
 | Uninitialised reads | Impossible: initializers are mandatory and every frame slot is zeroed on entry |
 | Branch never taken | A binding declared inside it reads as `0` |
@@ -237,6 +238,7 @@ prints one. (Divergence from Alloy SPEC §§9–10, recorded deliberately.)
   - `flush() -> i64` - drains the shared stdout buffer with one `WriteFile`; answers the byte count.
 - `popcount(x: i64) -> i64` - set-bit count of the unsigned 64-bit reading of `x`.
 - `clz(x: i64) -> i64` - leading-zero count of the unsigned 64-bit reading of `x` (64 for zero).
+- `ctz(x: i64) -> i64` - trailing-zero count of the unsigned 64-bit reading of `x` (64 for zero).
 - Comments: `//` to end of line.
 - Limits: 8 parameters (the first four in registers, the rest in the caller's outgoing
   stack area); `i64` range `-9223372036854775808..9223372036854775807`; ASCII identifiers,

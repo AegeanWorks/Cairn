@@ -1332,6 +1332,21 @@ class ClzBuiltinTest(unittest.TestCase):
         self.assertIn(b"\xf3\x48\x0f\xbd\xc0", bytes(artifact.text))
 
 
+class CtzTzcntTest(unittest.TestCase):
+    """ctz lowers inline to one TZCNT, with no runtime call round-trip."""
+
+    def test_the_tzcnt_bytes_appear_inline(self) -> None:
+        program = sema.analyze(parser.parse("fn main() -> i64 { print(ctz(255)); return 0; }"))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertIn(b"\xf3\x48\x0f\xbc\xc0", bytes(artifact.text))
+
+    def test_no_runtime_helper_is_emitted_or_called(self) -> None:
+        program = sema.analyze(parser.parse("fn main() -> i64 { print(ctz(255)); return 0; }"))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertNotIn("cairn.runtime.ctz", artifact.text_labels)
+        self.assertNotIn("cairn.runtime.ctz", {label for _, label in artifact.fixups})
+
+
 class ArrayVectorTest(unittest.TestCase):
     """A counted array read-modify-write loop uses two SSE2 lanes."""
 

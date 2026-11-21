@@ -773,6 +773,17 @@ class Assembler:
         rex = _rex(True, dst >> 3, 0, src >> 3)
         self.emit(bytes([0xF3, rex, 0x0F, 0xBD, 0xC0 | ((dst & 7) << 3) | (src & 7)]))
 
+    def tzcnt(self, destination: str, source: str) -> None:
+        """`tzcnt r64, r/m64` (F3 REX.W 0F BC /r): one trailing-zero count.
+
+        TZCNT returns 64 for a zero input, unlike `bsf`, and is part of BMI1,
+        present on every x86-64 CPU since 2013 (ADR-110). The call site lowers
+        inline, so no runtime helper is needed.
+        """
+        dst, src = REGISTERS[destination], REGISTERS[source]
+        rex = _rex(True, dst >> 3, 0, src >> 3)
+        self.emit(bytes([0xF3, rex, 0x0F, 0xBC, 0xC0 | ((dst & 7) << 3) | (src & 7)]))
+
     def hlt(self) -> None:
         """`hlt`, used only on unreachable paths such as after ExitProcess."""
         self.emit(b"\xF4")

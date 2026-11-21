@@ -3427,6 +3427,10 @@ class CodeGenerator:
             self._emit_expression(expression.arguments[0])
             self.assembler.lzcnt("rax", "rax")
             return
+        if expression.name == "ctz":
+            self._emit_expression(expression.arguments[0])
+            self.assembler.tzcnt("rax", "rax")
+            return
         if expression.name == "print":
             self._emit_expression(expression.arguments[0])
             asm.push("rax")

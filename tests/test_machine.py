@@ -475,5 +475,14 @@ class LzcntMethodTest(unittest.TestCase):
         self.assertEqual(bytes(assembler.code), b"\xf3\x48\x0f\xbd\xc0")
 
 
+class TzcntMethodTest(unittest.TestCase):
+    """TZCNT is one fixed byte pattern with the F3 and REX.W prefixes."""
+
+    def test_tzcnt_of_a_register(self) -> None:
+        assembler = Assembler()
+        assembler.tzcnt("rax", "rax")
+        self.assertEqual(bytes(assembler.code), b"\xf3\x48\x0f\xbc\xc0")
+
+
 if __name__ == "__main__":
     unittest.main()
