@@ -7,10 +7,10 @@
 
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `47`
-- **Total Classes**: `211`
-- **Total Top-Level Functions**: `242`
-- **Total Class Methods**: `1134`
-- **Total Source Lines**: `21396`
+- **Total Classes**: `212`
+- **Total Top-Level Functions**: `244`
+- **Total Class Methods**: `1137`
+- **Total Source Lines**: `21469`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`47` module(s))
@@ -32,14 +32,16 @@
 ### [`benchmarks/paired.py`](benchmarks/paired.py)
 > *Deterministic paired A/B verdict for the benchmark registry.*
 
-**Size**: `117` lines
+**Size**: `150` lines
 
 **Functions:**
 - `def timed(executable, stdin)` - *One wall-clock run; returns milliseconds and stdout for parity checks.*
 - `def gap(left, right, rounds, stdin)` - *Median ratio left/right and its samples (lower = left faster).*
 - `def band(samples)` - *The central 80 percent of an identical-binary control run.*
 - `def verdict(gap_value, control_band)` - *Win only when the gap is clearly outside the control band.*
-- `def measure_case(case, folder, rounds)` - *Build every twin for one case and measure its gaps with a control band.*
+- `def measure_interleaved(timers, rounds)` - *Sample every timer in alternating order across the same rounds.*
+- `def verdicts_from_samples(samples, baselines)` - *Derive the control band and baseline verdicts from interleaved samples.*
+- `def measure_case(case, folder, rounds)` - *Build every twin for one case and measure all gaps in one interleaved window.*
 - `def main(argv)`
 
 ---
@@ -876,7 +878,7 @@
 ### [`tests/test_benchmarks.py`](tests/test_benchmarks.py)
 > *Benchmark harness tests: summarising and rendering, without running a benchmark.*
 
-**Size**: `610` lines
+**Size**: `650` lines
 
 **Classes:**
 - `class PairedVerdictTest` - *A win is a gap outside the identical-binary band, not a raw best time.*
@@ -952,6 +954,10 @@
   - Method `.test_compare_is_symmetric_about_the_noise_band_edges()`
   - Method `.test_the_newest_valid_history_record_wins_over_corrupt_lines()`
   - Method `.test_missing_history_reads_as_no_record()`
+- `class InterleavedWindowTest` - *Control band and baseline gaps must come from the same wall-clock window.*
+  - Method `.test_every_key_is_sampled_each_round_in_alternating_order()`
+  - Method `.test_a_shared_window_cancels_a_host_load_spike()`
+  - Method `.test_missing_baselines_are_skipped()`
 
 ---
 
