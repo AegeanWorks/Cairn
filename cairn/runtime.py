@@ -724,7 +724,6 @@ def emit_runtime(assembler: Assembler, rodata: ReadOnlyData,
     emit_print_hex(assembler, PRINT_HEX_LINE_LABEL, with_newline=True)
     emit_print_str(assembler)
     emit_popcount(assembler)
-    emit_clz(assembler)
     emit_str_len(assembler)
     emit_str_byte(assembler)
     emit_div_zero(assembler, rodata)

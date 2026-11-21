@@ -1318,13 +1318,18 @@ class ClzLzcntTest(unittest.TestCase):
 
 
 class ClzBuiltinTest(unittest.TestCase):
-    """clz dispatches to its own runtime helper with the standard stack round-trip."""
+    """clz lowers inline: one LZCNT at the call site, no runtime call round-trip."""
 
-    def test_the_helper_is_emitted_and_called(self) -> None:
+    def test_no_runtime_helper_is_emitted_or_called(self) -> None:
         program = sema.analyze(parser.parse("fn main() -> i64 { print(clz(255)); return 0; }"))
         artifact = CodeGenerator(assembler=Assembler()).generate(program)
-        self.assertIn("cairn.runtime.clz", artifact.text_labels)
-        self.assertIn("cairn.runtime.clz", {label for _, label in artifact.fixups})
+        self.assertNotIn("cairn.runtime.clz", artifact.text_labels)
+        self.assertNotIn("cairn.runtime.clz", {label for _, label in artifact.fixups})
+
+    def test_the_lzcnt_bytes_appear_inline(self) -> None:
+        program = sema.analyze(parser.parse("fn main() -> i64 { print(clz(255)); return 0; }"))
+        artifact = CodeGenerator(assembler=Assembler()).generate(program)
+        self.assertIn(b"\xf3\x48\x0f\xbd\xc0", bytes(artifact.text))
 
 
 class ArrayVectorTest(unittest.TestCase):
