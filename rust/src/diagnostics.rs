@@ -7,7 +7,7 @@
 use std::fmt;
 
 /// A half-open source range, in byte offsets and in 1-based line/column pairs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
     pub start: usize,
     pub end: usize,

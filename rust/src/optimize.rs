@@ -330,7 +330,7 @@ impl Optimizer {
         }
     }
 
-    fn fold_string_builtin(&self, span: crate::diagnostics::Span, name: &str,
+    fn fold_string_builtin(&self, _span: crate::diagnostics::Span, name: &str,
                            arguments: &[Expr]) -> Option<i128> {
         if name != "str_len" && name != "str_byte" {
             return None;
@@ -753,6 +753,285 @@ fn propagate_once(root: &Block, block: &mut Block) -> bool {
         }
     }
     false
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum Signature {
+    Int(i128),
+    Slot(i64),
+    Str(String),
+    Unary(String, Box<Signature>),
+    Bin(String, Box<Signature>, Box<Signature>),
+    Call(String, Vec<Signature>),
+    Other(Span),
+}
+
+fn signature(expression: &Expr) -> Signature {
+    match peel_parens(Some(expression)).unwrap() {
+        Expr::IntLiteral { value, .. } => Signature::Int(*value),
+        Expr::Name { slot, .. } => Signature::Slot(*slot),
+        Expr::StrLiteral { text, .. } => Signature::Str(text.clone()),
+        Expr::Unary { op, operand, .. } => {
+            Signature::Unary(op.clone(), Box::new(signature(operand)))
+        }
+        Expr::Binary { op, left, right, .. } => Signature::Bin(
+            op.clone(),
+            Box::new(signature(left)),
+            Box::new(signature(right)),
+        ),
+        Expr::Call { name, arguments, .. } => {
+            Signature::Call(name.clone(), arguments.iter().map(signature).collect())
+        }
+        other => Signature::Other(other.span()),
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Term {
+    sign: i128,
+    constant: Option<i128>,
+    expression: Option<Expr>,
+    span: Span,
+}
+
+fn product_term(expression: &Expr, sign: i128) -> Vec<Term> {
+    let span = expression.span();
+    let peeled = peel_parens(Some(expression)).unwrap();
+    if let Expr::Unary { op, operand, .. } = peeled {
+        if op == "-" {
+            return product_term(operand, wrap(-sign));
+        }
+    }
+    if let Expr::IntLiteral { value, .. } = peeled {
+        return vec![Term { sign: wrap(sign * value), constant: Some(*value), expression: None, span }];
+    }
+    if let Expr::Binary { op, left, right, .. } = peeled {
+        if op == "*" {
+            let left = peel_parens(Some(left)).unwrap();
+            let right = peel_parens(Some(right)).unwrap();
+            let literal = match (left, right) {
+                (Expr::IntLiteral { value, .. }, other)
+                    if !matches!(other, Expr::IntLiteral { .. }) => Some((*value, other)),
+                (other, Expr::IntLiteral { value, .. })
+                    if !matches!(other, Expr::IntLiteral { .. }) => Some((*value, other)),
+                _ => None,
+            };
+            if let Some((literal, base)) = literal {
+                return chain_terms(base, wrap(sign * literal))
+                    .into_iter()
+                    .map(|term| Term { span, ..term })
+                    .collect();
+            }
+        }
+    }
+    vec![Term { sign, constant: None, expression: Some(peeled.clone()), span }]
+}
+
+fn chain_terms(expression: &Expr, sign: i128) -> Vec<Term> {
+    let peeled = peel_parens(Some(expression)).unwrap();
+    if let Expr::Binary { op, left, right, .. } = peeled {
+        if op == "+" || op == "-" {
+            let right_sign = if op == "+" { sign } else { wrap(-sign) };
+            let mut terms = chain_terms(left, sign);
+            terms.extend(chain_terms(right, right_sign));
+            return terms;
+        }
+    }
+    product_term(peeled, sign)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum ChainKey {
+    Const,
+    Effect(Span),
+    Shape(Signature),
+}
+
+fn collect_chain(expression: &Expr) -> Option<Expr> {
+    let (op, _, _) = match expression {
+        Expr::Binary { op, left, right, .. } if op == "+" || op == "-" => (op, left, right),
+        _ => return None,
+    };
+    let _ = op;
+    let mut order: Vec<ChainKey> = Vec::new();
+    let mut table: Vec<(ChainKey, i128, Option<Expr>, Span, usize)> = Vec::new();
+    for term in chain_terms(expression, 1) {
+        let key = if let Some(value) = term.constant {
+            if value == 0 {
+                continue;
+            }
+            ChainKey::Const
+        } else if has_call(term.expression.as_ref(), &[]) {
+            ChainKey::Effect(term.expression.as_ref().unwrap().span())
+        } else {
+            ChainKey::Shape(signature(term.expression.as_ref().unwrap()))
+        };
+        let position = match table.iter().position(|entry| entry.0 == key) {
+            Some(position) => position,
+            None => {
+                order.push(key.clone());
+                table.push((key, 0, term.expression.clone(), term.span, 0));
+                table.len() - 1
+            }
+        };
+        let entry = &mut table[position];
+        entry.1 = wrap(entry.1 + term.sign);
+        entry.4 += 1;
+    }
+    if !table.iter().any(|entry| entry.0 != ChainKey::Const && entry.4 >= 2) {
+        return None;
+    }
+    let span = expression.span();
+    let mut rebuilt: Option<Expr> = None;
+    for key in order {
+        let (_, sign_total, base, term_span, _) =
+            table.iter().find(|entry| entry.0 == key).unwrap().clone();
+        let node = if key == ChainKey::Const {
+            if sign_total == 0 {
+                continue;
+            }
+            Expr::IntLiteral { span: term_span, value: sign_total }
+        } else if sign_total == 0 {
+            let base = base.unwrap();
+            if has_call(Some(&base), &[]) || may_trap(Some(&base)) {
+                Expr::Binary {
+                    span: term_span,
+                    op: "*".to_string(),
+                    left: Box::new(Expr::IntLiteral { span: term_span, value: 0 }),
+                    right: Box::new(base),
+                }
+            } else {
+                continue;
+            }
+        } else if sign_total == 1 {
+            base.unwrap()
+        } else {
+            Expr::Binary {
+                span: term_span,
+                op: "*".to_string(),
+                left: Box::new(base.unwrap()),
+                right: Box::new(Expr::IntLiteral { span: term_span, value: sign_total }),
+            }
+        };
+        rebuilt = Some(match rebuilt {
+            None => node,
+            Some(previous) => Expr::Binary {
+                span,
+                op: "+".to_string(),
+                left: Box::new(previous),
+                right: Box::new(node),
+            },
+        });
+    }
+    Some(rebuilt.unwrap_or(Expr::IntLiteral { span, value: 0 }))
+}
+
+fn algebraic_expression(expression: &Expr) -> Option<Expr> {
+    match expression {
+        Expr::IntLiteral { .. } | Expr::Name { .. } | Expr::StrLiteral { .. } => None,
+        Expr::Parens { span, inner } => algebraic_expression(inner).map(|new| Expr::Parens {
+            span: *span, inner: Box::new(new),
+        }),
+        Expr::Unary { span, op, operand } => algebraic_expression(operand).map(|new| Expr::Unary {
+            span: *span, op: op.clone(), operand: Box::new(new),
+        }),
+        Expr::Call { span, name, arguments } => {
+            let mut changed = false;
+            let mut new_arguments = Vec::new();
+            for argument in arguments {
+                match algebraic_expression(argument) {
+                    Some(new) => {
+                        new_arguments.push(new);
+                        changed = true;
+                    }
+                    None => new_arguments.push(argument.clone()),
+                }
+            }
+            changed.then(|| Expr::Call { span: *span, name: name.clone(), arguments: new_arguments })
+        }
+        Expr::Binary { span, op, left, right } => {
+            let new_left = algebraic_expression(left);
+            let new_right = algebraic_expression(right);
+            let mut node = Expr::Binary {
+                span: *span,
+                op: op.clone(),
+                left: Box::new(new_left.clone().unwrap_or_else(|| (**left).clone())),
+                right: Box::new(new_right.clone().unwrap_or_else(|| (**right).clone())),
+            };
+            if op == "+" || op == "-" {
+                if let Some(collected) = collect_chain(&node) {
+                    return Some(collected);
+                }
+            }
+            if new_left.is_some() || new_right.is_some() {
+                node = Expr::Binary {
+                    span: *span,
+                    op: op.clone(),
+                    left: Box::new(new_left.unwrap_or_else(|| (**left).clone())),
+                    right: Box::new(new_right.unwrap_or_else(|| (**right).clone())),
+                };
+                Some(node)
+            } else {
+                None
+            }
+        }
+        Expr::ArrayLiteral { .. } | Expr::Index { .. } => None,
+    }
+}
+
+/// Expand constant coefficients over add-chains and collect like terms.
+pub fn apply_algebraic_simplification(program: &mut Program) -> usize {
+    let mut changed = 0;
+    for function in &mut program.functions {
+        changed += algebraic_block(&mut function.body);
+    }
+    changed
+}
+
+fn algebraic_block(block: &mut Block) -> usize {
+    let mut changed = 0;
+    for statement in &mut block.statements {
+        match statement {
+            Stmt::Let { value, .. } | Stmt::Assign { value, .. } | Stmt::Return { value, .. }
+            | Stmt::ExprStmt { expression: value, .. } => {
+                if let Some(new) = algebraic_expression(value) {
+                    *value = new;
+                    changed += 1;
+                }
+            }
+            Stmt::If { condition, then_block, else_block, .. } => {
+                if let Some(new) = algebraic_expression(condition) {
+                    *condition = new;
+                    changed += 1;
+                }
+                changed += algebraic_block(then_block);
+                if let Some(otherwise) = else_block {
+                    changed += algebraic_block(otherwise);
+                }
+            }
+            Stmt::While { condition, body, .. } => {
+                if let Some(new) = algebraic_expression(condition) {
+                    *condition = new;
+                    changed += 1;
+                }
+                changed += algebraic_block(body);
+            }
+            Stmt::Block(inner) => changed += algebraic_block(inner),
+            Stmt::For { start, end, body, .. } => {
+                if let Some(new) = algebraic_expression(start) {
+                    *start = new;
+                    changed += 1;
+                }
+                if let Some(new) = algebraic_expression(end) {
+                    *end = new;
+                    changed += 1;
+                }
+                changed += algebraic_block(body);
+            }
+            Stmt::Break { .. } | Stmt::Continue { .. } => {}
+        }
+    }
+    changed
 }
 
 fn rewrite_continues(block: &mut Block, name: &str, slot: i64) {

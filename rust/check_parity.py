@@ -70,6 +70,13 @@ def main():
                         failures.append((source, "a copy dumper exited non-zero"))
                     elif copy_expected.stdout != copy_actual.stdout:
                         failures.append((source, "copy propagation mismatch"))
+                    else:
+                        alg_expected = run([sys.executable, str(RUST / "alg_dump.py"), str(source)])
+                        alg_actual = run([str(BINARY), "alg", str(source)])
+                        if alg_expected.returncode != 0 or alg_actual.returncode != 0:
+                            failures.append((source, "an algebraic dumper exited non-zero"))
+                        elif alg_expected.stdout != alg_actual.stdout:
+                            failures.append((source, "algebraic mismatch"))
 
         specs = sorted((RUST / "specs").glob("*.txt"))
         for spec in specs:

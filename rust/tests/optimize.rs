@@ -108,6 +108,20 @@ fn copy_propagation_removes_a_single_read_definition() {
 }
 
 #[test]
+fn algebraic_simplification_collects_like_terms() {
+    let mut program = analysed(
+        "fn main() -> i64 { let i: i64 = 3; return i * 31 + i * 37; }",
+    );
+    let changed = optimize::apply_algebraic_simplification(&mut program);
+    assert!(changed >= 1);
+    let cairn_rs::syntax::Stmt::Return { value, .. } = &program.functions[0].body.statements[1]
+    else {
+        panic!("expected a return");
+    };
+    assert!(matches!(value, Expr::Binary { op, .. } if op == "*"));
+}
+
+#[test]
 fn a_constant_if_is_replaced_by_its_branch() {
     let program = analysed("fn main() -> i64 { if 0 { return 1; } else { return 2; } }");
     let folded = Optimizer::new().fold_program(&program);

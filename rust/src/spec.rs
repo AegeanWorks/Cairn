@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::image::{Artifact, ReadOnlyData, WritableData};
+use crate::image::{Artifact, ReadOnlyData};
 
 fn hex_decode(text: &str) -> Result<Vec<u8>, String> {
     if text.len() % 2 != 0 {

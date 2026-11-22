@@ -1291,3 +1291,10 @@ external compiler and was verified end to end.
 - **Context**: A single-read pure definition can be replaced by its value at the copy, removing a frame slot. Applying the rewrite when a slot is written or read elsewhere would change generated code, so the safety predicates matter as much as the rewrite.
 - **Decision**: Port apply_copy_propagation with has_call/may_trap purity checks, a single-read count over the whole function, operand-write barriers between definition and copy, and at most one rewrite per round up to 64 rounds. Add copy_dump.py and a cairn-rs copyprop command to the parity gate, applied after for-loop lowering.
 - **Consequences**: The parity gate reports 39/39 identical sources including copy propagation. 96 Rust tests pass. Remaining Python-only passes: algebraic simplification, constant-loop unrolling, countdown latches, odd-pair fusion, induction strength reduction, bottom-test rotation and pure inlining.
+
+### ADR-125: algebraic chain collection is the third structural optimizer pass in Rust
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: Algebraic simplification distributes literal coefficients over add-chains and collects like terms; it runs right after folding. A wrong signature or sign would rewrite a program into something different while still compiling.
+- **Decision**: Port apply_algebraic_simplification with chain flattening, product distribution, effect and structural signatures, and rebuild-only-when-shrinking. Effect keys use source spans rather than pointer identity because dropped clones reuse addresses; add alg_dump.py and a cairn-rs alg command to the parity gate after copy propagation.
+- **Consequences**: The parity gate reports 39/39 identical sources including algebraic simplification; 97 Rust tests pass. Two bugs were caught by the gate: an unwrap on a newly inserted table entry and pointer reuse that merged two distinct recursive calls. Remaining Python-only passes are loop unrolling, countdown latches, odd-pair fusion, induction strength reduction, bottom-test rotation and pure inlining.
