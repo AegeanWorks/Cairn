@@ -73,6 +73,8 @@ def main():
         for spec in specs:
             if spec.name == "fold_calls.txt":
                 oracle, command = RUST / "fold_dump.py", "fold"
+            elif spec.name == "magic.txt":
+                oracle, command = RUST / "magic_dump.py", "magic"
             else:
                 oracle, command = RUST / "pe_dump.py", "pe"
             expected = run([sys.executable, str(oracle), str(spec)])

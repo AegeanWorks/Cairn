@@ -5,6 +5,7 @@
 //! `values` and `version` are leaves; `syntax`, `lexer` and `parser` build on them. Later stages
 //! (`sema`, `machine`, `codegen`, `optimize`, `cli`) are added in their own tasks.
 
+pub mod codegen;
 pub mod codes;
 pub mod diagnostics;
 pub mod dump;

@@ -6,15 +6,15 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `60`
+- **Total Python Modules**: `61`
 - **Total Classes**: `224`
-- **Total Top-Level Functions**: `278`
+- **Total Top-Level Functions**: `279`
 - **Total Class Methods**: `1202`
-- **Total Source Lines**: `22933`
+- **Total Source Lines**: `22958`
 
 ## 🧭 Map Coverage
-- **Indexed**: python (`60` module(s))
-- **Not indexed by this map**: cpp (`48` file(s)), rust (`49` file(s))
+- **Indexed**: python (`61` module(s))
+- **Not indexed by this map**: cpp (`48` file(s)), rust (`50` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -894,7 +894,7 @@
 ### [`rust/check_parity.py`](rust/check_parity.py)
 > *Prove that the Rust front end accepts exactly the same Cairn language as the Python compiler.*
 
-**Size**: `100` lines
+**Size**: `102` lines
 
 **Functions:**
 - `def run(command, timeout)`
@@ -986,6 +986,16 @@
 > *Python oracle for the for-loop lowering parity check.*
 
 **Size**: `37` lines
+
+**Functions:**
+- `def main(argv)`
+
+---
+
+### [`rust/magic_dump.py`](rust/magic_dump.py)
+> *Python oracle for the magic-division helper parity check.*
+
+**Size**: `23` lines
 
 **Functions:**
 - `def main(argv)`

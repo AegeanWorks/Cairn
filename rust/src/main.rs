@@ -88,6 +88,20 @@ fn main() {
         }
         return;
     }
+    if arguments.len() == 3 && arguments[1] == "magic" {
+        let text = std::fs::read_to_string(&arguments[2]).unwrap_or_else(|error| {
+            eprintln!("cannot read {}: {}", arguments[2], error);
+            std::process::exit(2);
+        });
+        for line in text.lines() {
+            let divisor = line.parse::<i128>().unwrap_or(0);
+            match cairn_rs::codegen::magic_division_parameters(divisor) {
+                Some((multiplier, shift)) => println!("{} -> {},{}", line, multiplier, shift),
+                None => println!("{} -> NONE", line),
+            }
+        }
+        return;
+    }
     if arguments.len() == 3 && arguments[1] == "final" {
         let path = Path::new(&arguments[2]);
         match std::fs::read_to_string(path) {

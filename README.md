@@ -436,14 +436,17 @@ cairn/
 │   ├── fuse_dump.py          <- Python oracle for odd-pair-fusion parity
 │   ├── inline_dump.py        <- Python oracle for pure-inlining parity
 │   ├── lower_dump.py         <- Python oracle for for-loop lowering parity
+│   ├── magic_dump.py         <- Python oracle for magic-division parity
 │   ├── unroll_dump.py        <- Python oracle for constant-loop-unrolling parity
 │   ├── pe_dump.py            <- Python oracle for linked PE bytes, listing and verification
 │   ├── runtime_dump.py       <- Python oracle for the emitted runtime helpers
 │   ├── check_parity.py       <- compares both dumps over every source; front-end-parity gate
 │   ├── specs/
+│   │   ├── magic.txt         <- shared divisor cases for magic-division parity
 │   │   ├── pe_basic.txt      <- shared artifact spec for the byte-level parity check
 │   │   └── fold_calls.txt    <- shared folding cases for the optimizer parity check
 │   ├── src/
+│   │   ├── codegen.rs        <- codegen helper layer (labels, slots, magic divide)
 │   │   ├── codes.rs          <- diagnostic code registry
 │   │   ├── diagnostics.rs    <- spans, diagnostics and the JSON contract
 │   │   ├── dump.rs           <- canonical dump emitted by `cairn-rs dump`
