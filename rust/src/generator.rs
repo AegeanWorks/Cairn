@@ -9,6 +9,27 @@ use crate::machine::Assembler;
 use crate::runtime::{emit_runtime, OUT_FLUSH_LABEL, PRINT_CHAR_LABEL, PRINT_HEX_LABEL, PRINT_LABEL};
 use crate::syntax::{Expr, Program, Stmt};
 
+/// The array spans declared in one function: `(base slot, element count)`.
+fn collect_arrays(block: &crate::syntax::Block, found: &mut Vec<(i64, usize)>) {
+    for statement in &block.statements {
+        match statement {
+            Stmt::Let { slot, array_size: Some(size), .. } => found.push((*slot, *size)),
+            Stmt::If { then_block, else_block, .. } => {
+                collect_arrays(then_block, found);
+                if let Some(otherwise) = else_block {
+                    collect_arrays(otherwise, found);
+                }
+            }
+            Stmt::While { body, .. } | Stmt::Block(body) => collect_arrays(body, found),
+            _ => {}
+        }
+    }
+}
+
+fn in_array(slot: i64, arrays: &[(i64, usize)]) -> bool {
+    arrays.iter().any(|(base, size)| slot >= *base && slot < *base + *size as i64)
+}
+
 /// The register home of a slot, when the slot is kept in a register.
 fn home_for<'a>(slot: i64, homes: &'a [(i64, &'a str)]) -> Option<&'a str> {
     homes.iter().find(|(found, _)| *found == slot).map(|(_, register)| *register)
@@ -93,6 +114,7 @@ pub struct CodeGenerator {
     inline_depth: usize,
     current_name: String,
     current_body: crate::syntax::Block,
+    arrays: Vec<(i64, usize)>,
 }
 
 impl CodeGenerator {
@@ -113,6 +135,7 @@ impl CodeGenerator {
                 span: crate::diagnostics::Span::point(0, 1, 1),
                 statements: Vec::new(),
             },
+            arrays: Vec::new(),
         }
     }
 
@@ -174,12 +197,12 @@ impl CodeGenerator {
 
     /// Slots that keep a register home, in register order (frame functions rank by loop depth,
     /// ties by descending slot; all slots at depth zero here).
-    fn home_slots(function: &crate::syntax::Function) -> Vec<i64> {
-        if (function.slots as usize) <= crate::codegen::HOME_REGISTERS.len() {
-            return (0..function.slots as i64).collect();
-        }
+    fn home_slots(function: &crate::syntax::Function, arrays: &[(i64, usize)]) -> Vec<i64> {
         let mut ranked: Vec<i64> = (0..function.slots as i64).collect();
-        ranked.sort_by(|a, b| b.cmp(a));
+        if (function.slots as usize) > crate::codegen::HOME_REGISTERS.len() {
+            ranked.sort_by(|a, b| b.cmp(a));
+        }
+        ranked.retain(|slot| !in_array(*slot, arrays));
         ranked
     }
 
@@ -187,7 +210,9 @@ impl CodeGenerator {
     fn emit_function(&mut self, function: &crate::syntax::Function) {
         self.epilogue = format!("{}.epilogue", function_label(&function.name));
         self.assembler.label(&function_label(&function.name));
-        let ranked = Self::home_slots(function);
+        let mut array_spans = Vec::new();
+        collect_arrays(&function.body, &mut array_spans);
+        let ranked = Self::home_slots(function, &array_spans);
         let callee_homes = crate::codegen::HOME_REGISTERS.len();
         let callee_count = ranked.len().min(callee_homes);
         let extra_count = ranked.len().saturating_sub(callee_homes);
@@ -202,7 +227,7 @@ impl CodeGenerator {
                 .zip(crate::codegen::EXTRA_HOME_REGISTERS.iter().take(extra_count))
                 .map(|(slot, register)| (*slot, *register)),
         );
-        let frame_function = function.slots > callee_homes;
+        let frame_function = function.slots > callee_homes || !array_spans.is_empty();
         let delta_eligible = function.slots == 1
             && function.parameters.len() == 1
             && !body_assigns(&function.body)
@@ -212,6 +237,7 @@ impl CodeGenerator {
         self.inline_depth = 0;
         self.current_name = function.name.clone();
         self.current_body = function.body.clone();
+        self.arrays = array_spans.clone();
         let callee_registers: Vec<&str> = homes[..callee_count]
             .iter()
             .map(|(_, register)| *register)
@@ -326,6 +352,14 @@ impl CodeGenerator {
                 }
             }
             Expr::Parens { inner, .. } => self.emit_value(slot, inner, homes),
+            Expr::ArrayLiteral { elements, .. } => {
+                for (index, element) in elements.iter().enumerate() {
+                    self.emit_expression(element, homes);
+                    self.assembler.mov_store_rbp(
+                        crate::codegen::slot_offset(slot + elements.len() as i64 - 1 - index as i64),
+                        "rax");
+                }
+            }
             Expr::Binary { op, left, right, .. }
                 if op == "+"
                     && matches!(left.as_ref(), Expr::Name { slot: src, .. } if *src == slot)
@@ -494,6 +528,18 @@ impl CodeGenerator {
                     }
                     _ => {}
                 }
+            }
+            Expr::Index { operand, index, slot: base, .. }
+                if matches!(operand.as_ref(), Expr::Name { .. })
+                    && matches!(index.as_ref(), Expr::IntLiteral { .. }) =>
+            {
+                let Expr::IntLiteral { value, .. } = index.as_ref() else { unreachable!() };
+                let size = self.arrays.iter()
+                    .find(|(span_base, _)| span_base == base)
+                    .map(|(_, size)| *size)
+                    .unwrap_or(1);
+                self.assembler.mov_load_rbp(
+                    "rax", crate::codegen::slot_offset(*base + size as i64 - 1 - *value as i64));
             }
             Expr::Unary { .. } | Expr::Binary { .. } | Expr::Index { .. }
             | Expr::ArrayLiteral { .. } => {}

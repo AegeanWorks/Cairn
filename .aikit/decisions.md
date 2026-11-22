@@ -1424,3 +1424,10 @@ external compiler and was verified end to end.
 - **Context**: A 64-bit literal mask cannot fit the group-1 imm8/imm32 form; the earlier generator panicked on such a benchmark and broke the parity run.
 - **Decision**: When an in-place add's literal exceeds signed 32 bits, materialise the addend with movabs into rax and add it to the slot's home. Small literals keep the one-instruction add_imm form. A regression spec pins the largest i64 mask.
 - **Consequences**: Curated parity is 54/54 including the large-literal shape; the generator no longer panics on the bit benchmarks. The full corpus diagnostic remains unchanged at 2/27 because those programs combine the shape with vectorised loops and array state.
+
+### ADR-144: array bindings use frame slots with descending base offsets
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: Array bindings exclude their frame slots from register homes and live in a frame function. Element zero sits at the span's lowest displacement, so literal indices are addressed by subtraction from the span top.
+- **Decision**: Collect array spans from the function body, exclude those slots from homes, force the frame prologue, materialise aggregate initialisers in ascending element order from the lowest displacement, and lower a literal array load as mov rax,[rbp+slot_offset(base+size-1-index)].
+- **Consequences**: Curated parity is 55/55 including a four-element array. The real-program diagnostic stays at 2/27 because vectorised array loops and multi-slot recursion still use shapes not lowered by this generator.

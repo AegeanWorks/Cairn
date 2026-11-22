@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795378010.747943,
+    "updated_at": 1795379520.54234,
     "owner": "opencode:session",
-    "lease_until": 1795385210.747943,
+    "lease_until": 1795386720.54234,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,23 +105,6 @@
         "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
       },
       "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/N] codegen helper layer ported (labels, slots, offsets, leaf/call predicates, shape equality, rotate count, plus step, magic division); magic parity spec added (40/40); 100 Rust tests; ADR-130; aikit check 7/7 gates passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795359243.926383,
-      "timestamp_str": "2026-11-22 17:54:03",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "handoff": {
-        "state": "helper layer committed, class still Python-only",
-        "next": "port the CodeGenerator class methods starting with generate/_emit_entry/_emit_function and simple expression lowering",
-        "evidence": "40/40 parity across 11 dumps, 7/7 gates"
-      }
     },
     {
       "task_id": "cairn-rs-codegen",
@@ -341,6 +324,23 @@
       "handoff": {
         "state": "102 Rust tests, 54/54 curated parity",
         "next": "vectorised array loops and multi-slot recursive frames",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[15/N] array init and literal-index loads lower with frame slots; parity 55/55; ADR-144; vectorised array loops and multi-slot recursion still block full real-program .text parity",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795379520.54234,
+      "timestamp_str": "2026-11-22 23:32:00",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 55/55 curated parity",
+        "next": "vectorised array loops and remaining CLI commands",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }
