@@ -1,0 +1,4 @@
+fn main() -> i64 {
+    var a: [16]i64 = [3; 16];
+    return a[0];
+}

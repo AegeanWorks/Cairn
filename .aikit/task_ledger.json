@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795385159.198568,
+    "updated_at": 1795386376.9290836,
     "owner": "opencode:session",
-    "lease_until": 1795392359.198568,
+    "lease_until": 1795393576.9290836,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,23 +105,6 @@
         "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
       },
       "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[6/N] binary Name+Name lowers to one lea over homed registers; parity 48/48; ADR-135; real-program diagnostic still 2/27 due to tail-return and delta-inlining shapes",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795367564.6182232,
-      "timestamp_str": "2026-11-22 20:12:44",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "handoff": {
-        "state": "102 Rust tests, 48/48 curated parity",
-        "next": "tail-return and delta-inlining shapes for recursive functions before call lowering",
-        "evidence": "cargo test, parity, both aikit checks"
-      }
     },
     {
       "task_id": "cairn-rs-codegen",
@@ -341,6 +324,23 @@
       "handoff": {
         "state": "102 Rust tests, 55/55 curated parity",
         "next": "vectorised array loops and multi-slot recursive frames",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[20/N] large array fills emit one store loop; parity 56/56; ADR-149; fused array RMW and summation loops still block full corpus parity",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795386376.9290836,
+      "timestamp_str": "2026-11-23 01:26:16",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 56/56 curated parity",
+        "next": "array RMW and summation loop fusion, then multi-slot recursion",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }

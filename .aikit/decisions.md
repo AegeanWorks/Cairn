@@ -1459,3 +1459,10 @@ external compiler and was verified end to end.
 - **Context**: The run command builds to a temporary executable, executes it and reports an envelope. Two subtle mismatches surfaced: ok is false for a non-zero return code, and Windows reports the return code as an unsigned 32-bit value.
 - **Decision**: Implement runjson in main.rs: compile in memory, write the image atomically to a temp sibling, spawn the process with piped output, apply a 30-second bound, then render the Python-shaped envelope with returncode normalised to u32 and ok set only for a zero, in-time exit.
 - **Consequences**: Curated parity remains 55/55 and now includes run envelopes. All four JSON CLI surfaces (check, build, listing, verify, run) match byte-for-byte. Vectorised array loops and multi-slot recursion remain the codegen gap.
+
+### ADR-149: large array fills emit one store loop
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A fill literal longer than eight elements expands to thousands of nodes; materialising each one produced a two-megabyte .text instead of the reference's short loop.
+- **Decision**: Detect an all-equal IntLiteral fill longer than ARRAY_UNROLL_LIMIT and emit one up-counting store loop: count in rdx, fill in rax, span base in rcx, a fresh array_fill label, store/add/sub/jcc. Shorter or mixed literals keep element-by-element stores.
+- **Consequences**: Curated parity is 56/56 including a sixteen-element fill. The full corpus diagnostic stays at 2/27 because the remaining array benchmarks use fused read-modify-write and summation loops that are not lowered yet.

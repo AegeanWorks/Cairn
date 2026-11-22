@@ -353,11 +353,40 @@ impl CodeGenerator {
             }
             Expr::Parens { inner, .. } => self.emit_value(slot, inner, homes),
             Expr::ArrayLiteral { elements, .. } => {
-                for (index, element) in elements.iter().enumerate() {
-                    self.emit_expression(element, homes);
-                    self.assembler.mov_store_rbp(
-                        crate::codegen::slot_offset(slot + elements.len() as i64 - 1 - index as i64),
-                        "rax");
+                let fill = if elements.len() > crate::codegen::ARRAY_UNROLL_LIMIT {
+                    match elements.first() {
+                        Some(Expr::IntLiteral { value, .. })
+                            if elements.iter().all(|element| matches!(element,
+                                Expr::IntLiteral { value: found, .. } if found == value)) =>
+                        {
+                            Some(*value)
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                if let Some(value) = fill {
+                    let loop_label = self.fresh("array_fill");
+                    self.assembler.mov_imm64("rdx", elements.len() as i64);
+                    self.assembler.mov_imm64("rax", value as i64);
+                    let base = crate::codegen::array_element_base(slot, elements.len() as i64);
+                    self.assembler.lea_rbp("rcx", base);
+                    let label = loop_label.clone();
+                    self.assembler.label(&label);
+                    self.assembler.mov_store_reg("rcx", "rax");
+                    self.assembler.add_imm("rcx", 8);
+                    self.assembler.sub_imm("rdx", 1);
+                    let again = loop_label.clone();
+                    self.assembler.jcc("nz", &again);
+                } else {
+                    for (index, element) in elements.iter().enumerate() {
+                        self.emit_expression(element, homes);
+                        self.assembler.mov_store_rbp(
+                            crate::codegen::slot_offset(
+                                slot + elements.len() as i64 - 1 - index as i64),
+                            "rax");
+                    }
                 }
             }
             Expr::Binary { op, left, right, .. }
