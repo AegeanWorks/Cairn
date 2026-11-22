@@ -1,67 +1,20 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-rs-for-lowering",
+    "task_id": "cairn-rs-copy-prop",
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795351954.4849117,
+    "updated_at": 1795352806.8965347,
     "owner": "opencode:session",
-    "lease_until": 1795359154.4849117,
+    "lease_until": 1795360006.8965347,
     "started_by": "opencode:session",
     "continuations": [],
-    "completed_at": 1795352005.7449374,
-    "completed_head": "c45f5e1ade012fd4e5c0ee805125b74c9e546586",
-    "completed_tree": "0a2158acde1c306bb4b99f004c1b0274c94bd44c"
+    "completed_at": 1795352855.3867369,
+    "completed_head": "2a7b8fddd5f0ef246afa9fe8dd3d135fe113b8ef",
+    "completed_tree": "3df7b2ee83b8366271c9f83e5a2185209737428c"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-frontend",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[2/2] crate scaffolded with leaf contracts, AST, lexer and parser; 49 Rust tests ported from the Python front-end suite pass; rust-test gate added; ADR-117 recorded; aikit check 6/6 gates passed (hygiene, guidelines, secrets, dependencies, test, rust-test)",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795341093.0881703,
-      "timestamp_str": "2026-11-22 12:51:33",
-      "agent": "opencode:session",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-rs-frontend",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-rs-frontend' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795343395.0762432,
-      "timestamp_str": "2026-11-22 13:29:55",
-      "agent": "opencode:session",
-      "head": "b2343d27126e04fd8420bbdadd7c085b4567d8c0",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-rs-sema",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/2] port sema and capabilities to Rust and add a direct Python-to-Rust differential dump over the front end (tokens, AST and diagnostics); [2/2] port the semantic tests, run cargo test plus project gates and commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795343724.8556256,
-      "timestamp_str": "2026-11-22 13:35:24",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "The user confirmed the rewrite must keep the Cairn language itself, not invent another one. A differential check against the Python compiler is the mechanical proof, and sema/capabilities are the next layer below the backend.",
-        "benefits": "A byte-for-byte canonical comparison of Python and Rust front-end output over every example and benchmark source, plus the name/slot/arity/mutability rules and the capability manifest in Rust.",
-        "risks": "contract: the canonical dump format and all diagnostic codes/messages must match Python exactly; dependency: std-only Rust and the already-declared Python stdlib; concurrency: none; state: new Rust modules, a parity script and a new gate.",
-        "mitigation": "Add the differential check first and run it over the whole .crn corpus before porting sema, then port test_sema.py and test_capabilities.py as Rust tests; run all project gates before commit and record the result in ADR-117 follow-up."
-      },
-      "plan_digest": "07f5bf49e48a6764d3af44bf88d762cac4e7a6e0ff38b3b2b01c35eff9a0227e"
-    },
     {
       "task_id": "cairn-rs-sema",
       "phase": "in_progress",
@@ -319,6 +272,53 @@
       "timestamp_str": "2026-11-22 15:53:25",
       "agent": "opencode:session",
       "head": "c45f5e1ade012fd4e5c0ee805125b74c9e546586",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rs-copy-prop",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/1] port copy propagation, add a parity dump and Rust tests, then commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795352070.81555,
+      "timestamp_str": "2026-11-22 15:54:30",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "The next structural optimizer pass replaces a copied binding with its source when provably safe; codegen byte parity depends on applying the same rewrites as Python.",
+        "benefits": "A Rust copy-propagation pass checked against Python on every source with a shared dump.",
+        "risks": "contract: only safe slots may be substituted, and shadowing/writes must be respected; dependency: std-only Rust; concurrency: none; state: new helper module code, oracle and ADR.",
+        "mitigation": "Port the pass with its safety predicates, compare canonical dumps over the corpus, run all gates before commit."
+      },
+      "plan_digest": "b60baeb9345b8790247d0e62ff0a68dd5c0464bef934bdf7c97f0c181fa61792"
+    },
+    {
+      "task_id": "cairn-rs-copy-prop",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/1] copy propagation ported with purity, single-read and operand-barrier checks; shared copy dump in the parity gate (39/39 identical); 96 Rust tests; ADR-124; aikit check 7/7 gates passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795352806.8965347,
+      "timestamp_str": "2026-11-22 16:06:46",
+      "agent": "opencode:session",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-rs-copy-prop",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-rs-copy-prop' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795352855.454777,
+      "timestamp_str": "2026-11-22 16:07:35",
+      "agent": "opencode:session",
+      "head": "2a7b8fddd5f0ef246afa9fe8dd3d135fe113b8ef",
       "delivery": {
         "roots": [
           "."
