@@ -1,49 +1,17 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-rs-final-passes",
+    "task_id": "cairn-rs-codegen",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1795358120.9314852,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1795359243.926383,
     "owner": "opencode:session",
-    "lease_until": 1795365320.9314852,
+    "lease_until": 1795366443.926383,
     "started_by": "opencode:session",
-    "continuations": [],
-    "completed_at": 1795358182.8242614,
-    "completed_head": "a9dca1ab838277e2028a42fa88da1b7a51452bdc",
-    "completed_tree": "71ef5aebc6f3ea0cef5738669d06c7add127366c"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-for-lowering",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/1] lower_for_loops ported with a shared dump in the parity gate (39/39 identical), including continue rewriting and inclusive bounds; a Windows UTF-8 stdout artifact in the oracle was fixed; ADR-123; aikit check 7/7 gates passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795351954.4849117,
-      "timestamp_str": "2026-11-22 15:52:34",
-      "agent": "opencode:session",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-rs-for-lowering",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-rs-for-lowering' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795352005.9206202,
-      "timestamp_str": "2026-11-22 15:53:25",
-      "agent": "opencode:session",
-      "head": "c45f5e1ade012fd4e5c0ee805125b74c9e546586",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-rs-copy-prop",
       "phase": "in_progress",
@@ -324,6 +292,41 @@
           "."
         ],
         "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/N] port the syntax-tree-to-bytes generator incrementally, beginning with the emitter framework, function frames, literals and simple expressions; each slice gets parity tests",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795358453.4681253,
+      "timestamp_str": "2026-11-22 17:40:53",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "The last unported compiler component turns the optimized AST into x86-64 bytes; without it the Rust compiler cannot produce an executable.",
+        "benefits": "A Rust code generator producing the same machine bytes as Python, checked by dumping generated .text for real sources.",
+        "risks": "contract: every lowering rule, frame layout and calling convention must match byte for byte; dependency: std-only Rust; concurrency: none; state: new Rust module, oracle and ADR.",
+        "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
+      },
+      "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/N] codegen helper layer ported (labels, slots, offsets, leaf/call predicates, shape equality, rotate count, plus step, magic division); magic parity spec added (40/40); 100 Rust tests; ADR-130; aikit check 7/7 gates passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795359243.926383,
+      "timestamp_str": "2026-11-22 17:54:03",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "helper layer committed, class still Python-only",
+        "next": "port the CodeGenerator class methods starting with generate/_emit_entry/_emit_function and simple expression lowering",
+        "evidence": "40/40 parity across 11 dumps, 7/7 gates"
       }
     }
   ]
