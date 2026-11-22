@@ -44,6 +44,7 @@ disagree, `python -m cairn capabilities --json` wins.
 - **Canonical Regression Shield Gate**:
   ```bash
   python -m unittest discover
+  cargo test --quiet --manifest-path rust/Cargo.toml
   ```
   (run from `projects/cairn`)
 - **Compile and run something now** (under 10 seconds):
@@ -560,6 +561,11 @@ cairn/
 │   ├── version.py            <- the one version string
 │   ├── __init__.py           <- package docstring and public exports
 │   └── __main__.py           <- `python -m cairn`
+├── rust/                     <- std-only Rust rewrite (ADR-117), checked against the Python oracle
+│   ├── Cargo.toml            <- crate manifest and the rust-test gate target
+│   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
+│   ├── src/                  <- codes, diagnostics, values, syntax, lexer, parser (front end)
+│   └── tests/                <- front-end tests ported from the Python suite
 ├── benchmarks/               <- three cases, their C and Rust twins, and the harness
 ├── examples/                 <- hello, fibonacci, arithmetic, alloy_probe (Alloy backend probe)
 ├── tests/                    <- lexer, parser, sema, optimiser, codegen, emitter, PE, CLI, harness, capabilities, verifier, values, filetable, end-to-end, IR differential
