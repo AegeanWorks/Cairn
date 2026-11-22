@@ -1,72 +1,20 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-rs-frontend",
+    "task_id": "cairn-rs-sema",
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795341093.0881703,
+    "updated_at": 1795346611.179851,
     "owner": "opencode:session",
-    "lease_until": 1795348293.0881703,
+    "lease_until": 1795353811.179851,
     "started_by": "opencode:session",
     "continuations": [],
-    "completed_at": 1795343394.4471545,
-    "completed_head": "b2343d27126e04fd8420bbdadd7c085b4567d8c0",
-    "completed_tree": "b2086fe4c58a57525bd79bbf967bf163b69641e9"
+    "completed_at": 1795346652.5890963,
+    "completed_head": "8a87a1a418b24b96b50670b72456ab90e207b5a3",
+    "completed_tree": "e4a427820f39a59e44217f5afc44ea1ef3d774e7"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-parity-full",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[2/3] implemented: failing-first meta-test went red naming all ten missing cases; added parity methods for hex_io, argv_walk, char_stream, str_scan, array_sum, sieve, popcount, clz, ctz and bswap; _assert_par feeds case.stdin; the char_stream run exposed a harness bug, so decode_output now matches the text branch's universal-newline decoding and OutputDecodingTest pins it; TwinParityTest 24/24 OK",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795263995.4611535,
-      "timestamp_str": "2026-11-21 15:26:35",
-      "agent": "kilo:cairn",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-parity-full",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[3/3] committed 5c1292b; ADR-112 records the 13/23 coverage gap, the meta-test enforcement and the stdin universal-newline fix; map refreshed; aikit check --allow-dirty 5/5 gates passed (hygiene, guidelines, secrets, dependencies, full suite); checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795264273.7767339,
-      "timestamp_str": "2026-11-21 15:31:13",
-      "agent": "kilo:cairn",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-parity-full",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-parity-full' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795264280.7589264,
-      "timestamp_str": "2026-11-21 15:31:20",
-      "agent": "kilo:cairn",
-      "head": "5c1292bd7b7a7c778e2235ca6d0ad56cf7123b4a",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "chore-1795265826",
       "phase": "chore",
@@ -363,6 +311,53 @@
       "timestamp_str": "2026-11-22 13:29:55",
       "agent": "opencode:session",
       "head": "b2343d27126e04fd8420bbdadd7c085b4567d8c0",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rs-sema",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/2] port sema and capabilities to Rust and add a direct Python-to-Rust differential dump over the front end (tokens, AST and diagnostics); [2/2] port the semantic tests, run cargo test plus project gates and commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795343724.8556256,
+      "timestamp_str": "2026-11-22 13:35:24",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "The user confirmed the rewrite must keep the Cairn language itself, not invent another one. A differential check against the Python compiler is the mechanical proof, and sema/capabilities are the next layer below the backend.",
+        "benefits": "A byte-for-byte canonical comparison of Python and Rust front-end output over every example and benchmark source, plus the name/slot/arity/mutability rules and the capability manifest in Rust.",
+        "risks": "contract: the canonical dump format and all diagnostic codes/messages must match Python exactly; dependency: std-only Rust and the already-declared Python stdlib; concurrency: none; state: new Rust modules, a parity script and a new gate.",
+        "mitigation": "Add the differential check first and run it over the whole .crn corpus before porting sema, then port test_sema.py and test_capabilities.py as Rust tests; run all project gates before commit and record the result in ADR-117 follow-up."
+      },
+      "plan_digest": "07f5bf49e48a6764d3af44bf88d762cac4e7a6e0ff38b3b2b01c35eff9a0227e"
+    },
+    {
+      "task_id": "cairn-rs-sema",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[2/2] ported sema to Rust with 15 ported tests; added a Python-to-Rust canonical dump and front-end-parity gate covering 36/36 sources (tokens, AST, spans, slots, diagnostics); ADR-118 records the same-language guard; aikit check 7/7 gates passed (hygiene, guidelines, secrets, dependencies, Python suite, rust-test, front-end-parity)",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795346611.179851,
+      "timestamp_str": "2026-11-22 14:23:31",
+      "agent": "opencode:session",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-rs-sema",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-rs-sema' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795346653.1588867,
+      "timestamp_str": "2026-11-22 14:24:13",
+      "agent": "opencode:session",
+      "head": "8a87a1a418b24b96b50670b72456ab90e207b5a3",
       "delivery": {
         "roots": [
           "."
