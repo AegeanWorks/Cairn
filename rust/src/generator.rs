@@ -119,6 +119,10 @@ impl CodeGenerator {
             }
         }
         let body = function.body.clone();
+        let ends_in_return = matches!(body.statements.last(), Some(Stmt::Return { .. }));
+        if !ends_in_return {
+            self.assembler.mov_imm64("rax", 0);
+        }
         for (index, statement) in body.statements.iter().enumerate() {
             self.emit_statement(statement, index + 1 == body.statements.len(), homes);
         }
@@ -175,6 +179,20 @@ impl CodeGenerator {
                 }
             }
             Expr::Parens { inner, .. } => self.emit_value(slot, inner, homes),
+            Expr::Binary { op, left, right, .. }
+                if op == "+"
+                    && matches!(left.as_ref(), Expr::Name { slot: src, .. } if *src == slot)
+                    && matches!(right.as_ref(), Expr::IntLiteral { .. }) =>
+            {
+                let Expr::IntLiteral { value, .. } = right.as_ref() else { unreachable!() };
+                if let Some(home) = home_for(slot, homes) {
+                    self.assembler.add_imm(home, *value as i64);
+                } else {
+                    self.load_slot(slot, "rax", homes);
+                    self.assembler.add_imm("rax", *value as i64);
+                    self.store_slot(slot, "rax", homes);
+                }
+            }
             other => {
                 self.emit_expression(other, homes);
                 self.store_slot(slot, "rax", homes);
@@ -200,10 +218,92 @@ impl CodeGenerator {
                     self.emit_statement(inner, tail && index + 1 == block.statements.len(), homes);
                 }
             }
+            Stmt::If { condition, then_block, else_block, .. } => {
+                self.emit_if(condition, then_block, else_block.as_ref(), tail, homes);
+            }
+            Stmt::While { condition, body, .. } => self.emit_while(condition, body, homes),
             Stmt::Break { .. } | Stmt::Continue { .. } => {}
             // Wider shapes are added in later slices; refusing beats emitting wrong bytes.
-            Stmt::If { .. } | Stmt::While { .. } | Stmt::For { .. } => {}
+            Stmt::For { .. } => {}
         }
+    }
+
+    fn emit_block(&mut self, block: &crate::syntax::Block, tail: bool, homes: &[&str]) {
+        for (index, statement) in block.statements.iter().enumerate() {
+            self.emit_statement(statement, tail && index + 1 == block.statements.len(), homes);
+        }
+    }
+
+    fn emit_while(&mut self, condition: &Expr, body: &crate::syntax::Block, homes: &[&str]) {
+        let start = self.fresh("while.start");
+        let end = self.fresh("while.end");
+        self.emit_condition_polarity(condition, &end, homes, false);
+        let pad = (16 - self.assembler.here() % 16) % 16;
+        if pad > 0 {
+            self.assembler.nop_pad(pad);
+        }
+        let start_label = start.clone();
+        self.assembler.label(&start_label);
+        self.emit_block(body, false, homes);
+        let latch = self.fresh("while.latch");
+        let latch_label = latch.clone();
+        self.assembler.label(&latch_label);
+        self.emit_condition_polarity(condition, &start, homes, true);
+        let end_label = end.clone();
+        self.assembler.label(&end_label);
+    }
+
+    /// Emit a comparison that jumps to `target` when the relation holds.
+    fn emit_condition(&mut self, expression: &Expr, target: &str, homes: &[&str]) {
+        self.emit_condition_polarity(expression, target, homes, true);
+    }
+
+    fn emit_condition_polarity(&mut self, expression: &Expr, target: &str, homes: &[&str],
+                               when_true: bool) {
+        let Expr::Binary { op, left, right, .. } = expression else {
+            return;
+        };
+        let (name_slot, literal) = match (left.as_ref(), right.as_ref()) {
+            (Expr::Name { slot, .. }, Expr::IntLiteral { value, .. }) => (*slot, *value as i64),
+            (Expr::IntLiteral { value, .. }, Expr::Name { slot, .. }) => (*slot, *value as i64),
+            _ => return,
+        };
+        if let Some(home) = home_for(name_slot, homes) {
+            self.assembler.cmp_imm(home, literal);
+        } else {
+            self.load_slot(name_slot, "rax", homes);
+            self.assembler.cmp_imm("rax", literal);
+        }
+        let condition = match op.as_str() {
+            "==" => "e", "!=" => "ne", "<" => "l", "<=" => "le", ">" => "g", ">=" => "ge",
+            _ => return,
+        };
+        let condition = if when_true {
+            condition
+        } else {
+            match condition {
+                "e" => "ne", "ne" => "e", "l" => "ge", "ge" => "l", "le" => "g", "g" => "le",
+                other => other,
+            }
+        };
+        self.assembler.jcc(condition, target);
+    }
+
+    fn emit_if(&mut self, condition: &Expr, then_block: &crate::syntax::Block,
+               else_block: Option<&crate::syntax::Block>, tail: bool, homes: &[&str]) {
+        let then_label = self.fresh("if.then");
+        let end_label = self.fresh("if.end");
+        self.emit_condition(condition, &then_label, homes);
+        if let Some(otherwise) = else_block {
+            self.emit_block(otherwise, tail, homes);
+            let end = end_label.clone();
+            self.assembler.jmp(&end);
+        }
+        let then = then_label.clone();
+        self.assembler.label(&then);
+        self.emit_block(then_block, tail, homes);
+        let end = end_label.clone();
+        self.assembler.label(&end);
     }
 
     fn emit_expression(&mut self, expression: &Expr, homes: &[&str]) {

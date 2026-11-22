@@ -5,30 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795362372.8156703,
+    "updated_at": 1795365420.213249,
     "owner": "opencode:session",
-    "lease_until": 1795369572.8156703,
+    "lease_until": 1795372620.213249,
     "started_by": "opencode:session",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-copy-prop",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-rs-copy-prop' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795352855.454777,
-      "timestamp_str": "2026-11-22 16:07:35",
-      "agent": "opencode:session",
-      "head": "2a7b8fddd5f0ef246afa9fe8dd3d135fe113b8ef",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-rs-algebraic",
       "phase": "in_progress",
@@ -331,6 +314,23 @@
         "state": "102 Rust tests, 44/44 parity",
         "next": "add if/while and frame functions with generated-byte parity",
         "evidence": "cargo test and check 7/7"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[4/N] generator now lowers if and while with byte parity (46/46); Python oracles moved out of the Rust crate into parity/; new AIKit project cairn-rs created with a Rust-only CLI; ADR-133; cairn 7/7 and cairn-rs 4/4 gates",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795365420.213249,
+      "timestamp_str": "2026-11-22 19:37:00",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 46/46 parity",
+        "next": "extend generator to frame functions and remaining call shapes",
+        "evidence": "cargo test, parity check, both aikit checks"
       }
     }
   ]

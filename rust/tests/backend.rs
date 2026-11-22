@@ -9,7 +9,7 @@ use cairn_rs::spec;
 use cairn_rs::verify::verify_image;
 
 fn spec_path() -> &'static str {
-    "specs/pe_basic.txt"
+    "../parity/specs/pe_basic.txt"
 }
 
 fn artifact() -> Artifact {

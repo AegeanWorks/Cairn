@@ -45,7 +45,7 @@ disagree, `python -m cairn capabilities --json` wins.
   ```bash
   python -m unittest discover
   cargo test --quiet --manifest-path rust/Cargo.toml
-  python rust/check_parity.py
+  python parity/check_parity.py
   ```
   (run from `projects/cairn`)
 - **Compile and run something now** (under 10 seconds):
@@ -427,26 +427,6 @@ cairn/
 ├── rust/                     <- std-only Rust rewrite (ADR-117), kept identical by a parity gate (ADR-118)
 │   ├── Cargo.toml            <- crate manifest and the rust-test gate target
 │   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
-│   ├── codegen_dump.py       <- Python oracle for generated artifact bytes
-│   ├── dump.py               <- Python oracle printing the canonical front-end dump
-│   ├── alg_dump.py           <- Python oracle for algebraic-simplification parity
-│   ├── count_dump.py         <- Python oracle for countdown-latch parity
-│   ├── copy_dump.py          <- Python oracle for copy-propagation parity
-│   ├── final_dump.py         <- Python oracle for induction and rotation parity
-│   ├── fold_dump.py          <- Python oracle for constant-folding parity
-│   ├── fuse_dump.py          <- Python oracle for odd-pair-fusion parity
-│   ├── inline_dump.py        <- Python oracle for pure-inlining parity
-│   ├── lower_dump.py         <- Python oracle for for-loop lowering parity
-│   ├── magic_dump.py         <- Python oracle for magic-division parity
-│   ├── unroll_dump.py        <- Python oracle for constant-loop-unrolling parity
-│   ├── pe_dump.py            <- Python oracle for linked PE bytes, listing and verification
-│   ├── runtime_dump.py       <- Python oracle for the emitted runtime helpers
-│   ├── check_parity.py       <- compares both dumps over every source; front-end-parity gate
-│   ├── specs/
-│   │   ├── codegen/          <- simple sources for generated-byte parity
-│   │   ├── magic.txt         <- shared divisor cases for magic-division parity
-│   │   ├── pe_basic.txt      <- shared artifact spec for the byte-level parity check
-│   │   └── fold_calls.txt    <- shared folding cases for the optimizer parity check
 │   ├── src/
 │   │   ├── codegen.rs        <- codegen helper layer (labels, slots, magic divide)
 │   │   ├── codes.rs          <- diagnostic code registry
@@ -477,6 +457,23 @@ cairn/
 │       ├── optimize.rs       <- folding, wrapping and trap-safety tests
 │       ├── runtime.rs        <- emitted runtime labels, state and fixup tests
 │       └── sema.rs           <- semantic rule tests ported from Python
+├── parity/                   <- evidence tooling, outside the Rust-only crate
+│   ├── check_parity.py       <- gate driver comparing Rust with the Python reference
+│   ├── dump.py               <- canonical front-end oracle
+│   ├── alg_dump.py           <- algebraic oracle
+│   ├── codegen_dump.py       <- generated artifact oracle
+│   ├── copy_dump.py          <- copy-propagation oracle
+│   ├── count_dump.py         <- countdown oracle
+│   ├── final_dump.py         <- final loop passes oracle
+│   ├── fold_dump.py          <- folding oracle
+│   ├── fuse_dump.py          <- odd-pair fusion oracle
+│   ├── inline_dump.py        <- inlining oracle
+│   ├── lower_dump.py         <- for-loop lowering oracle
+│   ├── magic_dump.py         <- magic-division oracle
+│   ├── pe_dump.py            <- PE artifact oracle
+│   ├── runtime_dump.py       <- runtime helper oracle
+│   └── unroll_dump.py        <- unrolling oracle
+│   └── specs/                <- shared specs: codegen sources, divisors, PE artifact, folds
 ├── benchmarks/               <- three cases, their C and Rust twins, and the harness
 ├── examples/                 <- hello, fibonacci, arithmetic, alloy_probe (Alloy backend probe)
 ├── tests/                    <- lexer, parser, sema, optimiser, codegen, emitter, PE, CLI, harness, capabilities, verifier, values, filetable, end-to-end, IR differential

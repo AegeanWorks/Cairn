@@ -10,7 +10,7 @@
 - **Total Classes**: `224`
 - **Total Top-Level Functions**: `280`
 - **Total Class Methods**: `1202`
-- **Total Source Lines**: `23013`
+- **Total Source Lines**: `23014`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`62` module(s))
@@ -881,7 +881,7 @@
 
 ---
 
-### [`rust/alg_dump.py`](rust/alg_dump.py)
+### [`parity/alg_dump.py`](parity/alg_dump.py)
 > *Python oracle for the algebraic-simplification parity check.*
 
 **Size**: `43` lines
@@ -891,10 +891,10 @@
 
 ---
 
-### [`rust/check_parity.py`](rust/check_parity.py)
+### [`parity/check_parity.py`](parity/check_parity.py)
 > *Prove that the Rust front end accepts exactly the same Cairn language as the Python compiler.*
 
-**Size**: `110` lines
+**Size**: `111` lines
 
 **Functions:**
 - `def run(command, timeout)`
@@ -902,7 +902,7 @@
 
 ---
 
-### [`rust/codegen_dump.py`](rust/codegen_dump.py)
+### [`parity/codegen_dump.py`](parity/codegen_dump.py)
 > *Python oracle for codegen byte parity: full pipeline then generated artifact bytes.*
 
 **Size**: `47` lines
@@ -912,7 +912,7 @@
 
 ---
 
-### [`rust/copy_dump.py`](rust/copy_dump.py)
+### [`parity/copy_dump.py`](parity/copy_dump.py)
 > *Python oracle for the copy-propagation parity check.*
 
 **Size**: `38` lines
@@ -922,7 +922,7 @@
 
 ---
 
-### [`rust/count_dump.py`](rust/count_dump.py)
+### [`parity/count_dump.py`](parity/count_dump.py)
 > *Python oracle for the countdown-latch parity check.*
 
 **Size**: `45` lines
@@ -932,7 +932,7 @@
 
 ---
 
-### [`rust/dump.py`](rust/dump.py)
+### [`parity/dump.py`](parity/dump.py)
 > *The Python reference's canonical front-end dump.*
 
 **Size**: `155` lines
@@ -952,7 +952,7 @@
 
 ---
 
-### [`rust/final_dump.py`](rust/final_dump.py)
+### [`parity/final_dump.py`](parity/final_dump.py)
 > *Python oracle for the final optimizer passes (induction and rotation) parity.*
 
 **Size**: `56` lines
@@ -962,7 +962,7 @@
 
 ---
 
-### [`rust/fold_dump.py`](rust/fold_dump.py)
+### [`parity/fold_dump.py`](parity/fold_dump.py)
 > *Python oracle for the folding parity check.*
 
 **Size**: `29` lines
@@ -972,7 +972,7 @@
 
 ---
 
-### [`rust/fuse_dump.py`](rust/fuse_dump.py)
+### [`parity/fuse_dump.py`](parity/fuse_dump.py)
 > *Python oracle for the odd-pair-fusion parity check.*
 
 **Size**: `50` lines
@@ -982,7 +982,7 @@
 
 ---
 
-### [`rust/inline_dump.py`](rust/inline_dump.py)
+### [`parity/inline_dump.py`](parity/inline_dump.py)
 > *Python oracle for the pure-inlining parity check.*
 
 **Size**: `37` lines
@@ -992,7 +992,7 @@
 
 ---
 
-### [`rust/lower_dump.py`](rust/lower_dump.py)
+### [`parity/lower_dump.py`](parity/lower_dump.py)
 > *Python oracle for the for-loop lowering parity check.*
 
 **Size**: `37` lines
@@ -1002,7 +1002,7 @@
 
 ---
 
-### [`rust/magic_dump.py`](rust/magic_dump.py)
+### [`parity/magic_dump.py`](parity/magic_dump.py)
 > *Python oracle for the magic-division helper parity check.*
 
 **Size**: `23` lines
@@ -1012,7 +1012,7 @@
 
 ---
 
-### [`rust/pe_dump.py`](rust/pe_dump.py)
+### [`parity/pe_dump.py`](parity/pe_dump.py)
 > *Python oracle for the backend parity check.*
 
 **Size**: `62` lines
@@ -1023,7 +1023,7 @@
 
 ---
 
-### [`rust/runtime_dump.py`](rust/runtime_dump.py)
+### [`parity/runtime_dump.py`](parity/runtime_dump.py)
 > *Python oracle for the runtime emitter parity check.*
 
 **Size**: `32` lines
@@ -1033,7 +1033,7 @@
 
 ---
 
-### [`rust/unroll_dump.py`](rust/unroll_dump.py)
+### [`parity/unroll_dump.py`](parity/unroll_dump.py)
 > *Python oracle for the constant-loop-unrolling parity check.*
 
 **Size**: `45` lines
