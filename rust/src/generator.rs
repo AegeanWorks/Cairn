@@ -332,11 +332,19 @@ impl CodeGenerator {
                     && matches!(right.as_ref(), Expr::IntLiteral { .. }) =>
             {
                 let Expr::IntLiteral { value, .. } = right.as_ref() else { unreachable!() };
+                if *value >= -0x80000000 && *value <= 0x7FFFFFFF {
+                    if let Some(home) = home_for(slot, homes) {
+                        self.assembler.add_imm(home, *value as i64);
+                        return;
+                    }
+                }
                 if let Some(home) = home_for(slot, homes) {
-                    self.assembler.add_imm(home, *value as i64);
+                    self.assembler.mov_imm64("rax", *value as i64);
+                    self.assembler.binary(0x01, home, "rax");
                 } else {
                     self.load_slot(slot, "rax", homes);
-                    self.assembler.add_imm("rax", *value as i64);
+                    self.assembler.mov_imm64("rcx", *value as i64);
+                    self.assembler.binary(0x01, "rax", "rcx");
                     self.store_slot(slot, "rax", homes);
                 }
             }

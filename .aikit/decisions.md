@@ -1417,3 +1417,10 @@ external compiler and was verified end to end.
 - **Context**: The builder is the last stage boundary between the checked program and an executable image; leaving it in Python means a Rust compiler could not build a program end to end.
 - **Decision**: Add builder.rs with compile_source, output_path and an atomic write_executable. The fold count is computed before the pipeline mutates the AST. A build parity dump compares folded count, image size and the full image bytes with Python.
 - **Consequences**: Curated parity is 53/53 including the build pipeline. Builder is no longer Python-only for these sources; the remaining Python-only CLI commands and the unported multi-slot recursive codegen shapes are recorded in the ledger handoff.
+
+### ADR-143: large immediate updates use a materialised addend
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: A 64-bit literal mask cannot fit the group-1 imm8/imm32 form; the earlier generator panicked on such a benchmark and broke the parity run.
+- **Decision**: When an in-place add's literal exceeds signed 32 bits, materialise the addend with movabs into rax and add it to the slot's home. Small literals keep the one-instruction add_imm form. A regression spec pins the largest i64 mask.
+- **Consequences**: Curated parity is 54/54 including the large-literal shape; the generator no longer panics on the bit benchmarks. The full corpus diagnostic remains unchanged at 2/27 because those programs combine the shape with vectorised loops and array state.

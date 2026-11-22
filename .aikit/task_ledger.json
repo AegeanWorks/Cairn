@@ -5,31 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795376706.8473232,
+    "updated_at": 1795378010.747943,
     "owner": "opencode:session",
-    "lease_until": 1795383906.8473232,
+    "lease_until": 1795385210.747943,
     "started_by": "opencode:session",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-inlining",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/1] port pure inlining, add a parity dump and Rust tests, then commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795355566.1213546,
-      "timestamp_str": "2026-11-22 16:52:46",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "Pure inlining rewrites small call bodies into their callers and runs first in optimize(); codegen parity depends on the same call sites being inlined.",
-        "benefits": "A Rust inliner with the same single-return, pure-body eligibility and parameter substitution, checked against Python on every source.",
-        "risks": "contract: eligibility, recursion guard and substitution must match; dependency: std-only Rust; concurrency: none; state: new Rust code, oracle and ADR.",
-        "mitigation": "Compare canonical dumps over the corpus, add focused Rust tests, run all gates before commit."
-      },
-      "plan_digest": "0b76d5b982d73157bac2245c7c375a8e031f6f4875e9e6a90a6f2f0ff6a2d32e"
-    },
     {
       "task_id": "cairn-rs-inlining",
       "phase": "in_progress",
@@ -342,6 +324,23 @@
       "handoff": {
         "state": "102 Rust tests, 53/53 curated parity",
         "next": "port remaining CLI commands and finish recursive/array codegen",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[14/N] large-literal in-place add fixed and pinned; parity 54/54; ADR-143; bit benchmarks no longer panic but full .text parity of real programs still 2/27",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795378010.747943,
+      "timestamp_str": "2026-11-22 23:06:50",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 54/54 curated parity",
+        "next": "vectorised array loops and multi-slot recursive frames",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }
