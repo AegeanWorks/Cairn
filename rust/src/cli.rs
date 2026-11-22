@@ -38,6 +38,34 @@ pub fn check_json(source: &str, path: &str) -> String {
     )
 }
 
+/// The `verify --json` envelope for a source compiled in memory.
+pub fn verify_json(source: &str, path: &str) -> String {
+    let build = match crate::builder::compile_source(source, path, true) {
+        Ok(build) => build,
+        Err(error) => return compile_error(path, &error.diagnostics),
+    };
+    let problems = crate::verify::verify_image(&build.image);
+    let problems_json = if problems.is_empty() {
+        "[]".to_string()
+    } else {
+        let items = problems
+            .iter()
+            .map(|problem| {
+                format!(
+                    "    {{\n      \"code\": {},\n      \"detail\": {}\n    }}",
+                    json_string(problem.code), json_string(&problem.detail)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",\n");
+        format!("[\n{}\n  ]", items)
+    };
+    format!(
+        "{{\n  \"ok\": true,\n  \"path\": {},\n  \"kind\": \"source\",\n  \"image_bytes\": {},\n  \"problems\": {},\n  \"diagnostics\": []\n}}\n",
+        json_string(path), build.image.len(), problems_json
+    )
+}
+
 /// The `listing --json` envelope: text size, sorted labels and the rendered listing.
 pub fn listing_json(source: &str, path: &str) -> String {
     let build = match crate::builder::compile_source(source, path, true) {

@@ -89,6 +89,12 @@ def main():
                 failures.append((codegen_source, "a listing dumper exited non-zero"))
             elif list_expected.stdout != list_actual.stdout:
                 failures.append((codegen_source, "listing envelope mismatch"))
+            verify_expected = run([sys.executable, str(PARITY / "verify_dump.py"), str(codegen_source)])
+            verify_actual = run([str(BINARY), "verifyjson", str(codegen_source)])
+            if verify_expected.returncode != 0 or verify_actual.returncode != 0:
+                failures.append((codegen_source, "a verify dumper exited non-zero"))
+            elif verify_expected.stdout != verify_actual.stdout:
+                failures.append((codegen_source, "verify envelope mismatch"))
             cli_expected = run([sys.executable, str(PARITY / "cli_dump.py"), str(codegen_source)])
             cli_actual = run([str(BINARY), "check", str(codegen_source)])
             if cli_expected.returncode != 0 or cli_actual.returncode != 0:

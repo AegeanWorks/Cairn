@@ -1445,3 +1445,10 @@ external compiler and was verified end to end.
 - **Context**: A stable sort by offset preserves insertion order for labels at the same offset. A BTreeMap silently reordered arg_fill.token and arg_fill.skip and made listjson differ from Python.
 - **Decision**: Record label binding order in Assembler::label_order, carry it into Artifact::text_label_order, and build the listing from that insertion-ordered vector with a stable sort by offset. Enable listjson in the parity gate.
 - **Consequences**: Curated parity remains 55/55 and now includes byte-exact listing envelopes. The emitted bytes were already identical; this fixes only the reported label order.
+
+### ADR-147: verify --json is ported with byte-exact envelopes
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Verification is the agent-facing proof that a built artifact is well formed; its JSON envelope must match the reference exactly.
+- **Decision**: Add verify_json to cli.rs and a cairn-rs verifyjson command that compiles in memory, runs verify_image and renders the Python-shaped envelope, including an empty [] array when no problems exist. Add the oracle to the parity gate.
+- **Consequences**: Curated parity remains 55/55 and now includes verify envelopes. The run command and full .text parity for the real corpus remain open.

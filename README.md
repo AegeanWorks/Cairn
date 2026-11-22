@@ -479,7 +479,8 @@ cairn/
 │   ├── magic_dump.py         <- magic-division oracle
 │   ├── pe_dump.py            <- PE artifact oracle
 │   ├── runtime_dump.py       <- runtime helper oracle
-│   └── unroll_dump.py        <- unrolling oracle
+│   ├── unroll_dump.py        <- unrolling oracle
+│   └── verify_dump.py        <- verify --json oracle
 │   └── specs/                <- shared specs: codegen sources, divisors, PE artifact, folds
 ├── benchmarks/               <- three cases, their C and Rust twins, and the harness
 ├── examples/                 <- hello, fibonacci, arithmetic, alloy_probe (Alloy backend probe)
