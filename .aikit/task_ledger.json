@@ -1,67 +1,20 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-rs-copy-prop",
+    "task_id": "cairn-rs-algebraic",
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795352806.8965347,
+    "updated_at": 1795353674.510041,
     "owner": "opencode:session",
-    "lease_until": 1795360006.8965347,
+    "lease_until": 1795360874.510041,
     "started_by": "opencode:session",
     "continuations": [],
-    "completed_at": 1795352855.3867369,
-    "completed_head": "2a7b8fddd5f0ef246afa9fe8dd3d135fe113b8ef",
-    "completed_tree": "3df7b2ee83b8366271c9f83e5a2185209737428c"
+    "completed_at": 1795353711.8339775,
+    "completed_head": "4cf3a08ad203f371ccec4ac891191ca33b74e257",
+    "completed_tree": "eb6603c02c7d442af30ec035de5ae5c344e27dd5"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-sema",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[2/2] ported sema to Rust with 15 ported tests; added a Python-to-Rust canonical dump and front-end-parity gate covering 36/36 sources (tokens, AST, spans, slots, diagnostics); ADR-118 records the same-language guard; aikit check 7/7 gates passed (hygiene, guidelines, secrets, dependencies, Python suite, rust-test, front-end-parity)",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795346611.179851,
-      "timestamp_str": "2026-11-22 14:23:31",
-      "agent": "opencode:session",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-rs-sema",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-rs-sema' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795346653.1588867,
-      "timestamp_str": "2026-11-22 14:24:13",
-      "agent": "opencode:session",
-      "head": "8a87a1a418b24b96b50670b72456ab90e207b5a3",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-rs-backend",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/2] port image, machine emitter, PE writer, listing and verifier to Rust with byte-level tests; [2/2] extend the parity gate to compare emitted bytes and commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795346778.2070062,
-      "timestamp_str": "2026-11-22 14:26:18",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "The language front end and semantic analysis are proven identical to Python; the next bottom-up layer is the byte-emitting backend, which turns the same AST into PE32+ images and must match the reference byte for byte.",
-        "benefits": "A std-only Rust backend whose instruction encodings, section layout and artifact verification match Python, with the shared parity gate extended from source semantics to emitted bytes.",
-        "risks": "contract: x86-64 encodings, PE headers, fixups and verifier codes must match exactly; dependency: std-only Rust; concurrency: none; state: new Rust modules and tests, more Python gate scripts.",
-        "mitigation": "Port the emitter, PE and verifier tests verbatim as Rust tests, add a byte-level dump to the parity gate, run all project gates before commit and record stage decisions in an ADR."
-      },
-      "plan_digest": "af6f3bb84a78d1a0eed1f16d4709ea0730fee96b4a7ecf5995fd31d105b8b36c"
-    },
     {
       "task_id": "cairn-rs-backend",
       "phase": "in_progress",
@@ -319,6 +272,53 @@
       "timestamp_str": "2026-11-22 16:07:35",
       "agent": "opencode:session",
       "head": "2a7b8fddd5f0ef246afa9fe8dd3d135fe113b8ef",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rs-algebraic",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/1] port algebraic simplification, add a parity dump and Rust tests, then commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795352980.5695214,
+      "timestamp_str": "2026-11-22 16:09:40",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "Algebraic simplification rewrites whole expression chains and runs immediately after folding, so codegen cannot match Python bytes without it.",
+        "benefits": "A Rust algebraic pass with the same chain recognition and rewrite rules, checked against Python on every source.",
+        "risks": "contract: chain signatures, sign handling and effect/trap safety must match; dependency: std-only Rust; concurrency: none; state: new Rust helpers, oracle and ADR.",
+        "mitigation": "Port the pass with its helpers, compare canonical dumps over the corpus, run all gates before commit."
+      },
+      "plan_digest": "c5c024ee035d9eacab8f31f20bad93d5c380e14a503ad139b413eae4ef4f414a"
+    },
+    {
+      "task_id": "cairn-rs-algebraic",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/1] algebraic simplification ported with chain flattening and effect-safe signatures; shared alg dump in the parity gate (39/39 identical); 97 Rust tests; ADR-125; aikit check 7/7 gates passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795353674.510041,
+      "timestamp_str": "2026-11-22 16:21:14",
+      "agent": "opencode:session",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-rs-algebraic",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-rs-algebraic' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795353711.91434,
+      "timestamp_str": "2026-11-22 16:21:51",
+      "agent": "opencode:session",
+      "head": "4cf3a08ad203f371ccec4ac891191ca33b74e257",
       "delivery": {
         "roots": [
           "."
