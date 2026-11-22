@@ -5,30 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795367564.6182232,
+    "updated_at": 1795368691.3776448,
     "owner": "opencode:session",
-    "lease_until": 1795374764.6182232,
+    "lease_until": 1795375891.3776448,
     "started_by": "opencode:session",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-algebraic",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-rs-algebraic' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795353711.91434,
-      "timestamp_str": "2026-11-22 16:21:51",
-      "agent": "opencode:session",
-      "head": "4cf3a08ad203f371ccec4ac891191ca33b74e257",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-rs-countdown",
       "phase": "in_progress",
@@ -334,6 +317,23 @@
       "handoff": {
         "state": "102 Rust tests, 48/48 curated parity",
         "next": "tail-return and delta-inlining shapes for recursive functions before call lowering",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[7/N] literal user-call lowering added; parity 49/49; ADR-136; real-program diagnostic remains 2/27 because recursive delta-inlined callees are unlowered",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795368691.3776448,
+      "timestamp_str": "2026-11-22 20:31:31",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 49/49 curated parity",
+        "next": "delta-inlined recursive callees and non-literal call arguments",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }

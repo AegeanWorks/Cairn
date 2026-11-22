@@ -408,7 +408,22 @@ impl CodeGenerator {
                 self.depth -= 8;
                 self.assembler.pop("rax");
             }
-            _ => {}
+            _ => {
+                // A pure call with literal arguments: place them in the ABI registers and call.
+                // Wider argument shapes are added in later slices.
+                if arguments.is_empty()
+                    || arguments.iter().all(|arg| matches!(arg, Expr::IntLiteral { .. }))
+                {
+                    if arguments.len() <= 4 {
+                        for (index, argument) in arguments.iter().enumerate() {
+                            let Expr::IntLiteral { value, .. } = argument else { unreachable!() };
+                            self.assembler.mov_imm64(["rcx", "rdx", "r8", "r9"][index], *value as i64);
+                        }
+                        let label = function_label(name);
+                        self.call_site(&label);
+                    }
+                }
+            }
         }
     }
 

@@ -1368,3 +1368,10 @@ external compiler and was verified end to end.
 - **Context**: A homed a+b is the hot shape in recursive helpers and a generic add through rax would not match the reference bytes.
 - **Decision**: Lower Name+Name with both slots homed as lea rax,[left+right] via Assembler::lea_scale with scale 0 and displacement 0. Other binary shapes stay unlowered until their reference form is measured.
 - **Consequences**: Curated parity is 48/48 including a two-parameter helper. The real-program diagnostic stays at 2/27 because recursion uses tail-return and delta-inlining forms not ported yet.
+
+### ADR-136: literal user calls lower through the ABI registers
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: A non-inlined helper with literal arguments is the simplest call shape in the corpus and a prerequisite for recursive call lowering.
+- **Decision**: For a call whose arguments are all i64 literals and at most four in number, emit mov_imm64 into rcx/rdx/r8/r9 and a padded call to fn.<name>. The result remains in rax, so a surrounding return needs no move.
+- **Consequences**: Curated parity is 49/49 including a two-function program with a real call. The real-program diagnostic remains 2/27: recursive callees use delta-inlined copies and non-literal arguments that are not lowered yet.
