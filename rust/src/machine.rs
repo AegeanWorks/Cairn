@@ -86,6 +86,8 @@ fn rbp_displacement(reg: u8, offset: i64) -> Vec<u8> {
 pub struct Assembler {
     pub code: Vec<u8>,
     pub labels: BTreeMap<String, usize>,
+    /// Label names in binding order, so ties at one offset keep source order.
+    pub label_order: Vec<String>,
     pub fixups: Vec<(usize, String)>,
     /// The register whose current value ZF compares against zero, when usable.
     pub zf_status: Option<String>,
@@ -110,6 +112,7 @@ impl Assembler {
     pub fn label(&mut self, name: &str) {
         assert!(!self.labels.contains_key(name), "duplicate label {}", name);
         self.zf_status = None;
+        self.label_order.push(name.to_string());
         self.labels.insert(name.to_string(), self.here());
     }
 

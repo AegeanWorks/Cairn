@@ -10,7 +10,7 @@
 - **Total Classes**: `224`
 - **Total Top-Level Functions**: `284`
 - **Total Class Methods**: `1202`
-- **Total Source Lines**: `23127`
+- **Total Source Lines**: `23133`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`66` module(s))
@@ -914,7 +914,7 @@
 ### [`parity/check_parity.py`](parity/check_parity.py)
 > *Prove that the Rust front end accepts exactly the same Cairn language as the Python compiler.*
 
-**Size**: `130` lines
+**Size**: `136` lines
 
 **Functions:**
 - `def run(command, timeout)`

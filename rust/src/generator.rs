@@ -647,6 +647,7 @@ impl CodeGenerator {
         Artifact {
             text: self.assembler.code,
             text_labels: self.assembler.labels,
+            text_label_order: self.assembler.label_order,
             fixups: self.assembler.fixups,
             rodata: self.rodata,
             entry: ENTRY_LABEL.to_string(),

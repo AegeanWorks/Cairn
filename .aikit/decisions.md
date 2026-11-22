@@ -1438,3 +1438,10 @@ external compiler and was verified end to end.
 - **Context**: The listing command is the machine-readable view of emitted bytes. Python keeps label insertion order for ties at the same offset; the Rust assembler stores labels in a sorted map.
 - **Decision**: Add listing_json to cli.rs and a cairn-rs listjson command. Leave it out of the parity gate until the assembler preserves insertion order, and record the tie-order gap in the audit report rather than hiding it.
 - **Consequences**: Curated parity remains 55/55. The listing gap is explicit and bounded: it is a label-order issue, not an emitted-byte issue, because the underlying .text and fixups already match.
+
+### ADR-146: label insertion order makes listing parity gateable
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A stable sort by offset preserves insertion order for labels at the same offset. A BTreeMap silently reordered arg_fill.token and arg_fill.skip and made listjson differ from Python.
+- **Decision**: Record label binding order in Assembler::label_order, carry it into Artifact::text_label_order, and build the listing from that insertion-ordered vector with a stable sort by offset. Enable listjson in the parity gate.
+- **Consequences**: Curated parity remains 55/55 and now includes byte-exact listing envelopes. The emitted bytes were already identical; this fixes only the reported label order.

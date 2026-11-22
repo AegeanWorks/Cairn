@@ -80,6 +80,8 @@ impl WritableData {
 pub struct Artifact {
     pub text: Vec<u8>,
     pub text_labels: BTreeMap<String, usize>,
+    /// Text label names in binding order, for stable tie-breaking in listings.
+    pub text_label_order: Vec<String>,
     pub fixups: Vec<(usize, String)>,
     pub rodata: ReadOnlyData,
     pub entry: String,
@@ -93,6 +95,7 @@ impl Default for Artifact {
         Self {
             text: Vec::new(),
             text_labels: BTreeMap::new(),
+            text_label_order: Vec::new(),
             fixups: Vec::new(),
             rodata: ReadOnlyData::default(),
             entry: ENTRY_LABEL.to_string(),

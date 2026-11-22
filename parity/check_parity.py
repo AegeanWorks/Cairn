@@ -83,6 +83,12 @@ def main():
                 failures.append((codegen_source, "a build dumper exited non-zero"))
             elif build_expected.stdout != build_actual.stdout:
                 failures.append((codegen_source, "build pipeline mismatch"))
+            list_expected = run([sys.executable, str(PARITY / "listing_dump.py"), str(codegen_source)])
+            list_actual = run([str(BINARY), "listjson", str(codegen_source)])
+            if list_expected.returncode != 0 or list_actual.returncode != 0:
+                failures.append((codegen_source, "a listing dumper exited non-zero"))
+            elif list_expected.stdout != list_actual.stdout:
+                failures.append((codegen_source, "listing envelope mismatch"))
             cli_expected = run([sys.executable, str(PARITY / "cli_dump.py"), str(codegen_source)])
             cli_actual = run([str(BINARY), "check", str(codegen_source)])
             if cli_expected.returncode != 0 or cli_actual.returncode != 0:

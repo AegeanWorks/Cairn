@@ -18,8 +18,16 @@ fn rows(chunk: &[u8], start: usize) -> Vec<String> {
 
 /// Every label with its offset and the bytes up to the next label.
 pub fn render_listing(artifact: &Artifact) -> Result<String, String> {
-    let mut ordered: Vec<(&String, usize)> =
-        artifact.text_labels.iter().map(|(name, offset)| (name, *offset)).collect();
+    let mut ordered: Vec<(&String, usize)> = if artifact.text_label_order.is_empty() {
+        artifact.text_labels.iter().map(|(name, offset)| (name, *offset)).collect()
+    } else {
+        artifact
+            .text_label_order
+            .iter()
+            .filter_map(|name| artifact.text_labels.get_key_value(name))
+            .map(|(name, offset)| (name, *offset))
+            .collect()
+    };
     ordered.sort_by_key(|(_, offset)| *offset);
     for (name, offset) in &ordered {
         if *offset > artifact.text.len() {
