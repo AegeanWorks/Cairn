@@ -88,6 +88,87 @@ fn main() {
         }
         return;
     }
+    if arguments.len() == 3 && arguments[1] == "final" {
+        let path = Path::new(&arguments[2]);
+        match std::fs::read_to_string(path) {
+            Ok(source) => {
+                let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+                let program = cairn_rs::parser::parse(&normalized, &arguments[2])
+                    .and_then(|parsed| {
+                        let mut analysed = parsed;
+                        cairn_rs::sema::analyze(&mut analysed, &arguments[2])?;
+                        let mut result = cairn_rs::optimize::lower_for_loops(&analysed);
+                        cairn_rs::optimize::apply_copy_propagation(&mut result);
+                        cairn_rs::optimize::apply_algebraic_simplification(&mut result);
+                        cairn_rs::optimize::apply_constant_loop_unrolling(&mut result);
+                        cairn_rs::optimize::apply_countdown_latches(&mut result);
+                        let first = cairn_rs::optimize::apply_odd_pair_fusion(&mut result);
+                        if first > 0 {
+                            result = cairn_rs::optimize::Optimizer::new().fold_program(&result);
+                            cairn_rs::optimize::apply_odd_pair_fusion(&mut result);
+                        }
+                        cairn_rs::optimize::apply_induction_strength_reduction(&mut result);
+                        cairn_rs::optimize::apply_bottom_test_rotation(&mut result);
+                        Ok(result)
+                    });
+                match program {
+                    Ok(program) => println!("{}", cairn_rs::dump::program_dump(&program)),
+                    Err(error) => {
+                        for diagnostic in &error.diagnostics {
+                            println!("ERROR[{},{},{},{}]", diagnostic.code,
+                                     diagnostic.message, diagnostic.fix,
+                                     diagnostic.span.start);
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("cannot read {}: {}", arguments[2], error);
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
+    if arguments.len() == 3 && arguments[1] == "fuse" {
+        let path = Path::new(&arguments[2]);
+        match std::fs::read_to_string(path) {
+            Ok(source) => {
+                let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+                let program = cairn_rs::parser::parse(&normalized, &arguments[2])
+                    .and_then(|parsed| {
+                        let mut analysed = parsed;
+                        cairn_rs::sema::analyze(&mut analysed, &arguments[2])?;
+                        let mut result = cairn_rs::optimize::lower_for_loops(&analysed);
+                        cairn_rs::optimize::apply_copy_propagation(&mut result);
+                        cairn_rs::optimize::apply_algebraic_simplification(&mut result);
+                        cairn_rs::optimize::apply_countdown_latches(&mut result);
+                        let first = cairn_rs::optimize::apply_odd_pair_fusion(&mut result);
+                        if first > 0 {
+                            let mut folded = cairn_rs::optimize::Optimizer::new()
+                                .fold_program(&result);
+                            cairn_rs::optimize::apply_odd_pair_fusion(&mut folded);
+                            result = folded;
+                        }
+                        Ok(result)
+                    });
+                match program {
+                    Ok(program) => println!("{}", cairn_rs::dump::program_dump(&program)),
+                    Err(error) => {
+                        for diagnostic in &error.diagnostics {
+                            println!("ERROR[{},{},{},{}]", diagnostic.code,
+                                     diagnostic.message, diagnostic.fix,
+                                     diagnostic.span.start);
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("cannot read {}: {}", arguments[2], error);
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
     if arguments.len() == 3 && arguments[1] == "inline" {
         let path = Path::new(&arguments[2]);
         match std::fs::read_to_string(path) {

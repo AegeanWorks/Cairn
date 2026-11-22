@@ -431,7 +431,9 @@ cairn/
 │   ├── alg_dump.py           <- Python oracle for algebraic-simplification parity
 │   ├── count_dump.py         <- Python oracle for countdown-latch parity
 │   ├── copy_dump.py          <- Python oracle for copy-propagation parity
+│   ├── final_dump.py         <- Python oracle for induction and rotation parity
 │   ├── fold_dump.py          <- Python oracle for constant-folding parity
+│   ├── fuse_dump.py          <- Python oracle for odd-pair-fusion parity
 │   ├── inline_dump.py        <- Python oracle for pure-inlining parity
 │   ├── lower_dump.py         <- Python oracle for for-loop lowering parity
 │   ├── unroll_dump.py        <- Python oracle for constant-loop-unrolling parity

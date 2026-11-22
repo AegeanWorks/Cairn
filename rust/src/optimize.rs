@@ -1789,6 +1789,717 @@ pub fn apply_pure_inlining(program: &mut Program) -> usize {
     inlined
 }
 
+fn slot_of_name(expression: Option<&Expr>) -> Option<i64> {
+    match peel_parens(expression).unwrap() {
+        Expr::Name { slot, .. } => Some(*slot),
+        _ => None,
+    }
+}
+
+fn is_plus_one(statement: &Stmt) -> bool {
+    let Stmt::Assign { slot, value, .. } = statement else {
+        return false;
+    };
+    if *slot < 0 {
+        return false;
+    }
+    let Expr::Binary { op, left, right, .. } = peel_parens(Some(value)).unwrap() else {
+        return false;
+    };
+    if op != "+" {
+        return false;
+    }
+    let left = peel_parens(Some(left)).unwrap();
+    let right = peel_parens(Some(right)).unwrap();
+    let (left, right) = if matches!(right, Expr::IntLiteral { value, .. } if *value == 1) {
+        (right, left)
+    } else {
+        (left, right)
+    };
+    matches!(left, Expr::IntLiteral { value, .. } if *value == 1)
+        && matches!(right, Expr::Name { slot: found, .. } if *found == *slot)
+}
+
+fn scaled_odd_term(value: Option<&Expr>, slot: i64) -> Option<i128> {
+    let Expr::Binary { op, left, right, .. } = peel_parens(value).unwrap() else {
+        return None;
+    };
+    if op != "*" {
+        return None;
+    }
+    let left = peel_parens(Some(left)).unwrap();
+    let right = peel_parens(Some(right)).unwrap();
+    if let (Expr::Name { slot: found, .. }, Expr::IntLiteral { value, .. }) = (left, right) {
+        if *found == slot && value % 2 != 0 {
+            return Some(*value);
+        }
+    }
+    if let (Expr::IntLiteral { value, .. }, Expr::Name { slot: found, .. }) = (left, right) {
+        if *found == slot && value % 2 != 0 {
+            return Some(*value);
+        }
+    }
+    None
+}
+
+fn odd_step_value(value: Option<&Expr>, slot: i64) -> Option<(i128, i128)> {
+    let Expr::Binary { op, left, right, .. } = peel_parens(value).unwrap() else {
+        return None;
+    };
+    if op != "+" {
+        return None;
+    }
+    for (term, addend) in [
+        (peel_parens(Some(left)).unwrap(), peel_parens(Some(right)).unwrap()),
+        (peel_parens(Some(right)).unwrap(), peel_parens(Some(left)).unwrap()),
+    ] {
+        if let Some(multiplier) = scaled_odd_term(Some(term), slot) {
+            if let Expr::IntLiteral { value, .. } = addend {
+                if value % 2 != 0 {
+                    return Some((multiplier, *value));
+                }
+            }
+        }
+    }
+    None
+}
+
+fn halving_value(value: Option<&Expr>, slot: i64) -> bool {
+    let Expr::Binary { op, left, right, .. } = peel_parens(value).unwrap() else {
+        return false;
+    };
+    if op != "/" {
+        return false;
+    }
+    let right = peel_parens(Some(right)).unwrap();
+    slot_of_name(Some(left)) == Some(slot)
+        && matches!(right, Expr::IntLiteral { value, .. } if *value == 2)
+}
+
+fn fuse_odd_pair(statement: &mut Stmt) -> bool {
+    let Stmt::While { countdown, body, .. } = statement else {
+        return false;
+    };
+    if *countdown || contains_break_or_continue(body) {
+        return false;
+    }
+    for index in 0..body.statements.len().saturating_sub(1) {
+        let (branch, increment) = {
+            let branch = &body.statements[index];
+            let increment = &body.statements[index + 1];
+            (branch.clone(), increment.clone())
+        };
+        let Stmt::If { condition, then_block, else_block, .. } = &branch else {
+            continue;
+        };
+        let Some(otherwise) = else_block else { continue };
+        if !is_plus_one(&increment) {
+            continue;
+        }
+        let condition = peel_parens(Some(condition)).unwrap();
+        let Expr::Binary { op, left, right, .. } = condition else { continue };
+        if op != "==" && op != "!=" {
+            continue;
+        }
+        let zero = peel_parens(Some(right)).unwrap();
+        if !matches!(zero, Expr::IntLiteral { value, .. } if *value == 0) {
+            continue;
+        }
+        let parity = peel_parens(Some(left)).unwrap();
+        let Expr::Binary { op: parity_op, left: dividend, right: modulus, .. } = parity else {
+            continue;
+        };
+        if parity_op != "%" {
+            continue;
+        }
+        let modulus = peel_parens(Some(modulus)).unwrap();
+        if !matches!(modulus, Expr::IntLiteral { value, .. } if *value == 2) {
+            continue;
+        }
+        let slot = match slot_of_name(Some(dividend)) {
+            Some(slot) if slot >= 0 => slot,
+            _ => continue,
+        };
+        if then_block.statements.len() != 1 || otherwise.statements.len() != 1 {
+            continue;
+        }
+        let mut even_side = then_block.statements[0].clone();
+        let mut odd_side = otherwise.statements[0].clone();
+        if op == "!=" {
+            std::mem::swap(&mut even_side, &mut odd_side);
+        }
+        let Stmt::Assign { slot: even_slot, value: even_value, .. } = &even_side else {
+            continue;
+        };
+        if *even_slot != slot || !halving_value(Some(even_value), slot) {
+            continue;
+        }
+        let Stmt::Assign { slot: odd_slot, name, value: odd_value, span: odd_span, .. } = &odd_side
+        else {
+            continue;
+        };
+        if *odd_slot != slot || odd_step_value(Some(odd_value), slot).is_none() {
+            continue;
+        }
+        let fused = Stmt::Assign {
+            span: *odd_span,
+            name: name.clone(),
+            slot,
+            value: Expr::Binary {
+                span: odd_value.span(),
+                op: "/".to_string(),
+                left: Box::new(odd_value.clone()),
+                right: Box::new(Expr::IntLiteral { span: zero.span(), value: 2 }),
+            },
+            index: None,
+            temp_slot: None,
+            array_size: None,
+        };
+        let counted = |level: i128| Stmt::Assign {
+            span: increment.span(),
+            name: match &increment {
+                Stmt::Assign { name, .. } => name.clone(),
+                _ => unreachable!(),
+            },
+            value: Expr::Binary {
+                span: match &increment {
+                    Stmt::Assign { value, .. } => value.span(),
+                    _ => unreachable!(),
+                },
+                op: "+".to_string(),
+                left: Box::new(Expr::Name {
+                    span: increment.span(),
+                    name: match &increment {
+                        Stmt::Assign { name, .. } => name.clone(),
+                        _ => unreachable!(),
+                    },
+                    slot: match &increment {
+                        Stmt::Assign { slot, .. } => *slot,
+                        _ => unreachable!(),
+                    },
+                }),
+                right: Box::new(Expr::IntLiteral { span: increment.span(), value: level }),
+            },
+            slot: match &increment {
+                Stmt::Assign { slot, .. } => *slot,
+                _ => unreachable!(),
+            },
+            index: None,
+            temp_slot: None,
+            array_size: None,
+        };
+        let Stmt::If { then_block: target_then, else_block: target_else, .. } =
+            &mut body.statements[index]
+        else {
+            unreachable!();
+        };
+        if op == "==" {
+            target_then.statements = vec![even_side, counted(1)];
+            target_else.as_mut().unwrap().statements = vec![fused, counted(2)];
+        } else {
+            target_then.statements = vec![fused, counted(2)];
+            target_else.as_mut().unwrap().statements = vec![even_side, counted(1)];
+        }
+        body.statements.remove(index + 1);
+        return true;
+    }
+    false
+}
+
+/// Fuse collatz-shaped odd steps with the halving that follows them.
+pub fn apply_odd_pair_fusion(program: &mut Program) -> usize {
+    fn visit(block: &mut Block) -> usize {
+        let mut changed = 0;
+        for statement in &mut block.statements {
+            match statement {
+                Stmt::While { body, .. } => {
+                    changed += visit(body);
+                    if fuse_odd_pair(statement) {
+                        changed += 1;
+                    }
+                }
+                Stmt::If { then_block, else_block, .. } => {
+                    changed += visit(then_block);
+                    if let Some(otherwise) = else_block {
+                        changed += visit(otherwise);
+                    }
+                }
+                Stmt::Block(inner) => changed += visit(inner),
+                _ => {}
+            }
+        }
+        changed
+    }
+    let mut changed = 0;
+    for function in &mut program.functions {
+        changed += visit(&mut function.body);
+    }
+    changed
+}
+
+fn shift_lowbit_clear(expression: &Expr, slot: i64) -> bool {
+    let Expr::Binary { op, left, right, .. } = peel_parens(Some(expression)).unwrap() else {
+        return false;
+    };
+    if op != "==" {
+        return false;
+    }
+    let left = peel_parens(Some(left)).unwrap();
+    let right = peel_parens(Some(right)).unwrap();
+    let target = if matches!(right, Expr::IntLiteral { value, .. } if *value == 0) {
+        left
+    } else if matches!(left, Expr::IntLiteral { value, .. } if *value == 0) {
+        right
+    } else {
+        return false;
+    };
+    let Expr::Binary { op, left, right, .. } = peel_parens(Some(target)).unwrap() else {
+        return false;
+    };
+    if op != "&" {
+        return false;
+    }
+    let first = peel_parens(Some(left)).unwrap();
+    let second = peel_parens(Some(right)).unwrap();
+    (matches!(first, Expr::Name { slot: found, .. } if *found == slot)
+        && matches!(second, Expr::IntLiteral { value, .. } if *value == 1))
+        || (matches!(second, Expr::Name { slot: found, .. } if *found == slot)
+            && matches!(first, Expr::IntLiteral { value, .. } if *value == 1))
+}
+
+fn is_shift_loop(statement: &Stmt, slot: i64) -> bool {
+    let Stmt::While { condition, body, countdown, .. } = statement else {
+        return false;
+    };
+    if *countdown || !shift_lowbit_clear(condition, slot) || body.statements.len() != 1 {
+        return false;
+    }
+    let Stmt::Assign { slot: found, value, index: None, temp_slot: None, .. } =
+        &body.statements[0] else {
+        return false;
+    };
+    if *found != slot {
+        return false;
+    }
+    let Expr::Binary { op, left, right, .. } = peel_parens(Some(value)).unwrap() else {
+        return false;
+    };
+    if op != ">>" {
+        return false;
+    }
+    slot_of_name(Some(left)) == Some(slot)
+        && matches!(peel_parens(Some(right)).unwrap(), Expr::IntLiteral { value, .. } if *value == 1)
+}
+
+fn zero_comparison(expression: &Expr, slot: i64, op: &str) -> bool {
+    let Expr::Binary { op: found, left, right, .. } = peel_parens(Some(expression)).unwrap() else {
+        return false;
+    };
+    if found != op {
+        return false;
+    }
+    let left = peel_parens(Some(left)).unwrap();
+    let right = peel_parens(Some(right)).unwrap();
+    (matches!(left, Expr::Name { slot: found, .. } if *found == slot)
+        && matches!(right, Expr::IntLiteral { value, .. } if *value == 0))
+        || (matches!(right, Expr::Name { slot: found, .. } if *found == slot)
+            && matches!(left, Expr::IntLiteral { value, .. } if *value == 0))
+}
+
+fn count_break(statements: &[Stmt]) -> usize {
+    statements.iter().map(|statement| match statement {
+        Stmt::Break { .. } => 1,
+        Stmt::If { then_block, else_block, .. } => {
+            count_break(&then_block.statements)
+                + else_block.as_ref().map_or(0, |block| count_break(&block.statements))
+        }
+        Stmt::While { body, .. } | Stmt::Block(body) => count_break(&body.statements),
+        _ => 0,
+    }).sum()
+}
+
+fn count_continue_return(statements: &[Stmt]) -> usize {
+    statements.iter().map(|statement| match statement {
+        Stmt::Continue { .. } | Stmt::Return { .. } => 1,
+        Stmt::If { then_block, else_block, .. } => {
+            count_continue_return(&then_block.statements)
+                + else_block.as_ref().map_or(0, |block| count_continue_return(&block.statements))
+        }
+        Stmt::While { body, .. } | Stmt::Block(body) => count_continue_return(&body.statements),
+        _ => 0,
+    }).sum()
+}
+
+/// Rotate a guarded bottom-test loop so its redundant condition re-test disappears.
+pub fn apply_bottom_test_rotation(program: &mut Program) -> usize {
+    let mut rotated = 0;
+    for function in &mut program.functions {
+        let statements = &mut function.body.statements;
+        let mut index = 1;
+        while index < statements.len() {
+            let is_candidate = matches!(&statements[index], Stmt::While { countdown: false, .. });
+            if !is_candidate {
+                index += 1;
+                continue;
+            }
+            let cloned = statements[index].clone();
+            let Stmt::While { ref condition, ref body, .. } = cloned else {
+                unreachable!()
+            };
+            let Expr::Binary { op, left, right, .. } = peel_parens(Some(condition)).unwrap() else {
+                index += 1;
+                continue;
+            };
+            if op != "!=" {
+                index += 1;
+                continue;
+            }
+            let left = peel_parens(Some(left)).unwrap();
+            let right = peel_parens(Some(right)).unwrap();
+            let slot = if let (Expr::Name { slot, .. }, Expr::IntLiteral { value, .. }) = (left, right) {
+                if *value == 0 { *slot } else { index += 1; continue }
+            } else if let (Expr::IntLiteral { value, .. }, Expr::Name { slot, .. }) = (left, right) {
+                if *value == 0 { *slot } else { index += 1; continue }
+            } else {
+                index += 1;
+                continue;
+            };
+            if !is_shift_loop(&statements[index - 1], slot)
+                || body.statements.len() < 3
+                || !is_shift_loop(body.statements.last().unwrap(), slot)
+            {
+                index += 1;
+                continue;
+            }
+            let prefix = &body.statements[..body.statements.len() - 1];
+            let guards = prefix.iter().enumerate().filter(|(_, statement)| {
+                if let Stmt::If { condition, then_block, else_block, .. } = statement {
+                    zero_comparison(condition, slot, "==")
+                        && else_block.is_none()
+                        && then_block.statements.len() == 1
+                        && matches!(then_block.statements[0], Stmt::Break { .. })
+                } else {
+                    false
+                }
+            }).count();
+            if guards != 1 || count_continue_return(prefix) > 0
+                || count_break(&body.statements) != 1
+            {
+                index += 1;
+                continue;
+            }
+            let trailing = body.statements.last().unwrap().clone();
+            let mut new_body = vec![trailing];
+            new_body.extend_from_slice(prefix);
+            let span = condition.span();
+            if let Stmt::While { body: target_body, condition: target_condition, .. } =
+                &mut statements[index]
+            {
+                target_body.statements = new_body;
+                *target_condition = Expr::IntLiteral { span, value: 1 };
+            }
+            statements.remove(index - 1);
+            rotated += 1;
+        }
+    }
+    rotated
+}
+
+fn linear_product(expression: &Expr, slot: i64) -> Option<i128> {
+    let Expr::Binary { op, left, right, .. } = peel_parens(Some(expression)).unwrap() else {
+        return None;
+    };
+    if op != "*" {
+        return None;
+    }
+    let left = peel_parens(Some(left)).unwrap();
+    let right = peel_parens(Some(right)).unwrap();
+    if let (Expr::Name { slot: found, .. }, Expr::IntLiteral { value, .. }) = (left, right) {
+        if *found == slot {
+            return Some(*value);
+        }
+    }
+    if let (Expr::IntLiteral { value, .. }, Expr::Name { slot: found, .. }) = (left, right) {
+        if *found == slot {
+            return Some(*value);
+        }
+    }
+    None
+}
+
+fn linear_in_index(expression: &Expr, slot: i64) -> Option<(i128, i128)> {
+    let value = peel_parens(Some(expression)).unwrap();
+    let Expr::Binary { op, left, right, .. } = value else {
+        return None;
+    };
+    let left = peel_parens(Some(left)).unwrap();
+    let right = peel_parens(Some(right)).unwrap();
+    if op == "+" {
+        if let Expr::IntLiteral { value, .. } = right {
+            if let Some(multiplier) = linear_product(left, slot) {
+                return Some((multiplier, *value));
+            }
+        }
+        if let Expr::IntLiteral { value, .. } = left {
+            if let Some(multiplier) = linear_product(right, slot) {
+                return Some((multiplier, *value));
+            }
+        }
+    }
+    if op == "*" {
+        if let Some(multiplier) = linear_product(value, slot) {
+            return Some((multiplier, 0));
+        }
+    }
+    None
+}
+
+type LinearReplacements = BTreeMap<(i128, i128), i64>;
+
+fn rewrite_linear(expression: &Expr, slot: i64, replacements: &LinearReplacements)
+    -> (Expr, usize) {
+    if let Expr::Parens { span, inner } = expression {
+        let (new_inner, count) = rewrite_linear(inner, slot, replacements);
+        return (Expr::Parens { span: *span, inner: Box::new(new_inner) }, count);
+    }
+    if let Some(term) = linear_in_index(expression, slot) {
+        if let Some(induction_slot) = replacements.get(&term) {
+            return (Expr::Name {
+                span: expression.span(),
+                name: "__induction".to_string(),
+                slot: *induction_slot,
+            }, 1);
+        }
+    }
+    match expression {
+        Expr::Binary { span, op, left, right } => {
+            let (new_left, first) = rewrite_linear(left, slot, replacements);
+            let (new_right, second) = rewrite_linear(right, slot, replacements);
+            if first + second > 0 {
+                (Expr::Binary {
+                    span: *span, op: op.clone(),
+                    left: Box::new(new_left), right: Box::new(new_right),
+                }, first + second)
+            } else {
+                (expression.clone(), 0)
+            }
+        }
+        Expr::Unary { span, op, operand } => {
+            let (new_operand, count) = rewrite_linear(operand, slot, replacements);
+            if count > 0 {
+                (Expr::Unary { span: *span, op: op.clone(), operand: Box::new(new_operand) }, count)
+            } else {
+                (expression.clone(), 0)
+            }
+        }
+        Expr::Call { span, name, arguments } => {
+            let mut new_arguments = Vec::new();
+            let mut total = 0;
+            for argument in arguments {
+                let (new_argument, count) = rewrite_linear(argument, slot, replacements);
+                new_arguments.push(new_argument);
+                total += count;
+            }
+            if total > 0 {
+                (Expr::Call { span: *span, name: name.clone(), arguments: new_arguments }, total)
+            } else {
+                (expression.clone(), 0)
+            }
+        }
+        Expr::Index { span, operand, index, slot: base, size } => {
+            let (new_operand, first) = rewrite_linear(operand, slot, replacements);
+            let (new_index, second) = rewrite_linear(index, slot, replacements);
+            if first + second > 0 {
+                (Expr::Index {
+                    span: *span, operand: Box::new(new_operand), index: Box::new(new_index),
+                    slot: *base, size: *size,
+                }, first + second)
+            } else {
+                (expression.clone(), 0)
+            }
+        }
+        other => (other.clone(), 0),
+    }
+}
+
+fn collect_linear(expression: &Expr, slot: i64, found: &mut BTreeSet<(i128, i128)>) {
+    if let Some(term) = linear_in_index(expression, slot) {
+        found.insert(term);
+        return;
+    }
+    match expression {
+        Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => {
+            collect_linear(inner, slot, found);
+        }
+        Expr::Binary { left, right, .. } | Expr::Index { operand: left, index: right, .. } => {
+            collect_linear(left, slot, found);
+            collect_linear(right, slot, found);
+        }
+        Expr::Call { arguments, .. } | Expr::ArrayLiteral { elements: arguments, .. } => {
+            for argument in arguments {
+                collect_linear(argument, slot, found);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn statement_expression(statement: &Stmt) -> Option<&Expr> {
+    match statement {
+        Stmt::Let { value, .. } | Stmt::Assign { value, .. } | Stmt::ExprStmt { expression: value, .. }
+        | Stmt::If { condition: value, .. } => Some(value),
+        _ => None,
+    }
+}
+
+fn strength_reduction_plan(statement: &Stmt) -> Option<(i64, Vec<(i128, i128)>)> {
+    let Stmt::While { condition, body, .. } = statement else {
+        return None;
+    };
+    let Expr::Binary { op, left, .. } = peel_parens(Some(condition)).unwrap() else {
+        return None;
+    };
+    if op != "<" {
+        return None;
+    }
+    let Expr::Name { slot: index_slot, .. } = peel_parens(Some(left)).unwrap() else {
+        return None;
+    };
+    if body.statements.len() < 2 || contains_break_or_continue(body) {
+        return None;
+    }
+    let last = body.statements.last().unwrap();
+    let Stmt::Assign { slot: found, value, .. } = last else {
+        return None;
+    };
+    if *found != *index_slot {
+        return None;
+    }
+    let Expr::Binary { op, right, .. } = peel_parens(Some(value)).unwrap() else {
+        return None;
+    };
+    if op != "+" {
+        return None;
+    }
+    if !matches!(peel_parens(Some(right)).unwrap(), Expr::IntLiteral { value, .. } if *value == 1) {
+        return None;
+    }
+    let mut terms = BTreeSet::new();
+    for inner in &body.statements[..body.statements.len() - 1] {
+        if matches!(inner, Stmt::If { .. }) {
+            return None;
+        }
+        if let Some(expression) = statement_expression(inner) {
+            collect_linear(expression, *index_slot, &mut terms);
+        }
+    }
+    if terms.is_empty() {
+        return None;
+    }
+    Some((*index_slot, terms.into_iter().collect()))
+}
+
+fn induction_block(block: &mut Block, next_slot: &mut usize) -> usize {
+    let mut changed = 0;
+    let mut output = Vec::new();
+    for statement in std::mem::take(&mut block.statements) {
+        let plan = if matches!(statement, Stmt::While { .. }) {
+            strength_reduction_plan(&statement)
+        } else {
+            None
+        };
+        if let Some((index_slot, terms)) = plan {
+            let mut initializers = Vec::new();
+            let mut increments = Vec::new();
+            let mut replacements = LinearReplacements::new();
+            for (multiplier, offset) in terms {
+                let slot = *next_slot as i64;
+                *next_slot += 1;
+                let name = format!("__induction_{}", slot);
+                replacements.insert((multiplier, offset), slot);
+                initializers.push(Stmt::Let {
+                    span: statement.span(), name: name.clone(), mutable: true,
+                    type_name: "i64".to_string(),
+                    value: Expr::IntLiteral { span: statement.span(), value: offset },
+                    slot, array_size: None,
+                });
+                increments.push(Stmt::Assign {
+                    span: statement.span(), name, slot,
+                    value: Expr::Binary {
+                        span: statement.span(), op: "+".to_string(),
+                        left: Box::new(Expr::Name {
+                            span: statement.span(),
+                            name: format!("__induction_{}", slot), slot,
+                        }),
+                        right: Box::new(Expr::IntLiteral {
+                            span: statement.span(), value: multiplier,
+                        }),
+                    },
+                    index: None, temp_slot: None, array_size: None,
+                });
+            }
+            let mut rewritten = Vec::new();
+            let Stmt::While { ref body, .. } = statement else { unreachable!() };
+            for inner in &body.statements[..body.statements.len() - 1] {
+                match inner {
+                    Stmt::Let { value, .. } | Stmt::Assign { value, .. } => {
+                        let (new_value, _) = rewrite_linear(value, index_slot, &replacements);
+                        let mut copy = inner.clone();
+                        if let Stmt::Let { value, .. } | Stmt::Assign { value, .. } = &mut copy {
+                            *value = new_value;
+                        }
+                        rewritten.push(copy);
+                    }
+                    Stmt::ExprStmt { expression, .. } => {
+                        let (new_expression, _) =
+                            rewrite_linear(expression, index_slot, &replacements);
+                        rewritten.push(Stmt::ExprStmt {
+                            span: inner.span(), expression: new_expression,
+                        });
+                    }
+                    other => rewritten.push(other.clone()),
+                }
+            }
+            rewritten.push(body.statements.last().unwrap().clone());
+            rewritten.extend(increments);
+            let mut new_statement = statement;
+            if let Stmt::While { body: target, .. } = &mut new_statement {
+                target.statements = rewritten;
+            }
+            output.extend(initializers);
+            output.push(new_statement);
+            changed += 1;
+            continue;
+        }
+        output.push(statement);
+    }
+    block.statements = output;
+    for statement in &mut block.statements {
+        match statement {
+            Stmt::If { then_block, else_block, .. } => {
+                changed += induction_block(then_block, next_slot);
+                if let Some(otherwise) = else_block {
+                    changed += induction_block(otherwise, next_slot);
+                }
+            }
+            Stmt::While { body, .. } | Stmt::Block(body) => {
+                changed += induction_block(body, next_slot);
+            }
+            _ => {}
+        }
+    }
+    changed
+}
+
+/// Keep linear functions of a counted index in one incremented local each.
+pub fn apply_induction_strength_reduction(program: &mut Program) -> usize {
+    let mut changed = 0;
+    for function in &mut program.functions {
+        changed += induction_block(&mut function.body, &mut function.slots);
+    }
+    changed
+}
+
 fn rewrite_continues(block: &mut Block, name: &str, slot: i64) {
     for statement in &mut block.statements {
         match statement {

@@ -57,6 +57,8 @@ def main():
             ("algebraic", RUST / "alg_dump.py", "alg"),
             ("unrolling", RUST / "unroll_dump.py", "unroll"),
             ("countdown", RUST / "count_dump.py", "count"),
+            ("odd-pair fusion", RUST / "fuse_dump.py", "fuse"),
+            ("final passes", RUST / "final_dump.py", "final"),
         ]
         for source in sources:
             for label, oracle, command in checks:

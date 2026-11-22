@@ -6,14 +6,14 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `58`
+- **Total Python Modules**: `60`
 - **Total Classes**: `224`
-- **Total Top-Level Functions**: `276`
+- **Total Top-Level Functions**: `278`
 - **Total Class Methods**: `1202`
-- **Total Source Lines**: `22825`
+- **Total Source Lines**: `22933`
 
 ## 🧭 Map Coverage
-- **Indexed**: python (`58` module(s))
+- **Indexed**: python (`60` module(s))
 - **Not indexed by this map**: cpp (`48` file(s)), rust (`49` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
@@ -894,7 +894,7 @@
 ### [`rust/check_parity.py`](rust/check_parity.py)
 > *Prove that the Rust front end accepts exactly the same Cairn language as the Python compiler.*
 
-**Size**: `98` lines
+**Size**: `100` lines
 
 **Functions:**
 - `def run(command, timeout)`
@@ -942,10 +942,30 @@
 
 ---
 
+### [`rust/final_dump.py`](rust/final_dump.py)
+> *Python oracle for the final optimizer passes (induction and rotation) parity.*
+
+**Size**: `56` lines
+
+**Functions:**
+- `def main(argv)`
+
+---
+
 ### [`rust/fold_dump.py`](rust/fold_dump.py)
 > *Python oracle for the folding parity check.*
 
 **Size**: `29` lines
+
+**Functions:**
+- `def main(argv)`
+
+---
+
+### [`rust/fuse_dump.py`](rust/fuse_dump.py)
+> *Python oracle for the odd-pair-fusion parity check.*
+
+**Size**: `50` lines
 
 **Functions:**
 - `def main(argv)`
