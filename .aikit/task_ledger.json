@@ -5,25 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795361442.449938,
+    "updated_at": 1795362372.8156703,
     "owner": "opencode:session",
-    "lease_until": 1795368642.449938,
+    "lease_until": 1795369572.8156703,
     "started_by": "opencode:session",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-copy-prop",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/1] copy propagation ported with purity, single-read and operand-barrier checks; shared copy dump in the parity gate (39/39 identical); 96 Rust tests; ADR-124; aikit check 7/7 gates passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795352806.8965347,
-      "timestamp_str": "2026-11-22 16:06:46",
-      "agent": "opencode:session",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-rs-copy-prop",
       "phase": "completed",
@@ -325,6 +313,23 @@
       "handoff": {
         "state": "102 Rust tests, 43/43 parity",
         "next": "extend generator.rs to let/assign/if/while and frame functions, driven by generated-byte parity",
+        "evidence": "cargo test and check 7/7"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[3/N] homed local slots added to the generator (save/pad/restore and literal/name stores); parity 44/44 including a one-slot function; ADR-132; reports updated; 7/7 gates passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795362372.8156703,
+      "timestamp_str": "2026-11-22 18:46:12",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 44/44 parity",
+        "next": "add if/while and frame functions with generated-byte parity",
         "evidence": "cargo test and check 7/7"
       }
     }
