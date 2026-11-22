@@ -1410,3 +1410,10 @@ external compiler and was verified end to end.
 - **Context**: The check command is the first thing an agent uses to inspect a source; its JSON envelope and fold count must match exactly across implementations.
 - **Decision**: Add cli.rs, a pure module that maps a source to a check envelope, and a cairn-rs check command. The fold count mirrors Python's pass order: one fold pass, pure inlining, then a second fold pass on the same optimizer. Windows path separators are normalised at the I/O edge.
 - **Consequences**: Curated parity is 53/53 including CLI envelopes; a corpus diagnostic shows 10 of 27 real programs already have byte-identical check envelopes. Remaining differences are fold counts from unported optimizer interactions.
+
+### ADR-142: the build pipeline is ported to Rust
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: The builder is the last stage boundary between the checked program and an executable image; leaving it in Python means a Rust compiler could not build a program end to end.
+- **Decision**: Add builder.rs with compile_source, output_path and an atomic write_executable. The fold count is computed before the pipeline mutates the AST. A build parity dump compares folded count, image size and the full image bytes with Python.
+- **Consequences**: Curated parity is 53/53 including the build pipeline. Builder is no longer Python-only for these sources; the remaining Python-only CLI commands and the unported multi-slot recursive codegen shapes are recorded in the ledger handoff.

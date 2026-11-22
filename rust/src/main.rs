@@ -5,6 +5,36 @@ use std::path::Path;
 
 fn main() {
     let arguments: Vec<String> = std::env::args().collect();
+    if arguments.len() == 3 && arguments[1] == "build" {
+        let path = Path::new(&arguments[2]);
+        match std::fs::read_to_string(path) {
+            Ok(source) => {
+                let normalized = source.trim_start_matches('\u{feff}')
+                    .replace("\r\n", "\n").replace('\r', "\n");
+                match cairn_rs::builder::compile_source(&normalized, &arguments[2], true) {
+                    Ok(build) => {
+                        let hex = build.image.iter().map(|byte| format!("{:02x}", byte))
+                            .collect::<Vec<_>>().join("");
+                        println!("FOLDED {}", build.folded);
+                        println!("SIZE {}", build.image.len());
+                        println!("IMAGE {}", hex);
+                    }
+                    Err(error) => {
+                        for diagnostic in &error.diagnostics {
+                            println!("ERROR[{},{},{},{}]", diagnostic.code,
+                                     diagnostic.message, diagnostic.fix,
+                                     diagnostic.span.start);
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("cannot read {}: {}", arguments[2], error);
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
     if arguments.len() == 3 && arguments[1] == "check" {
         let path = Path::new(&arguments[2]);
         match std::fs::read_to_string(path) {

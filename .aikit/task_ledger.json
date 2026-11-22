@@ -5,30 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795374870.0047536,
+    "updated_at": 1795376706.8473232,
     "owner": "opencode:session",
-    "lease_until": 1795382070.0047536,
+    "lease_until": 1795383906.8473232,
     "started_by": "opencode:session",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-unrolling",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-rs-unrolling' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795355330.8214798,
-      "timestamp_str": "2026-11-22 16:48:50",
-      "agent": "opencode:session",
-      "head": "77b77dc7f33bff99873a2c6f5403873c877bddd5",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
     {
       "task_id": "cairn-rs-inlining",
       "phase": "in_progress",
@@ -342,6 +325,23 @@
       "handoff": {
         "state": "102 Rust tests, 53/53 curated parity",
         "next": "port builder and remaining CLI commands, then finish multi-slot recursive codegen",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[13/N] build pipeline ported with byte-exact image parity; 53/53 curated; ADR-142; remaining: other CLI commands and multi-slot recursive codegen",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795376706.8473232,
+      "timestamp_str": "2026-11-22 22:45:06",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 53/53 curated parity",
+        "next": "port remaining CLI commands and finish recursive/array codegen",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }
