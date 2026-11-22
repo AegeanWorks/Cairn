@@ -1,73 +1,20 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-rs-sema",
+    "task_id": "cairn-rs-backend",
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795346611.179851,
+    "updated_at": 1795347386.6449928,
     "owner": "opencode:session",
-    "lease_until": 1795353811.179851,
+    "lease_until": 1795354586.6449928,
     "started_by": "opencode:session",
     "continuations": [],
-    "completed_at": 1795346652.5890963,
-    "completed_head": "8a87a1a418b24b96b50670b72456ab90e207b5a3",
-    "completed_tree": "e4a427820f39a59e44217f5afc44ea1ef3d774e7"
+    "completed_at": 1795347426.787098,
+    "completed_head": "c9fd7cec49b2224b428b4d0a5442208b08e687f7",
+    "completed_tree": "a906bd97dce390e65f0c1606c100ff84ca7e92a3"
   },
   "checkpoints": [
-    {
-      "task_id": "chore-1795265826",
-      "phase": "chore",
-      "phase_num": 1,
-      "description": "record the bswap 48-round verdict and the all-case verdict pending a quiet window",
-      "status": "completed",
-      "chore": true,
-      "timestamp": 1795265826.1840286,
-      "timestamp_str": "2026-11-21 15:57:06",
-      "agent": "unidentified"
-    },
-    {
-      "task_id": "cairn-bswap-verdict",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/1] record the bswap measurement that ADR-111 promised: the full 23-case paired run aborted on a hex_io C-twin timeout under concurrent host load, so the paired tool was run over the bswap case alone for 48 interleaved rounds, returning c=0.388 tie, cpp=1.133 tie and rust=1.174 tie in a 0.285-1.204 control band; bswap shipped inline so no pre/post A/B applies; the all-case ALL WON read stays pending a quiet window",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795265931.265384,
-      "timestamp_str": "2026-11-21 15:58:51",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "ADR-111 ended with the authoritative 48-round verdict and A/B as the next measurement step, and the bswap decision (keep or change the lowering) needs that evidence recorded in the ADR and ledger",
-        "benefits": "the bswap case has an interleaved 48-round verdict on the record, the ADR no longer leaves the measurement dangling, and the outstanding full-registry re-run is named explicitly",
-        "risks": "contract: documentation and ledger only, no code or benchmark number changes; dependency: none; concurrency: the measurement was taken under concurrent host load, so the wide control band is recorded rather than hidden; state: ledger gains one completion record",
-        "mitigation": "record the exact ratios and the aborted full-run condition; do not claim an all-case ALL WON; the paired tool remains unchanged for a quiet-window re-run"
-      },
-      "plan_digest": "292d9b572e2ad8185f114f0dbe2ffa48c2545786344d1bf7093a95b8d82066df",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-bswap-verdict",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/1] measurement recorded in ADR-111; aikit check --allow-dirty 5/5 gates passed (hygiene, guidelines, secrets, dependencies, full suite); checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795266222.7518964,
-      "timestamp_str": "2026-11-21 16:03:42",
-      "agent": "kilo:cairn",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-bswap-verdict",
       "phase": "completed",
@@ -358,6 +305,53 @@
       "timestamp_str": "2026-11-22 14:24:13",
       "agent": "opencode:session",
       "head": "8a87a1a418b24b96b50670b72456ab90e207b5a3",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rs-backend",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/2] port image, machine emitter, PE writer, listing and verifier to Rust with byte-level tests; [2/2] extend the parity gate to compare emitted bytes and commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795346778.2070062,
+      "timestamp_str": "2026-11-22 14:26:18",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "The language front end and semantic analysis are proven identical to Python; the next bottom-up layer is the byte-emitting backend, which turns the same AST into PE32+ images and must match the reference byte for byte.",
+        "benefits": "A std-only Rust backend whose instruction encodings, section layout and artifact verification match Python, with the shared parity gate extended from source semantics to emitted bytes.",
+        "risks": "contract: x86-64 encodings, PE headers, fixups and verifier codes must match exactly; dependency: std-only Rust; concurrency: none; state: new Rust modules and tests, more Python gate scripts.",
+        "mitigation": "Port the emitter, PE and verifier tests verbatim as Rust tests, add a byte-level dump to the parity gate, run all project gates before commit and record stage decisions in an ADR."
+      },
+      "plan_digest": "af6f3bb84a78d1a0eed1f16d4709ea0730fee96b4a7ecf5995fd31d105b8b36c"
+    },
+    {
+      "task_id": "cairn-rs-backend",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[2/2] ported image, PE writer, listing and verifier to Rust with 9 backend tests; added a shared artifact spec so the parity gate compares linked PE bytes, verification and listing (37/37 identical); ADR-119 records the byte-level guard; aikit check 7/7 gates passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795347386.6449928,
+      "timestamp_str": "2026-11-22 14:36:26",
+      "agent": "opencode:session",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-rs-backend",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-rs-backend' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795347426.8598962,
+      "timestamp_str": "2026-11-22 14:37:06",
+      "agent": "opencode:session",
+      "head": "c9fd7cec49b2224b428b4d0a5442208b08e687f7",
       "delivery": {
         "roots": [
           "."
