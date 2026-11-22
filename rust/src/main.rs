@@ -88,6 +88,37 @@ fn main() {
         }
         return;
     }
+    if arguments.len() == 3 && arguments[1] == "inline" {
+        let path = Path::new(&arguments[2]);
+        match std::fs::read_to_string(path) {
+            Ok(source) => {
+                let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+                let program = cairn_rs::parser::parse(&normalized, &arguments[2])
+                    .and_then(|parsed| {
+                        let mut analysed = parsed;
+                        cairn_rs::sema::analyze(&mut analysed, &arguments[2])?;
+                        let mut result = analysed;
+                        cairn_rs::optimize::apply_pure_inlining(&mut result);
+                        Ok(result)
+                    });
+                match program {
+                    Ok(program) => println!("{}", cairn_rs::dump::program_dump(&program)),
+                    Err(error) => {
+                        for diagnostic in &error.diagnostics {
+                            println!("ERROR[{},{},{},{}]", diagnostic.code,
+                                     diagnostic.message, diagnostic.fix,
+                                     diagnostic.span.start);
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("cannot read {}: {}", arguments[2], error);
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
     if arguments.len() == 3 && arguments[1] == "unroll" {
         let path = Path::new(&arguments[2]);
         match std::fs::read_to_string(path) {

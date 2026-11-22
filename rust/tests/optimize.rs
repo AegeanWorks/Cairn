@@ -108,6 +108,21 @@ fn copy_propagation_removes_a_single_read_definition() {
 }
 
 #[test]
+fn a_single_return_helper_is_inlined() {
+    let mut program = analysed(
+        "fn add(a: i64, b: i64) -> i64 { return a + b; } \
+         fn main() -> i64 { return add(1, 2); }",
+    );
+    let changed = optimize::apply_pure_inlining(&mut program);
+    assert!(changed >= 1);
+    let cairn_rs::syntax::Stmt::Return { value, .. } = &program.functions[1].body.statements[0]
+    else {
+        panic!("expected a return");
+    };
+    assert!(matches!(value, Expr::Binary { op, .. } if op == "+"));
+}
+
+#[test]
 fn a_short_self_recursive_loop_unrolls() {
     let mut program = analysed(
         "fn f(n: i64) -> i64 { var t: i64 = 0; var i: i64 = 0; \

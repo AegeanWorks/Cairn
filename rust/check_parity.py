@@ -49,48 +49,23 @@ def main():
             sources.append(path)
 
         failures = []
+        checks = [
+            ("front end", ORACLE, "dump"),
+            ("inlining", RUST / "inline_dump.py", "inline"),
+            ("lowering", RUST / "lower_dump.py", "lower"),
+            ("copy propagation", RUST / "copy_dump.py", "copyprop"),
+            ("algebraic", RUST / "alg_dump.py", "alg"),
+            ("unrolling", RUST / "unroll_dump.py", "unroll"),
+            ("countdown", RUST / "count_dump.py", "count"),
+        ]
         for source in sources:
-            expected = run([sys.executable, str(ORACLE), str(source)])
-            actual = run([str(BINARY), "dump", str(source)])
-            if expected.returncode != 0 or actual.returncode != 0:
-                failures.append((source, "a dumper exited non-zero"))
-            elif expected.stdout != actual.stdout:
-                failures.append((source, "dump mismatch"))
-            else:
-                lowered_expected = run([sys.executable, str(RUST / "lower_dump.py"), str(source)])
-                lowered_actual = run([str(BINARY), "lower", str(source)])
-                if lowered_expected.returncode != 0 or lowered_actual.returncode != 0:
-                    failures.append((source, "a lowering dumper exited non-zero"))
-                elif lowered_expected.stdout != lowered_actual.stdout:
-                    failures.append((source, "lowering mismatch"))
-                else:
-                    copy_expected = run([sys.executable, str(RUST / "copy_dump.py"), str(source)])
-                    copy_actual = run([str(BINARY), "copyprop", str(source)])
-                    if copy_expected.returncode != 0 or copy_actual.returncode != 0:
-                        failures.append((source, "a copy dumper exited non-zero"))
-                    elif copy_expected.stdout != copy_actual.stdout:
-                        failures.append((source, "copy propagation mismatch"))
-                    else:
-                        alg_expected = run([sys.executable, str(RUST / "alg_dump.py"), str(source)])
-                        alg_actual = run([str(BINARY), "alg", str(source)])
-                        if alg_expected.returncode != 0 or alg_actual.returncode != 0:
-                            failures.append((source, "an algebraic dumper exited non-zero"))
-                        elif alg_expected.stdout != alg_actual.stdout:
-                            failures.append((source, "algebraic mismatch"))
-                        else:
-                            unroll_expected = run([sys.executable, str(RUST / "unroll_dump.py"), str(source)])
-                            unroll_actual = run([str(BINARY), "unroll", str(source)])
-                            if unroll_expected.returncode != 0 or unroll_actual.returncode != 0:
-                                failures.append((source, "an unroll dumper exited non-zero"))
-                            elif unroll_expected.stdout != unroll_actual.stdout:
-                                failures.append((source, "unrolling mismatch"))
-                            else:
-                                count_expected = run([sys.executable, str(RUST / "count_dump.py"), str(source)])
-                                count_actual = run([str(BINARY), "count", str(source)])
-                                if count_expected.returncode != 0 or count_actual.returncode != 0:
-                                    failures.append((source, "a countdown dumper exited non-zero"))
-                                elif count_expected.stdout != count_actual.stdout:
-                                    failures.append((source, "countdown mismatch"))
+            for label, oracle, command in checks:
+                expected = run([sys.executable, str(oracle), str(source)])
+                actual = run([str(BINARY), command, str(source)])
+                if expected.returncode != 0 or actual.returncode != 0:
+                    failures.append((source, f"{label} dumper exited non-zero"))
+                elif expected.stdout != actual.stdout:
+                    failures.append((source, f"{label} mismatch"))
 
         specs = sorted((RUST / "specs").glob("*.txt"))
         for spec in specs:

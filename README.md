@@ -432,6 +432,7 @@ cairn/
 │   ├── count_dump.py         <- Python oracle for countdown-latch parity
 │   ├── copy_dump.py          <- Python oracle for copy-propagation parity
 │   ├── fold_dump.py          <- Python oracle for constant-folding parity
+│   ├── inline_dump.py        <- Python oracle for pure-inlining parity
 │   ├── lower_dump.py         <- Python oracle for for-loop lowering parity
 │   ├── unroll_dump.py        <- Python oracle for constant-loop-unrolling parity
 │   ├── pe_dump.py            <- Python oracle for linked PE bytes, listing and verification

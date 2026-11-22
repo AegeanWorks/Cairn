@@ -1543,6 +1543,252 @@ fn unroll_block(block: &mut Block, function_name: &str) -> usize {
     unrolled
 }
 
+const INLINE_EXPANSION_NODES: usize = 512;
+const INLINE_ROUNDS: usize = 8;
+
+fn node_count(expression: &Expr) -> usize {
+    match expression {
+        Expr::IntLiteral { .. } | Expr::Name { .. } | Expr::StrLiteral { .. } => 1,
+        Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => {
+            1 + node_count(inner)
+        }
+        Expr::Binary { left, right, .. } | Expr::Index { operand: left, index: right, .. } => {
+            1 + node_count(left) + node_count(right)
+        }
+        Expr::Call { arguments, .. } | Expr::ArrayLiteral { elements: arguments, .. } => {
+            1 + arguments.iter().map(node_count).sum::<usize>()
+        }
+    }
+}
+
+type InlineBodies = BTreeMap<String, (Vec<crate::syntax::Parameter>, Expr)>;
+
+fn single_return_bodies(program: &Program) -> InlineBodies {
+    let mut bodies = InlineBodies::new();
+    for function in &program.functions {
+        if function.body.statements.len() == 1 {
+            if let Stmt::Return { value, .. } = &function.body.statements[0] {
+                if node_count(value) <= INLINE_EXPANSION_NODES && !contains_index(value) {
+                    bodies.insert(
+                        function.name.clone(),
+                        (function.parameters.clone(), value.clone()),
+                    );
+                }
+            }
+        }
+    }
+    bodies
+}
+
+fn substitute_parameters(expression: &Expr, substitutions: &BTreeMap<i64, Expr>) -> Expr {
+    match expression {
+        Expr::Name { slot, .. } if substitutions.contains_key(slot) => {
+            substitutions[slot].clone()
+        }
+        Expr::Parens { span, inner } => Expr::Parens {
+            span: *span,
+            inner: Box::new(substitute_parameters(inner, substitutions)),
+        },
+        Expr::Unary { span, op, operand } => Expr::Unary {
+            span: *span,
+            op: op.clone(),
+            operand: Box::new(substitute_parameters(operand, substitutions)),
+        },
+        Expr::Binary { span, op, left, right } => Expr::Binary {
+            span: *span,
+            op: op.clone(),
+            left: Box::new(substitute_parameters(left, substitutions)),
+            right: Box::new(substitute_parameters(right, substitutions)),
+        },
+        Expr::Call { span, name, arguments } => Expr::Call {
+            span: *span,
+            name: name.clone(),
+            arguments: arguments.iter()
+                .map(|argument| substitute_parameters(argument, substitutions))
+                .collect(),
+        },
+        Expr::Index { span, operand, index, slot, size } => Expr::Index {
+            span: *span,
+            operand: Box::new(substitute_parameters(operand, substitutions)),
+            index: Box::new(substitute_parameters(index, substitutions)),
+            slot: *slot,
+            size: *size,
+        },
+        other => other.clone(),
+    }
+}
+
+fn calls_in(expression: &Expr, found: &mut Vec<String>) {
+    if let Expr::Call { name, arguments, .. } = expression {
+        found.push(name.clone());
+        for argument in arguments {
+            calls_in(argument, found);
+        }
+        return;
+    }
+    match expression {
+        Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => calls_in(inner, found),
+        Expr::Binary { left, right, .. } => {
+            calls_in(left, found);
+            calls_in(right, found);
+        }
+        Expr::Index { operand, index, .. } => {
+            calls_in(operand, found);
+            calls_in(index, found);
+        }
+        Expr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                calls_in(element, found);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn inlined_body(name: &str, arguments: &[Expr], bodies: &InlineBodies,
+                active: &BTreeSet<String>) -> Option<Expr> {
+    let (parameters, value) = bodies.get(name)?;
+    let mut substitutions = BTreeMap::new();
+    for (parameter, argument) in parameters.iter().zip(arguments.iter()) {
+        let count = count_reads_expr(value, parameter.slot);
+        if count == 0 && (has_call(Some(argument), &[]) || may_trap(Some(argument))) {
+            return None;
+        }
+        if count > 1 && has_call(Some(argument), &[]) {
+            return None;
+        }
+        if count > 0 {
+            substitutions.insert(parameter.slot, argument.clone());
+        }
+    }
+    if substitutions.is_empty() {
+        return None;
+    }
+    let substituted = substitute_parameters(value, &substitutions);
+    if node_count(&substituted) > INLINE_EXPANSION_NODES * 2 {
+        return None;
+    }
+    let mut calls = Vec::new();
+    calls_in(&substituted, &mut calls);
+    if calls.iter().any(|call| bodies.contains_key(call) && active.contains(call)) {
+        return None;
+    }
+    Some(substituted)
+}
+
+fn inline_expression(expression: &Expr, bodies: &InlineBodies,
+                     active: &BTreeSet<String>) -> Option<Expr> {
+    match expression {
+        Expr::Call { span, name, arguments } => {
+            let mut changed = false;
+            let mut new_arguments = Vec::new();
+            for argument in arguments {
+                match inline_expression(argument, bodies, active) {
+                    Some(new) => {
+                        new_arguments.push(new);
+                        changed = true;
+                    }
+                    None => new_arguments.push(argument.clone()),
+                }
+            }
+            if bodies.contains_key(name) && !active.contains(name) {
+                if let Some(substituted) = inlined_body(name, &new_arguments, bodies, active) {
+                    return Some(substituted);
+                }
+            }
+            changed.then(|| Expr::Call {
+                span: *span, name: name.clone(), arguments: new_arguments,
+            })
+        }
+        Expr::Parens { span, inner } => inline_expression(inner, bodies, active).map(|new| {
+            Expr::Parens { span: *span, inner: Box::new(new) }
+        }),
+        Expr::Unary { span, op, operand } => inline_expression(operand, bodies, active).map(|new| {
+            Expr::Unary { span: *span, op: op.clone(), operand: Box::new(new) }
+        }),
+        Expr::Binary { span, op, left, right } => {
+            let new_left = inline_expression(left, bodies, active);
+            let new_right = inline_expression(right, bodies, active);
+            if new_left.is_none() && new_right.is_none() {
+                None
+            } else {
+                Some(Expr::Binary {
+                    span: *span,
+                    op: op.clone(),
+                    left: Box::new(new_left.unwrap_or_else(|| (**left).clone())),
+                    right: Box::new(new_right.unwrap_or_else(|| (**right).clone())),
+                })
+            }
+        }
+        _ => None,
+    }
+}
+
+fn inline_attribute(expression: &mut Expr, bodies: &InlineBodies,
+                    active: &BTreeSet<String>) -> usize {
+    match inline_expression(expression, bodies, active) {
+        Some(new) => {
+            *expression = new;
+            1
+        }
+        None => 0,
+    }
+}
+
+fn inline_statements(block: &mut Block, bodies: &InlineBodies,
+                     active: &BTreeSet<String>) -> usize {
+    let mut inlined = 0;
+    for statement in &mut block.statements {
+        match statement {
+            Stmt::If { condition, then_block, else_block, .. } => {
+                inlined += inline_attribute(condition, bodies, active);
+                inlined += inline_statements(then_block, bodies, active);
+                if let Some(otherwise) = else_block {
+                    inlined += inline_statements(otherwise, bodies, active);
+                }
+            }
+            Stmt::While { condition, body, .. } => {
+                inlined += inline_attribute(condition, bodies, active);
+                inlined += inline_statements(body, bodies, active);
+            }
+            Stmt::Block(inner) => inlined += inline_statements(inner, bodies, active),
+            Stmt::For { start, end, body, .. } => {
+                inlined += inline_attribute(start, bodies, active);
+                inlined += inline_attribute(end, bodies, active);
+                inlined += inline_statements(body, bodies, active);
+            }
+            Stmt::Let { value, .. } | Stmt::Assign { value, .. } | Stmt::Return { value, .. } => {
+                inlined += inline_attribute(value, bodies, active);
+            }
+            Stmt::ExprStmt { expression, .. } => {
+                inlined += inline_attribute(expression, bodies, active);
+            }
+            Stmt::Break { .. } | Stmt::Continue { .. } => {}
+        }
+    }
+    inlined
+}
+
+/// Inline every call to a single-`return` function, substituting its arguments.
+pub fn apply_pure_inlining(program: &mut Program) -> usize {
+    let bodies = single_return_bodies(program);
+    if bodies.is_empty() {
+        return 0;
+    }
+    let mut inlined = 0;
+    for _ in 0..INLINE_ROUNDS {
+        let mut changed = 0;
+        for function in &mut program.functions {
+            changed += inline_statements(&mut function.body, &bodies, &BTreeSet::new());
+        }
+        if changed == 0 {
+            break;
+        }
+        inlined += 1;
+    }
+    inlined
+}
+
 fn rewrite_continues(block: &mut Block, name: &str, slot: i64) {
     for statement in &mut block.statements {
         match statement {

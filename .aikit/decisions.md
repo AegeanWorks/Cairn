@@ -1312,3 +1312,10 @@ external compiler and was verified end to end.
 - **Context**: A short loop around a self-recursive call can be unrolled into literal-counter clones so masks and bounds fold into immediates. The shape is deliberately narrow, and an over-broad rewrite would duplicate bodies where it brings no gain.
 - **Decision**: Port apply_constant_loop_unrolling with the counter step and bound checks, self-call-only eligibility, jump and second-write refusals, trip and body limits, and deep literal substitution. Add unroll_dump.py and a cairn-rs unroll command to the parity gate after algebraic simplification.
 - **Consequences**: The parity gate reports 39/39 identical sources including unrolling; 99 Rust tests pass. Remaining Python-only passes are odd-pair fusion, induction strength reduction, bottom-test rotation and pure inlining before codegen.
+
+### ADR-128: pure inlining is the last optimizer pass ported before codegen
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: A function whose body is exactly one return expression can be inlined at its call sites, removing call overhead. A wrong effect count would duplicate or drop a call, so the parameter-read guards matter more than the substitution itself.
+- **Decision**: Port apply_pure_inlining with single-return eligibility, node budgets, recursion guard, argument effect counts (zero reads must not drop a call or trap, multiple reads must not duplicate a call), and fresh clones per substitution. Add inline_dump.py and a cairn-rs inline command to the parity gate.
+- **Consequences**: The parity gate reports 39/39 identical sources including inlining; 100 Rust tests pass. Odd-pair fusion, induction strength reduction and bottom-test rotation are still Python-only; they affect only specific loop shapes and can be ported if parity reveals them.
