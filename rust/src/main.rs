@@ -5,6 +5,10 @@ use std::path::Path;
 
 fn main() {
     let arguments: Vec<String> = std::env::args().collect();
+    if arguments.len() == 2 && arguments[1] == "capjson" {
+        print!("{}", cairn_rs::capabilities::capabilities_json());
+        return;
+    }
     if arguments.len() == 2 && arguments[1] == "runtime" {
         let (asm, rodata, writable) = cairn_rs::runtime::emit_all();
         let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{:02x}", b))

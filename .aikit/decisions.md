@@ -1382,3 +1382,10 @@ external compiler and was verified end to end.
 - **Context**: A homed name passed to a helper should move straight into the ABI register; a round trip through rax costs an instruction and breaks byte parity.
 - **Decision**: For user calls, emit literals directly into rcx/rdx/r8/r9, move a homed Name straight into the argument register, and evaluate other argument forms into rax before the move.
 - **Consequences**: Curated parity is 50/50 including a variable-argument call. The real-program diagnostic remains 2/27 because recursive callees still use delta-inlined copies that this generator does not emit.
+
+### ADR-138: the capability manifest is ported with byte-exact JSON
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: The manifest is the first thing an agent reads; a single key or formatting difference makes a Rust compiler disagree with the documented surface.
+- **Decision**: Build the manifest as a small JSON value tree in Rust and render it with Python-compatible indent=2 and ASCII escaping. Compare the full canonical manifest against Python in the parity gate.
+- **Consequences**: The parity gate is 51/51 including the complete capability manifest. The remaining Python-only compiler surfaces are builder and CLI; delta-inlined recursive codegen is still the blocking shape for full .text parity.

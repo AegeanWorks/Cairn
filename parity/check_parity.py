@@ -100,7 +100,14 @@ def main():
         elif runtime_expected.stdout != runtime_actual.stdout:
             failures.append((Path("runtime"), "runtime dump mismatch"))
 
-        total = len(sources) + len(specs) + 1 + len(list((PARITY / "specs" / "codegen").glob("*.crn")))
+        cap_expected = run([sys.executable, str(PARITY / "cap_dump.py")])
+        cap_actual = run([str(BINARY), "capjson"])
+        if cap_expected.returncode != 0 or cap_actual.returncode != 0:
+            failures.append((Path("capabilities"), "a manifest dumper exited non-zero"))
+        elif cap_expected.stdout != cap_actual.stdout:
+            failures.append((Path("capabilities"), "manifest mismatch"))
+
+        total = len(sources) + len(specs) + 2 + len(list((PARITY / "specs" / "codegen").glob("*.crn")))
         print(f"parity: {total - len(failures)}/{total} sources identical")
         for source, reason in failures:
             print(f"  FAIL {source.name}: {reason}")

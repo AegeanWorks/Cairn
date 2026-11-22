@@ -6,6 +6,7 @@
 //! (`sema`, `machine`, `codegen`, `optimize`, `cli`) are added in their own tasks.
 
 pub mod codegen;
+pub mod capabilities;
 pub mod codes;
 pub mod diagnostics;
 pub mod dump;

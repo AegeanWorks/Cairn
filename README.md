@@ -428,6 +428,7 @@ cairn/
 │   ├── Cargo.toml            <- crate manifest and the rust-test gate target
 │   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
 │   ├── src/
+│   │   ├── capabilities.rs   <- byte-exact JSON surface manifest
 │   │   ├── codegen.rs        <- codegen helper layer (labels, slots, magic divide)
 │   │   ├── codes.rs          <- diagnostic code registry
 │   │   ├── diagnostics.rs    <- spans, diagnostics and the JSON contract
@@ -461,6 +462,7 @@ cairn/
 │   ├── check_parity.py       <- gate driver comparing Rust with the Python reference
 │   ├── dump.py               <- canonical front-end oracle
 │   ├── alg_dump.py           <- algebraic oracle
+│   ├── cap_dump.py           <- capability manifest oracle
 │   ├── codegen_dump.py       <- generated artifact oracle
 │   ├── copy_dump.py          <- copy-propagation oracle
 │   ├── count_dump.py         <- countdown oracle
