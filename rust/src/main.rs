@@ -5,6 +5,81 @@ use std::path::Path;
 
 fn main() {
     let arguments: Vec<String> = std::env::args().collect();
+    if arguments.len() == 3 && arguments[1] == "runjson" {
+        let path = Path::new(&arguments[2]);
+        match std::fs::read_to_string(path) {
+            Ok(source) => {
+                let normalized = source.trim_start_matches('\u{feff}')
+                    .replace("\r\n", "\n").replace('\r', "\n");
+                let display = arguments[2].replace('/', "\\");
+                match cairn_rs::builder::compile_source(&normalized, &arguments[2], true) {
+                    Ok(build) => {
+                        let folder = std::env::temp_dir().join(format!(
+                            "cairn-rs-run-{}", std::process::id()));
+                        let _ = std::fs::create_dir_all(&folder);
+                        let exe = folder.join("program.exe");
+                        if let Err(error) = cairn_rs::builder::write_executable(&exe, &build.image) {
+                            eprintln!("cannot write {}: {}", exe.display(), error);
+                            std::process::exit(2);
+                        }
+                        let mut child = std::process::Command::new(&exe)
+                            .stdout(std::process::Stdio::piped())
+                            .stderr(std::process::Stdio::piped())
+                            .spawn();
+                        let (returncode, timed_out, out, err) = match child {
+                            Ok(mut child) => {
+                                let deadline = std::time::Instant::now()
+                                    + std::time::Duration::from_secs(30);
+                                let mut done = None;
+                                while std::time::Instant::now() < deadline {
+                                    match child.try_wait() {
+                                        Ok(Some(status)) => { done = Some(status); break; }
+                                        Ok(None) => std::thread::sleep(
+                                            std::time::Duration::from_millis(10)),
+                                        Err(_) => break,
+                                    }
+                                }
+                                match done {
+                                    Some(status) => {
+                                        let output = child.wait_with_output().unwrap();
+                                        (status.code().unwrap_or(-1) as u32 as i64,
+                                         false, output.stdout, output.stderr)
+                                    }
+                                    None => {
+                                        let _ = child.kill();
+                                        let output = child.wait_with_output().unwrap();
+                                        (-1, true, output.stdout, output.stderr)
+                                    }
+                                }
+                            }
+                            Err(_) => (-1, false, Vec::new(), Vec::new()),
+                        };
+                        let _ = std::fs::remove_file(&exe);
+                        let string = |bytes: Vec<u8>| {
+                            String::from_utf8_lossy(&bytes).replace("\r\n", "\n")
+                        };
+                        let esc = |value: &str| cairn_rs::diagnostics::json_string(value);
+                        println!("{{\n  \"ok\": {},\n  \"path\": {},\n  \"returncode\": {},\n  \"timed_out\": {},\n  \"stdout\": {},\n  \"stderr\": {},\n  \"diagnostics\": []\n}}",
+                                 if timed_out || returncode != 0 { "false" } else { "true" },
+                                 esc(&display), returncode, timed_out,
+                                 esc(&string(out)), esc(&string(err)));
+                    }
+                    Err(error) => {
+                        for diagnostic in &error.diagnostics {
+                            println!("ERROR[{},{},{},{}]", diagnostic.code,
+                                     diagnostic.message, diagnostic.fix,
+                                     diagnostic.span.start);
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("cannot read {}: {}", arguments[2], error);
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
     if arguments.len() == 3 && arguments[1] == "verifyjson" {
         let path = Path::new(&arguments[2]);
         match std::fs::read_to_string(path) {

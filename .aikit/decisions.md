@@ -1452,3 +1452,10 @@ external compiler and was verified end to end.
 - **Context**: Verification is the agent-facing proof that a built artifact is well formed; its JSON envelope must match the reference exactly.
 - **Decision**: Add verify_json to cli.rs and a cairn-rs verifyjson command that compiles in memory, runs verify_image and renders the Python-shaped envelope, including an empty [] array when no problems exist. Add the oracle to the parity gate.
 - **Consequences**: Curated parity remains 55/55 and now includes verify envelopes. The run command and full .text parity for the real corpus remain open.
+
+### ADR-148: run --json is ported with process execution at the edge
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: The run command builds to a temporary executable, executes it and reports an envelope. Two subtle mismatches surfaced: ok is false for a non-zero return code, and Windows reports the return code as an unsigned 32-bit value.
+- **Decision**: Implement runjson in main.rs: compile in memory, write the image atomically to a temp sibling, spawn the process with piped output, apply a 30-second bound, then render the Python-shaped envelope with returncode normalised to u32 and ok set only for a zero, in-time exit.
+- **Consequences**: Curated parity remains 55/55 and now includes run envelopes. All four JSON CLI surfaces (check, build, listing, verify, run) match byte-for-byte. Vectorised array loops and multi-slot recursion remain the codegen gap.

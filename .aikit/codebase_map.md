@@ -6,14 +6,14 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `67`
+- **Total Python Modules**: `68`
 - **Total Classes**: `224`
-- **Total Top-Level Functions**: `285`
+- **Total Top-Level Functions**: `286`
 - **Total Class Methods**: `1202`
-- **Total Source Lines**: `23163`
+- **Total Source Lines**: `23193`
 
 ## 🧭 Map Coverage
-- **Indexed**: python (`67` module(s))
+- **Indexed**: python (`68` module(s))
 - **Not indexed by this map**: cpp (`48` file(s)), rust (`55` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
@@ -914,7 +914,7 @@
 ### [`parity/check_parity.py`](parity/check_parity.py)
 > *Prove that the Rust front end accepts exactly the same Cairn language as the Python compiler.*
 
-**Size**: `142` lines
+**Size**: `148` lines
 
 **Functions:**
 - `def run(command, timeout)`
@@ -1059,6 +1059,16 @@
 
 **Functions:**
 - `def load(path)`
+- `def main(argv)`
+
+---
+
+### [`parity/run_dump.py`](parity/run_dump.py)
+> *Python oracle for the `run --json` CLI envelope.*
+
+**Size**: `24` lines
+
+**Functions:**
 - `def main(argv)`
 
 ---

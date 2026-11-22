@@ -479,6 +479,7 @@ cairn/
 │   ├── magic_dump.py         <- magic-division oracle
 │   ├── pe_dump.py            <- PE artifact oracle
 │   ├── runtime_dump.py       <- runtime helper oracle
+│   ├── run_dump.py           <- run --json oracle
 │   ├── unroll_dump.py        <- unrolling oracle
 │   └── verify_dump.py        <- verify --json oracle
 │   └── specs/                <- shared specs: codegen sources, divisors, PE artifact, folds
