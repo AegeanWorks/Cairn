@@ -1,79 +1,20 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-rs-backend",
+    "task_id": "cairn-rs-machine",
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795347386.6449928,
+    "updated_at": 1795348026.6788838,
     "owner": "opencode:session",
-    "lease_until": 1795354586.6449928,
+    "lease_until": 1795355226.6788838,
     "started_by": "opencode:session",
     "continuations": [],
-    "completed_at": 1795347426.787098,
-    "completed_head": "c9fd7cec49b2224b428b4d0a5442208b08e687f7",
-    "completed_tree": "a906bd97dce390e65f0c1606c100ff84ca7e92a3"
+    "completed_at": 1795348071.4261599,
+    "completed_head": "768c2bb3f1d2dd66cb3d62dab5cdfdf5755ded2e",
+    "completed_tree": "98a1456d5f43602876024723449ffabe5440ad3c"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-bswap-verdict",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-bswap-verdict' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795266227.4481897,
-      "timestamp_str": "2026-11-21 16:03:47",
-      "agent": "kilo:cairn",
-      "head": "0ceb0dc4f1ce05ef967c4434992af96e818304b2",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-paired-resilient",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/2] failing-first: the paired verdict drops a baseline whose run times out instead of aborting the whole case, and a lost control pair reports the case as unavailable; [2/2] ADR-113, suite and gates, commit, then run the 23-case 48-round verdict in the background and record it",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795269854.822781,
-      "timestamp_str": "2026-11-21 17:04:14",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "the authoritative 23-case paired run aborted mid-run when hex_io's portable C twin, normally 5-7 s, hit the 120 s per-run timeout under concurrent host load; one slow baseline discarded eleven cases that had already measured cleanly",
-        "benefits": "a case with one unavailable baseline still reports verdicts for the remaining languages, so a single timeout no longer voids an entire authoritative verdict run under load",
-        "risks": "contract: measure_interleaved may omit a timed-out key and verdicts_from_samples returns no band when the control pair is incomplete; callers are measure_case and main only; dependency: none new, subprocess.TimeoutExpired is already raised by timed(); concurrency: each key is guarded independently inside the interleaved round, so other keys keep their samples; state: none",
-        "mitigation": "failing-first tests pin the dropped key and the missing-control result; the existing order and spike-cancellation tests must stay green; full suite and project gates before the commit"
-      },
-      "plan_digest": "4b5411f0c8b64f76c985621ace9a221a9a501a0dfe5e8f77daf0336a61813e74",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-paired-resilient",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/2] committed 8a96195: measure_interleaved drops a timed-out key, verdicts_from_samples reads an incomplete control pair as unavailable, main prints control=unavailable; TimeoutResilienceTest 3 failing-first tests red then green, existing interleaved/paired tests stay green; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795270469.210994,
-      "timestamp_str": "2026-11-21 17:14:29",
-      "agent": "kilo:cairn",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-paired-resilient",
       "phase": "completed",
@@ -352,6 +293,53 @@
       "timestamp_str": "2026-11-22 14:37:06",
       "agent": "opencode:session",
       "head": "c9fd7cec49b2224b428b4d0a5442208b08e687f7",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rs-machine",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/2] port the x86-64 emitter (machine.py) to Rust with every encoding byte-tested; [2/2] trim the oversized README Performance section, run all gates and commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795347491.836104,
+      "timestamp_str": "2026-11-22 14:38:11",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "The PE writer can now link bytes, but the bytes themselves still come from Python. The emitter is the next layer, and byte-for-byte instruction tests are the only way to prove the Rust lowering produces the same machine code.",
+        "benefits": "A std-only Rust Assembler whose instruction encodings, labels and fixups match Python exactly, covered by the ported emitter test suite.",
+        "risks": "contract: every opcode, ModRM and REX pattern must match Python byte for byte; dependency: std-only Rust; concurrency: none; state: new Rust module, tests and README trim.",
+        "mitigation": "Port test_machine.py verbatim as Rust tests, keep a canonical emitter dump in the parity gate, and run all project gates before commit."
+      },
+      "plan_digest": "560649c15850d37e43ad374d365bc9b1c4f2fcc26efbe9e1e8d6a118871996da"
+    },
+    {
+      "task_id": "cairn-rs-machine",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[2/2] ported the full x86-64 emitter to Rust with 11 exact-byte tests (84 Rust tests total); the byte comparison caught a wrong bswap ModRM base; ADR-120 records it; README Performance trimmed from 17k to under 11k chars; aikit check 7/7 gates passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795348026.6788838,
+      "timestamp_str": "2026-11-22 14:47:06",
+      "agent": "opencode:session",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-rs-machine",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-rs-machine' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795348071.5234284,
+      "timestamp_str": "2026-11-22 14:47:51",
+      "agent": "opencode:session",
+      "head": "768c2bb3f1d2dd66cb3d62dab5cdfdf5755ded2e",
       "delivery": {
         "roots": [
           "."
