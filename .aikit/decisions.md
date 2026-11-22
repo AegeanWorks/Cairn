@@ -1284,3 +1284,10 @@ external compiler and was verified end to end.
 - **Context**: Code generation never sees a For node: semantic analysis leaves it for the optimizer to lower into a mutable binding and a counted while. The folding core alone cannot prepare a program for the Rust backend.
 - **Decision**: Port lower_for_loops, including innermost-first descent, continue rewriting and the inclusive/exclusive bound, and add lower_dump.py plus a cairn-rs lower command to the parity gate. The oracle writes UTF-8 bytes explicitly because the Windows console would otherwise replace a non-ASCII character in a diagnostic.
 - **Consequences**: The parity gate now checks lowering on every source and reports 39/39 identical. Remaining structural passes (algebraic simplification, copy propagation, loop unrolling, countdown, odd-pair fusion, induction and bottom-test rotation) are still Python-only; this milestone does not claim full optimizer parity.
+
+### ADR-124: copy propagation is the second structural optimizer pass in Rust
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: A single-read pure definition can be replaced by its value at the copy, removing a frame slot. Applying the rewrite when a slot is written or read elsewhere would change generated code, so the safety predicates matter as much as the rewrite.
+- **Decision**: Port apply_copy_propagation with has_call/may_trap purity checks, a single-read count over the whole function, operand-write barriers between definition and copy, and at most one rewrite per round up to 64 rounds. Add copy_dump.py and a cairn-rs copyprop command to the parity gate, applied after for-loop lowering.
+- **Consequences**: The parity gate reports 39/39 identical sources including copy propagation. 96 Rust tests pass. Remaining Python-only passes: algebraic simplification, constant-loop unrolling, countdown latches, odd-pair fusion, induction strength reduction, bottom-test rotation and pure inlining.

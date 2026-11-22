@@ -63,6 +63,13 @@ def main():
                     failures.append((source, "a lowering dumper exited non-zero"))
                 elif lowered_expected.stdout != lowered_actual.stdout:
                     failures.append((source, "lowering mismatch"))
+                else:
+                    copy_expected = run([sys.executable, str(RUST / "copy_dump.py"), str(source)])
+                    copy_actual = run([str(BINARY), "copyprop", str(source)])
+                    if copy_expected.returncode != 0 or copy_actual.returncode != 0:
+                        failures.append((source, "a copy dumper exited non-zero"))
+                    elif copy_expected.stdout != copy_actual.stdout:
+                        failures.append((source, "copy propagation mismatch"))
 
         specs = sorted((RUST / "specs").glob("*.txt"))
         for spec in specs:

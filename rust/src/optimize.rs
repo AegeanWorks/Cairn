@@ -5,6 +5,8 @@
 //! an effect, so no rewrite may drop or duplicate a call. The structural passes (algebraic
 //! simplification, copy propagation and loop rewrites) are added after this core.
 
+use std::collections::BTreeSet;
+
 use crate::diagnostics::Span;
 use crate::syntax::{Block, Expr, Program, Stmt};
 
@@ -507,6 +509,250 @@ fn increment(name: &str, slot: i64, span: crate::diagnostics::Span) -> Stmt {
         temp_slot: None,
         array_size: None,
     }
+}
+
+/// Add every slot an expression reads to `acc`.
+fn read_slots(expression: &Expr, acc: &mut BTreeSet<i64>) {
+    match expression {
+        Expr::Name { slot, .. } => {
+            acc.insert(*slot);
+        }
+        Expr::Unary { operand, .. } | Expr::Parens { inner: operand, .. } => {
+            read_slots(operand, acc);
+        }
+        Expr::Binary { left, right, .. } => {
+            read_slots(left, acc);
+            read_slots(right, acc);
+        }
+        Expr::Call { arguments, .. } | Expr::ArrayLiteral { elements: arguments, .. } => {
+            for argument in arguments {
+                read_slots(argument, acc);
+            }
+        }
+        Expr::Index { operand, index, .. } => {
+            if let Expr::Name { slot, .. } = operand.as_ref() {
+                acc.insert(*slot);
+            }
+            read_slots(index, acc);
+        }
+        Expr::IntLiteral { .. } | Expr::StrLiteral { .. } => {}
+    }
+}
+
+/// Whether a statement or expression reads or writes the variable in `slot`.
+fn mentions_slot_expr(expression: &Expr, slot: i64) -> bool {
+    match expression {
+        Expr::Name { slot: found, .. } => *found == slot,
+        Expr::Unary { operand, .. } | Expr::Parens { inner: operand, .. } => {
+            mentions_slot_expr(operand, slot)
+        }
+        Expr::Binary { left, right, .. } => {
+            mentions_slot_expr(left, slot) || mentions_slot_expr(right, slot)
+        }
+        Expr::Call { arguments, .. } | Expr::ArrayLiteral { elements: arguments, .. } => {
+            arguments.iter().any(|argument| mentions_slot_expr(argument, slot))
+        }
+        Expr::Index { operand, index, .. } => {
+            mentions_slot_expr(operand, slot) || mentions_slot_expr(index, slot)
+        }
+        Expr::IntLiteral { .. } | Expr::StrLiteral { .. } => false,
+    }
+}
+
+fn mentions_slot_block(block: &Block, slot: i64) -> bool {
+    block.statements.iter().any(|statement| mentions_slot_stmt(statement, slot))
+}
+
+fn mentions_slot_stmt(statement: &Stmt, slot: i64) -> bool {
+    match statement {
+        Stmt::Let { value, slot: found, .. } | Stmt::Assign { value, slot: found, .. } => {
+            *found == slot || mentions_slot_expr(value, slot)
+        }
+        Stmt::If { condition, then_block, else_block, .. } => {
+            mentions_slot_expr(condition, slot)
+                || mentions_slot_block(then_block, slot)
+                || else_block.as_ref().map_or(false, |block| mentions_slot_block(block, slot))
+        }
+        Stmt::While { condition, body, .. } => {
+            mentions_slot_expr(condition, slot) || mentions_slot_block(body, slot)
+        }
+        Stmt::Block(block) => mentions_slot_block(block, slot),
+        Stmt::Return { value, .. } | Stmt::ExprStmt { expression: value, .. } => {
+            mentions_slot_expr(value, slot)
+        }
+        Stmt::For { start, end, body, .. } => {
+            mentions_slot_expr(start, slot)
+                || mentions_slot_expr(end, slot)
+                || mentions_slot_block(body, slot)
+        }
+        Stmt::Break { .. } | Stmt::Continue { .. } => false,
+    }
+}
+
+fn count_reads_expr(expression: &Expr, slot: i64) -> usize {
+    match expression {
+        Expr::Name { slot: found, .. } => usize::from(*found == slot),
+        Expr::Unary { operand, .. } | Expr::Parens { inner: operand, .. } => {
+            count_reads_expr(operand, slot)
+        }
+        Expr::Binary { left, right, .. } => {
+            count_reads_expr(left, slot) + count_reads_expr(right, slot)
+        }
+        Expr::Call { arguments, .. } | Expr::ArrayLiteral { elements: arguments, .. } => {
+            arguments.iter().map(|argument| count_reads_expr(argument, slot)).sum()
+        }
+        Expr::Index { operand, index, .. } => {
+            count_reads_expr(operand, slot) + count_reads_expr(index, slot)
+        }
+        Expr::IntLiteral { .. } | Expr::StrLiteral { .. } => 0,
+    }
+}
+
+fn count_reads_block(block: &Block, slot: i64) -> usize {
+    block.statements.iter().map(|statement| count_reads_stmt(statement, slot)).sum()
+}
+
+fn count_reads_stmt(statement: &Stmt, slot: i64) -> usize {
+    match statement {
+        Stmt::Let { value, .. } | Stmt::Return { value, .. }
+        | Stmt::ExprStmt { expression: value, .. } => count_reads_expr(value, slot),
+        Stmt::Assign { value, index, .. } => {
+            count_reads_expr(value, slot)
+                + index.as_ref().map_or(0, |index| count_reads_expr(index, slot))
+        }
+        Stmt::If { condition, then_block, else_block, .. } => {
+            count_reads_expr(condition, slot)
+                + count_reads_block(then_block, slot)
+                + else_block.as_ref().map_or(0, |block| count_reads_block(block, slot))
+        }
+        Stmt::While { condition, body, .. } => {
+            count_reads_expr(condition, slot) + count_reads_block(body, slot)
+        }
+        Stmt::Block(block) => count_reads_block(block, slot),
+        Stmt::For { start, end, body, .. } => {
+            count_reads_expr(start, slot)
+                + count_reads_expr(end, slot)
+                + count_reads_block(body, slot)
+        }
+        Stmt::Break { .. } | Stmt::Continue { .. } => 0,
+    }
+}
+
+/// Apply copy propagation: replace `x = t` with t's definition when the copy is t's only read.
+pub fn apply_copy_propagation(program: &mut Program) -> usize {
+    let mut propagated = 0;
+    for _ in 0..64 {
+        let roots: Vec<Block> = program.functions.iter().map(|f| f.body.clone()).collect();
+        let mut changed = false;
+        for (function, root) in program.functions.iter_mut().zip(roots.iter()) {
+            if propagate_once(root, &mut function.body) {
+                changed = true;
+                propagated += 1;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    propagated
+}
+
+fn propagate_once(root: &Block, block: &mut Block) -> bool {
+    for index in 0..block.statements.len() {
+        match &block.statements[index] {
+            Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Return { .. }
+            | Stmt::ExprStmt { .. } => continue,
+            Stmt::If { then_block, else_block, condition, span } => {
+                let mut then = then_block.clone();
+                let mut otherwise = else_block.clone();
+                if propagate_once(root, &mut then)
+                    || otherwise.as_mut().map_or(false, |block| propagate_once(root, block))
+                {
+                    block.statements[index] = Stmt::If {
+                        span: *span, condition: condition.clone(), then_block: then,
+                        else_block: otherwise,
+                    };
+                    return true;
+                }
+                continue;
+            }
+            Stmt::While { body, condition, span, countdown } => {
+                let mut inner = body.clone();
+                if propagate_once(root, &mut inner) {
+                    block.statements[index] = Stmt::While {
+                        span: *span, condition: condition.clone(), body: inner, countdown: *countdown,
+                    };
+                    return true;
+                }
+                continue;
+            }
+            Stmt::Block(inner) => {
+                let mut nested = inner.clone();
+                if propagate_once(root, &mut nested) {
+                    block.statements[index] = Stmt::Block(nested);
+                    return true;
+                }
+                continue;
+            }
+            Stmt::Let { value, slot, .. } => {
+                if has_call(Some(value), &[]) || may_trap(Some(value))
+                    || mentions_slot_expr(value, *slot) || count_reads_block(root, *slot) != 1
+                {
+                    continue;
+                }
+                let mut operands = BTreeSet::new();
+                read_slots(value, &mut operands);
+                let definition = value.clone();
+                let slot = *slot;
+                let mut target = None;
+                let mut blocked = false;
+                for cursor in index + 1..block.statements.len() {
+                    let current = &block.statements[cursor];
+                    let copy = match current {
+                        Stmt::Assign { value, slot: destination, .. }
+                        | Stmt::Let { value, slot: destination, .. } => {
+                            matches!(value, Expr::Name { slot: found, .. }
+                                     if *found == slot && *destination != slot)
+                        }
+                        _ => false,
+                    };
+                    if copy {
+                        if target.is_some() {
+                            blocked = true;
+                            break;
+                        }
+                        target = Some(cursor);
+                        continue;
+                    }
+                    if mentions_slot_stmt(current, slot) {
+                        blocked = true;
+                        break;
+                    }
+                    if target.is_none() && operands.iter().any(|operand| {
+                        mentions_slot_stmt(current, *operand)
+                    }) {
+                        blocked = true;
+                        break;
+                    }
+                }
+                if blocked {
+                    continue;
+                }
+                if let Some(cursor) = target {
+                    match &mut block.statements[cursor] {
+                        Stmt::Assign { value, .. } | Stmt::Let { value, .. } => {
+                            *value = definition;
+                        }
+                        _ => unreachable!(),
+                    }
+                    block.statements.remove(index);
+                    return true;
+                }
+            }
+            Stmt::For { .. } | Stmt::Assign { .. } => continue,
+        }
+    }
+    false
 }
 
 fn rewrite_continues(block: &mut Block, name: &str, slot: i64) {

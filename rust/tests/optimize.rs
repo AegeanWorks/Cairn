@@ -93,6 +93,21 @@ fn a_for_loop_lowers_to_a_let_and_a_while() {
 }
 
 #[test]
+fn copy_propagation_removes_a_single_read_definition() {
+    let mut program = analysed(
+        "fn main() -> i64 { let a: i64 = 1 + 2; let b: i64 = a; return b; }",
+    );
+    let applied = optimize::apply_copy_propagation(&mut program);
+    assert!(applied >= 1);
+    let statements = &program.functions[0].body.statements;
+    let cairn_rs::syntax::Stmt::Let { name, value, .. } = &statements[0] else {
+        panic!("expected a binding");
+    };
+    assert_eq!(name, "b");
+    assert!(matches!(value, Expr::Binary { .. }));
+}
+
+#[test]
 fn a_constant_if_is_replaced_by_its_branch() {
     let program = analysed("fn main() -> i64 { if 0 { return 1; } else { return 2; } }");
     let folded = Optimizer::new().fold_program(&program);

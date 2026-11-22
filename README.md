@@ -428,6 +428,7 @@ cairn/
 │   ├── Cargo.toml            <- crate manifest and the rust-test gate target
 │   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
 │   ├── dump.py               <- Python oracle printing the canonical front-end dump
+│   ├── copy_dump.py          <- Python oracle for copy-propagation parity
 │   ├── fold_dump.py          <- Python oracle for constant-folding parity
 │   ├── lower_dump.py         <- Python oracle for for-loop lowering parity
 │   ├── pe_dump.py            <- Python oracle for linked PE bytes, listing and verification
