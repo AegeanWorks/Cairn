@@ -10,6 +10,8 @@ node_modules/
 # Built executables and build temporaries
 *.exe
 *.exe.tmp_*
+# Rust crate build output
+rust/target/
 # AIKit transient state
 .aikit/*.log
 .aikit/reforge.reviews/

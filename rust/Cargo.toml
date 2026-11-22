@@ -1,0 +1,15 @@
+[package]
+name = "cairn-rs"
+version = "0.1.0"
+edition = "2021"
+description = "A Rust rewrite of the Cairn compiler, kept byte-compatible with the Python reference"
+
+[lib]
+name = "cairn_rs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cairn-rs"
+path = "src/main.rs"
+
+[dependencies]

@@ -14,7 +14,9 @@
     "systems-programming",
     "language-design"
   ],
-  "gates": {},
+  "gates": {
+    "rust-test": "cargo test --quiet --manifest-path rust/Cargo.toml"
+  },
   "ui_required": false,
   "created": "2026-10-29",
   "has_ui": false,
