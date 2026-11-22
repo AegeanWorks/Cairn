@@ -1,67 +1,20 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-rs-inlining",
+    "task_id": "cairn-rs-final-passes",
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795356403.5037882,
+    "updated_at": 1795358120.9314852,
     "owner": "opencode:session",
-    "lease_until": 1795363603.5037882,
+    "lease_until": 1795365320.9314852,
     "started_by": "opencode:session",
     "continuations": [],
-    "completed_at": 1795356465.325515,
-    "completed_head": "f2fae4625f10a2bc9b238d772a0f483bf7f1d69b",
-    "completed_tree": "714104ce6fabcc1d6c0f56e8facf5322bd7b70d4"
+    "completed_at": 1795358182.8242614,
+    "completed_head": "a9dca1ab838277e2028a42fa88da1b7a51452bdc",
+    "completed_tree": "71ef5aebc6f3ea0cef5738669d06c7add127366c"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-optimize",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[2/2] ported the optimizer folding core to Rust with a fold parity spec (39/39 identical) and 7 Rust tests; ADR-122 records that structural passes remain; first gate run hit transient CLI temp-file failures under low disk, retry passed 7/7",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795351268.0914104,
-      "timestamp_str": "2026-11-22 15:41:08",
-      "agent": "opencode:session",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-rs-optimize",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-rs-optimize' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795351314.1982374,
-      "timestamp_str": "2026-11-22 15:41:54",
-      "agent": "opencode:session",
-      "head": "c07a1e7b45f9a2f92242639a3bbf60f59d056b61",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-rs-for-lowering",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/1] port lower_for_loops and its helpers, add a shared lowering dump to the parity gate, and commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795351942.3928406,
-      "timestamp_str": "2026-11-22 15:52:22",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "The optimizer task closed after the folding core, but codegen cannot consume For nodes, so the for-loop lowering pass is the next independent unit of work.",
-        "benefits": "Programs reaching the Rust backend contain no For nodes, with continue rewritten and bounds preserved, checked against Python on every source.",
-        "risks": "contract: loop slot, inclusive bound and continue placement must match Python; dependency: std-only Rust; concurrency: none; state: new Rust helpers, oracle and ADR.",
-        "mitigation": "Compare lowered program dumps over the full corpus with the shared gate, run all project gates, and record ADR-123."
-      },
-      "plan_digest": "dbd0c2532a8a9b4a1c517d4826abde31a22b3a42556ce15f0971144daab6ca99"
-    },
     {
       "task_id": "cairn-rs-for-lowering",
       "phase": "in_progress",
@@ -319,6 +272,53 @@
       "timestamp_str": "2026-11-22 17:07:45",
       "agent": "opencode:session",
       "head": "f2fae4625f10a2bc9b238d772a0f483bf7f1d69b",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rs-final-passes",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/1] port odd-pair fusion, induction strength reduction and bottom-test rotation; add fuse and final dumps to the parity gate and commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795358100.7160404,
+      "timestamp_str": "2026-11-22 17:35:00",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "These were the last Python-only optimizer passes; the Rust optimizer is not complete until codegen sees the same transformed program.",
+        "benefits": "Full optimizer parity: 39/39 identical sources across every stage from lexing to final loop rewrites.",
+        "risks": "contract: shape guards, induction slot order and rotation rewrites must match; dependency: std-only Rust; concurrency: none; state: new Rust code, two oracles and ADR.",
+        "mitigation": "Compare canonical dumps over the corpus, run all gates before commit, and record the two bugs found by the gate."
+      },
+      "plan_digest": "ab5a8c0456e1d37f3c78fcfad6cf59be5a7d4b96a93b4c31241243a8a944a4d2"
+    },
+    {
+      "task_id": "cairn-rs-final-passes",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/1] all optimizer passes ported; parity 39/39 across 10 dumps; 100 Rust tests; ADR-129 records the slot-order and unsafe-traversal fixes; aikit check 7/7 gates passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795358120.9314852,
+      "timestamp_str": "2026-11-22 17:35:20",
+      "agent": "opencode:session",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-rs-final-passes",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-rs-final-passes' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795358183.0262487,
+      "timestamp_str": "2026-11-22 17:36:23",
+      "agent": "opencode:session",
+      "head": "a9dca1ab838277e2028a42fa88da1b7a51452bdc",
       "delivery": {
         "roots": [
           "."
