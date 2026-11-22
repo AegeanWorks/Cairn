@@ -366,6 +366,19 @@ impl CodeGenerator {
             }
             Expr::Name { slot, .. } => self.load_slot(*slot, "rax", homes),
             Expr::Call { name, arguments, .. } => self.emit_call(name, arguments, homes),
+            Expr::Binary { op, left, right, .. }
+                if op == "+" && matches!(left.as_ref(), Expr::Name { .. })
+                    && matches!(right.as_ref(), Expr::Name { .. }) =>
+            {
+                let Expr::Name { slot: left_slot, .. } = left.as_ref() else { unreachable!() };
+                let Expr::Name { slot: right_slot, .. } = right.as_ref() else { unreachable!() };
+                match (home_for(*left_slot, homes), home_for(*right_slot, homes)) {
+                    (Some(base), Some(index)) => {
+                        self.assembler.lea_scale("rax", base, index, 0, 0);
+                    }
+                    _ => {}
+                }
+            }
             Expr::Unary { .. } | Expr::Binary { .. } | Expr::Index { .. }
             | Expr::ArrayLiteral { .. } => {}
         }

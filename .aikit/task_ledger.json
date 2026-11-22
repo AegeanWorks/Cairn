@@ -5,25 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795366643.8806298,
+    "updated_at": 1795367564.6182232,
     "owner": "opencode:session",
-    "lease_until": 1795373843.8806298,
+    "lease_until": 1795374764.6182232,
     "started_by": "opencode:session",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-algebraic",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/1] algebraic simplification ported with chain flattening and effect-safe signatures; shared alg dump in the parity gate (39/39 identical); 97 Rust tests; ADR-125; aikit check 7/7 gates passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795353674.510041,
-      "timestamp_str": "2026-11-22 16:21:14",
-      "agent": "opencode:session",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-rs-algebraic",
       "phase": "completed",
@@ -329,6 +317,23 @@
       "handoff": {
         "state": "102 Rust tests, 47/47 curated parity",
         "next": "binary-operator and call lowering (2/27 real programs currently match)",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[6/N] binary Name+Name lowers to one lea over homed registers; parity 48/48; ADR-135; real-program diagnostic still 2/27 due to tail-return and delta-inlining shapes",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795367564.6182232,
+      "timestamp_str": "2026-11-22 20:12:44",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 48/48 curated parity",
+        "next": "tail-return and delta-inlining shapes for recursive functions before call lowering",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }

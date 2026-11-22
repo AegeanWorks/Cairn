@@ -1361,3 +1361,10 @@ external compiler and was verified end to end.
 - **Context**: A function with more slots than register homes needs an rbp frame, a save area for callee-saved homes and a different epilogue. The home ranking also changes: deeper-loop slots win, ties by descending slot.
 - **Decision**: Add the frame path to the generator: rank frame-function slots by descending slot at loop depth zero, map the first six to callee-saved registers and the rest to caller-saved extras, save callee homes at slot_offset(slots + i), allocate align16((slots + homes) * 8) bytes, and restore with leave_ret. Frameless functions keep their existing push/pad/pop path.
 - **Consequences**: Generated-byte parity is 47/47 including a seven-slot frame function. A corpus-wide diagnostic currently matches 2 of 27 real programs, so binary-operator and call lowering remain the next codegen slices.
+
+### ADR-135: binary addition of homed slots lowers to one lea
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: A homed a+b is the hot shape in recursive helpers and a generic add through rax would not match the reference bytes.
+- **Decision**: Lower Name+Name with both slots homed as lea rax,[left+right] via Assembler::lea_scale with scale 0 and displacement 0. Other binary shapes stay unlowered until their reference form is measured.
+- **Consequences**: Curated parity is 48/48 including a two-parameter helper. The real-program diagnostic stays at 2/27 because recursion uses tail-return and delta-inlining forms not ported yet.
