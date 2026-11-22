@@ -5,31 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795371193.820838,
+    "updated_at": 1795372675.6059904,
     "owner": "opencode:session",
-    "lease_until": 1795378393.820838,
+    "lease_until": 1795379875.6059904,
     "started_by": "opencode:session",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-unrolling",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/1] port constant-loop unrolling with narrow shape checks and literal substitution, add a shared dump to the parity gate, and commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795355267.4536028,
-      "timestamp_str": "2026-11-22 16:47:47",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "Unrolling is the next pass in optimize() order and changes hot-loop byte shape; codegen parity depends on the same rewrite.",
-        "benefits": "A Rust unrolling pass checked against Python on every source, including the self-recursive backtracking shape.",
-        "risks": "contract: counter step/bound, trip limits and literal substitution must match; dependency: std-only Rust; concurrency: none; state: new Rust code, oracle and ADR.",
-        "mitigation": "Compare canonical dumps over the corpus, add a focused Rust test, run all gates before commit."
-      },
-      "plan_digest": "fe9b5cc1fd416c6eaf4bf6c6667eaf410de59e99038a5b94d756dbee5cb20ffc"
-    },
     {
       "task_id": "cairn-rs-unrolling",
       "phase": "in_progress",
@@ -338,6 +320,23 @@
       "handoff": {
         "state": "102 Rust tests, 52/52 curated parity",
         "next": "delta-inlined recursive callees and builder/CLI port",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[11/N] delta-inlined recursive calls lowered as pure text copies; parity 53/53; ADR-140; real-program .text diagnostic still 2/27 for multi-slot recursive shapes",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795372675.6059904,
+      "timestamp_str": "2026-11-22 21:37:55",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 53/53 curated parity",
+        "next": "multi-slot recursive shapes and builder/CLI port",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }

@@ -1396,3 +1396,10 @@ external compiler and was verified end to end.
 - **Context**: A two-way if and a guard if use different label sets and condition polarity in the reference generator.
 - **Decision**: For an if with no else, allocate one if.else label, branch to it when the condition is false, emit the then block, then bind the label. A two-way if keeps if.then and if.end with the true branch inverted to a forward jmp.
 - **Consequences**: Curated parity is 52/52 including mutual calls with a guard. The real-program diagnostic remains 2/27 because recursive callees still use delta-inlined copy shapes.
+
+### ADR-140: delta-inlined self calls lower as pure text copies
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: Recursive helpers with one unbound parameter are emitted by the reference as up to seven literal-shifted text copies plus a final real call. Without this shape none of the recursive benchmark functions can match.
+- **Decision**: Detect single-parameter functions with no binding statements and a constant-delta self call, reserve eight hold units, and lower each self call as a fresh epilogue-labelled copy of the body with an accumulated delta. Reads and conditions of the delta slot use lea with the negated delta; the depth-seven fallback binds the shifted argument directly into rcx.
+- **Consequences**: Curated parity is 53/53 including a recursive helper. The real-program diagnostic is still 2/27: fib and the benchmarks combine delta with multi-slot frames, arrays or other lowering shapes not yet ported.

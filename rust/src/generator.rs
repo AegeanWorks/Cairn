@@ -14,6 +14,71 @@ fn home_for<'a>(slot: i64, homes: &'a [(i64, &'a str)]) -> Option<&'a str> {
     homes.iter().find(|(found, _)| *found == slot).map(|(_, register)| *register)
 }
 
+/// The constant shift a self-call's argument adds to the inlined parameter.
+fn delta_argument(expression: &Expr, slot: i64) -> Option<i64> {
+    match crate::optimize::peel_parens(Some(expression)).unwrap() {
+        Expr::Name { slot: found, .. } if *found == slot => Some(0),
+        Expr::Binary { op, left, right, .. } if op == "+" || op == "-" => {
+            let left = crate::optimize::peel_parens(Some(left)).unwrap();
+            let right = crate::optimize::peel_parens(Some(right)).unwrap();
+            if let (Expr::Name { slot: found, .. }, Expr::IntLiteral { value, .. }) = (left, right) {
+                if *found == slot {
+                    return Some(if op == "+" { *value as i64 } else { -(*value as i64) });
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn body_assigns(block: &crate::syntax::Block) -> bool {
+    block.statements.iter().any(|statement| match statement {
+        Stmt::Let { .. } | Stmt::Assign { .. } => true,
+        Stmt::If { then_block, else_block, .. } => {
+            body_assigns(then_block)
+                || else_block.as_ref().map_or(false, body_assigns)
+        }
+        Stmt::While { body, .. } | Stmt::Block(body) => body_assigns(body),
+        _ => false,
+    })
+}
+
+fn has_delta_self_call(block: &crate::syntax::Block, name: &str, slot: i64) -> bool {
+    fn in_expr(expression: &Expr, name: &str, slot: i64) -> bool {
+        if let Expr::Call { name: found, arguments, .. } = expression {
+            if found == name && arguments.len() == 1 && delta_argument(&arguments[0], slot).is_some() {
+                return true;
+            }
+            return arguments.iter().any(|argument| in_expr(argument, name, slot));
+        }
+        match expression {
+            Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => in_expr(inner, name, slot),
+            Expr::Binary { left, right, .. } | Expr::Index { operand: left, index: right, .. } => {
+                in_expr(left, name, slot) || in_expr(right, name, slot)
+            }
+            Expr::ArrayLiteral { elements, .. } => elements.iter().any(|element| in_expr(element, name, slot)),
+            _ => false,
+        }
+    }
+    block.statements.iter().any(|statement| match statement {
+        Stmt::Let { value, .. } | Stmt::Assign { value, .. } | Stmt::Return { value, .. } => {
+            in_expr(value, name, slot)
+        }
+        Stmt::ExprStmt { expression, .. } => in_expr(expression, name, slot),
+        Stmt::If { condition, then_block, else_block, .. } => {
+            in_expr(condition, name, slot)
+                || has_delta_self_call(then_block, name, slot)
+                || else_block.as_ref().map_or(false, |block| has_delta_self_call(block, name, slot))
+        }
+        Stmt::While { condition, body, .. } => {
+            in_expr(condition, name, slot) || has_delta_self_call(body, name, slot)
+        }
+        Stmt::Block(inner) => has_delta_self_call(inner, name, slot),
+        _ => false,
+    })
+}
+
 /// One lowering pass over a checked program.
 pub struct CodeGenerator {
     pub assembler: Assembler,
@@ -23,6 +88,11 @@ pub struct CodeGenerator {
     counter: usize,
     depth: i64,
     epilogue: String,
+    delta_slot: i64,
+    delta_value: i64,
+    inline_depth: usize,
+    current_name: String,
+    current_body: crate::syntax::Block,
 }
 
 impl CodeGenerator {
@@ -35,6 +105,14 @@ impl CodeGenerator {
             counter: 0,
             depth: 0,
             epilogue: String::new(),
+            delta_slot: -1,
+            delta_value: 0,
+            inline_depth: 0,
+            current_name: String::new(),
+            current_body: crate::syntax::Block {
+                span: crate::diagnostics::Span::point(0, 1, 1),
+                statements: Vec::new(),
+            },
         }
     }
 
@@ -125,6 +203,15 @@ impl CodeGenerator {
                 .map(|(slot, register)| (*slot, *register)),
         );
         let frame_function = function.slots > callee_homes;
+        let delta_eligible = function.slots == 1
+            && function.parameters.len() == 1
+            && !body_assigns(&function.body)
+            && has_delta_self_call(&function.body, &function.name, function.parameters[0].slot);
+        self.delta_slot = if delta_eligible { function.parameters[0].slot } else { -1 };
+        self.delta_value = 0;
+        self.inline_depth = 0;
+        self.current_name = function.name.clone();
+        self.current_body = function.body.clone();
         let callee_registers: Vec<&str> = homes[..callee_count]
             .iter()
             .map(|(_, register)| *register)
@@ -144,7 +231,9 @@ impl CodeGenerator {
             for register in &callee_registers {
                 self.assembler.push(register);
             }
-            if callee_count % 2 == 0 {
+            if delta_eligible {
+                self.assembler.sub_rsp(8 * 8);
+            } else if callee_count % 2 == 0 {
                 self.assembler.sub_rsp(8);
             }
         }
@@ -176,7 +265,9 @@ impl CodeGenerator {
             }
             self.assembler.leave_ret();
         } else {
-            if callee_count % 2 == 0 {
+            if delta_eligible {
+                self.assembler.add_rsp(8 * 8);
+            } else if callee_count % 2 == 0 {
                 self.assembler.add_rsp(8);
             }
             for register in callee_registers.iter().rev() {
@@ -184,13 +275,19 @@ impl CodeGenerator {
             }
             self.assembler.ret();
         }
+        self.delta_slot = -1;
+        self.delta_value = 0;
+        self.inline_depth = 0;
+        self.current_name.clear();
     }
 
 
 
     fn load_slot(&mut self, slot: i64, destination: &str, homes: &[(i64, &str)]) {
         if let Some(home) = home_for(slot, homes) {
-            if home != destination {
+            if slot == self.delta_slot && self.delta_value != 0 {
+                self.assembler.lea_imm(destination, home, -self.delta_value);
+            } else if home != destination {
                 self.assembler.mov_reg_reg(destination, home);
             }
         } else {
@@ -318,6 +415,11 @@ impl CodeGenerator {
             (Expr::IntLiteral { value, .. }, Expr::Name { slot, .. }) => (*slot, *value as i64),
             _ => return,
         };
+        let literal = if name_slot == self.delta_slot {
+            literal + self.delta_value
+        } else {
+            literal
+        };
         if let Some(home) = home_for(name_slot, homes) {
             self.assembler.cmp_imm(home, literal);
         } else {
@@ -390,6 +492,24 @@ impl CodeGenerator {
         }
     }
 
+    /// Lower a constant-delta self-call as a pure-text copy of the current body.
+    fn emit_delta_self_call(&mut self, delta: i64, homes: &[(i64, &str)]) {
+        let saved_epilogue = self.epilogue.clone();
+        let saved_value = self.delta_value;
+        let saved_depth = self.inline_depth;
+        let label = self.fresh(&format!("{}.delta", function_label(&self.current_name)));
+        self.epilogue = label;
+        self.inline_depth += 1;
+        self.delta_value -= delta;
+        let body = self.current_body.clone();
+        self.emit_block(&body, true, homes);
+        let end = self.epilogue.clone();
+        self.assembler.label(&end);
+        self.epilogue = saved_epilogue;
+        self.delta_value = saved_value;
+        self.inline_depth = saved_depth;
+    }
+
     fn emit_call(&mut self, name: &str, arguments: &[Expr], homes: &[(i64, &str)]) {
         match name {
             "argc" => {
@@ -415,6 +535,16 @@ impl CodeGenerator {
                 self.assembler.pop("rax");
             }
             _ => {
+                if name == &self.current_name
+                    && self.delta_slot >= 0
+                    && self.inline_depth < 7
+                    && arguments.len() == 1
+                {
+                    if let Some(delta) = delta_argument(&arguments[0], self.delta_slot) {
+                        self.emit_delta_self_call(delta, homes);
+                        return;
+                    }
+                }
                 // Pure arguments: a literal goes straight into its ABI register; any other form is
                 // evaluated into rax and moved. Wider shapes are added in later slices.
                 if arguments.len() <= 4 {
@@ -424,10 +554,21 @@ impl CodeGenerator {
                             self.assembler.mov_imm64(register, *value as i64);
                         } else if let Expr::Name { slot, .. } = argument {
                             if let Some(home) = home_for(*slot, homes) {
-                                self.assembler.mov_reg_reg(register, home);
+                                if *slot == self.delta_slot && self.delta_value != 0 {
+                                    self.assembler.lea_imm(register, home, -self.delta_value);
+                                } else {
+                                    self.assembler.mov_reg_reg(register, home);
+                                }
                             } else {
                                 self.load_slot(*slot, "rax", homes);
                                 self.assembler.mov_reg_reg(register, "rax");
+                            }
+                        } else if let Some(offset) = delta_argument(argument, self.delta_slot) {
+                            if self.delta_slot >= 0 {
+                                if let Some(home) = home_for(self.delta_slot, homes) {
+                                    let effective = -(self.delta_value - offset);
+                                    self.assembler.lea_imm(register, home, effective);
+                                }
                             }
                         } else {
                             self.emit_expression(argument, homes);
