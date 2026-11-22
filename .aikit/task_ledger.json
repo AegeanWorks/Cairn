@@ -1,79 +1,20 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-rs-machine",
+    "task_id": "cairn-rs-runtime",
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795348026.6788838,
+    "updated_at": 1795349715.42862,
     "owner": "opencode:session",
-    "lease_until": 1795355226.6788838,
+    "lease_until": 1795356915.42862,
     "started_by": "opencode:session",
     "continuations": [],
-    "completed_at": 1795348071.4261599,
-    "completed_head": "768c2bb3f1d2dd66cb3d62dab5cdfdf5755ded2e",
-    "completed_tree": "98a1456d5f43602876024723449ffabe5440ad3c"
+    "completed_at": 1795349756.0329316,
+    "completed_head": "672773572b6900977639731d636bdccdad566dee",
+    "completed_tree": "33dcf706a5b6a13ce4ecd86a17921b85882c6392"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-paired-resilient",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-paired-resilient' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795270469.7921574,
-      "timestamp_str": "2026-11-21 17:14:29",
-      "agent": "kilo:cairn",
-      "head": "8a9619581ba946c49392d913ac95d20c24ed6f70",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-rotl-builtin",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/2] add rotl(x, n) as a two-argument builtin lowered inline to one ROL rax, cl, with sema/codegen/machine layers and failing-first tests at each layer plus end-to-end value tests; [2/2] four-language rotl benchmark, TwinParityTest method, SPEC/README/LLM_SYSTEM, ADR-114, suite and gates, commit, then the 24-case verdict in a controlled window",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795272290.9963405,
-      "timestamp_str": "2026-11-21 17:44:50",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "the 23-case 48-round verdict re-run after ADR-113 reports ALL WON for C, C++ and Rust, so the objective calls for one new function; the single-instruction bit surface has popcount, clz, ctz and bswap but no rotation, the last baseline x86-64 bit instruction (ROL/ROR) the surface lacks",
-        "benefits": "a two-argument rotate builtin mapped to one ROL instruction, extending the two-argument builtin precedent (arg_byte, str_byte) and completing the bit-manipulation family",
-        "risks": "contract: rotl returns x rotated left by n masked to 63, matching the documented shift-count masking; dependency: baseline x86-64, no CPU feature check; concurrency: none; state: none",
-        "mitigation": "failing-first sema arity and rejection, machine byte, inline codegen and end-to-end value tests; twin parity and the registry meta-test; full suite and gates; controlled paired measurement before any speed claim"
-      },
-      "plan_digest": "9d42b7477fbe867719c8978d548a2429e2424f2fb09a46e2a215d7e034529647",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-rotl-builtin",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[1/2] committed 1944d0f: rotl(x, n) inline ROL rax, cl through Assembler.rotate_cl, sema arity 2, failing-first tests at sema/machine/codegen/end-to-end; four twins print 7514809512662158567 matching the Python model; suite 1477 OK; first 48-round paired read c=1.163 cpp=1.157 rust=1.294 all ties in a 0.842-2.412 band; ADR-114, SPEC/README/LLM_SYSTEM synced; checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795274638.3489132,
-      "timestamp_str": "2026-11-21 18:23:58",
-      "agent": "kilo:cairn",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-rotl-builtin",
       "phase": "phase 2",
@@ -340,6 +281,53 @@
       "timestamp_str": "2026-11-22 14:47:51",
       "agent": "opencode:session",
       "head": "768c2bb3f1d2dd66cb3d62dab5cdfdf5755ded2e",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rs-runtime",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/2] port the emitted runtime helpers (runtime.py) to Rust with emitted-shape tests; [2/2] run all gates and commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795349133.6156843,
+      "timestamp_str": "2026-11-22 15:05:33",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "Code generation emits calls into a fixed set of runtime helpers (printers, argv, stdin, divide trap); those helpers must exist in Rust before generated code can be byte-compared with Python.",
+        "benefits": "A std-only Rust runtime emitter with the same helper labels, byte shapes and static state as the Python reference.",
+        "risks": "contract: helper labels, encoding bytes and reserved data sizes must match exactly; dependency: std-only Rust; concurrency: none; state: new Rust module and tests.",
+        "mitigation": "Port test_runtime.py assertions as Rust tests and compare emitted helper bytes with the Python oracle; run all project gates before commit."
+      },
+      "plan_digest": "44897419446c8d68bb2ba2a186d71fe0a7463193773bbe3526e1da00c5a7f3e9"
+    },
+    {
+      "task_id": "cairn-rs-runtime",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[2/2] ported all runtime emitters and static state to Rust with a shared runtime dump in the parity gate (38/38 identical); 87 Rust tests pass; ADR-121 records the byte-level guard; aikit check 7/7 gates passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795349715.42862,
+      "timestamp_str": "2026-11-22 15:15:15",
+      "agent": "opencode:session",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-rs-runtime",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-rs-runtime' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795349756.1020842,
+      "timestamp_str": "2026-11-22 15:15:56",
+      "agent": "opencode:session",
+      "head": "672773572b6900977639731d636bdccdad566dee",
       "delivery": {
         "roots": [
           "."
