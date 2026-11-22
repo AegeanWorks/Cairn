@@ -10,12 +10,8 @@ use crate::runtime::{emit_runtime, OUT_FLUSH_LABEL, PRINT_CHAR_LABEL, PRINT_HEX_
 use crate::syntax::{Expr, Program, Stmt};
 
 /// The register home of a slot, when the slot is kept in a register.
-fn home_for<'a>(slot: i64, homes: &'a [&'a str]) -> Option<&'a str> {
-    if slot >= 0 && (slot as usize) < homes.len() {
-        Some(homes[slot as usize])
-    } else {
-        None
-    }
+fn home_for<'a>(slot: i64, homes: &'a [(i64, &'a str)]) -> Option<&'a str> {
+    homes.iter().find(|(found, _)| *found == slot).map(|(_, register)| *register)
 }
 
 /// One lowering pass over a checked program.
@@ -98,24 +94,68 @@ impl CodeGenerator {
         self.assembler.hlt();
     }
 
-    /// Emit a function using the frameless path (all slots homed in registers).
+    /// Slots that keep a register home, in register order (frame functions rank by loop depth,
+    /// ties by descending slot; all slots at depth zero here).
+    fn home_slots(function: &crate::syntax::Function) -> Vec<i64> {
+        if (function.slots as usize) <= crate::codegen::HOME_REGISTERS.len() {
+            return (0..function.slots as i64).collect();
+        }
+        let mut ranked: Vec<i64> = (0..function.slots as i64).collect();
+        ranked.sort_by(|a, b| b.cmp(a));
+        ranked
+    }
+
+    /// Emit one function: frameless when every slot has a home, otherwise a frame function.
     fn emit_function(&mut self, function: &crate::syntax::Function) {
         self.epilogue = format!("{}.epilogue", function_label(&function.name));
         self.assembler.label(&function_label(&function.name));
-        let home_count = function.slots.min(crate::codegen::HOME_REGISTERS.len());
-        let homes = &crate::codegen::HOME_REGISTERS[..home_count];
-        for home in homes {
-            self.assembler.push(home);
-        }
-        let pad = home_count % 2 == 0;
-        if pad {
-            self.assembler.sub_rsp(8);
+        let ranked = Self::home_slots(function);
+        let callee_homes = crate::codegen::HOME_REGISTERS.len();
+        let callee_count = ranked.len().min(callee_homes);
+        let extra_count = ranked.len().saturating_sub(callee_homes);
+        let mut homes: Vec<(i64, &str)> = ranked[..callee_count]
+            .iter()
+            .zip(crate::codegen::HOME_REGISTERS.iter().take(callee_count))
+            .map(|(slot, register)| (*slot, *register))
+            .collect();
+        homes.extend(
+            ranked[callee_count..callee_count + extra_count]
+                .iter()
+                .zip(crate::codegen::EXTRA_HOME_REGISTERS.iter().take(extra_count))
+                .map(|(slot, register)| (*slot, *register)),
+        );
+        let frame_function = function.slots > callee_homes;
+        let callee_registers: Vec<&str> = homes[..callee_count]
+            .iter()
+            .map(|(_, register)| *register)
+            .collect();
+        if frame_function {
+            let frame = crate::codegen::align16((function.slots as usize + callee_count) * 8);
+            self.assembler.push("rbp");
+            self.assembler.mov_reg_reg("rbp", "rsp");
+            self.assembler.sub_rsp(frame as i64);
+            for (index, register) in callee_registers.iter().enumerate() {
+                self.assembler.mov_store_rbp(
+                    crate::codegen::slot_offset(function.slots as i64 + index as i64),
+                    register,
+                );
+            }
+        } else {
+            for register in &callee_registers {
+                self.assembler.push(register);
+            }
+            if callee_count % 2 == 0 {
+                self.assembler.sub_rsp(8);
+            }
         }
         self.depth = 0;
         for (index, parameter) in function.parameters.iter().enumerate() {
-            if index < crate::image::IMPORTS.len() && index < 4 {
+            if index < 4 {
                 let source = ["rcx", "rdx", "r8", "r9"][index];
-                self.store_slot(parameter.slot, source, homes);
+                self.store_slot(parameter.slot, source, &homes);
+            } else if frame_function {
+                self.assembler.mov_load_rbp("rax", 16 + 8 * (index - 4) as i64);
+                self.store_slot(parameter.slot, "rax", &homes);
             }
         }
         let body = function.body.clone();
@@ -124,21 +164,31 @@ impl CodeGenerator {
             self.assembler.mov_imm64("rax", 0);
         }
         for (index, statement) in body.statements.iter().enumerate() {
-            self.emit_statement(statement, index + 1 == body.statements.len(), homes);
+            self.emit_statement(statement, index + 1 == body.statements.len(), &homes);
         }
         self.assembler.label(&self.epilogue.clone());
-        if pad {
-            self.assembler.add_rsp(8);
+        if frame_function {
+            for (index, register) in callee_registers.iter().enumerate() {
+                self.assembler.mov_load_rbp(
+                    register,
+                    crate::codegen::slot_offset(function.slots as i64 + index as i64),
+                );
+            }
+            self.assembler.leave_ret();
+        } else {
+            if callee_count % 2 == 0 {
+                self.assembler.add_rsp(8);
+            }
+            for register in callee_registers.iter().rev() {
+                self.assembler.pop(register);
+            }
+            self.assembler.ret();
         }
-        for home in homes.iter().rev() {
-            self.assembler.pop(home);
-        }
-        self.assembler.ret();
     }
 
 
 
-    fn load_slot(&mut self, slot: i64, destination: &str, homes: &[&str]) {
+    fn load_slot(&mut self, slot: i64, destination: &str, homes: &[(i64, &str)]) {
         if let Some(home) = home_for(slot, homes) {
             if home != destination {
                 self.assembler.mov_reg_reg(destination, home);
@@ -148,7 +198,7 @@ impl CodeGenerator {
         }
     }
 
-    fn store_slot(&mut self, slot: i64, source: &str, homes: &[&str]) {
+    fn store_slot(&mut self, slot: i64, source: &str, homes: &[(i64, &str)]) {
         if let Some(home) = home_for(slot, homes) {
             if home != source {
                 self.assembler.mov_reg_reg(home, source);
@@ -158,7 +208,7 @@ impl CodeGenerator {
         }
     }
 
-    fn emit_value(&mut self, slot: i64, expression: &Expr, homes: &[&str]) {
+    fn emit_value(&mut self, slot: i64, expression: &Expr, homes: &[(i64, &str)]) {
         match expression {
             Expr::IntLiteral { value, .. } => {
                 if *value == 0 {
@@ -200,7 +250,7 @@ impl CodeGenerator {
         }
     }
 
-    fn emit_statement(&mut self, statement: &Stmt, tail: bool, homes: &[&str]) {
+    fn emit_statement(&mut self, statement: &Stmt, tail: bool, homes: &[(i64, &str)]) {
         match statement {
             Stmt::Return { value, .. } => {
                 self.emit_expression(value, homes);
@@ -228,13 +278,13 @@ impl CodeGenerator {
         }
     }
 
-    fn emit_block(&mut self, block: &crate::syntax::Block, tail: bool, homes: &[&str]) {
+    fn emit_block(&mut self, block: &crate::syntax::Block, tail: bool, homes: &[(i64, &str)]) {
         for (index, statement) in block.statements.iter().enumerate() {
             self.emit_statement(statement, tail && index + 1 == block.statements.len(), homes);
         }
     }
 
-    fn emit_while(&mut self, condition: &Expr, body: &crate::syntax::Block, homes: &[&str]) {
+    fn emit_while(&mut self, condition: &Expr, body: &crate::syntax::Block, homes: &[(i64, &str)]) {
         let start = self.fresh("while.start");
         let end = self.fresh("while.end");
         self.emit_condition_polarity(condition, &end, homes, false);
@@ -254,11 +304,11 @@ impl CodeGenerator {
     }
 
     /// Emit a comparison that jumps to `target` when the relation holds.
-    fn emit_condition(&mut self, expression: &Expr, target: &str, homes: &[&str]) {
+    fn emit_condition(&mut self, expression: &Expr, target: &str, homes: &[(i64, &str)]) {
         self.emit_condition_polarity(expression, target, homes, true);
     }
 
-    fn emit_condition_polarity(&mut self, expression: &Expr, target: &str, homes: &[&str],
+    fn emit_condition_polarity(&mut self, expression: &Expr, target: &str, homes: &[(i64, &str)],
                                when_true: bool) {
         let Expr::Binary { op, left, right, .. } = expression else {
             return;
@@ -290,7 +340,7 @@ impl CodeGenerator {
     }
 
     fn emit_if(&mut self, condition: &Expr, then_block: &crate::syntax::Block,
-               else_block: Option<&crate::syntax::Block>, tail: bool, homes: &[&str]) {
+               else_block: Option<&crate::syntax::Block>, tail: bool, homes: &[(i64, &str)]) {
         let then_label = self.fresh("if.then");
         let end_label = self.fresh("if.end");
         self.emit_condition(condition, &then_label, homes);
@@ -306,7 +356,7 @@ impl CodeGenerator {
         self.assembler.label(&end);
     }
 
-    fn emit_expression(&mut self, expression: &Expr, homes: &[&str]) {
+    fn emit_expression(&mut self, expression: &Expr, homes: &[(i64, &str)]) {
         match expression {
             Expr::IntLiteral { value, .. } => self.assembler.mov_imm64("rax", *value as i64),
             Expr::Parens { inner, .. } => self.emit_expression(inner, homes),
@@ -321,7 +371,7 @@ impl CodeGenerator {
         }
     }
 
-    fn emit_call(&mut self, name: &str, arguments: &[Expr], homes: &[&str]) {
+    fn emit_call(&mut self, name: &str, arguments: &[Expr], homes: &[(i64, &str)]) {
         match name {
             "argc" => {
                 let label = crate::runtime::ARGC_LABEL.to_string();
