@@ -5,6 +5,21 @@ use std::path::Path;
 
 fn main() {
     let arguments: Vec<String> = std::env::args().collect();
+    if arguments.len() == 3 && arguments[1] == "check" {
+        let path = Path::new(&arguments[2]);
+        match std::fs::read_to_string(path) {
+            Ok(source) => {
+                let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+                let display = arguments[2].replace('/', "\\");
+                print!("{}", cairn_rs::cli::check_json(&normalized, &display));
+            }
+            Err(error) => {
+                eprintln!("cannot read {}: {}", arguments[2], error);
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
     if arguments.len() == 2 && arguments[1] == "capjson" {
         print!("{}", cairn_rs::capabilities::capabilities_json());
         return;

@@ -5,25 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795372675.6059904,
+    "updated_at": 1795374870.0047536,
     "owner": "opencode:session",
-    "lease_until": 1795379875.6059904,
+    "lease_until": 1795382070.0047536,
     "started_by": "opencode:session",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-unrolling",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[1/1] unrolling ported with a shared dump in the parity gate (39/39 identical); 99 Rust tests; ADR-127; aikit check 7/7 gates passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795355280.1137636,
-      "timestamp_str": "2026-11-22 16:48:00",
-      "agent": "opencode:session",
-      "checklists": "passed"
-    },
     {
       "task_id": "cairn-rs-unrolling",
       "phase": "completed",
@@ -337,6 +325,23 @@
       "handoff": {
         "state": "102 Rust tests, 53/53 curated parity",
         "next": "multi-slot recursive shapes and builder/CLI port",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[12/N] check --json CLI envelope ported with byte parity; 53/53 curated, 10/27 real-program check envelopes match; ADR-141; builder and full .text parity of recursive benchmarks remain",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795374870.0047536,
+      "timestamp_str": "2026-11-22 22:14:30",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 53/53 curated parity",
+        "next": "port builder and remaining CLI commands, then finish multi-slot recursive codegen",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }

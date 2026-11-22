@@ -7,6 +7,7 @@
 
 pub mod codegen;
 pub mod capabilities;
+pub mod cli;
 pub mod codes;
 pub mod diagnostics;
 pub mod dump;

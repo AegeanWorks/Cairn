@@ -1403,3 +1403,10 @@ external compiler and was verified end to end.
 - **Context**: Recursive helpers with one unbound parameter are emitted by the reference as up to seven literal-shifted text copies plus a final real call. Without this shape none of the recursive benchmark functions can match.
 - **Decision**: Detect single-parameter functions with no binding statements and a constant-delta self call, reserve eight hold units, and lower each self call as a fresh epilogue-labelled copy of the body with an accumulated delta. Reads and conditions of the delta slot use lea with the negated delta; the depth-seven fallback binds the shifted argument directly into rcx.
 - **Consequences**: Curated parity is 53/53 including a recursive helper. The real-program diagnostic is still 2/27: fib and the benchmarks combine delta with multi-slot frames, arrays or other lowering shapes not yet ported.
+
+### ADR-141: the check --json CLI envelope is byte-identical
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: The check command is the first thing an agent uses to inspect a source; its JSON envelope and fold count must match exactly across implementations.
+- **Decision**: Add cli.rs, a pure module that maps a source to a check envelope, and a cairn-rs check command. The fold count mirrors Python's pass order: one fold pass, pure inlining, then a second fold pass on the same optimizer. Windows path separators are normalised at the I/O edge.
+- **Consequences**: Curated parity is 53/53 including CLI envelopes; a corpus diagnostic shows 10 of 27 real programs already have byte-identical check envelopes. Remaining differences are fold counts from unported optimizer interactions.

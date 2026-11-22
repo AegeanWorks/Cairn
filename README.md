@@ -429,6 +429,7 @@ cairn/
 │   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
 │   ├── src/
 │   │   ├── capabilities.rs   <- byte-exact JSON surface manifest
+│   │   ├── cli.rs            <- pure check --json envelope builder
 │   │   ├── codegen.rs        <- codegen helper layer (labels, slots, magic divide)
 │   │   ├── codes.rs          <- diagnostic code registry
 │   │   ├── diagnostics.rs    <- spans, diagnostics and the JSON contract
@@ -463,6 +464,7 @@ cairn/
 │   ├── dump.py               <- canonical front-end oracle
 │   ├── alg_dump.py           <- algebraic oracle
 │   ├── cap_dump.py           <- capability manifest oracle
+│   ├── cli_dump.py           <- check --json envelope oracle
 │   ├── codegen_dump.py       <- generated artifact oracle
 │   ├── copy_dump.py          <- copy-propagation oracle
 │   ├── count_dump.py         <- countdown oracle
