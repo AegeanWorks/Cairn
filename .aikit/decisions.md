@@ -1340,3 +1340,10 @@ external compiler and was verified end to end.
 - **Context**: The codegen class has over one hundred lowering methods. Porting it as one block would make a wrong byte pattern hard to localize, and the stage order was implicit in nested function calls.
 - **Decision**: Add a first generator slice covering the entry stub, frameless functions and simple expressions (literals, names, string handles, printer calls), checked by a generated-artifact parity dump. Add pipeline.rs with an explicit Stage state machine whose transition is pure and whose shell lives in main.rs, satisfying the functional-core/imperative-shell directive.
 - **Consequences**: Parity is now 43/43 sources, including three tiny generated programs with byte-identical .text, labels, fixups and data. 102 Rust tests pass, including two state-machine tests. The codegen task stays open for wider lowering shapes.
+
+### ADR-132: homed local slots use the frameless register path
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: A function whose slots fit in the register homes avoids a stack frame. The save/pad/restore pattern must match Python exactly or every generated function's prologue differs.
+- **Decision**: Extend the generator slice to allocate slot homes in HOME_REGISTERS order, push them on entry, add an 8-byte pad when the saved-unit count is even, store literal and name bindings through the home, load names from the home, and reverse the pop order at the single epilogue.
+- **Consequences**: Byte parity covers a function with one local slot (44/44 sources). Deeper shapes (branches, loops, frame functions, calls with stack arguments) remain in the open codegen task.
