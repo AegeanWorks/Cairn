@@ -346,182 +346,44 @@ The size column is the executable's `.text` frame at the current revision: the r
 
 `popcount`, `clz`, `ctz` and `bswap` are the single-instruction bit cases (ADR-101 to ADR-111): each lowers to one x86-64 instruction, and the authoritative 23-case verdict measures each faster than C and tied with C++ and Rust. `rotl` (one ROL, ADR-114) is the newest; ADR-115 and ADR-116 shrank its hot loop from 18 to 13 instructions (no push/pop around the count, no redundant `& 63`, the accumulator mask applied in place), and its measured verdicts read as ties against all three baselines.
 
-Standings per case (Cairn vs the fastest baseline on that case): `collatz`, `ackermann`, `tak`,
-`folded_math` and `splitmix` are won outright against all three baselines; `hex_io` wins against
-C, C++ and Rust after ADR-091's mask-and-shift printers (-19.9 percent paired A/B) and
-ADR-092's newline carrying in the hex buffer (-15.1 percent paired A/B);
-`fib30` sits inside
-C/C++'s spread; `xorshift` is a measured tie — the implementations sit within
-about one percent of each other around 300 ms, with the best run flipping between them, which
-is inside every documented spread, so no win is claimed there. The tie is now structural, not
-pending: the benchmark's serial chain costs 6 dependent cycles per iteration (one shift and one
-xor per line, each waiting on the previous state), and the loop bookkeeping executes entirely
-inside those latencies, so the countdown latch it now shares with gcc (ADR-023) cannot shave
-cycles — disassembly of all three compilers shows identical two-op dependent chains with
-zero-latency registers, pinning the case at the ISA latency floor.
-`fib30`'s call path is frame-less (ADR-019), literal argument offsets such as `n - 1` fold into
-one `lea`, a homed name compares against a small literal in place, the delta-inlining pass
-(ADR-021) lowers the first seven recursion levels as pure text with merge values in
-level-indexed slots of the real frame, and the tail-return pass (ADR-022) lets every final
-`return` fall through instead of jumping — one instruction less per merge on the recursion's
-dependency chain.
-`collatz` is the odd-pair branchless win (ADR-024): the fused `3k+1` step halves first (`shr`
-carries the parity bit in CF), the odd value is one scaled `lea` of the halved slot, a `cmov`
-replaces the parity branch, and one `adc` pays the pair's steps — three instructions per
-reference step, one taken branch, zero mispredicts, where both baselines branch on the parity
-test. `ackermann` is the two-argument pair win (ADR-025): pure arguments bind straight into the
-argument registers with no stack traffic, the two-parameter recursion shape lowers as pure-text
-body copies, and the delta-0 `ack(m, n - 1)` chain site collapses into a counted loop
-(`R(j) = f**(j+1)(1)`) whose body is a single shifted copy — 10.2-13.9 ms against C's 15.2-19.4 ms,
-C++'s 15.4-18.0 ms and Rust's 55.9-64.5 ms. `xorshift` remains the
-recorded structural tie at the ISA latency floor, and `folded_math`'s margin is inside run-to-run
-spread in some sessions; `nqueens`, `binary_gcd`, `call_chain`, `primes`, `mandelbrot`,
-`many_params` (ADR-074 replaced the twin contract that let every baseline fold the
-program to one print: all four twins now take the loop bound from their runtime's
-argument count and keep a masked product in the mix, so a bare run executes the same
-10M iterations everywhere; ADR-075 folded each constant into a three-operand
-`imul`, and ADR-076 made the algebraic pass recurse into a chain that cannot merge at
-its own root, so the substituted linear terms collect to `144i + 584` - one `imul` and
-one `add` - and the case reads 13.2-13.7 ms against C's 12.5-12.7, C++'s 14.3-14.8 and
-Rust's 13.4-13.8: it beat two of the three baselines and trailed C by 3.5 percent until
-ADR-097 kept `144i + 584` in an incremented local, a paired A/B with a +0.6 percent
-control measuring -10.8 percent),
-`argv_walk`
-remains a recorded loss (ADR-059's inline); `str_scan` keeps its NUL-test facts in
-ADR-060/061 and ADR-093 adds a `str_len`-guarded in-bounds fact that removes the dead
-NUL test from the byte scan, a paired A/B with a +1.3 percent control measured -10.3
-percent; `char_stream` rides ADR-072's fused `read_char` fast path and
-ADR-079's promoted cursor — a stdin-reading leaf keeps the buffer base, the cursor
-and the count word in register homes for its whole body, so the hot path is a
-register compare, one SIB byte read and one register increment, with the refill
-still out of line and the cursor stored back on the single epilogue — and reads
-9.4-13.3 ms against C's 7.7-10.7 ms; a 31-round interleaved same-seconds A/B
-measured the promoted base/index pair at -12.2 percent best and -10.0 percent on the ten fastest
-runs, with a byte-identical control at +0.3 percent in the same rounds. ADR-095 rotates
-the scan so the EOF guard is the back-edge and the add falls into the next fetch; a paired
-A/B with a -0.1 percent control measured -4.8 percent best on the 4 MiB stream.
-`array_sum` now rides ADR-073's ascending element addressing — element `i` at the
-span's lowest displacement plus `8i`, so a dynamic load, a read-modify-write and a
-literal-or-register store each lower to one indexed memory instruction, with no
-index negation and no address register — and reads 10.8-11.4 ms against C's
-10.2-11.9 ms; a 31-round interleaved same-seconds A/B measured -8.3 percent best
-and -6.9 percent on the ten fastest runs, while `sieve` measured neutral. ADR-099
-vectorizes the 100-pass sweep with two SSE2 lanes; a controlled A/B measured -9.8
-percent best and -10.2 percent on the ten fastest runs.
+Standings per case: `collatz`, `ackermann`, `tak`, `folded_math` and `splitmix` win outright;
+`hex_io` wins after ADR-091/092; `xorshift` is a structural tie at the ISA latency floor (ADR-023).
+The remaining cases are ties or small bounded gaps documented in the ADRs cited above; each is
+argued from disassembly and paired A/B measurements, never from a single run. `mandelbrot` is a
+known bounded loss to C (ADR-106) that needs a different recurrence, not another lowering tweak.
 
-The former `loop_sum` case was retired: GCC constant-folds it entirely, emitting
-`movabs $19999999900000000` and never running the loop, so it measured GCC's folding heuristics
-rather than codegen. Its replacement, `xorshift`, is a serial state chain no optimizer can fold or
-vectorise; the folding evidence and the retired numbers are in ADR-017, and the argument-path
-rewrite is in ADR-018.
+The twin-parity gate (`tests/test_end_to_end.py::TwinParityTest`) compiles all four twins for every
+case and fails unless they print the same total, so a standing cannot be earned against a twin that
+computes something else.
 
-Three later cases widen the measured surface (ADR-026): `nqueens` (bitmask backtracking, many live
-locals per frame — once 1.09-1.17x C and 1.21-1.41x Rust; ADR-088 unrolls its
-twelve-turn bit walk around the recursive call into clones with literal masks, which took
-it to 17.7-19.0 ms, level with Rust and ahead of C and C++), `binary_gcd` (subtraction and
-shift loops with a swap — ADR-027's magic-multiply division removed both `idiv` chains from the LCG
-loop, 190.2 → 178-195 ms, and ADR-029's flag-fused conditions fused every `(x & 1) == 0` branch and
-the conjoined shift loop into `test`/`test_imm` + one `jcc`, 202.1 → 188 ms best: 1.06-1.08x C,
-1.27x Rust, with the remaining gap the real `call bgcd` per pair) and `call_chain` (three-argument calls with
-non-pure operands on the hot path — ADR-027's foreign-function inlining, flag-fused select and
-direct-into-register compute fell 95.9 → 45-48 ms: Rust's 70.9-76.5 is beaten outright at about
-0.62x, C's 36-39 ms is the last recorded closure target). A twin-parity gate
-(`tests/test_end_to_end.py::TwinParityTest`) compiles every
-case's Cairn, C, C++ and Rust sources and hard-fails unless all four print the identical total, so a
-standing can never be earned against a twin that computes something else.
+Run-to-run spread is about 10 percent: use `python benchmarks/run_benchmarks.py --save --compare`
+to append one JSONL record (including the ADR-069 quiet-window probe) and diff against the newest
+saved record; a Cairn regression beyond the band exits nonzero. Every case is scored on
+whole-process time; `--floors` prints a compute-adjusted diagnostic.
 
-A C++ baseline joined the scoreboard (ADR-033): `g++ 16.2 -O2` compiles the same C sources as
-C++, so the comparison re-uses the verified C twins with C++ name mangling and the C++
-overload-resolution rules added — no benchmark semantics change. The first standings show
-the C++ column within one percent of the C column everywhere, which is expected for the same
-sources under `-O2`; the win/loss list above is therefore unchanged by C++'s arrival, and the
-board now reports the gap to all three compilers on every run.
+Three user-recorded project rules: after every change to `cairn/` code, run the full benchmark
+suite and compare; every new language feature ships its own tests in the same change; every new
+feature ships a C/C++/Rust benchmark twin in the same change.
 
-Four later cases widen the measured surface again (ADR-030): `tak` (three-argument
-data-dependent recursion — won outright against both baselines, 7.5 ms vs C 8.4-9.1 and Rust
-9.6-9.9), `primes` (trial division over 2..300000 — once tied C at 25.0 vs 24.5 ms because
-every runtime-divisor modulo paid a 64-bit `idiv`; ADR-085's guarded 32-bit `div`
-took the case to 17.9-19.1 ms, ahead of C and C++ and level with Rust, which had
-already narrowed the same modulo through its value-range analysis), `mandelbrot` (four 960x540 fixed-point
-escape frames — 13.5 ms vs C 10.8, the inner multiply/shift merge chain is the visible gap) and
-`splitmix` (100,000,000 wrapping 64-bit mixes, whose first standing of 165.9 ms vs C 98.7 and
-Rust 113.8 was rematerialized loop-invariant constants, the early recorded mechanism). Writing
-`splitmix` also exposed and fixed a real miscompilation: a merged left operand parked in its
-destination register could be clobbered by the right side's own register reuse
-(`tests/test_end_to_end.py::OperandParkTest`).
-
-The mixer then gained three backend mechanisms (the logical-shift peephole, then ADR-031's
-reclaimed merged-park fast path, then ADR-032's loop-invariant hoisting): `(z ^ ((z >> 30) & M)) * c`
-lowers the `&` as one logical `shr` whose mask never materialises, the xor and multiply combine
-directly in the home register with no dead park, no temporary spill and no `imul` re-park, and a
-countdown loop's big constants load once into prologue-saved spare home registers instead of
-re-materializing a 10-byte `movabs` on every iteration. splitmix fell 165.9 → 94.3 ms — now
-faster than its C twin (98-102) and Rust (110-113); every other benchmark executable compiles
-byte-identical against the pre-change compiler except the splitmix rewrites themselves, the
-recorded proof that the soundness hardening of `_computes_in_rax_only` cost no fast path
-anywhere else. Recorded next mechanisms: three-operand immediate multiplies, inner-loop merge
-pressure (mandelbrot), and call overhead (fib30, call_chain).
-
-Run-to-run spread on this machine is about 10 percent, so treat these as an order of magnitude
-rather than three significant figures; the harness prints best, median and worst for that reason.
-The comparison never depends on remembering numbers by hand: `python benchmarks/run_benchmarks.py
---save` appends one JSONL record (commit stamp, every best time, and the ADR-069 quiet-window probe — the `many_params` best against the 20 ms criterion, so a busy-machine record says so) to `.aikit/benchmark_history.jsonl`,
-and `--compare` diffs the current run against the newest saved record per case — warning first when that baseline was measured on a loaded machine — printing each delta —
-`improved`, `within noise`, or `regressed` — and exiting nonzero when a Cairn case regressed beyond
-the noise band. Every case is scored on whole-process time, and a minimal program already costs
-millions of cycles to start (ADR-084: Cairn 5.7M, C 8.2M, Rust 11.8M, C++ 17.1M cycles), so
-on a short case the loader is most of the number; `--floors` builds one empty program per
-available language and prints a compute-adjusted table (each best minus its own language's floor)
-as a diagnostic, while the scoreboard and every verdict stay on whole-process time. The project rule (recorded as a guideline from the user): after every change to the
-compiler, run the full benchmark suite again and compare, so winning one case while quietly losing
-another surfaces at the change that caused it.
-
-A second project rule (recorded as a guideline from the user): every function or construct added
-to the language ships with its own tests — exercising the new surface directly (values, edge
-cases, misuses reported as diagnostics) — committed in the same change, never covered only by
-incidental passes of existing tests.
-
-A third project rule (recorded as a guideline from the user): every function or construct added
-to the language ships with its own benchmark case — a program that exercises the new surface in
-a hot loop, with C, C++ and Rust twins — added in the same change, so the cost of the new
-feature is measured against the baselines from day one instead of discovered later.
-
-Compile time is about 150-280 ms per case, nearly all of it Python interpreter startup; the
-produced executable is two kilobytes because there is no runtime to link.
-
-What is *not* claimed: that Cairn is faster than C, C++ or Rust in general. Beating an optimising C compiler
-on arbitrary code is a claim about optimisers and workloads, not about syntax, and this compiler
-has one folding pass and a register fast path, not a modern optimiser. What Cairn does claim
-today is a zero-cost execution model on its subset, sub-second compiles, deterministic output,
-and a total dependency surface of one Python interpreter.
+What is *not* claimed: that Cairn beats optimising compilers in general. It claims a zero-cost
+execution model on its subset, sub-second compiles, deterministic output, and one Python
+interpreter as its only dependency.
 
 ### Goal: faster than C, C++ and Rust, measured per case
 
-The owner's target is that Cairn beats the C twin on every committed benchmark case, the Rust
-twin as well, and the C++ twin alongside them. That is a goal with a scoreboard, not a slogan the
-README asserts:
-`run_benchmarks.py` measures every baseline whose compiler is already installed, in the same run,
-and derives one verdict per case per language.
+The owner's target is to beat the C, Rust and C++ twin on every committed case. Verdicts are
+measured by `run_benchmarks.py` in one run per baseline:
 
 ```bash
-python benchmarks/run_benchmarks.py           # table plus a "Goal: faster than ..." line per baseline
-python benchmarks/run_benchmarks.py --json    # goal.faster_than_c / _cpp / _rust: true, false or null
-python benchmarks/run_benchmarks.py --strict  # gate: 0 won, 1 slower or errored, 2 no baseline at all
+python benchmarks/run_benchmarks.py           # table plus a "Goal: faster than ..." line
+python benchmarks/run_benchmarks.py --json    # goal.faster_than_c / _cpp / _rust
+python benchmarks/run_benchmarks.py --strict  # 0 won, 1 slower/errored, 2 no baseline
 ```
 
-A verdict is `faster`, `tie`, `slower`, `unavailable` or `error`, one per case per baseline. `unavailable`
-means the language's compiler (`gcc`, `clang` or `cl` for C; `g++`, `clang++` or `cl` for C++;
-`rustc` for Rust) was not found on
-`PATH`, and `--strict` then exits `2` only when no baseline at all can be measured, rather than
-reporting a win it did not measure. `error` means the case's own build or run failed instead of
-producing a time, and `--strict` exits `1`. The goal is measured on the development machine with
-all three baselines: `collatz`, `ackermann`,
-`tak`, `folded_math` and `splitmix` beat all three outright, and `xorshift` is a structural tie
-(ADR-023) — a serial loop pinned at the ISA latency floor, where all the
-compilers emit identical dependent chain shapes and the shared countdown latch makes the
-bookkeeping identical too. The committed cases cover a serial integer loop, recursion, constant
-arithmetic, branch-heavy counting, three-argument recursion, bit masking, fixed-point math and a
-64-bit mixing function.
+A verdict is `faster`, `tie`, `slower`, `unavailable` or `error`; `--strict` exits `2` only when no
+baseline can be measured. `benchmarks/paired.py` is the authoritative verdict: it measures all
+languages in one interleaved window with an identical-binary control band, so a gap counts only
+outside that band.
 
 ## What's Inside
 
@@ -577,6 +439,7 @@ cairn/
 │   │   ├── image.rs          <- read-only and writable data, artifact model
 │   │   ├── lexer.rs          <- scanner and token model
 │   │   ├── listing.rs        <- label-grouped .text bytes
+│   │   ├── machine.rs        <- x86-64 emitter: byte-exact instruction encodings
 │   │   ├── main.rs           <- binary entry point and dump commands
 │   │   ├── parser.rs         <- recursive-descent parser
 │   │   ├── pe.rs             <- PE32+ writer and fixup resolution
@@ -590,6 +453,7 @@ cairn/
 │   └── tests/
 │       ├── backend.rs        <- PE linking, verifier and listing tests
 │       ├── front_end.rs      <- lexer, parser and contract tests ported from Python
+│       ├── machine.rs        <- exact emitter byte tests ported from Python
 │       └── sema.rs           <- semantic rule tests ported from Python
 ├── benchmarks/               <- three cases, their C and Rust twins, and the harness
 ├── examples/                 <- hello, fibonacci, arithmetic, alloy_probe (Alloy backend probe)

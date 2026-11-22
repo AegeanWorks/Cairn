@@ -1256,3 +1256,10 @@ external compiler and was verified end to end.
 - **Context**: The front-end parity gate proved tokens, AST and semantics identical, but a compiler also has to produce the same executable. The backend was ported bottom-up from image and PE writing to listing and verification, and two real encoding bugs were found during the comparison.
 - **Decision**: rust/specs/pe_basic.txt is a small artifact spec read by both pe_dump.py and cairn-rs pe; their canonical dumps of the linked image, verification results and listing are compared by check_parity.py. The comparison found a four-byte COFF characteristics field and a five-import default that would have silently changed every PE header, so both are pinned by Rust tests and the shared gate.
 - **Consequences**: The parity gate now reports 37/37 identical sources including linked bytes. The machine emitter and code generator are still Python-only; when ported they will feed the same spec so byte identity is checked at the artifact level rather than by assertion alone.
+
+### ADR-120: the Rust emitter is pinned byte-for-byte against Python
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: The backend could link a PE but still took its instruction bytes from Python. Porting the 811-line emitter mechanically risks a wrong REX, ModRM or opcode that a functional test would miss, so the port was checked against the exact byte assertions of test_machine.py.
+- **Decision**: Implement the whole Assembler surface in Rust, from frame and indexed memory forms to SSE2 and the bit builtins, and port the exact-byte tests. The comparison caught one real defect: bswap used a 0xC0 ModRM base instead of Python's 0xC8, which would have emitted the wrong opcode family; two other mismatches were wrong test expectations, corrected to the Python-proven bytes.
+- **Consequences**: All 84 Rust tests pass, including 11 emitter tests with exact byte assertions. The README Performance section was reduced from 17k to under 11k characters to make room for the growing Rust tree while staying under the 40k cold-start budget.

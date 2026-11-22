@@ -11,6 +11,7 @@ pub mod dump;
 pub mod image;
 pub mod lexer;
 pub mod listing;
+pub mod machine;
 pub mod pe;
 pub mod parser;
 pub mod sema;
