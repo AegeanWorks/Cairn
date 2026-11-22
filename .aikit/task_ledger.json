@@ -1,67 +1,20 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-rs-countdown",
+    "task_id": "cairn-rs-unrolling",
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795354378.6930826,
+    "updated_at": 1795355280.1137636,
     "owner": "opencode:session",
-    "lease_until": 1795361578.6930826,
+    "lease_until": 1795362480.1137636,
     "started_by": "opencode:session",
     "continuations": [],
-    "completed_at": 1795354427.030273,
-    "completed_head": "42686ef42f9c0f3818b62b51d95e6a8626c95e34",
-    "completed_tree": "b34f23c56c3a4e995f886669cf9321930fd72151"
+    "completed_at": 1795355330.7458322,
+    "completed_head": "77b77dc7f33bff99873a2c6f5403873c877bddd5",
+    "completed_tree": "38e1678ff0c57f916a9db10a1a89c1d7b78c35ed"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-machine",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[2/2] ported the full x86-64 emitter to Rust with 11 exact-byte tests (84 Rust tests total); the byte comparison caught a wrong bswap ModRM base; ADR-120 records it; README Performance trimmed from 17k to under 11k chars; aikit check 7/7 gates passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795348026.6788838,
-      "timestamp_str": "2026-11-22 14:47:06",
-      "agent": "opencode:session",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-rs-machine",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-rs-machine' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795348071.5234284,
-      "timestamp_str": "2026-11-22 14:47:51",
-      "agent": "opencode:session",
-      "head": "768c2bb3f1d2dd66cb3d62dab5cdfdf5755ded2e",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-rs-runtime",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/2] port the emitted runtime helpers (runtime.py) to Rust with emitted-shape tests; [2/2] run all gates and commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795349133.6156843,
-      "timestamp_str": "2026-11-22 15:05:33",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "Code generation emits calls into a fixed set of runtime helpers (printers, argv, stdin, divide trap); those helpers must exist in Rust before generated code can be byte-compared with Python.",
-        "benefits": "A std-only Rust runtime emitter with the same helper labels, byte shapes and static state as the Python reference.",
-        "risks": "contract: helper labels, encoding bytes and reserved data sizes must match exactly; dependency: std-only Rust; concurrency: none; state: new Rust module and tests.",
-        "mitigation": "Port test_runtime.py assertions as Rust tests and compare emitted helper bytes with the Python oracle; run all project gates before commit."
-      },
-      "plan_digest": "44897419446c8d68bb2ba2a186d71fe0a7463193773bbe3526e1da00c5a7f3e9"
-    },
     {
       "task_id": "cairn-rs-runtime",
       "phase": "in_progress",
@@ -319,6 +272,53 @@
       "timestamp_str": "2026-11-22 16:33:47",
       "agent": "opencode:session",
       "head": "42686ef42f9c0f3818b62b51d95e6a8626c95e34",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rs-unrolling",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/1] port constant-loop unrolling with narrow shape checks and literal substitution, add a shared dump to the parity gate, and commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795355267.4536028,
+      "timestamp_str": "2026-11-22 16:47:47",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "Unrolling is the next pass in optimize() order and changes hot-loop byte shape; codegen parity depends on the same rewrite.",
+        "benefits": "A Rust unrolling pass checked against Python on every source, including the self-recursive backtracking shape.",
+        "risks": "contract: counter step/bound, trip limits and literal substitution must match; dependency: std-only Rust; concurrency: none; state: new Rust code, oracle and ADR.",
+        "mitigation": "Compare canonical dumps over the corpus, add a focused Rust test, run all gates before commit."
+      },
+      "plan_digest": "fe9b5cc1fd416c6eaf4bf6c6667eaf410de59e99038a5b94d756dbee5cb20ffc"
+    },
+    {
+      "task_id": "cairn-rs-unrolling",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/1] unrolling ported with a shared dump in the parity gate (39/39 identical); 99 Rust tests; ADR-127; aikit check 7/7 gates passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795355280.1137636,
+      "timestamp_str": "2026-11-22 16:48:00",
+      "agent": "opencode:session",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-rs-unrolling",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-rs-unrolling' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795355330.8214798,
+      "timestamp_str": "2026-11-22 16:48:50",
+      "agent": "opencode:session",
+      "head": "77b77dc7f33bff99873a2c6f5403873c877bddd5",
       "delivery": {
         "roots": [
           "."
