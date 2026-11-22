@@ -428,11 +428,13 @@ cairn/
 │   ├── Cargo.toml            <- crate manifest and the rust-test gate target
 │   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
 │   ├── dump.py               <- Python oracle printing the canonical front-end dump
+│   ├── fold_dump.py          <- Python oracle for constant-folding parity
 │   ├── pe_dump.py            <- Python oracle for linked PE bytes, listing and verification
 │   ├── runtime_dump.py       <- Python oracle for the emitted runtime helpers
 │   ├── check_parity.py       <- compares both dumps over every source; front-end-parity gate
 │   ├── specs/
-│   │   └── pe_basic.txt      <- shared artifact spec for the byte-level parity check
+│   │   ├── pe_basic.txt      <- shared artifact spec for the byte-level parity check
+│   │   └── fold_calls.txt    <- shared folding cases for the optimizer parity check
 │   ├── src/
 │   │   ├── codes.rs          <- diagnostic code registry
 │   │   ├── diagnostics.rs    <- spans, diagnostics and the JSON contract
@@ -441,6 +443,7 @@ cairn/
 │   │   ├── lexer.rs          <- scanner and token model
 │   │   ├── listing.rs        <- label-grouped .text bytes
 │   │   ├── machine.rs        <- x86-64 emitter: byte-exact instruction encodings
+│   │   ├── optimize.rs       <- constant folding and safe algebraic identities
 │   │   ├── main.rs           <- binary entry point and dump commands
 │   │   ├── parser.rs         <- recursive-descent parser
 │   │   ├── pe.rs             <- PE32+ writer and fixup resolution
@@ -456,6 +459,7 @@ cairn/
 │       ├── backend.rs        <- PE linking, verifier and listing tests
 │       ├── front_end.rs      <- lexer, parser and contract tests ported from Python
 │       ├── machine.rs        <- exact emitter byte tests ported from Python
+│       ├── optimize.rs       <- folding, wrapping and trap-safety tests
 │       ├── runtime.rs        <- emitted runtime labels, state and fixup tests
 │       └── sema.rs           <- semantic rule tests ported from Python
 ├── benchmarks/               <- three cases, their C and Rust twins, and the harness

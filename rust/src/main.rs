@@ -27,6 +27,31 @@ fn main() {
         println!("{}", lines.join("\n"));
         return;
     }
+    if arguments.len() == 3 && arguments[1] == "fold" {
+        let text = std::fs::read_to_string(&arguments[2]).unwrap_or_else(|error| {
+            eprintln!("cannot read {}: {}", arguments[2], error);
+            std::process::exit(2);
+        });
+        for line in text.lines() {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            let answer = match fields.as_slice() {
+                ["BIN", op, left, right] => {
+                    let left = left.parse::<i128>().unwrap_or(0);
+                    let right = right.parse::<i128>().unwrap_or(0);
+                    cairn_rs::optimize::fold_constant(op, left, right)
+                }
+                ["UN", op, value] => {
+                    cairn_rs::optimize::fold_unary(op, value.parse::<i128>().unwrap_or(0))
+                }
+                _ => None,
+            };
+            match answer {
+                Some(value) => println!("{} -> {}", line, value),
+                None => println!("{} -> NONE", line),
+            }
+        }
+        return;
+    }
     if arguments.len() == 3 && arguments[1] == "pe" {
         match cairn_rs::spec::dump(Path::new(&arguments[2])) {
             Ok(dump) => print!("{}", dump),

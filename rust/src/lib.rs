@@ -12,6 +12,7 @@ pub mod image;
 pub mod lexer;
 pub mod listing;
 pub mod machine;
+pub mod optimize;
 pub mod pe;
 pub mod parser;
 pub mod runtime;

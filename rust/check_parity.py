@@ -59,8 +59,12 @@ def main():
 
         specs = sorted((RUST / "specs").glob("*.txt"))
         for spec in specs:
-            expected = run([sys.executable, str(RUST / "pe_dump.py"), str(spec)])
-            actual = run([str(BINARY), "pe", str(spec)])
+            if spec.name == "fold_calls.txt":
+                oracle, command = RUST / "fold_dump.py", "fold"
+            else:
+                oracle, command = RUST / "pe_dump.py", "pe"
+            expected = run([sys.executable, str(oracle), str(spec)])
+            actual = run([str(BINARY), command, str(spec)])
             if expected.returncode != 0 or actual.returncode != 0:
                 failures.append((spec, "a backend dumper exited non-zero"))
             elif expected.stdout != actual.stdout:
