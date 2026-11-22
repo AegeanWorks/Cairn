@@ -5,31 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795359243.926383,
+    "updated_at": 1795361442.449938,
     "owner": "opencode:session",
-    "lease_until": 1795366443.926383,
+    "lease_until": 1795368642.449938,
     "started_by": "opencode:session",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-copy-prop",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/1] port copy propagation, add a parity dump and Rust tests, then commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795352070.81555,
-      "timestamp_str": "2026-11-22 15:54:30",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "The next structural optimizer pass replaces a copied binding with its source when provably safe; codegen byte parity depends on applying the same rewrites as Python.",
-        "benefits": "A Rust copy-propagation pass checked against Python on every source with a shared dump.",
-        "risks": "contract: only safe slots may be substituted, and shadowing/writes must be respected; dependency: std-only Rust; concurrency: none; state: new helper module code, oracle and ADR.",
-        "mitigation": "Port the pass with its safety predicates, compare canonical dumps over the corpus, run all gates before commit."
-      },
-      "plan_digest": "b60baeb9345b8790247d0e62ff0a68dd5c0464bef934bdf7c97f0c181fa61792"
-    },
     {
       "task_id": "cairn-rs-copy-prop",
       "phase": "in_progress",
@@ -327,6 +309,23 @@
         "state": "helper layer committed, class still Python-only",
         "next": "port the CodeGenerator class methods starting with generate/_emit_entry/_emit_function and simple expression lowering",
         "evidence": "40/40 parity across 11 dumps, 7/7 gates"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[2/N] generator slice landed: entry stub, frameless functions, simple expressions and printer calls with byte parity (43/43 including 3 generated programs); explicit pipeline state machine with 2 tests; ADR-131; three AIKit reports written under reports/combined; 7/7 gates passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795361442.449938,
+      "timestamp_str": "2026-11-22 18:30:42",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 43/43 parity",
+        "next": "extend generator.rs to let/assign/if/while and frame functions, driven by generated-byte parity",
+        "evidence": "cargo test and check 7/7"
       }
     }
   ]
