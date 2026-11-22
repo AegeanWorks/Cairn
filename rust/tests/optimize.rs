@@ -108,6 +108,23 @@ fn copy_propagation_removes_a_single_read_definition() {
 }
 
 #[test]
+fn a_dead_counter_loop_becomes_a_countdown_latch() {
+    let mut program = analysed(
+        "fn main() -> i64 { var i: i64 = 0; var t: i64 = 0; \
+         while i < 10 { t = t + 1; i = i + 1; } return t; }",
+    );
+    let changed = optimize::apply_countdown_latches(&mut program);
+    assert!(changed >= 1);
+    let cairn_rs::syntax::Stmt::While { condition, body, countdown, .. } =
+        &program.functions[0].body.statements[2] else {
+        panic!("expected a while loop");
+    };
+    assert!(*countdown);
+    assert!(matches!(condition, Expr::Binary { op, .. } if op == ">"));
+    assert_eq!(body.statements.len(), 1);
+}
+
+#[test]
 fn algebraic_simplification_collects_like_terms() {
     let mut program = analysed(
         "fn main() -> i64 { let i: i64 = 3; return i * 31 + i * 37; }",

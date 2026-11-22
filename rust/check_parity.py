@@ -77,6 +77,13 @@ def main():
                             failures.append((source, "an algebraic dumper exited non-zero"))
                         elif alg_expected.stdout != alg_actual.stdout:
                             failures.append((source, "algebraic mismatch"))
+                        else:
+                            count_expected = run([sys.executable, str(RUST / "count_dump.py"), str(source)])
+                            count_actual = run([str(BINARY), "count", str(source)])
+                            if count_expected.returncode != 0 or count_actual.returncode != 0:
+                                failures.append((source, "a countdown dumper exited non-zero"))
+                            elif count_expected.stdout != count_actual.stdout:
+                                failures.append((source, "countdown mismatch"))
 
         specs = sorted((RUST / "specs").glob("*.txt"))
         for spec in specs:

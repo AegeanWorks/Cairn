@@ -5,7 +5,7 @@
 //! an effect, so no rewrite may drop or duplicate a call. The structural passes (algebraic
 //! simplification, copy propagation and loop rewrites) are added after this core.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::diagnostics::Span;
 use crate::syntax::{Block, Expr, Program, Stmt};
@@ -1030,6 +1030,204 @@ fn algebraic_block(block: &mut Block) -> usize {
             }
             Stmt::Break { .. } | Stmt::Continue { .. } => {}
         }
+    }
+    changed
+}
+
+fn contains_break_or_continue(block: &Block) -> bool {
+    block.statements.iter().any(|statement| match statement {
+        Stmt::Break { .. } | Stmt::Continue { .. } => true,
+        Stmt::If { then_block, else_block, .. } => {
+            contains_break_or_continue(then_block)
+                || else_block.as_ref().map_or(false, contains_break_or_continue)
+        }
+        Stmt::While { body, .. } | Stmt::Block(body) => contains_break_or_continue(body),
+        _ => false,
+    })
+}
+
+/// Remove the first `slot = slot + 1` found under a statement list.
+fn remove_increment(statements: &mut Vec<Stmt>, slot: i64) -> bool {
+    for index in 0..statements.len() {
+        let is_increment = match &statements[index] {
+            Stmt::Assign { slot: found, value, .. } if *found == slot => {
+                let peeled = peel_parens(Some(value)).unwrap();
+                matches!(peeled, Expr::Binary { op, left, right, .. }
+                    if op == "+"
+                        && matches!(peel_parens(Some(left)).unwrap(), Expr::Name { slot: found, .. } if *found == slot)
+                        && matches!(peel_parens(Some(right)).unwrap(), Expr::IntLiteral { value, .. } if *value == 1))
+            }
+            _ => false,
+        };
+        if is_increment {
+            statements.remove(index);
+            return true;
+        }
+        let nested = match &mut statements[index] {
+            Stmt::If { then_block, else_block, .. } => {
+                remove_increment(&mut then_block.statements, slot)
+                    || else_block.as_mut().map_or(false, |block| remove_increment(&mut block.statements, slot))
+            }
+            Stmt::While { body, .. } | Stmt::Block(body) => {
+                remove_increment(&mut body.statements, slot)
+            }
+            _ => false,
+        };
+        if nested {
+            return true;
+        }
+    }
+    false
+}
+
+/// Rewrite one `while v < C` as a countdown latch, or refuse.
+fn try_countdown_latch(statement: &Stmt, init: &Stmt, count: i128, trailing: &[Stmt])
+    -> Option<(Stmt, Stmt)> {
+    let Stmt::While { span, condition, body, countdown } = statement else {
+        return None;
+    };
+    let binary = peel_parens(Some(condition)).unwrap();
+    let (left, right) = match binary {
+        Expr::Binary { op, left, right, .. } if op == "<" => (left, right),
+        _ => return None,
+    };
+    if !matches!(peel_parens(Some(right)).unwrap(), Expr::IntLiteral { .. }) {
+        return None;
+    }
+    let counter = peel_parens(Some(left)).unwrap();
+    let slot = match counter {
+        Expr::Name { slot, .. } if *slot >= 0 => *slot,
+        _ => return None,
+    };
+    if body.statements.is_empty() || *countdown || contains_break_or_continue(body)
+        || count_reads_block(body, slot) != 1
+        || trailing.iter().any(|statement| mentions_slot_stmt(statement, slot))
+    {
+        return None;
+    }
+    let mut new_body = body.clone();
+    if !remove_increment(&mut new_body.statements, slot) {
+        return None;
+    }
+    let right_span = right.span();
+    let new_condition = Expr::Binary {
+        span: condition.span(),
+        op: ">".to_string(),
+        left: Box::new(counter.clone()),
+        right: Box::new(Expr::IntLiteral { span: right_span, value: 0 }),
+    };
+    let new_while = Stmt::While {
+        span: *span,
+        condition: new_condition,
+        body: new_body,
+        countdown: true,
+    };
+    let mut new_init = init.clone();
+    if let Stmt::Let { value, .. } | Stmt::Assign { value, .. } = &mut new_init {
+        let init_span = value.span();
+        *value = Expr::IntLiteral { span: init_span, value: count };
+    } else {
+        return None;
+    }
+    Some((new_while, new_init))
+}
+
+fn countdown_block(block: &mut Block, trailing: &[Stmt], parameters: &BTreeSet<i64>,
+                   changed: &mut usize) {
+    let mut literal_writes: BTreeMap<i64, (usize, i128)> = BTreeMap::new();
+    for index in 0..block.statements.len() {
+        let mut rest: Vec<Stmt> = block.statements[index + 1..].to_vec();
+        rest.extend_from_slice(trailing);
+        match &mut block.statements[index] {
+            Stmt::Let { value, slot, .. } | Stmt::Assign { value, slot, .. } => {
+                match constant(Some(value)) {
+                    None => {
+                        literal_writes.remove(slot);
+                    }
+                    Some(literal) => {
+                        literal_writes.insert(*slot, (index, literal));
+                    }
+                }
+            }
+            Stmt::If { then_block, else_block, .. } => {
+                countdown_block(then_block, &rest, parameters, changed);
+                if let Some(otherwise) = else_block {
+                    countdown_block(otherwise, &rest, parameters, changed);
+                }
+                for slot in literal_writes.keys().copied().collect::<Vec<_>>() {
+                    if mentions_slot_block(then_block, slot)
+                        || else_block.as_ref().map_or(false, |block| mentions_slot_block(block, slot))
+                    {
+                        literal_writes.remove(&slot);
+                    }
+                }
+            }
+            Stmt::Block(inner) => {
+                countdown_block(inner, &rest, parameters, changed);
+                for slot in literal_writes.keys().copied().collect::<Vec<_>>() {
+                    if mentions_slot_block(inner, slot) {
+                        literal_writes.remove(&slot);
+                    }
+                }
+            }
+            Stmt::While { .. } => {
+                {
+                    let Stmt::While { body, .. } = &mut block.statements[index] else {
+                        unreachable!()
+                    };
+                    countdown_block(body, &rest, parameters, changed);
+                }
+                let current = block.statements[index].clone();
+                let body_slots: Vec<i64> = match &current {
+                    Stmt::While { body, .. } => literal_writes
+                        .keys()
+                        .copied()
+                        .filter(|slot| mentions_slot_block(body, *slot))
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                if let Stmt::While { condition, .. } = &current {
+                    let binary = peel_parens(Some(condition)).unwrap();
+                    if let Expr::Binary { op, left, right, .. } = binary {
+                        if op == "<" {
+                            if let Expr::Name { slot, .. } = peel_parens(Some(left)).unwrap() {
+                                if !parameters.contains(slot) {
+                                    if let Some((init_index, initial)) = literal_writes.get(slot).copied() {
+                                        if let Some(bound) = constant(Some(right)) {
+                                            let count = wrap(bound - initial);
+                                            if let Some((new_while, new_init)) = try_countdown_latch(
+                                                &current,
+                                                &block.statements[init_index],
+                                                count,
+                                                &rest,
+                                            ) {
+                                                block.statements[index] = new_while;
+                                                block.statements[init_index] = new_init;
+                                                *changed += 1;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                for slot in body_slots {
+                    literal_writes.remove(&slot);
+                }
+            }
+            Stmt::For { .. } | Stmt::Return { .. } | Stmt::ExprStmt { .. }
+            | Stmt::Break { .. } | Stmt::Continue { .. } => {}
+        }
+    }
+}
+
+/// Convert `while v < C` loops with a dead counter into countdown latches.
+pub fn apply_countdown_latches(program: &mut Program) -> usize {
+    let mut changed = 0;
+    for function in &mut program.functions {
+        let parameters: BTreeSet<i64> = function.parameters.iter().map(|p| p.slot).collect();
+        countdown_block(&mut function.body, &[], &parameters, &mut changed);
     }
     changed
 }
