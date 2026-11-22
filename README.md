@@ -566,20 +566,29 @@ cairn/
 │   ├── Cargo.toml            <- crate manifest and the rust-test gate target
 │   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
 │   ├── dump.py               <- Python oracle printing the canonical front-end dump
+│   ├── pe_dump.py            <- Python oracle for linked PE bytes, listing and verification
 │   ├── check_parity.py       <- compares both dumps over every source; front-end-parity gate
+│   ├── specs/
+│   │   └── pe_basic.txt      <- shared artifact spec for the byte-level parity check
 │   ├── src/
 │   │   ├── codes.rs          <- diagnostic code registry
 │   │   ├── diagnostics.rs    <- spans, diagnostics and the JSON contract
 │   │   ├── dump.rs           <- canonical dump emitted by `cairn-rs dump`
+│   │   ├── image.rs          <- read-only and writable data, artifact model
 │   │   ├── lexer.rs          <- scanner and token model
-│   │   ├── main.rs           <- binary entry point and dump command
+│   │   ├── listing.rs        <- label-grouped .text bytes
+│   │   ├── main.rs           <- binary entry point and dump commands
 │   │   ├── parser.rs         <- recursive-descent parser
+│   │   ├── pe.rs             <- PE32+ writer and fixup resolution
 │   │   ├── sema.rs           <- names, slots, arity, mutability and return paths
+│   │   ├── spec.rs           <- shared artifact spec reader
+│   │   ├── verify.rs         <- structural checks over a built image
 │   │   ├── syntax.rs         <- the syntax tree
 │   │   ├── values.rs         <- the six core values
 │   │   ├── version.rs        <- the one version string
 │   │   └── lib.rs            <- crate root
 │   └── tests/
+│       ├── backend.rs        <- PE linking, verifier and listing tests
 │       ├── front_end.rs      <- lexer, parser and contract tests ported from Python
 │       └── sema.rs           <- semantic rule tests ported from Python
 ├── benchmarks/               <- three cases, their C and Rust twins, and the harness

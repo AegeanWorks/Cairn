@@ -5,6 +5,16 @@ use std::path::Path;
 
 fn main() {
     let arguments: Vec<String> = std::env::args().collect();
+    if arguments.len() == 3 && arguments[1] == "pe" {
+        match cairn_rs::spec::dump(Path::new(&arguments[2])) {
+            Ok(dump) => print!("{}", dump),
+            Err(error) => {
+                eprintln!("cannot dump {}: {}", arguments[2], error);
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
     if arguments.len() == 3 && arguments[1] == "dump" {
         let path = Path::new(&arguments[2]);
         match std::fs::read_to_string(path) {

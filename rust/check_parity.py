@@ -57,7 +57,17 @@ def main():
             elif expected.stdout != actual.stdout:
                 failures.append((source, "dump mismatch"))
 
-        print(f"parity: {len(sources) - len(failures)}/{len(sources)} sources identical")
+        specs = sorted((RUST / "specs").glob("*.txt"))
+        for spec in specs:
+            expected = run([sys.executable, str(RUST / "pe_dump.py"), str(spec)])
+            actual = run([str(BINARY), "pe", str(spec)])
+            if expected.returncode != 0 or actual.returncode != 0:
+                failures.append((spec, "a backend dumper exited non-zero"))
+            elif expected.stdout != actual.stdout:
+                failures.append((spec, "backend dump mismatch"))
+
+        total = len(sources) + len(specs)
+        print(f"parity: {total - len(failures)}/{total} sources identical")
         for source, reason in failures:
             print(f"  FAIL {source.name}: {reason}")
         return 1 if failures else 0

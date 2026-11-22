@@ -8,9 +8,14 @@
 pub mod codes;
 pub mod diagnostics;
 pub mod dump;
+pub mod image;
 pub mod lexer;
+pub mod listing;
+pub mod pe;
 pub mod parser;
 pub mod sema;
+pub mod spec;
 pub mod syntax;
 pub mod values;
+pub mod verify;
 pub mod version;
