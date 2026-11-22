@@ -1,132 +1,20 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-rotl-builtin",
-    "last_phase": "phase 4",
+    "task_id": "cairn-rs-frontend",
+    "last_phase": "in_progress",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795281526.3612583,
-    "owner": "kilo:cairn",
-    "lease_until": 1795288726.3612583,
-    "started_by": "kilo:cairn",
+    "updated_at": 1795341093.0881703,
+    "owner": "opencode:session",
+    "lease_until": 1795348293.0881703,
+    "started_by": "opencode:session",
     "continuations": [],
-    "workspaces": [
-      {
-        "name": "cairn",
-        "path": "projects/cairn"
-      }
-    ],
-    "completed_at": 1795281526.9074833,
-    "completed_head": "b6e4407948696e41f1405080c264fd26b59625d3",
-    "completed_tree": "941b9ce4c2f1b59a3b156506a689382ae01299aa"
+    "completed_at": 1795343394.4471545,
+    "completed_head": "b2343d27126e04fd8420bbdadd7c085b4567d8c0",
+    "completed_tree": "b2086fe4c58a57525bd79bbf967bf163b69641e9"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-bswap-builtin",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/2] add bswap(x) as a builtin with one inline BSWAP instruction, sema/codegen/machine layers, failing-first tests and a four-language benchmark twin",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795253099.8097703,
-      "timestamp_str": "2026-11-21 12:24:59",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "the 22-case verdict is ALL WON, so the objective calls for one more function; the bit-builtin surface now has popcount/clz/ctz and bswap completes the single-instruction set",
-        "benefits": "a byte-order reversal builtin mapped to one BSWAP, with portable/intrinsic twins for measurement",
-        "risks": "contract: bswap reverses the eight bytes of the i64 reading; dependency: BSWAP is baseline x86-64, no CPU feature needed; concurrency: none; state: none",
-        "mitigation": "failing-first sema/machine/codegen/value tests, twin parity, full suite and strict gates, then a controlled paired A/B before any speed claim"
-      },
-      "plan_digest": "5e3fbe8702f75adaaf14fe752480b7e8773848a79b781f86505b84e004bca13d",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-bswap-builtin",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[2/2] verified and committed 1572c45: suite 1454 OK; four-way bswap parity prints 9167350446132641536 matching the Python model; 22/22 pre-existing registry cases build byte-identical through the e7d7488 worktree; the loaded G-004 windows were dropped under ADR-069 and ADR-111 records that evidence; codebase map refreshed; next: authoritative 48-round verdict and a controlled identical-binary A/B as a new measurement task",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795262291.6784658,
-      "timestamp_str": "2026-11-21 14:58:11",
-      "agent": "kilo:cairn",
-      "handoff": {
-        "state": "bswap committed at 1572c45",
-        "next": "run the authoritative 48-round verdict and controlled identical-binary A/B for bswap",
-        "evidence": "suite 1454 OK, four-way parity, 22/22 byte identity"
-      },
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ],
-      "continued_from": "opencode:session"
-    },
-    {
-      "task_id": "cairn-bswap-builtin",
-      "phase": "phase 4",
-      "phase_num": 4,
-      "description": "[2/2] committed 1572c45; check choice: gates passed via aikit check --allow-dirty 5/5 (hygiene, guidelines, secrets, dependencies, test); checklists: passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795262315.6862812,
-      "timestamp_str": "2026-11-21 14:58:35",
-      "agent": "kilo:cairn",
-      "checklists": "passed",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
-    {
-      "task_id": "cairn-bswap-builtin",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-bswap-builtin' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795262327.1473522,
-      "timestamp_str": "2026-11-21 14:58:47",
-      "agent": "kilo:cairn",
-      "head": "1572c45026ecc68273729e3568854c9d715bdeb0",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-parity-full",
-      "phase": "phase 2",
-      "phase_num": 2,
-      "description": "[1/3] failing-first coverage gate: a meta-test that TwinParityTest has one method per registered CASES entry, red on the ten missing cases; [2/3] add the missing parity methods and feed each case's stdin through the parity run; [3/3] ADR-112, map refresh, full suite and gates, commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795262784.7844377,
-      "timestamp_str": "2026-11-21 15:06:24",
-      "agent": "kilo:cairn",
-      "impact_assessment": {
-        "why": "ADR-111 verification found TwinParityTest covers only 13 of 23 registered cases while README and ADR-025 claim every case is parity-gated: hex_io, argv_walk, char_stream, str_scan, array_sum, sieve, popcount, clz, ctz and bswap have no parity method, so a twin that computes something else could still earn a scoreboard number",
-        "benefits": "the parity gate matches its documented contract for all 23 cases; every new benchmark and builtin is covered automatically by a meta-test that fails when a registry entry lacks a method; char_stream parity now feeds the same 4 MiB stdin as the scoreboard",
-        "risks": "contract: test-only change to tests/test_end_to_end.py, no production code or benchmark outputs; dependency: none new, the same gcc/g++/rustc detection already used; concurrency: none, tests are sequential; state: none",
-        "mitigation": "failing-first meta-test names every gap before any method is added, then the class runs all four languages on every case; full suite and project gates before commit"
-      },
-      "plan_digest": "6e8fc3c57d123fa9aa38beed0cd5cd9e654c5ddc156d6c12e7de4bb527a22d75",
-      "workspaces": [
-        {
-          "name": "cairn",
-          "path": "projects/cairn"
-        }
-      ]
-    },
     {
       "task_id": "cairn-parity-full",
       "phase": "phase 2",
@@ -400,6 +288,81 @@
       "timestamp_str": "2026-11-21 20:18:46",
       "agent": "kilo:cairn",
       "head": "b6e4407948696e41f1405080c264fd26b59625d3",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rotl-verdict",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/2] wait for a quiet window (ADR-069 probe: many_params best at most 20 ms twice) and run the authoritative 24-case 48-round paired verdict; [2/2] record the result in an ADR, refresh memory, run gates, commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795339550.4242773,
+      "timestamp_str": "2026-11-22 12:25:50",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "The cairn-rotl-builtin handoff leaves the 24-case 48-round paired verdict pending; ADR-115/116 recorded an 18-to-13 instruction lowering win but every measurement was taken under host load, so only a quiet-window verdict can decide whether rotl now wins or ties.",
+        "benefits": "An authoritative interleaved verdict recorded in decisions.md and the ledger, an honest answer on the rotl lowering, and no speed claim drawn from a loaded window.",
+        "risks": "contract: measurement and docs only, no cairn/ code or benchmark source changes; dependency: gcc/g++/rustc and the paired harness, all already used; concurrency: a detached job waits for quiet while other sessions load the host, and a loaded-window read is discarded; state: the ledger gains one in-progress task and one result record.",
+        "mitigation": "A bounded watcher polls the project probe with a 3h cap, streams output to a git-ignored file, and only then runs paired.py 48; if no quiet window appears, record that honestly and claim no verdict; then ADR, gates and commit."
+      },
+      "plan_digest": "73734ce01d42174a396d54e6184856c1ad6d3171f0f9ff1a9e514b2931a8fd10"
+    },
+    {
+      "task_id": "cairn-rotl-verdict",
+      "phase": "abandoned",
+      "phase_num": 2,
+      "description": "Task 'cairn-rotl-verdict' abandoned: superseded by new goal: rewrite the whole cairn compiler in Rust; 48-round verdict was not run",
+      "status": "abandoned",
+      "timestamp": 1795340298.6077192,
+      "timestamp_str": "2026-11-22 12:38:18",
+      "agent": "opencode:session"
+    },
+    {
+      "task_id": "cairn-rs-frontend",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/2] scaffold the std-only cairn-rs crate and port the leaf contracts, AST, lexer and parser with the Python front-end tests; [2/2] run cargo tests and project gates, record ADR-117 and commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795340361.9076252,
+      "timestamp_str": "2026-11-22 12:39:21",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "The user set the goal of rewriting the whole Cairn compiler in Rust; the front end is the foundation every later stage depends on, and the parser already needs only INT64_MIN from the optimizer, so it can be ported before the heavy backend.",
+        "benefits": "A std-only Rust crate whose tokens, spans, diagnostics and AST shapes match the Python reference exactly, with the front-end test cases ported so parity is checkable at the first stage.",
+        "risks": "contract: token kinds, span offsets, diagnostic codes/messages and AST node shapes must match Python; dependency: std-only, rustc 1.100 available, no external crates; concurrency: none; state: a new untracked rust/ tree with Cargo target/ ignored.",
+        "mitigation": "Port test_lexer.py and test_parser.py verbatim as Rust tests, keep the Python compiler as oracle, and run cargo test plus project gates before commit; ADR-117 records the overall architecture."
+      },
+      "plan_digest": "39074b893b8f02cb54b1b0c376b7bf12a9b1b520efc40ef7cfb421b552210e77"
+    },
+    {
+      "task_id": "cairn-rs-frontend",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[2/2] crate scaffolded with leaf contracts, AST, lexer and parser; 49 Rust tests ported from the Python front-end suite pass; rust-test gate added; ADR-117 recorded; aikit check 6/6 gates passed (hygiene, guidelines, secrets, dependencies, test, rust-test)",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795341093.0881703,
+      "timestamp_str": "2026-11-22 12:51:33",
+      "agent": "opencode:session",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-rs-frontend",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-rs-frontend' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795343395.0762432,
+      "timestamp_str": "2026-11-22 13:29:55",
+      "agent": "opencode:session",
+      "head": "b2343d27126e04fd8420bbdadd7c085b4567d8c0",
       "delivery": {
         "roots": [
           "."
