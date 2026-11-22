@@ -109,7 +109,7 @@ fn excerpt(source: &str, span: Span) -> Option<&str> {
 }
 
 /// `json.dumps`-compatible string quoting with `ensure_ascii=True`, matching the Python compiler.
-fn json_string(value: &str) -> String {
+pub fn json_string(value: &str) -> String {
     let mut out = String::from("\"");
     for ch in value.chars() {
         match ch {

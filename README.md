@@ -45,6 +45,7 @@ disagree, `python -m cairn capabilities --json` wins.
   ```bash
   python -m unittest discover
   cargo test --quiet --manifest-path rust/Cargo.toml
+  python rust/check_parity.py
   ```
   (run from `projects/cairn`)
 - **Compile and run something now** (under 10 seconds):
@@ -561,11 +562,26 @@ cairn/
 │   ├── version.py            <- the one version string
 │   ├── __init__.py           <- package docstring and public exports
 │   └── __main__.py           <- `python -m cairn`
-├── rust/                     <- std-only Rust rewrite (ADR-117), checked against the Python oracle
+├── rust/                     <- std-only Rust rewrite (ADR-117), kept identical by a parity gate (ADR-118)
 │   ├── Cargo.toml            <- crate manifest and the rust-test gate target
 │   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
-│   ├── src/                  <- codes, diagnostics, values, syntax, lexer, parser (front end)
-│   └── tests/                <- front-end tests ported from the Python suite
+│   ├── dump.py               <- Python oracle printing the canonical front-end dump
+│   ├── check_parity.py       <- compares both dumps over every source; front-end-parity gate
+│   ├── src/
+│   │   ├── codes.rs          <- diagnostic code registry
+│   │   ├── diagnostics.rs    <- spans, diagnostics and the JSON contract
+│   │   ├── dump.rs           <- canonical dump emitted by `cairn-rs dump`
+│   │   ├── lexer.rs          <- scanner and token model
+│   │   ├── main.rs           <- binary entry point and dump command
+│   │   ├── parser.rs         <- recursive-descent parser
+│   │   ├── sema.rs           <- names, slots, arity, mutability and return paths
+│   │   ├── syntax.rs         <- the syntax tree
+│   │   ├── values.rs         <- the six core values
+│   │   ├── version.rs        <- the one version string
+│   │   └── lib.rs            <- crate root
+│   └── tests/
+│       ├── front_end.rs      <- lexer, parser and contract tests ported from Python
+│       └── sema.rs           <- semantic rule tests ported from Python
 ├── benchmarks/               <- three cases, their C and Rust twins, and the harness
 ├── examples/                 <- hello, fibonacci, arithmetic, alloy_probe (Alloy backend probe)
 ├── tests/                    <- lexer, parser, sema, optimiser, codegen, emitter, PE, CLI, harness, capabilities, verifier, values, filetable, end-to-end, IR differential

@@ -6,15 +6,15 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `47`
+- **Total Python Modules**: `49`
 - **Total Classes**: `224`
-- **Total Top-Level Functions**: `253`
+- **Total Top-Level Functions**: `266`
 - **Total Class Methods**: `1202`
-- **Total Source Lines**: `22204`
+- **Total Source Lines**: `22426`
 
 ## 🧭 Map Coverage
-- **Indexed**: python (`47` module(s))
-- **Not indexed by this map**: cpp (`48` file(s)), rust (`34` file(s))
+- **Indexed**: python (`49` module(s))
+- **Not indexed by this map**: cpp (`48` file(s)), rust (`37` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -878,6 +878,37 @@
 > *The one place the compiler version is written.*
 
 **Size**: `5` lines
+
+---
+
+### [`rust/check_parity.py`](rust/check_parity.py)
+> *Prove that the Rust front end accepts exactly the same Cairn language as the Python compiler.*
+
+**Size**: `67` lines
+
+**Functions:**
+- `def run(command, timeout)`
+- `def main()`
+
+---
+
+### [`rust/dump.py`](rust/dump.py)
+> *The Python reference's canonical front-end dump.*
+
+**Size**: `155` lines
+
+**Functions:**
+- `def q(text)`
+- `def span(value)`
+- `def opt(value)`
+- `def boolean(value)`
+- `def expr(node)`
+- `def block(node)`
+- `def stmt(node)`
+- `def program(node)`
+- `def errors(diagnostic_error)`
+- `def dump(source, path)`
+- `def main(argv)`
 
 ---
 

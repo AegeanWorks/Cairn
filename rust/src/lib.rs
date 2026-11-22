@@ -7,8 +7,10 @@
 
 pub mod codes;
 pub mod diagnostics;
+pub mod dump;
 pub mod lexer;
 pub mod parser;
+pub mod sema;
 pub mod syntax;
 pub mod values;
 pub mod version;

@@ -70,6 +70,15 @@ impl Expr {
         }
         current
     }
+
+    /// The mutable form of `unwrap_parens`, for stages that fill in slots.
+    pub fn unwrap_parens_mut(&mut self) -> &mut Self {
+        let mut current = self;
+        while let Self::Parens { inner, .. } = current {
+            current = inner;
+        }
+        current
+    }
 }
 
 /// A brace-delimited statement sequence.

@@ -1,0 +1,67 @@
+"""Prove that the Rust front end accepts exactly the same Cairn language as the Python compiler.
+
+Both implementations print a canonical front-end dump for each source; this driver builds the Rust
+binary once and compares the two dumps over every example and benchmark, plus a set of rejected
+sources so diagnostic codes, messages and spans are covered too.
+"""
+
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+RUST = ROOT / "rust"
+BINARY = RUST / "target" / "debug" / "cairn-rs"
+ORACLE = RUST / "dump.py"
+TIMEOUT_S = 120
+
+REJECTED = (
+    "let x: i64 = 9223372036854775809;",
+    "fn main() -> f64 { return 0; }",
+    "fn main() -> i64 { 1; return 0; }",
+    "fn main() -> i64 { return 0 }",
+    "fn main() -> i64 { for i in 0 10 { } return 0; }",
+    "fn main() -> i64 { var a: [4]i64 = [0; n]; return 0; }",
+    "fn main() -> i64 { return -9223372036854775808; }",
+    "let caf\u00e9: i64 = 1;",
+    'print_str("bad\\q");',
+)
+
+
+def run(command, timeout=TIMEOUT_S):
+    return subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=timeout, cwd=str(ROOT))
+
+
+def main():
+    built = run(["cargo", "build", "--quiet", "--manifest-path", str(RUST / "Cargo.toml")], 300)
+    if built.returncode != 0:
+        print("cargo build failed:\n" + built.stdout + built.stderr, file=sys.stderr)
+        return 1
+
+    sources = sorted((ROOT / "examples").glob("*.crn"))
+    sources += sorted((ROOT / "benchmarks").glob("*.crn"))
+    with tempfile.TemporaryDirectory(prefix="cairn-parity-") as folder:
+        for index, source in enumerate(REJECTED):
+            path = Path(folder) / f"rejected-{index}.crn"
+            path.write_text(source, encoding="utf-8")
+            sources.append(path)
+
+        failures = []
+        for source in sources:
+            expected = run([sys.executable, str(ORACLE), str(source)])
+            actual = run([str(BINARY), "dump", str(source)])
+            if expected.returncode != 0 or actual.returncode != 0:
+                failures.append((source, "a dumper exited non-zero"))
+            elif expected.stdout != actual.stdout:
+                failures.append((source, "dump mismatch"))
+
+        print(f"parity: {len(sources) - len(failures)}/{len(sources)} sources identical")
+        for source, reason in failures:
+            print(f"  FAIL {source.name}: {reason}")
+        return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
