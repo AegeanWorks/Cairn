@@ -5,31 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795368691.3776448,
+    "updated_at": 1795369547.0995252,
     "owner": "opencode:session",
-    "lease_until": 1795375891.3776448,
+    "lease_until": 1795376747.0995252,
     "started_by": "opencode:session",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-countdown",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/1] port countdown latches with literal-write tracking and safety guards, add a shared dump to the parity gate, and commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795354364.2764764,
-      "timestamp_str": "2026-11-22 16:32:44",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "Countdown latches are the next pass in optimize() order and change hot-loop shape; codegen parity depends on the same rewrite.",
-        "benefits": "A Rust countdown pass checked against Python on every source, including nested loops and post-loop reads.",
-        "risks": "contract: bound arithmetic, counter read count and break/continue refusal must match; dependency: std-only Rust; concurrency: none; state: new Rust code, oracle and ADR.",
-        "mitigation": "Compare canonical dumps over the corpus, add a focused Rust test, run all gates before commit."
-      },
-      "plan_digest": "6f987696ac426f8ce779a4a4e170c4e95ec5f6b49742f107178baedbd3346435"
-    },
     {
       "task_id": "cairn-rs-countdown",
       "phase": "in_progress",
@@ -334,6 +316,23 @@
       "handoff": {
         "state": "102 Rust tests, 49/49 curated parity",
         "next": "delta-inlined recursive callees and non-literal call arguments",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[8/N] non-literal call arguments lower via direct home moves; parity 50/50; ADR-137; real-program diagnostic still 2/27 due to delta-inlined recursive callees",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795369547.0995252,
+      "timestamp_str": "2026-11-22 20:45:47",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 50/50 curated parity",
+        "next": "delta-inlined recursive callees, then builder/CLI/capabilities port",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }

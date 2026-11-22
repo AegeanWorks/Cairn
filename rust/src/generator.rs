@@ -409,19 +409,27 @@ impl CodeGenerator {
                 self.assembler.pop("rax");
             }
             _ => {
-                // A pure call with literal arguments: place them in the ABI registers and call.
-                // Wider argument shapes are added in later slices.
-                if arguments.is_empty()
-                    || arguments.iter().all(|arg| matches!(arg, Expr::IntLiteral { .. }))
-                {
-                    if arguments.len() <= 4 {
-                        for (index, argument) in arguments.iter().enumerate() {
-                            let Expr::IntLiteral { value, .. } = argument else { unreachable!() };
-                            self.assembler.mov_imm64(["rcx", "rdx", "r8", "r9"][index], *value as i64);
+                // Pure arguments: a literal goes straight into its ABI register; any other form is
+                // evaluated into rax and moved. Wider shapes are added in later slices.
+                if arguments.len() <= 4 {
+                    for (index, argument) in arguments.iter().enumerate() {
+                        let register = ["rcx", "rdx", "r8", "r9"][index];
+                        if let Expr::IntLiteral { value, .. } = argument {
+                            self.assembler.mov_imm64(register, *value as i64);
+                        } else if let Expr::Name { slot, .. } = argument {
+                            if let Some(home) = home_for(*slot, homes) {
+                                self.assembler.mov_reg_reg(register, home);
+                            } else {
+                                self.load_slot(*slot, "rax", homes);
+                                self.assembler.mov_reg_reg(register, "rax");
+                            }
+                        } else {
+                            self.emit_expression(argument, homes);
+                            self.assembler.mov_reg_reg(register, "rax");
                         }
-                        let label = function_label(name);
-                        self.call_site(&label);
                     }
+                    let label = function_label(name);
+                    self.call_site(&label);
                 }
             }
         }

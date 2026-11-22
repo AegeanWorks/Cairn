@@ -1375,3 +1375,10 @@ external compiler and was verified end to end.
 - **Context**: A non-inlined helper with literal arguments is the simplest call shape in the corpus and a prerequisite for recursive call lowering.
 - **Decision**: For a call whose arguments are all i64 literals and at most four in number, emit mov_imm64 into rcx/rdx/r8/r9 and a padded call to fn.<name>. The result remains in rax, so a surrounding return needs no move.
 - **Consequences**: Curated parity is 49/49 including a two-function program with a real call. The real-program diagnostic remains 2/27: recursive callees use delta-inlined copies and non-literal arguments that are not lowered yet.
+
+### ADR-137: non-literal call arguments use direct home moves
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: A homed name passed to a helper should move straight into the ABI register; a round trip through rax costs an instruction and breaks byte parity.
+- **Decision**: For user calls, emit literals directly into rcx/rdx/r8/r9, move a homed Name straight into the argument register, and evaluate other argument forms into rax before the move.
+- **Consequences**: Curated parity is 50/50 including a variable-argument call. The real-program diagnostic remains 2/27 because recursive callees still use delta-inlined copies that this generator does not emit.
