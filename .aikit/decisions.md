@@ -1277,3 +1277,10 @@ external compiler and was verified end to end.
 - **Context**: Code generation needs constant folding and effect-safe identities before it can lower expressions. optimize.py is 2,115 lines of folding plus structural passes (algebraic simplification, copy propagation, loop rewrites); porting the whole file at once would make a wrong fold hard to localize.
 - **Decision**: Port the folding core first: constants, wrapping, truncating division, fold_constant/fold_unary, has_call with inline builtins, may_trap, the Optimizer's expression/statement/block folding, and the safe identities. Add fold_calls.txt plus fold_dump.py and a cairn-rs fold command to the shared parity gate. The structural passes are deliberately NOT ported yet and are not stubbed.
 - **Consequences**: The parity gate reports 39/39 identical sources, now including 32 folding cases with wrapping and trap refusals. 94 Rust tests pass. A later milestone must port the remaining passes before a Rust codegen can claim byte identity for loop-heavy programs; this milestone does not claim full optimizer parity.
+
+### ADR-123: for-loop lowering is the first structural optimizer pass in Rust
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: Code generation never sees a For node: semantic analysis leaves it for the optimizer to lower into a mutable binding and a counted while. The folding core alone cannot prepare a program for the Rust backend.
+- **Decision**: Port lower_for_loops, including innermost-first descent, continue rewriting and the inclusive/exclusive bound, and add lower_dump.py plus a cairn-rs lower command to the parity gate. The oracle writes UTF-8 bytes explicitly because the Windows console would otherwise replace a non-ASCII character in a diagnostic.
+- **Consequences**: The parity gate now checks lowering on every source and reports 39/39 identical. Remaining structural passes (algebraic simplification, copy propagation, loop unrolling, countdown, odd-pair fusion, induction and bottom-test rotation) are still Python-only; this milestone does not claim full optimizer parity.

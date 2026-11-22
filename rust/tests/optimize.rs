@@ -83,6 +83,16 @@ fn folds_a_program_in_place() {
 }
 
 #[test]
+fn a_for_loop_lowers_to_a_let_and_a_while() {
+    let program = analysed("fn main() -> i64 { var t: i64 = 0; for i in 0..3 { t = t + i; } return t; }");
+    let lowered = optimize::lower_for_loops(&program);
+    let statements = &lowered.functions[0].body.statements;
+    assert!(matches!(statements[1], cairn_rs::syntax::Stmt::Let { mutable: true, .. }));
+    assert!(matches!(statements[2], cairn_rs::syntax::Stmt::While { .. }));
+    assert!(!statements.iter().any(|statement| matches!(statement, cairn_rs::syntax::Stmt::For { .. })));
+}
+
+#[test]
 fn a_constant_if_is_replaced_by_its_branch() {
     let program = analysed("fn main() -> i64 { if 0 { return 1; } else { return 2; } }");
     let folded = Optimizer::new().fold_program(&program);

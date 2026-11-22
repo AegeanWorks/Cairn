@@ -429,6 +429,7 @@ cairn/
 │   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
 │   ├── dump.py               <- Python oracle printing the canonical front-end dump
 │   ├── fold_dump.py          <- Python oracle for constant-folding parity
+│   ├── lower_dump.py         <- Python oracle for for-loop lowering parity
 │   ├── pe_dump.py            <- Python oracle for linked PE bytes, listing and verification
 │   ├── runtime_dump.py       <- Python oracle for the emitted runtime helpers
 │   ├── check_parity.py       <- compares both dumps over every source; front-end-parity gate

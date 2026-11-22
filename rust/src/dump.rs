@@ -127,7 +127,7 @@ fn stmt(node: &Stmt) -> String {
     }
 }
 
-fn program_dump(node: &Program) -> String {
+pub fn program_dump(node: &Program) -> String {
     format!(
         "PROGRAM[{}]({})",
         span(node.span),

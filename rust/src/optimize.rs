@@ -5,6 +5,7 @@
 //! an effect, so no rewrite may drop or duplicate a call. The structural passes (algebraic
 //! simplification, copy propagation and loop rewrites) are added after this core.
 
+use crate::diagnostics::Span;
 use crate::syntax::{Block, Expr, Program, Stmt};
 
 /// The smallest i64, as an exact integer.
@@ -421,4 +422,113 @@ impl Optimizer {
 /// Fold a program with a fresh optimizer.
 pub fn fold(program: &Program) -> Program {
     Optimizer::new().fold_program(program)
+}
+
+/// Lower every `for` into a mutable `let` plus a `while`; runs before any folding.
+///
+/// Innermost loops lower first, so a `continue` in a nested `for` was already bound to the inner
+/// increment before the outer rewrite looks at the block.
+pub fn lower_for_loops(program: &Program) -> Program {
+    let mut result = program.clone();
+    for function in &mut result.functions {
+        lower_block(&mut function.body);
+    }
+    result
+}
+
+fn lower_block(block: &mut Block) {
+    let mut lowered = Vec::new();
+    for statement in std::mem::take(&mut block.statements) {
+        match statement {
+            Stmt::For { span, name, start, end, inclusive, mut body, slot } => {
+                lower_block(&mut body);
+                rewrite_continues(&mut body, &name, slot);
+                let increment = increment(&name, slot, span);
+                body.statements.push(increment);
+                lowered.extend(for_to_while(span, &name, slot, start, end, inclusive, body));
+            }
+            Stmt::If { condition, then_block, else_block, span } => {
+                let mut then_block = then_block;
+                let mut else_block = else_block;
+                lower_block(&mut then_block);
+                if let Some(otherwise) = else_block.as_mut() {
+                    lower_block(otherwise);
+                }
+                lowered.push(Stmt::If { span, condition, then_block, else_block });
+            }
+            Stmt::While { span, condition, mut body, countdown } => {
+                lower_block(&mut body);
+                lowered.push(Stmt::While { span, condition, body, countdown });
+            }
+            Stmt::Block(mut inner) => {
+                lower_block(&mut inner);
+                lowered.push(Stmt::Block(inner));
+            }
+            other => lowered.push(other),
+        }
+    }
+    block.statements = lowered;
+}
+
+fn for_to_while(span: crate::diagnostics::Span, name: &str, slot: i64, start: Expr,
+                end: Expr, inclusive: bool, body: Block) -> Vec<Stmt> {
+    let op = if inclusive { "<=" } else { "<" };
+    let condition_span = Span::join(start.span(), end.span());
+    let condition = Expr::Binary {
+        span: condition_span,
+        op: op.to_string(),
+        left: Box::new(Expr::Name { span: start.span(), name: name.to_string(), slot }),
+        right: Box::new(end),
+    };
+    let initialiser = Stmt::Let {
+        span,
+        name: name.to_string(),
+        mutable: true,
+        type_name: "i64".to_string(),
+        value: start,
+        slot,
+        array_size: None,
+    };
+    vec![initialiser, Stmt::While { span, condition, body, countdown: false }]
+}
+
+fn increment(name: &str, slot: i64, span: crate::diagnostics::Span) -> Stmt {
+    Stmt::Assign {
+        span,
+        name: name.to_string(),
+        value: Expr::Binary {
+            span,
+            op: "+".to_string(),
+            left: Box::new(Expr::Name { span, name: name.to_string(), slot }),
+            right: Box::new(Expr::IntLiteral { span, value: 1 }),
+        },
+        slot,
+        index: None,
+        temp_slot: None,
+        array_size: None,
+    }
+}
+
+fn rewrite_continues(block: &mut Block, name: &str, slot: i64) {
+    for statement in &mut block.statements {
+        match statement {
+            Stmt::Continue { span } => {
+                let mut replacement = Block {
+                    span: *span,
+                    statements: vec![increment(name, slot, *span)],
+                };
+                replacement.statements.push(statement.clone());
+                *statement = Stmt::Block(replacement);
+            }
+            Stmt::If { then_block, else_block, .. } => {
+                rewrite_continues(then_block, name, slot);
+                if let Some(otherwise) = else_block {
+                    rewrite_continues(otherwise, name, slot);
+                }
+            }
+            Stmt::While { .. } => {}
+            Stmt::Block(inner) => rewrite_continues(inner, name, slot),
+            _ => {}
+        }
+    }
 }

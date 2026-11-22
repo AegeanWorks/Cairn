@@ -56,6 +56,13 @@ def main():
                 failures.append((source, "a dumper exited non-zero"))
             elif expected.stdout != actual.stdout:
                 failures.append((source, "dump mismatch"))
+            else:
+                lowered_expected = run([sys.executable, str(RUST / "lower_dump.py"), str(source)])
+                lowered_actual = run([str(BINARY), "lower", str(source)])
+                if lowered_expected.returncode != 0 or lowered_actual.returncode != 0:
+                    failures.append((source, "a lowering dumper exited non-zero"))
+                elif lowered_expected.stdout != lowered_actual.stdout:
+                    failures.append((source, "lowering mismatch"))
 
         specs = sorted((RUST / "specs").glob("*.txt"))
         for spec in specs:
