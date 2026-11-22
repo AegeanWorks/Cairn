@@ -38,6 +38,29 @@ pub fn check_json(source: &str, path: &str) -> String {
     )
 }
 
+/// The `listing --json` envelope: text size, sorted labels and the rendered listing.
+pub fn listing_json(source: &str, path: &str) -> String {
+    let build = match crate::builder::compile_source(source, path, true) {
+        Ok(build) => build,
+        Err(error) => return compile_error(path, &error.diagnostics),
+    };
+    let listing = crate::listing::render_listing(&build.artifact).unwrap_or_default();
+    let mut labels: Vec<&str> = build.artifact.text_labels.keys().map(String::as_str).collect();
+    labels.sort_unstable();
+    let labels_json = labels
+        .iter()
+        .map(|label| format!("    {}", json_string(label)))
+        .collect::<Vec<_>>()
+        .join(",\n");
+    format!(
+        "{{\n  \"ok\": true,\n  \"path\": {},\n  \"text_bytes\": {},\n  \"labels\": [\n{}\n  ],\n  \"listing\": {},\n  \"diagnostics\": []\n}}\n",
+        json_string(path),
+        build.artifact.text.len(),
+        labels_json,
+        json_string(&listing),
+    )
+}
+
 fn compile_error(path: &str, diagnostics: &[crate::diagnostics::Diagnostic]) -> String {
     let items = diagnostics
         .iter()

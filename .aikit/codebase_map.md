@@ -6,14 +6,14 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `65`
+- **Total Python Modules**: `66`
 - **Total Classes**: `224`
-- **Total Top-Level Functions**: `283`
+- **Total Top-Level Functions**: `284`
 - **Total Class Methods**: `1202`
-- **Total Source Lines**: `23103`
+- **Total Source Lines**: `23127`
 
 ## 🧭 Map Coverage
-- **Indexed**: python (`65` module(s))
+- **Indexed**: python (`66` module(s))
 - **Not indexed by this map**: cpp (`48` file(s)), rust (`55` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
@@ -1016,6 +1016,16 @@
 > *Python oracle for the pure-inlining parity check.*
 
 **Size**: `37` lines
+
+**Functions:**
+- `def main(argv)`
+
+---
+
+### [`parity/listing_dump.py`](parity/listing_dump.py)
+> *Python oracle for the `listing --json` CLI envelope.*
+
+**Size**: `24` lines
 
 **Functions:**
 - `def main(argv)`

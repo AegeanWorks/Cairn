@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795379520.54234,
+    "updated_at": 1795381453.9209075,
     "owner": "opencode:session",
-    "lease_until": 1795386720.54234,
+    "lease_until": 1795388653.9209075,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,23 +105,6 @@
         "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
       },
       "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[2/N] generator slice landed: entry stub, frameless functions, simple expressions and printer calls with byte parity (43/43 including 3 generated programs); explicit pipeline state machine with 2 tests; ADR-131; three AIKit reports written under reports/combined; 7/7 gates passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795361442.449938,
-      "timestamp_str": "2026-11-22 18:30:42",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "handoff": {
-        "state": "102 Rust tests, 43/43 parity",
-        "next": "extend generator.rs to let/assign/if/while and frame functions, driven by generated-byte parity",
-        "evidence": "cargo test and check 7/7"
-      }
     },
     {
       "task_id": "cairn-rs-codegen",
@@ -341,6 +324,23 @@
       "handoff": {
         "state": "102 Rust tests, 55/55 curated parity",
         "next": "vectorised array loops and remaining CLI commands",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[16/N] listing --json command implemented with documented label-tie gap; curated parity 55/55; ADR-145; both projects gated",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795381453.9209075,
+      "timestamp_str": "2026-11-23 00:04:13",
+      "agent": "opencode:session",
+      "checklists": "passed",
+      "handoff": {
+        "state": "102 Rust tests, 55/55 curated parity",
+        "next": "preserve label insertion order to gate listing, then finish vectorised loops and multi-slot recursion",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }

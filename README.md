@@ -474,6 +474,7 @@ cairn/
 │   ├── fold_dump.py          <- folding oracle
 │   ├── fuse_dump.py          <- odd-pair fusion oracle
 │   ├── inline_dump.py        <- inlining oracle
+│   ├── listing_dump.py       <- listing --json oracle
 │   ├── lower_dump.py         <- for-loop lowering oracle
 │   ├── magic_dump.py         <- magic-division oracle
 │   ├── pe_dump.py            <- PE artifact oracle

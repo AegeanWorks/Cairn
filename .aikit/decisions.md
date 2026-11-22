@@ -1431,3 +1431,10 @@ external compiler and was verified end to end.
 - **Context**: Array bindings exclude their frame slots from register homes and live in a frame function. Element zero sits at the span's lowest displacement, so literal indices are addressed by subtraction from the span top.
 - **Decision**: Collect array spans from the function body, exclude those slots from homes, force the frame prologue, materialise aggregate initialisers in ascending element order from the lowest displacement, and lower a literal array load as mov rax,[rbp+slot_offset(base+size-1-index)].
 - **Consequences**: Curated parity is 55/55 including a four-element array. The real-program diagnostic stays at 2/27 because vectorised array loops and multi-slot recursion still use shapes not lowered by this generator.
+
+### ADR-145: listing --json is implemented but not yet gated
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: The listing command is the machine-readable view of emitted bytes. Python keeps label insertion order for ties at the same offset; the Rust assembler stores labels in a sorted map.
+- **Decision**: Add listing_json to cli.rs and a cairn-rs listjson command. Leave it out of the parity gate until the assembler preserves insertion order, and record the tie-order gap in the audit report rather than hiding it.
+- **Consequences**: Curated parity remains 55/55. The listing gap is explicit and bounded: it is a label-order issue, not an emitted-byte issue, because the underlying .text and fixups already match.

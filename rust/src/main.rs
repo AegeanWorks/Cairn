@@ -5,6 +5,22 @@ use std::path::Path;
 
 fn main() {
     let arguments: Vec<String> = std::env::args().collect();
+    if arguments.len() == 3 && arguments[1] == "listjson" {
+        let path = Path::new(&arguments[2]);
+        match std::fs::read_to_string(path) {
+            Ok(source) => {
+                let normalized = source.trim_start_matches('\u{feff}')
+                    .replace("\r\n", "\n").replace('\r', "\n");
+                let display = arguments[2].replace('/', "\\");
+                print!("{}", cairn_rs::cli::listing_json(&normalized, &display));
+            }
+            Err(error) => {
+                eprintln!("cannot read {}: {}", arguments[2], error);
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
     if arguments.len() == 3 && arguments[1] == "build" {
         let path = Path::new(&arguments[2]);
         match std::fs::read_to_string(path) {
