@@ -1,67 +1,20 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-rs-unrolling",
+    "task_id": "cairn-rs-inlining",
     "last_phase": "in_progress",
     "active_phase": 5,
     "status": "completed",
-    "updated_at": 1795355280.1137636,
+    "updated_at": 1795356403.5037882,
     "owner": "opencode:session",
-    "lease_until": 1795362480.1137636,
+    "lease_until": 1795363603.5037882,
     "started_by": "opencode:session",
     "continuations": [],
-    "completed_at": 1795355330.7458322,
-    "completed_head": "77b77dc7f33bff99873a2c6f5403873c877bddd5",
-    "completed_tree": "38e1678ff0c57f916a9db10a1a89c1d7b78c35ed"
+    "completed_at": 1795356465.325515,
+    "completed_head": "f2fae4625f10a2bc9b238d772a0f483bf7f1d69b",
+    "completed_tree": "714104ce6fabcc1d6c0f56e8facf5322bd7b70d4"
   },
   "checkpoints": [
-    {
-      "task_id": "cairn-rs-runtime",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[2/2] ported all runtime emitters and static state to Rust with a shared runtime dump in the parity gate (38/38 identical); 87 Rust tests pass; ADR-121 records the byte-level guard; aikit check 7/7 gates passed",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795349715.42862,
-      "timestamp_str": "2026-11-22 15:15:15",
-      "agent": "opencode:session",
-      "checklists": "passed"
-    },
-    {
-      "task_id": "cairn-rs-runtime",
-      "phase": "completed",
-      "phase_num": 5,
-      "description": "Task 'cairn-rs-runtime' completed successfully.",
-      "status": "completed",
-      "timestamp": 1795349756.1020842,
-      "timestamp_str": "2026-11-22 15:15:56",
-      "agent": "opencode:session",
-      "head": "672773572b6900977639731d636bdccdad566dee",
-      "delivery": {
-        "roots": [
-          "."
-        ],
-        "forced": false
-      }
-    },
-    {
-      "task_id": "cairn-rs-optimize",
-      "phase": "in_progress",
-      "phase_num": 2,
-      "description": "[1/2] port the optimizer (optimize.py) to Rust with the fold and magic-division tests; [2/2] add optimizer parity to the shared gate, run all gates and commit",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795350603.5087152,
-      "timestamp_str": "2026-11-22 15:30:03",
-      "agent": "opencode:session",
-      "impact_assessment": {
-        "why": "Code generation calls the optimizer for constant folding and algebraic simplification, so the Rust compiler cannot produce the same bytes until the optimizer is ported.",
-        "benefits": "A std-only Rust optimizer with the same folds, refusals and magic-division parameters as the Python reference, checked by ported tests and a shared dump.",
-        "risks": "contract: folding results, refusal conditions and i128 wrapping must match exactly; dependency: std-only Rust; concurrency: none; state: new Rust module and tests.",
-        "mitigation": "Port test_optimize.py and test_magic_division.py verbatim as Rust tests, add an optimizer dump to the parity gate, and run all project gates before commit."
-      },
-      "plan_digest": "d3170612b7687121a59715cd3390d8b9337e91a0fd8091f569eb2d7e6d0ce8e5"
-    },
     {
       "task_id": "cairn-rs-optimize",
       "phase": "in_progress",
@@ -319,6 +272,53 @@
       "timestamp_str": "2026-11-22 16:48:50",
       "agent": "opencode:session",
       "head": "77b77dc7f33bff99873a2c6f5403873c877bddd5",
+      "delivery": {
+        "roots": [
+          "."
+        ],
+        "forced": false
+      }
+    },
+    {
+      "task_id": "cairn-rs-inlining",
+      "phase": "in_progress",
+      "phase_num": 2,
+      "description": "[1/1] port pure inlining, add a parity dump and Rust tests, then commit",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795355566.1213546,
+      "timestamp_str": "2026-11-22 16:52:46",
+      "agent": "opencode:session",
+      "impact_assessment": {
+        "why": "Pure inlining rewrites small call bodies into their callers and runs first in optimize(); codegen parity depends on the same call sites being inlined.",
+        "benefits": "A Rust inliner with the same single-return, pure-body eligibility and parameter substitution, checked against Python on every source.",
+        "risks": "contract: eligibility, recursion guard and substitution must match; dependency: std-only Rust; concurrency: none; state: new Rust code, oracle and ADR.",
+        "mitigation": "Compare canonical dumps over the corpus, add focused Rust tests, run all gates before commit."
+      },
+      "plan_digest": "0b76d5b982d73157bac2245c7c375a8e031f6f4875e9e6a90a6f2f0ff6a2d32e"
+    },
+    {
+      "task_id": "cairn-rs-inlining",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[1/1] pure inlining ported with effect-count guards and recursion check; shared inline dump in the parity gate (39/39 identical); 100 Rust tests; ADR-128; aikit check 7/7 gates passed",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795356403.5037882,
+      "timestamp_str": "2026-11-22 17:06:43",
+      "agent": "opencode:session",
+      "checklists": "passed"
+    },
+    {
+      "task_id": "cairn-rs-inlining",
+      "phase": "completed",
+      "phase_num": 5,
+      "description": "Task 'cairn-rs-inlining' completed successfully.",
+      "status": "completed",
+      "timestamp": 1795356465.5815306,
+      "timestamp_str": "2026-11-22 17:07:45",
+      "agent": "opencode:session",
+      "head": "f2fae4625f10a2bc9b238d772a0f483bf7f1d69b",
       "delivery": {
         "roots": [
           "."
