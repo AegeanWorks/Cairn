@@ -1389,3 +1389,10 @@ external compiler and was verified end to end.
 - **Context**: The manifest is the first thing an agent reads; a single key or formatting difference makes a Rust compiler disagree with the documented surface.
 - **Decision**: Build the manifest as a small JSON value tree in Rust and render it with Python-compatible indent=2 and ASCII escaping. Compare the full canonical manifest against Python in the parity gate.
 - **Consequences**: The parity gate is 51/51 including the complete capability manifest. The remaining Python-only compiler surfaces are builder and CLI; delta-inlined recursive codegen is still the blocking shape for full .text parity.
+
+### ADR-139: else-less if branches on the inverted condition
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: A two-way if and a guard if use different label sets and condition polarity in the reference generator.
+- **Decision**: For an if with no else, allocate one if.else label, branch to it when the condition is false, emit the then block, then bind the label. A two-way if keeps if.then and if.end with the true branch inverted to a forward jmp.
+- **Consequences**: Curated parity is 52/52 including mutual calls with a guard. The real-program diagnostic remains 2/27 because recursive callees still use delta-inlined copy shapes.

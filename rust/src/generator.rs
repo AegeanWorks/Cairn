@@ -341,19 +341,25 @@ impl CodeGenerator {
 
     fn emit_if(&mut self, condition: &Expr, then_block: &crate::syntax::Block,
                else_block: Option<&crate::syntax::Block>, tail: bool, homes: &[(i64, &str)]) {
-        let then_label = self.fresh("if.then");
-        let end_label = self.fresh("if.end");
-        self.emit_condition(condition, &then_label, homes);
-        if let Some(otherwise) = else_block {
-            self.emit_block(otherwise, tail, homes);
+        if let Some(otherwise_block) = else_block {
+            let then_label = self.fresh("if.then");
+            let end_label = self.fresh("if.end");
+            self.emit_condition(condition, &then_label, homes);
+            self.emit_block(otherwise_block, tail, homes);
             let end = end_label.clone();
             self.assembler.jmp(&end);
+            let then = then_label.clone();
+            self.assembler.label(&then);
+            self.emit_block(then_block, tail, homes);
+            let end = end_label.clone();
+            self.assembler.label(&end);
+        } else {
+            let otherwise = self.fresh("if.else");
+            self.emit_condition_polarity(condition, &otherwise, homes, false);
+            self.emit_block(then_block, tail, homes);
+            let label = otherwise.clone();
+            self.assembler.label(&label);
         }
-        let then = then_label.clone();
-        self.assembler.label(&then);
-        self.emit_block(then_block, tail, homes);
-        let end = end_label.clone();
-        self.assembler.label(&end);
     }
 
     fn emit_expression(&mut self, expression: &Expr, homes: &[(i64, &str)]) {
