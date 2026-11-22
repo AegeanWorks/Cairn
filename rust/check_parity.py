@@ -66,7 +66,14 @@ def main():
             elif expected.stdout != actual.stdout:
                 failures.append((spec, "backend dump mismatch"))
 
-        total = len(sources) + len(specs)
+        runtime_expected = run([sys.executable, str(RUST / "runtime_dump.py")])
+        runtime_actual = run([str(BINARY), "runtime"])
+        if runtime_expected.returncode != 0 or runtime_actual.returncode != 0:
+            failures.append((Path("runtime"), "a runtime dumper exited non-zero"))
+        elif runtime_expected.stdout != runtime_actual.stdout:
+            failures.append((Path("runtime"), "runtime dump mismatch"))
+
+        total = len(sources) + len(specs) + 1
         print(f"parity: {total - len(failures)}/{total} sources identical")
         for source, reason in failures:
             print(f"  FAIL {source.name}: {reason}")

@@ -429,6 +429,7 @@ cairn/
 │   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
 │   ├── dump.py               <- Python oracle printing the canonical front-end dump
 │   ├── pe_dump.py            <- Python oracle for linked PE bytes, listing and verification
+│   ├── runtime_dump.py       <- Python oracle for the emitted runtime helpers
 │   ├── check_parity.py       <- compares both dumps over every source; front-end-parity gate
 │   ├── specs/
 │   │   └── pe_basic.txt      <- shared artifact spec for the byte-level parity check
@@ -443,6 +444,7 @@ cairn/
 │   │   ├── main.rs           <- binary entry point and dump commands
 │   │   ├── parser.rs         <- recursive-descent parser
 │   │   ├── pe.rs             <- PE32+ writer and fixup resolution
+│   │   ├── runtime.rs        <- emitted printer, input and trap helpers
 │   │   ├── sema.rs           <- names, slots, arity, mutability and return paths
 │   │   ├── spec.rs           <- shared artifact spec reader
 │   │   ├── verify.rs         <- structural checks over a built image
@@ -454,6 +456,7 @@ cairn/
 │       ├── backend.rs        <- PE linking, verifier and listing tests
 │       ├── front_end.rs      <- lexer, parser and contract tests ported from Python
 │       ├── machine.rs        <- exact emitter byte tests ported from Python
+│       ├── runtime.rs        <- emitted runtime labels, state and fixup tests
 │       └── sema.rs           <- semantic rule tests ported from Python
 ├── benchmarks/               <- three cases, their C and Rust twins, and the harness
 ├── examples/                 <- hello, fibonacci, arithmetic, alloy_probe (Alloy backend probe)

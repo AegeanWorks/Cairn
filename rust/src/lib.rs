@@ -14,6 +14,7 @@ pub mod listing;
 pub mod machine;
 pub mod pe;
 pub mod parser;
+pub mod runtime;
 pub mod sema;
 pub mod spec;
 pub mod syntax;

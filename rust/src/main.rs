@@ -5,6 +5,28 @@ use std::path::Path;
 
 fn main() {
     let arguments: Vec<String> = std::env::args().collect();
+    if arguments.len() == 2 && arguments[1] == "runtime" {
+        let (asm, rodata, writable) = cairn_rs::runtime::emit_all();
+        let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{:02x}", b))
+            .collect::<Vec<_>>().join("");
+        let mut lines = vec![format!("CODE {}", hex(&asm.code))];
+        lines.push(format!("LABELS {}", asm.labels.iter()
+            .map(|(name, offset)| format!("{}={}", name, offset))
+            .collect::<Vec<_>>().join("|")));
+        lines.push(format!("FIXUPS {}", asm.fixups.iter()
+            .map(|(offset, target)| format!("{}={}", offset, target))
+            .collect::<Vec<_>>().join("|")));
+        lines.push(format!("RODATA {}", hex(&rodata.data)));
+        lines.push(format!("ROLABELS {}", rodata.labels.iter()
+            .map(|(name, offset)| format!("{}={}", name, offset))
+            .collect::<Vec<_>>().join("|")));
+        lines.push(format!("WRSIZE {}", writable.data.len()));
+        lines.push(format!("WRLABELS {}", writable.labels.iter()
+            .map(|(name, offset)| format!("{}={}", name, offset))
+            .collect::<Vec<_>>().join("|")));
+        println!("{}", lines.join("\n"));
+        return;
+    }
     if arguments.len() == 3 && arguments[1] == "pe" {
         match cairn_rs::spec::dump(Path::new(&arguments[2])) {
             Ok(dump) => print!("{}", dump),

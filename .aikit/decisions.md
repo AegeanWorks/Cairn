@@ -1263,3 +1263,10 @@ external compiler and was verified end to end.
 - **Context**: The backend could link a PE but still took its instruction bytes from Python. Porting the 811-line emitter mechanically risks a wrong REX, ModRM or opcode that a functional test would miss, so the port was checked against the exact byte assertions of test_machine.py.
 - **Decision**: Implement the whole Assembler surface in Rust, from frame and indexed memory forms to SSE2 and the bit builtins, and port the exact-byte tests. The comparison caught one real defect: bswap used a 0xC0 ModRM base instead of Python's 0xC8, which would have emitted the wrong opcode family; two other mismatches were wrong test expectations, corrected to the Python-proven bytes.
 - **Consequences**: All 84 Rust tests pass, including 11 emitter tests with exact byte assertions. The README Performance section was reduced from 17k to under 11k characters to make room for the growing Rust tree while staying under the 40k cold-start budget.
+
+### ADR-121: the Rust runtime is byte-identical to the emitted Python helpers
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: Code generation calls into a fixed set of runtime helpers written as machine code. A helper with a wrong label or one shifted instruction would produce a program that compiles but fails at run time, so functional tests alone cannot prove the port.
+- **Decision**: Port every runtime.py emitter and data reservation to Rust, and add runtime_dump.py plus a cairn-rs runtime command to the shared parity gate. The gate compares the full emitted code bytes, label offsets, fixups, rodata and writable-state layout; Python label insertion order is normalized to Rust's sorted map because ordering is not part of the emitted-byte contract.
+- **Consequences**: The parity gate now reports 38/38 identical sources. Three Rust tests pin every helper label, the reserved writable state and fixup resolution; 87 Rust tests pass in total. Two Python behaviours were preserved deliberately: clz has no emitted helper because it lowers inline, and some fixups target writable or rodata labels rather than code labels.
