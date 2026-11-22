@@ -1473,3 +1473,10 @@ external compiler and was verified end to end.
 - **Context**: The array read-modify-write benchmark uses a two-lane SSE2 loop; without it the generated .text diverges completely from the reference.
 - **Decision**: Detect while i < N { a[i] = a[i] + r; i = i + 1; } with an even bound and homed index/addend, and emit the reference loop: broadcast the addend into xmm1, then load/add/store two elements per iteration with movdqu and paddq. Park the reproducer under known_gaps until the frame-clear difference is resolved.
 - **Consequences**: Curated parity remains 56/56. The remaining difference is one xor-zero home clear emitted by Python's _clear_frame before the body; the vector loop body itself matches.
+
+### ADR-151: frame home ranking closes the vector RMW gap
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: The parked vecrmw spec differed by one xor-zero clear; fixing it required matching the reference home ranking, not a special case.
+- **Decision**: Rank frame-function slots by deepest loop nesting with ties by descending slot, clear unassigned non-parameter homes, and drop the extra operand-slot check from the RMW matcher because sema leaves it at -1. Return the spec to the gated set.
+- **Consequences**: Curated parity is 57/57 including the two-lane array RMW loop. Other real benchmarks still use summation and stdin-scan loop shapes that are not lowered.

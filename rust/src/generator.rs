@@ -26,6 +26,20 @@ fn collect_arrays(block: &crate::syntax::Block, found: &mut Vec<(i64, usize)>) {
     }
 }
 
+/// Slots whose first top-level touch is an assignment, so no entry clear is needed.
+fn assigned_slots(block: &crate::syntax::Block) -> std::collections::BTreeSet<i64> {
+    let mut found = std::collections::BTreeSet::new();
+    for statement in &block.statements {
+        match statement {
+            Stmt::Let { slot, .. } | Stmt::Assign { slot, .. } => {
+                found.insert(*slot);
+            }
+            _ => {}
+        }
+    }
+    found
+}
+
 fn in_array(slot: i64, arrays: &[(i64, usize)]) -> bool {
     arrays.iter().any(|(base, size)| slot >= *base && slot < *base + *size as i64)
 }
@@ -198,10 +212,63 @@ impl CodeGenerator {
     /// Slots that keep a register home, in register order (frame functions rank by loop depth,
     /// ties by descending slot; all slots at depth zero here).
     fn home_slots(function: &crate::syntax::Function, arrays: &[(i64, usize)]) -> Vec<i64> {
-        let mut ranked: Vec<i64> = (0..function.slots as i64).collect();
-        if (function.slots as usize) > crate::codegen::HOME_REGISTERS.len() {
-            ranked.sort_by(|a, b| b.cmp(a));
+        if (function.slots as usize) <= crate::codegen::HOME_REGISTERS.len() {
+            return (0..function.slots as i64)
+                .filter(|slot| !in_array(*slot, arrays))
+                .collect();
         }
+        let mut ranks = std::collections::BTreeMap::new();
+        fn touch(slot: i64, depth: usize, ranks: &mut std::collections::BTreeMap<i64, usize>) {
+            ranks.entry(slot).and_modify(|value| *value = (*value).max(depth)).or_insert(depth);
+        }
+        fn expression(expr: &Expr, depth: usize, ranks: &mut std::collections::BTreeMap<i64, usize>) {
+            match expr {
+                Expr::Name { slot, .. } => touch(*slot, depth, ranks),
+                Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => {
+                    expression(inner, depth, ranks);
+                }
+                Expr::Binary { left, right, .. } | Expr::Index { operand: left, index: right, .. } => {
+                    expression(left, depth, ranks);
+                    expression(right, depth, ranks);
+                }
+                Expr::Call { arguments, .. } | Expr::ArrayLiteral { elements: arguments, .. } => {
+                    for argument in arguments { expression(argument, depth, ranks); }
+                }
+                _ => {}
+            }
+        }
+        fn block(body: &crate::syntax::Block, depth: usize,
+                 ranks: &mut std::collections::BTreeMap<i64, usize>) {
+            for statement in &body.statements {
+                match statement {
+                    Stmt::Let { value, slot, .. } | Stmt::Assign { value, slot, .. } => {
+                        expression(value, depth, ranks);
+                        touch(*slot, depth, ranks);
+                    }
+                    Stmt::If { condition, then_block, else_block, .. } => {
+                        expression(condition, depth, ranks);
+                        block(then_block, depth, ranks);
+                        if let Some(otherwise) = else_block { block(otherwise, depth, ranks); }
+                    }
+                    Stmt::While { condition, body, .. } => {
+                        expression(condition, depth, ranks);
+                        block(body, depth + 1, ranks);
+                    }
+                    Stmt::Return { value, .. } | Stmt::ExprStmt { expression: value, .. } => {
+                        expression(value, depth, ranks);
+                    }
+                    Stmt::Block(inner) => block(inner, depth, ranks),
+                    _ => {}
+                }
+            }
+        }
+        block(&function.body, 0, &mut ranks);
+        let mut ranked: Vec<i64> = (0..function.slots as i64).collect();
+        ranked.sort_by(|a, b| {
+            let ra = ranks.get(a).copied().unwrap_or(0);
+            let rb = ranks.get(b).copied().unwrap_or(0);
+            rb.cmp(&ra).then_with(|| b.cmp(a))
+        });
         ranked.retain(|slot| !in_array(*slot, arrays));
         ranked
     }
@@ -252,6 +319,12 @@ impl CodeGenerator {
                     crate::codegen::slot_offset(function.slots as i64 + index as i64),
                     register,
                 );
+            }
+            let assigned = assigned_slots(&function.body);
+            for (slot, register) in &homes {
+                if *slot as usize >= function.parameters.len() && !assigned.contains(slot) {
+                    self.assembler.xor_zero(register);
+                }
             }
         } else {
             for register in &callee_registers {
@@ -479,7 +552,7 @@ impl CodeGenerator {
             _ => None,
         };
         let Some(Expr::Index { operand, index, .. }) = element else { return false; };
-        if !matches!(operand.as_ref(), Expr::Name { slot, .. } if *slot == *store_slot) { return false; }
+        if !matches!(operand.as_ref(), Expr::Name { .. }) { return false; }
         if !matches!(index.as_ref(), Expr::Name { slot, .. } if *slot == index_slot) { return false; }
         if !matches!(store_index, Expr::Name { slot, .. } if *slot == index_slot) { return false; }
         let addend = if matches!(add_left.as_ref(), Expr::Index { .. }) {
