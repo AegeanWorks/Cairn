@@ -1,0 +1,7 @@
+fn main() -> i64 {
+    var a: [8]i64 = [0; 8];
+    var r: i64 = 3;
+    var i: i64 = 0;
+    while i < 8 { a[i] = a[i] + r; i = i + 1; }
+    return a[0];
+}

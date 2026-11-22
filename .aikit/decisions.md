@@ -1466,3 +1466,10 @@ external compiler and was verified end to end.
 - **Context**: A fill literal longer than eight elements expands to thousands of nodes; materialising each one produced a two-megabyte .text instead of the reference's short loop.
 - **Decision**: Detect an all-equal IntLiteral fill longer than ARRAY_UNROLL_LIMIT and emit one up-counting store loop: count in rdx, fill in rax, span base in rcx, a fresh array_fill label, store/add/sub/jcc. Shorter or mixed literals keep element-by-element stores.
 - **Consequences**: Curated parity is 56/56 including a sixteen-element fill. The full corpus diagnostic stays at 2/27 because the remaining array benchmarks use fused read-modify-write and summation loops that are not lowered yet.
+
+### ADR-150: two-lane array RMW loop lowered with a known clear gap
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: The array read-modify-write benchmark uses a two-lane SSE2 loop; without it the generated .text diverges completely from the reference.
+- **Decision**: Detect while i < N { a[i] = a[i] + r; i = i + 1; } with an even bound and homed index/addend, and emit the reference loop: broadcast the addend into xmm1, then load/add/store two elements per iteration with movdqu and paddq. Park the reproducer under known_gaps until the frame-clear difference is resolved.
+- **Consequences**: Curated parity remains 56/56. The remaining difference is one xor-zero home clear emitted by Python's _clear_frame before the body; the vector loop body itself matches.

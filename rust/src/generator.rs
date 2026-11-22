@@ -439,7 +439,11 @@ impl CodeGenerator {
             Stmt::If { condition, then_block, else_block, .. } => {
                 self.emit_if(condition, then_block, else_block.as_ref(), tail, homes);
             }
-            Stmt::While { condition, body, .. } => self.emit_while(condition, body, homes),
+            Stmt::While { condition, body, .. } => {
+                if !self.try_emit_rmw_vector(condition, body, homes) {
+                    self.emit_while(condition, body, homes);
+                }
+            }
             Stmt::Break { .. } | Stmt::Continue { .. } => {}
             // Wider shapes are added in later slices; refusing beats emitting wrong bytes.
             Stmt::For { .. } => {}
@@ -450,6 +454,74 @@ impl CodeGenerator {
         for (index, statement) in block.statements.iter().enumerate() {
             self.emit_statement(statement, tail && index + 1 == block.statements.len(), homes);
         }
+    }
+
+    /// Lower `while i < N { a[i] = a[i] + r; i = i + 1; }` with two SSE2 lanes.
+    fn try_emit_rmw_vector(&mut self, condition: &Expr, body: &crate::syntax::Block,
+                           homes: &[(i64, &str)]) -> bool {
+        let Expr::Binary { op, left, right, .. } = condition else { return false };
+        if op != "<" { return false; }
+        let (index_slot, bound) = match (left.as_ref(), right.as_ref()) {
+            (Expr::Name { slot, .. }, Expr::IntLiteral { value, .. }) => (*slot, *value),
+            _ => return false,
+        };
+        if bound < 2 || bound % 2 != 0 || body.statements.len() != 2 { return false; }
+        let Stmt::Assign { slot: store_slot, index: Some(store_index), value: store_value,
+                           array_size, .. } = &body.statements[0] else { return false; };
+        let Some(array_size) = array_size else { return false; };
+        let Expr::Binary { op: add_op, left: add_left, right: add_right, .. } = store_value else {
+            return false;
+        };
+        if add_op != "+" { return false; }
+        let element = match (add_left.as_ref(), add_right.as_ref()) {
+            (Expr::Index { .. }, _) => Some(add_left.as_ref()),
+            (_, Expr::Index { .. }) => Some(add_right.as_ref()),
+            _ => None,
+        };
+        let Some(Expr::Index { operand, index, .. }) = element else { return false; };
+        if !matches!(operand.as_ref(), Expr::Name { slot, .. } if *slot == *store_slot) { return false; }
+        if !matches!(index.as_ref(), Expr::Name { slot, .. } if *slot == index_slot) { return false; }
+        if !matches!(store_index, Expr::Name { slot, .. } if *slot == index_slot) { return false; }
+        let addend = if matches!(add_left.as_ref(), Expr::Index { .. }) {
+            add_right.as_ref()
+        } else {
+            add_left.as_ref()
+        };
+        let Expr::Name { slot: addend_slot, .. } = addend else { return false; };
+        if *addend_slot == index_slot { return false; }
+        let Stmt::Assign { slot: step_slot, value: step_value, .. } = &body.statements[1] else {
+            return false;
+        };
+        if *step_slot != index_slot { return false; }
+        let Expr::Binary { op: step_op, left: step_left, right: step_right, .. } = step_value else {
+            return false;
+        };
+        if step_op != "+" { return false; }
+        if !matches!(step_left.as_ref(), Expr::Name { slot, .. } if *slot == index_slot) { return false; }
+        if !matches!(step_right.as_ref(), Expr::IntLiteral { value, .. } if *value == 1) { return false; }
+        let (Some(index_home), Some(addend_home)) =
+            (home_for(index_slot, homes), home_for(*addend_slot, homes)) else { return false };
+        if index_home == addend_home { return false; }
+
+        let start = self.fresh("vec_rmw.start");
+        let end = self.fresh("vec_rmw.end");
+        let displacement = crate::codegen::array_element_base(*store_slot, *array_size as i64);
+        self.assembler.movq_from_reg("xmm1", addend_home);
+        self.assembler.punpcklqdq("xmm1", "xmm1");
+        let start_label = start.clone();
+        self.assembler.label(&start_label);
+        self.assembler.cmp_imm(index_home, bound as i64);
+        let done = end.clone();
+        self.assembler.jcc("ge", &done);
+        self.assembler.movdqu_load_indexed("xmm0", "rbp", index_home, 3, displacement);
+        self.assembler.paddq_reg("xmm0", "xmm1");
+        self.assembler.movdqu_store_indexed("rbp", index_home, 3, displacement, "xmm0");
+        self.assembler.add_imm(index_home, 2);
+        let again = start.clone();
+        self.assembler.jmp(&again);
+        let end_label = end.clone();
+        self.assembler.label(&end_label);
+        true
     }
 
     fn emit_while(&mut self, condition: &Expr, body: &crate::syntax::Block, homes: &[(i64, &str)]) {
