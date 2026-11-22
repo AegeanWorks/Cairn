@@ -433,6 +433,7 @@ cairn/
 │   ├── copy_dump.py          <- Python oracle for copy-propagation parity
 │   ├── fold_dump.py          <- Python oracle for constant-folding parity
 │   ├── lower_dump.py         <- Python oracle for for-loop lowering parity
+│   ├── unroll_dump.py        <- Python oracle for constant-loop-unrolling parity
 │   ├── pe_dump.py            <- Python oracle for linked PE bytes, listing and verification
 │   ├── runtime_dump.py       <- Python oracle for the emitted runtime helpers
 │   ├── check_parity.py       <- compares both dumps over every source; front-end-parity gate

@@ -1232,6 +1232,317 @@ pub fn apply_countdown_latches(program: &mut Program) -> usize {
     changed
 }
 
+const UNROLL_TRIP_LIMIT: usize = 16;
+const UNROLL_BODY_STATEMENTS: usize = 8;
+
+#[derive(Debug, Clone, Copy)]
+enum Step {
+    Add(i128),
+    Mul(i128),
+    Shl(i128),
+}
+
+impl Step {
+    fn apply(self, current: i128) -> i128 {
+        match self {
+            Step::Add(value) => wrap(current + value),
+            Step::Mul(value) => wrap(current * value),
+            Step::Shl(value) => wrap(current << (value & 63)),
+        }
+    }
+}
+
+fn counter_step(statement: &Stmt, slot: i64) -> Option<Step> {
+    let Stmt::Assign { slot: found, value, index: None, .. } = statement else {
+        return None;
+    };
+    if *found != slot {
+        return None;
+    }
+    let Expr::Binary { op, left, right, .. } = peel_parens(Some(value)).unwrap() else {
+        return None;
+    };
+    let Expr::Name { slot: left_slot, .. } = peel_parens(Some(left)).unwrap() else {
+        return None;
+    };
+    if *left_slot != slot {
+        return None;
+    }
+    let Expr::IntLiteral { value: constant, .. } = peel_parens(Some(right)).unwrap() else {
+        return None;
+    };
+    match op.as_str() {
+        "+" => Some(Step::Add(*constant)),
+        "*" => Some(Step::Mul(*constant)),
+        "<<" => Some(Step::Shl(*constant)),
+        _ => None,
+    }
+}
+
+fn counter_bound(expression: &Expr) -> Option<(i128, bool)> {
+    let Expr::Binary { op, left, right, .. } = peel_parens(Some(expression)).unwrap() else {
+        return None;
+    };
+    if op != "<" && op != "<=" {
+        return None;
+    }
+    if !matches!(peel_parens(Some(left)).unwrap(), Expr::Name { .. }) {
+        return None;
+    }
+    let Expr::IntLiteral { value, .. } = peel_parens(Some(right)).unwrap() else {
+        return None;
+    };
+    Some((*value, op == "<="))
+}
+
+fn writes_slot(statements: &[Stmt], slot: i64) -> bool {
+    statements.iter().any(|statement| match statement {
+        Stmt::Assign { slot: found, .. } | Stmt::Let { slot: found, .. } => *found == slot,
+        Stmt::If { then_block, else_block, .. } => {
+            writes_slot(&then_block.statements, slot)
+                || else_block.as_ref().map_or(false, |block| writes_slot(&block.statements, slot))
+        }
+        Stmt::While { body, .. } => writes_slot(&body.statements, slot),
+        _ => false,
+    })
+}
+
+fn calls_named(expression: &Expr, name: &str) -> bool {
+    match expression {
+        Expr::Call { name: found, arguments, .. } => {
+            found == name || arguments.iter().any(|argument| calls_named(argument, name))
+        }
+        Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => {
+            calls_named(inner, name)
+        }
+        Expr::Binary { left, right, .. } => calls_named(left, name) || calls_named(right, name),
+        Expr::Index { operand, index, .. } => {
+            calls_named(operand, name) || calls_named(index, name)
+        }
+        Expr::ArrayLiteral { elements, .. } => elements.iter().any(|element| calls_named(element, name)),
+        _ => false,
+    }
+}
+
+fn calls_self(statements: &[Stmt], name: &str) -> bool {
+    statements.iter().any(|statement| match statement {
+        Stmt::ExprStmt { expression, .. } => calls_named(expression, name),
+        Stmt::Let { value, .. } | Stmt::Return { value, .. } => calls_named(value, name),
+        Stmt::Assign { value, index, .. } => {
+            calls_named(value, name) || index.as_ref().map_or(false, |index| calls_named(index, name))
+        }
+        Stmt::If { condition, then_block, else_block, .. } => {
+            calls_named(condition, name)
+                || calls_self(&then_block.statements, name)
+                || else_block.as_ref().map_or(false, |block| calls_self(&block.statements, name))
+        }
+        Stmt::While { condition, body, .. } => {
+            calls_named(condition, name) || calls_self(&body.statements, name)
+        }
+        _ => false,
+    })
+}
+
+fn jumps(statements: &[Stmt]) -> bool {
+    statements.iter().any(|statement| match statement {
+        Stmt::Break { .. } | Stmt::Continue { .. } => true,
+        Stmt::If { then_block, else_block, .. } => {
+            jumps(&then_block.statements)
+                || else_block.as_ref().map_or(false, |block| jumps(&block.statements))
+        }
+        Stmt::While { body, .. } => jumps(&body.statements),
+        _ => false,
+    })
+}
+
+fn clone_with_literal(expression: &Expr, slot: i64, value: i128) -> Expr {
+    match expression {
+        Expr::Name { span, name, slot: found } if *found == slot => {
+            Expr::IntLiteral { span: *span, value }
+        }
+        Expr::Name { span, name, slot } => Expr::Name {
+            span: *span, name: name.clone(), slot: *slot,
+        },
+        Expr::IntLiteral { span, value } => Expr::IntLiteral { span: *span, value: *value },
+        Expr::StrLiteral { span, text, label } => Expr::StrLiteral {
+            span: *span, text: text.clone(), label: label.clone(),
+        },
+        Expr::Parens { span, inner } => Expr::Parens {
+            span: *span,
+            inner: Box::new(clone_with_literal(inner, slot, value)),
+        },
+        Expr::Unary { span, op, operand } => Expr::Unary {
+            span: *span,
+            op: op.clone(),
+            operand: Box::new(clone_with_literal(operand, slot, value)),
+        },
+        Expr::Binary { span, op, left, right } => Expr::Binary {
+            span: *span,
+            op: op.clone(),
+            left: Box::new(clone_with_literal(left, slot, value)),
+            right: Box::new(clone_with_literal(right, slot, value)),
+        },
+        Expr::Call { span, name, arguments } => Expr::Call {
+            span: *span,
+            name: name.clone(),
+            arguments: arguments.iter().map(|argument| clone_with_literal(argument, slot, value)).collect(),
+        },
+        Expr::Index { span, operand, index, slot: base, size } => Expr::Index {
+            span: *span,
+            operand: Box::new(clone_with_literal(operand, slot, value)),
+            index: Box::new(clone_with_literal(index, slot, value)),
+            slot: *base,
+            size: *size,
+        },
+        Expr::ArrayLiteral { span, elements } => Expr::ArrayLiteral {
+            span: *span,
+            elements: elements.iter().map(|element| clone_with_literal(element, slot, value)).collect(),
+        },
+    }
+}
+
+fn clone_statement(statement: &Stmt, slot: i64, value: i128) -> Stmt {
+    match statement {
+        Stmt::Let { span, name, mutable, type_name, value: expr, slot: found, array_size } =>
+            Stmt::Let {
+                span: *span, name: name.clone(), mutable: *mutable, type_name: type_name.clone(),
+                value: clone_with_literal(expr, slot, value), slot: *found, array_size: *array_size,
+            },
+        Stmt::Assign { span, name, value: expr, slot: found, index, temp_slot, array_size } =>
+            Stmt::Assign {
+                span: *span, name: name.clone(), value: clone_with_literal(expr, slot, value),
+                slot: *found,
+                index: index.as_ref().map(|index| clone_with_literal(index, slot, value)),
+                temp_slot: *temp_slot, array_size: *array_size,
+            },
+        Stmt::Return { span, value: expr } => Stmt::Return {
+            span: *span, value: clone_with_literal(expr, slot, value),
+        },
+        Stmt::ExprStmt { span, expression } => Stmt::ExprStmt {
+            span: *span, expression: clone_with_literal(expression, slot, value),
+        },
+        Stmt::If { span, condition, then_block, else_block } => Stmt::If {
+            span: *span,
+            condition: clone_with_literal(condition, slot, value),
+            then_block: clone_block(then_block, slot, value),
+            else_block: else_block.as_ref().map(|block| clone_block(block, slot, value)),
+        },
+        Stmt::While { span, condition, body, countdown } => Stmt::While {
+            span: *span,
+            condition: clone_with_literal(condition, slot, value),
+            body: clone_block(body, slot, value),
+            countdown: *countdown,
+        },
+        Stmt::Block(block) => Stmt::Block(clone_block(block, slot, value)),
+        Stmt::For { .. } | Stmt::Break { .. } | Stmt::Continue { .. } => statement.clone(),
+    }
+}
+
+fn clone_block(block: &Block, slot: i64, value: i128) -> Block {
+    Block {
+        span: block.span,
+        statements: block.statements.iter()
+            .map(|statement| clone_statement(statement, slot, value))
+            .collect(),
+    }
+}
+
+fn unrolled_loop(statement: &Stmt, loop_statement: Option<&Stmt>, function_name: &str)
+    -> Option<Vec<Stmt>> {
+    let Stmt::While { span: loop_span, condition, body, .. } = loop_statement? else {
+        return None;
+    };
+    if body.statements.is_empty() {
+        return None;
+    }
+    let (Stmt::Let { value, slot, name, .. } | Stmt::Assign { value, slot, name, .. }) = statement else {
+        return None;
+    };
+    let Expr::IntLiteral { value: initial, .. } = peel_parens(Some(value)).unwrap() else {
+        return None;
+    };
+    if body.statements.len() > UNROLL_BODY_STATEMENTS || jumps(&body.statements)
+        || !calls_self(&body.statements, function_name)
+    {
+        return None;
+    }
+    let step = counter_step(body.statements.last().unwrap(), *slot)?;
+    let (limit, inclusive) = counter_bound(condition)?;
+    if writes_slot(&body.statements[..body.statements.len() - 1], *slot) {
+        return None;
+    }
+    let mut values = Vec::new();
+    let mut current = *initial;
+    while if inclusive { current <= limit } else { current < limit } {
+        values.push(current);
+        if values.len() > UNROLL_TRIP_LIMIT {
+            return None;
+        }
+        current = step.apply(current);
+    }
+    let mut steps = vec![statement.clone()];
+    for counter in values {
+        for body_statement in &body.statements[..body.statements.len() - 1] {
+            steps.push(clone_statement(body_statement, *slot, counter));
+        }
+    }
+    steps.push(Stmt::Assign {
+        span: *loop_span,
+        name: name.clone(),
+        value: Expr::IntLiteral { span: *loop_span, value: current },
+        slot: *slot,
+        index: None,
+        temp_slot: None,
+        array_size: None,
+    });
+    Some(steps)
+}
+
+/// Unroll a short constant-trip while into clones with literal counter values.
+pub fn apply_constant_loop_unrolling(program: &mut Program) -> usize {
+    let mut unrolled = 0;
+    for function in &mut program.functions {
+        let name = function.name.clone();
+        unrolled += unroll_block(&mut function.body, &name);
+    }
+    unrolled
+}
+
+fn unroll_block(block: &mut Block, function_name: &str) -> usize {
+    let mut unrolled = 0;
+    for statement in &mut block.statements {
+        match statement {
+            Stmt::If { then_block, else_block, .. } => {
+                unrolled += unroll_block(then_block, function_name);
+                if let Some(otherwise) = else_block {
+                    unrolled += unroll_block(otherwise, function_name);
+                }
+            }
+            Stmt::While { body, .. } => unrolled += unroll_block(body, function_name),
+            _ => {}
+        }
+    }
+    let mut statements = Vec::new();
+    let original = std::mem::take(&mut block.statements);
+    let mut index = 0;
+    while index < original.len() {
+        let following = original.get(index + 1);
+        match unrolled_loop(&original[index], following, function_name) {
+            Some(replacement) => {
+                statements.extend(replacement);
+                index += 2;
+                unrolled += 1;
+            }
+            None => {
+                statements.push(original[index].clone());
+                index += 1;
+            }
+        }
+    }
+    block.statements = statements;
+    unrolled
+}
+
 fn rewrite_continues(block: &mut Block, name: &str, slot: i64) {
     for statement in &mut block.statements {
         match statement {

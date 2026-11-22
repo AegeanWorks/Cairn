@@ -108,6 +108,20 @@ fn copy_propagation_removes_a_single_read_definition() {
 }
 
 #[test]
+fn a_short_self_recursive_loop_unrolls() {
+    let mut program = analysed(
+        "fn f(n: i64) -> i64 { var t: i64 = 0; var i: i64 = 0; \
+         while i < 4 { t = t + f(i); i = i + 1; } return t; } \
+         fn main() -> i64 { return f(1); }",
+    );
+    let changed = optimize::apply_constant_loop_unrolling(&mut program);
+    assert!(changed >= 1);
+    assert!(!program.functions[0].body.statements.iter().any(|statement| {
+        matches!(statement, cairn_rs::syntax::Stmt::While { .. })
+    }));
+}
+
+#[test]
 fn a_dead_counter_loop_becomes_a_countdown_latch() {
     let mut program = analysed(
         "fn main() -> i64 { var i: i64 = 0; var t: i64 = 0; \

@@ -1305,3 +1305,10 @@ external compiler and was verified end to end.
 - **Context**: A counted loop whose counter is dead after the loop can test the remaining iterations instead of the bound, removing the in-body increment. The rewrite is safe only under specific read/write and control-flow conditions.
 - **Decision**: Port apply_countdown_latches with literal-write tracking, post-loop read guards, break/continue refusal, a single counter read, and recursive increment removal. Add count_dump.py and a cairn-rs count command to the parity gate after algebraic simplification.
 - **Consequences**: The parity gate reports 39/39 identical sources including countdown latches; 98 Rust tests pass. Constant-loop unrolling, odd-pair fusion, induction strength reduction, bottom-test rotation and pure inlining remain Python-only.
+
+### ADR-127: constant-loop unrolling is the fifth structural optimizer pass in Rust
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: A short loop around a self-recursive call can be unrolled into literal-counter clones so masks and bounds fold into immediates. The shape is deliberately narrow, and an over-broad rewrite would duplicate bodies where it brings no gain.
+- **Decision**: Port apply_constant_loop_unrolling with the counter step and bound checks, self-call-only eligibility, jump and second-write refusals, trip and body limits, and deep literal substitution. Add unroll_dump.py and a cairn-rs unroll command to the parity gate after algebraic simplification.
+- **Consequences**: The parity gate reports 39/39 identical sources including unrolling; 99 Rust tests pass. Remaining Python-only passes are odd-pair fusion, induction strength reduction, bottom-test rotation and pure inlining before codegen.

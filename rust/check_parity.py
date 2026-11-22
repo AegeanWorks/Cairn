@@ -78,12 +78,19 @@ def main():
                         elif alg_expected.stdout != alg_actual.stdout:
                             failures.append((source, "algebraic mismatch"))
                         else:
-                            count_expected = run([sys.executable, str(RUST / "count_dump.py"), str(source)])
-                            count_actual = run([str(BINARY), "count", str(source)])
-                            if count_expected.returncode != 0 or count_actual.returncode != 0:
-                                failures.append((source, "a countdown dumper exited non-zero"))
-                            elif count_expected.stdout != count_actual.stdout:
-                                failures.append((source, "countdown mismatch"))
+                            unroll_expected = run([sys.executable, str(RUST / "unroll_dump.py"), str(source)])
+                            unroll_actual = run([str(BINARY), "unroll", str(source)])
+                            if unroll_expected.returncode != 0 or unroll_actual.returncode != 0:
+                                failures.append((source, "an unroll dumper exited non-zero"))
+                            elif unroll_expected.stdout != unroll_actual.stdout:
+                                failures.append((source, "unrolling mismatch"))
+                            else:
+                                count_expected = run([sys.executable, str(RUST / "count_dump.py"), str(source)])
+                                count_actual = run([str(BINARY), "count", str(source)])
+                                if count_expected.returncode != 0 or count_actual.returncode != 0:
+                                    failures.append((source, "a countdown dumper exited non-zero"))
+                                elif count_expected.stdout != count_actual.stdout:
+                                    failures.append((source, "countdown mismatch"))
 
         specs = sorted((RUST / "specs").glob("*.txt"))
         for spec in specs:
