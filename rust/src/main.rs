@@ -88,6 +88,56 @@ fn main() {
         }
         return;
     }
+    if arguments.len() == 3 && arguments[1] == "codegen" {
+        let path = Path::new(&arguments[2]);
+        match std::fs::read_to_string(path) {
+            Ok(source) => {
+                let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+                let program = cairn_rs::parser::parse(&normalized, &arguments[2])
+                    .and_then(|mut parsed| {
+                        cairn_rs::sema::analyze(&mut parsed, &arguments[2])?;
+                        let _ = cairn_rs::pipeline::Pipeline::new()
+                            .run(&mut parsed, &arguments[2]);
+                        Ok(parsed)
+                    });
+                match program {
+                    Ok(program) => {
+                        let artifact = cairn_rs::generator::CodeGenerator::new().generate(&program);
+                        let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{:02x}", b))
+                            .collect::<Vec<_>>().join("");
+                        let mut lines = vec![format!("TEXT {}", hex(&artifact.text))];
+                        lines.push(format!("LABELS {}", artifact.text_labels.iter()
+                            .map(|(name, offset)| format!("{}={}", name, offset))
+                            .collect::<Vec<_>>().join("|")));
+                        lines.push(format!("FIXUPS {}", artifact.fixups.iter()
+                            .map(|(offset, target)| format!("{}={}", offset, target))
+                            .collect::<Vec<_>>().join("|")));
+                        lines.push(format!("RODATA {}", hex(&artifact.rodata.data)));
+                        lines.push(format!("ROLABELS {}", artifact.rodata.labels.iter()
+                            .map(|(name, offset)| format!("{}={}", name, offset))
+                            .collect::<Vec<_>>().join("|")));
+                        lines.push(format!("WRITABLE {}", hex(&artifact.writable)));
+                        lines.push(format!("WRLABELS {}", artifact.writable_labels.iter()
+                            .map(|(name, offset)| format!("{}={}", name, offset))
+                            .collect::<Vec<_>>().join("|")));
+                        println!("{}", lines.join("\n"));
+                    }
+                    Err(error) => {
+                        for diagnostic in &error.diagnostics {
+                            println!("ERROR[{},{},{},{}]", diagnostic.code,
+                                     diagnostic.message, diagnostic.fix,
+                                     diagnostic.span.start);
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("cannot read {}: {}", arguments[2], error);
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
     if arguments.len() == 3 && arguments[1] == "magic" {
         let text = std::fs::read_to_string(&arguments[2]).unwrap_or_else(|error| {
             eprintln!("cannot read {}: {}", arguments[2], error);

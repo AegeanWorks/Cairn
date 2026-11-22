@@ -427,6 +427,7 @@ cairn/
 ├── rust/                     <- std-only Rust rewrite (ADR-117), kept identical by a parity gate (ADR-118)
 │   ├── Cargo.toml            <- crate manifest and the rust-test gate target
 │   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
+│   ├── codegen_dump.py       <- Python oracle for generated artifact bytes
 │   ├── dump.py               <- Python oracle printing the canonical front-end dump
 │   ├── alg_dump.py           <- Python oracle for algebraic-simplification parity
 │   ├── count_dump.py         <- Python oracle for countdown-latch parity
@@ -442,6 +443,7 @@ cairn/
 │   ├── runtime_dump.py       <- Python oracle for the emitted runtime helpers
 │   ├── check_parity.py       <- compares both dumps over every source; front-end-parity gate
 │   ├── specs/
+│   │   ├── codegen/          <- simple sources for generated-byte parity
 │   │   ├── magic.txt         <- shared divisor cases for magic-division parity
 │   │   ├── pe_basic.txt      <- shared artifact spec for the byte-level parity check
 │   │   └── fold_calls.txt    <- shared folding cases for the optimizer parity check
@@ -450,6 +452,7 @@ cairn/
 │   │   ├── codes.rs          <- diagnostic code registry
 │   │   ├── diagnostics.rs    <- spans, diagnostics and the JSON contract
 │   │   ├── dump.rs           <- canonical dump emitted by `cairn-rs dump`
+│   │   ├── generator.rs      <- first generator slice: entry, frameless functions
 │   │   ├── image.rs          <- read-only and writable data, artifact model
 │   │   ├── lexer.rs          <- scanner and token model
 │   │   ├── listing.rs        <- label-grouped .text bytes
@@ -458,6 +461,7 @@ cairn/
 │   │   ├── main.rs           <- binary entry point and dump commands
 │   │   ├── parser.rs         <- recursive-descent parser
 │   │   ├── pe.rs             <- PE32+ writer and fixup resolution
+│   │   ├── pipeline.rs       <- explicit compiler-stage state machine
 │   │   ├── runtime.rs        <- emitted printer, input and trap helpers
 │   │   ├── sema.rs           <- names, slots, arity, mutability and return paths
 │   │   ├── spec.rs           <- shared artifact spec reader

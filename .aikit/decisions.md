@@ -1333,3 +1333,10 @@ external compiler and was verified end to end.
 - **Context**: The 4,550-line CodeGenerator class is too large to port in one step without losing parity. Its pure helpers decide labels, frame offsets, leaf/call classification and magic-division parameters, and are the foundation every lowering rule uses.
 - **Decision**: Port the helper layer first: function labels, slot and array offsets, alignment, leaf and lowering-call predicates, structural index equality, rotate-count simplification, plus-step recognition and magic-division search. Add magic.txt and magic_dump.py to the parity gate; the CodeGenerator class itself remains Python-only.
 - **Consequences**: The parity gate reports 40/40 identical sources. The codegen task stays open for the class port. No full-program byte identity is claimed yet: the helpers are proven but no Rust function has emitted a user function's bytes.
+
+### ADR-131: a byte-parity generator slice and an explicit pipeline state machine
+- **Date**: 2026-11-22
+- **Status**: Accepted
+- **Context**: The codegen class has over one hundred lowering methods. Porting it as one block would make a wrong byte pattern hard to localize, and the stage order was implicit in nested function calls.
+- **Decision**: Add a first generator slice covering the entry stub, frameless functions and simple expressions (literals, names, string handles, printer calls), checked by a generated-artifact parity dump. Add pipeline.rs with an explicit Stage state machine whose transition is pure and whose shell lives in main.rs, satisfying the functional-core/imperative-shell directive.
+- **Consequences**: Parity is now 43/43 sources, including three tiny generated programs with byte-identical .text, labels, fixups and data. 102 Rust tests pass, including two state-machine tests. The codegen task stays open for wider lowering shapes.
