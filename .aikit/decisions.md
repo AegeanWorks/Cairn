@@ -1676,3 +1676,10 @@ external compiler and was verified end to end.
 - **Context**: A caller argument of x>>m feeding a parameter used once as p<<m can fuse to x&-2**m across the copy boundary without binding the parameter.
 - **Decision**: Detect forwarded shift-through parameters, skip evaluating and binding those arguments, lower the parameter's sole << use as a masked read of the caller's home, and restore the shift map after the copy.
 - **Consequences**: call_chain's shift fusion now matches but its return destination still differs; curated parity stays 58/58 and the corpus diagnostic is 22/27.
+
+### ADR-180: copy-home return slot override
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: An inlined copy's final result normally needs one move into the caller's destination; when the returned local is defined before its first read, that local can home directly in the destination register.
+- **Decision**: Track the caller's destination home through emit_value, detect a return of an assigned local in the foreign-inline copy, and remap that local's guest home to the destination so the final move disappears.
+- **Consequences**: call_chain and many_params advanced but still have small byte differences; curated parity stays 58/58 and the corpus diagnostic is 22/27.

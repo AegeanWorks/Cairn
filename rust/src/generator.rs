@@ -632,6 +632,10 @@ pub struct CodeGenerator {
     temporaries: usize,
     /// Slots whose sole use in an inline copy is a forwarded shift: (source home, count).
     shift_through: std::collections::BTreeMap<i64, (String, u32)>,
+    /// Destination home a foreign-inline copy may write its result into directly.
+    copy_home: Option<String>,
+    /// Whether the last foreign-inline copy honored `copy_home`.
+    copy_home_used: bool,
 }
 
 impl CodeGenerator {
@@ -668,6 +672,8 @@ impl CodeGenerator {
             chain_loop_depth: 0,
             temporaries: 0,
             shift_through: std::collections::BTreeMap::new(),
+            copy_home: None,
+            copy_home_used: false,
         }
     }
 
@@ -1608,8 +1614,18 @@ impl CodeGenerator {
                         return;
                     }
                 }
+                let saved_copy_home = self.copy_home.take();
+                if matches!(other, Expr::Call { .. }) {
+                    self.copy_home = home_for(slot, homes).map(str::to_string);
+                    self.copy_home_used = false;
+                }
                 self.emit_expression(other, homes);
-                self.store_slot(slot, "rax", homes);
+                let used = self.copy_home_used;
+                self.copy_home = saved_copy_home;
+                self.copy_home_used = false;
+                if !used {
+                    self.store_slot(slot, "rax", homes);
+                }
             }
         }
     }
@@ -2852,6 +2868,25 @@ impl CodeGenerator {
         }
         if guest.len() < callee.slots {
             return false;
+        }
+        let copy_home = self.copy_home.clone();
+        let mut return_slot: Option<i64> = None;
+        if let Some(copy_home) = &copy_home {
+            if let Some(Stmt::Return { value, .. }) = callee.body.statements.last() {
+                if let Expr::Name { slot, .. } =
+                    crate::optimize::peel_parens(Some(value)).unwrap() {
+                    let slot = *slot;
+                    if slot >= parameters as i64 && slot >= 0 && (slot as usize) < guest.len()
+                        && guest[slot as usize] != copy_home
+                        && assigned_slots(&callee.body).contains(&slot) {
+                        return_slot = Some(slot);
+                    }
+                }
+            }
+        }
+        if let (Some(slot), Some(copy_home)) = (return_slot, &copy_home) {
+            guest[slot as usize] = copy_home.as_str();
+            self.copy_home_used = true;
         }
         let mut shift_plan: std::collections::BTreeMap<i64, (String, u32)> =
             std::collections::BTreeMap::new();
