@@ -231,6 +231,44 @@ fn logical_shift_shape(expression: &Expr) -> Option<(&Expr, u8)> {
     }
 }
 
+/// Slots seeded with a non-negative literal and only grown by non-negative steps.
+fn collect_nonnegative_slots(block: &crate::syntax::Block,
+                              found: &mut std::collections::BTreeSet<i64>) {
+    for statement in &block.statements {
+        match statement {
+            Stmt::Let { slot, value, .. } | Stmt::Assign { slot, value, .. } => {
+                match crate::optimize::peel_parens(Some(value)).unwrap() {
+                    Expr::IntLiteral { value, .. } if *value >= 0 => {
+                        found.insert(*slot);
+                    }
+                    Expr::Binary { op, left, right, .. }
+                        if op == "+" && expr_slot(left) == Some(*slot) => {
+                        if matches!(crate::optimize::peel_parens(Some(right)).unwrap(),
+                            Expr::IntLiteral { value, .. } if *value >= 0) {
+                            found.insert(*slot);
+                        } else {
+                            found.remove(slot);
+                        }
+                    }
+                    _ => {
+                        found.remove(slot);
+                    }
+                }
+            }
+            Stmt::If { then_block, else_block, .. } => {
+                collect_nonnegative_slots(then_block, found);
+                if let Some(otherwise) = else_block {
+                    collect_nonnegative_slots(otherwise, found);
+                }
+            }
+            Stmt::While { body, .. } | Stmt::Block(body) => {
+                collect_nonnegative_slots(body, found);
+            }
+            _ => {}
+        }
+    }
+}
+
 fn collect_str_lens(block: &crate::syntax::Block,
                     found: &mut std::collections::BTreeMap<i64, i64>) {
     for statement in &block.statements {
@@ -466,6 +504,8 @@ pub struct CodeGenerator {
     continue_targets: Vec<String>,
     /// All functions in the program, for code-generation-time foreign inlining.
     functions: Vec<crate::syntax::Function>,
+    /// Slots provably non-negative by literal seeding and non-negative increments.
+    nonnegative_slots: std::collections::BTreeSet<i64>,
 }
 
 impl CodeGenerator {
@@ -497,6 +537,7 @@ impl CodeGenerator {
             break_targets: Vec::new(),
             continue_targets: Vec::new(),
             functions: Vec::new(),
+            nonnegative_slots: std::collections::BTreeSet::new(),
         }
     }
 
@@ -859,6 +900,8 @@ impl CodeGenerator {
         collect_str_lens(&body, &mut str_lens);
         self.string_bounds.clear();
         collect_string_bounds(&body, &str_lens, &mut self.string_bounds);
+        self.nonnegative_slots.clear();
+        collect_nonnegative_slots(&body, &mut self.nonnegative_slots);
         if !frame_function && !delta_eligible && self.inline_depth == 0 {
             self.plan_constant_hoists(&body, callee_count);
         } else {
@@ -1923,6 +1966,11 @@ impl CodeGenerator {
                 self.emit_expression(left.as_ref(), homes);
                 self.assembler.cmp_imm("rax", *value as i64);
             }
+            (Expr::Binary { .. }, Expr::Name { slot, .. }) => {
+                self.emit_into(left.as_ref(), "rcx", homes);
+                self.load_slot(*slot, "rax", homes);
+                self.assembler.cmp_reg_reg("rcx", "rax");
+            }
             (Expr::Index { .. }, Expr::IntLiteral { value, .. }) => {
                 self.emit_expression(left.as_ref(), homes);
                 self.assembler.cmp_imm("rax", *value as i64);
@@ -2194,6 +2242,48 @@ impl CodeGenerator {
         true
     }
 
+    /// Signed variable division with a guarded 32-bit fast path and a zero trap.
+    /// On entry `rcx` holds the dividend and `rax` the divisor.
+    fn emit_variable_division(&mut self, remainder: bool, nonnegative_divisor: bool) {
+        self.assembler.test("rax");
+        self.assembler.jcc("z", crate::runtime::DIV_ZERO_LABEL);
+        let wide = self.fresh("div.wide");
+        let done = self.fresh("div.wide.done");
+        self.assembler.cmp_imm("rax", 2147483647);
+        self.assembler.jcc("a", &wide);
+        self.assembler.cmp_imm("rcx", 2147483647);
+        self.assembler.jcc("a", &wide);
+        self.assembler.mov_reg_reg("rsi", "rax");
+        self.assembler.xor_zero("rdx");
+        self.assembler.mov_reg_reg("rax", "rcx");
+        self.assembler.divide32("rsi");
+        if remainder {
+            self.assembler.mov_reg_reg("rax", "rdx");
+        }
+        self.assembler.jmp(&done);
+        let w = wide.clone();
+        self.assembler.label(&w);
+        if !nonnegative_divisor {
+            let no_overflow = self.fresh("div.no_overflow");
+            self.assembler.cmp_imm("rax", -1);
+            self.assembler.jcc("nz", &no_overflow);
+            self.assembler.mov_imm64("rsi", i64::MIN);
+            self.assembler.cmp_reg_reg("rcx", "rsi");
+            self.assembler.jcc("e", crate::runtime::DIV_ZERO_LABEL);
+            let n = no_overflow.clone();
+            self.assembler.label(&n);
+        }
+        self.assembler.mov_reg_reg("rsi", "rax");
+        self.assembler.mov_reg_reg("rax", "rcx");
+        self.assembler.cqo();
+        self.assembler.divide("rsi", true);
+        if remainder {
+            self.assembler.mov_reg_reg("rax", "rdx");
+        }
+        let d = done.clone();
+        self.assembler.label(&d);
+    }
+
     /// Lower `x / d` or `x % d` for a positive literal divisor as a magic multiply.
     fn try_emit_magic_division(&mut self, op: &str, left: &Expr, right: &Expr,
                                homes: &[(i64, &str)]) -> bool {
@@ -2321,6 +2411,15 @@ impl CodeGenerator {
             } else if let Some(opcode) = arith {
                 self.assembler.binary(opcode, "rax", &right_home);
             }
+            return;
+        }
+        if op == "/" || op == "%" {
+            let nonnegative = expr_slot(right)
+                .is_some_and(|slot| self.nonnegative_slots.contains(&slot));
+            self.emit_expression(left, homes);
+            self.assembler.mov_reg_reg("rcx", "rax");
+            self.emit_expression(right, homes);
+            self.emit_variable_division(op == "%", nonnegative);
             return;
         }
         if op == "<<" || op == ">>" {

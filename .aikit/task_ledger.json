@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795403894.383405,
+    "updated_at": 1795405126.5370338,
     "owner": "opencode:session",
-    "lease_until": 1795411094.383405,
+    "lease_until": 1795412326.5370338,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
         "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
       },
       "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[28/N] runtime rax ABIs, inlined str_byte, home-vs-home conditions; corpus 12/27; curated parity 58/58; ADR-158",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795395057.6475313,
-      "timestamp_str": "2026-11-23 03:50:57",
-      "agent": "opencode:session",
-      "handoff": {
-        "state": "102 Rust tests, 58/58 curated parity",
-        "next": "stdin cursor promotion for char_stream, pair inlining for fib, multi-slot recursion",
-        "evidence": "cargo test, parity, both aikit checks"
-      }
     },
     {
       "task_id": "cairn-rs-codegen",
@@ -327,6 +311,22 @@
       "handoff": {
         "state": "102 Rust tests, 58/58 curated parity",
         "next": "pair-mode home reservation and delta inlining for fib/ackermann, magic-division calls for primes, frame layout",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[42/N] variable division, nonnegative facts, computed-left comparisons; primes nearly matches; corpus 17/27; curated parity 58/58; ADR-172",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795405126.5370338,
+      "timestamp_str": "2026-11-23 06:38:46",
+      "agent": "opencode:session",
+      "handoff": {
+        "state": "102 Rust tests, 58/58 curated parity",
+        "next": "pair-mode home reservation for ackermann/fib, copy-home inlining for many_params, final primes byte diff",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }

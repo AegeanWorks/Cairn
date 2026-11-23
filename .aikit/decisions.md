@@ -1620,3 +1620,10 @@ external compiler and was verified end to end.
 - **Context**: A homed name with a small literal offset can compute into rax with one lea, but the generic binary path emitted a move and an arithmetic immediate.
 - **Decision**: In the rax binary path, lower a Name plus or minus a 32-bit literal with lea_imm from its home before falling back to the arith-immediate form.
 - **Consequences**: Curated parity stays 58/58 and the corpus diagnostic is 17/27; ackermann's remaining gap is the reference's pair-machine home reservation.
+
+### ADR-172: variable division and computed-left comparisons
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Variable divisors emitted nothing and conditions comparing a computed left against a home were dropped, so trial-division loops diverged completely.
+- **Decision**: Lower variable / and % with a guarded 32-bit fast path and a 64-bit fallback, track non-negative slots to skip the overflow probe, and compare a computed left operand by emitting it into rcx before comparing against the right home.
+- **Consequences**: primes now generates the division guards and d*d test with only a few bytes of difference; curated parity stays 58/58 and the corpus diagnostic remains 17/27.
