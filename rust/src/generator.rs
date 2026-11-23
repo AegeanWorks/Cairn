@@ -1021,7 +1021,7 @@ impl CodeGenerator {
             Stmt::If { condition, then_block, else_block, .. } => {
                 self.emit_if(condition, then_block, else_block.as_ref(), tail, homes);
             }
-            Stmt::While { condition, body, .. } => {
+            Stmt::While { condition, body, countdown, .. } => {
                 let plan = self.hoist_plans.get(&(statement as *const Stmt as usize)).cloned();
                 let saved = self.hoist_imm.clone();
                 if let Some(plan) = plan {
@@ -1033,7 +1033,7 @@ impl CodeGenerator {
                     }
                 }
                 if !self.try_emit_rmw_vector(condition, body, homes) {
-                    self.emit_while(condition, body, homes);
+                    self.emit_while(condition, body, *countdown, homes);
                 }
                 self.hoist_imm = saved;
             }
@@ -1117,7 +1117,8 @@ impl CodeGenerator {
         true
     }
 
-    fn emit_while(&mut self, condition: &Expr, body: &crate::syntax::Block, homes: &[(i64, &str)]) {
+    fn emit_while(&mut self, condition: &Expr, body: &crate::syntax::Block,
+                  countdown: bool, homes: &[(i64, &str)]) {
         let start = self.fresh("while.start");
         let end = self.fresh("while.end");
         self.emit_condition_polarity(condition, &end, homes, false);
@@ -1127,6 +1128,29 @@ impl CodeGenerator {
         }
         let start_label = start.clone();
         self.assembler.label(&start_label);
+        if countdown {
+            self.emit_block(body, false, homes);
+            let counter = match crate::optimize::peel_parens(Some(condition)).unwrap() {
+                Expr::Binary { left, right, .. } => {
+                    expr_slot(left).or_else(|| expr_slot(right))
+                }
+                _ => None,
+            };
+            if let Some(slot) = counter {
+                if let Some(home) = home_for(slot, homes) {
+                    self.assembler.sub_imm(home, 1);
+                } else {
+                    self.load_slot(slot, "rax", homes);
+                    self.assembler.sub_imm("rax", 1);
+                    self.store_slot(slot, "rax", homes);
+                }
+            }
+            let again = start.clone();
+            self.assembler.jcc("nz", &again);
+            let end_label = end.clone();
+            self.assembler.label(&end_label);
+            return;
+        }
         let latch = self.fresh("while.latch");
         self.emit_block(body, false, homes);
         let latch_label = latch.clone();
@@ -1234,6 +1258,16 @@ impl CodeGenerator {
                     .unwrap_or(1);
                 self.assembler.mov_load_rbp(
                     "rax", crate::codegen::slot_offset(*base + size as i64 - 1 - *value as i64));
+            }
+            Expr::Index { index, slot, size, .. }
+                if matches!(index.as_ref(), Expr::Name { .. }) =>
+            {
+                let Expr::Name { slot: index_slot, .. } = index.as_ref() else { unreachable!() };
+                if let Some(index_home) = home_for(*index_slot, homes) {
+                    self.assembler.mov_load_indexed(
+                        "rax", "rbp", index_home, 3,
+                        crate::codegen::array_element_base(*slot, *size as i64));
+                }
             }
             Expr::Binary { op, left, right, .. } => {
                 self.emit_binary(op, left, right, homes);

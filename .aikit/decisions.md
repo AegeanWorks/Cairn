@@ -1508,3 +1508,10 @@ external compiler and was verified end to end.
 - **Context**: Accumulator updates through calls, odd saved-home counts and leaf-value rotates each produced a distinct mismatch in the bitop family.
 - **Decision**: Port _fold_update so slot=slot op value combines straight into the home, add the rdi alignment filler and body-may-hold rule, and use the leaf-value rotate fast path with the redundant mask removed.
 - **Consequences**: clz, ctz and rotl are now byte-identical; the corpus diagnostic is 6/27 and curated parity stays 58/58.
+
+### ADR-156: countdown latches and dynamic index loads restore corpus parity
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Countdown loops were lowered as compare-and-branch instead of decrement-and-jnz, and folding slot updates hid dynamic array index loads.
+- **Decision**: Honour the while countdown flag with a sub and jnz latch, and let emit_expression lower a dynamic Name index into a mov_load_indexed so folded accumulator updates keep their load.
+- **Consequences**: Nine of twenty-five valid corpus programs are byte-identical; array_sum is restored and curated parity remains 58/58.
