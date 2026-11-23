@@ -1718,3 +1718,10 @@ external compiler and was verified end to end.
 - **Context**: Frame functions with a pad slot park a call left operand in [rsp] rather than pushing, and a homed-name times literal right operand can combine into a destination with rax alone.
 - **Decision**: Track the active pad slot for call left-holds and recognize homed-name products in combines_in_rax_only.
 - **Consequences**: many_params' byte gap narrowed from 44 to 12 bytes; curated parity stays 58/58 and the corpus diagnostic is 23/27.
+
+### ADR-186: peel parens in homed-right binary combine
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A homed right operand wrapped in parentheses was missed by the in-place combine rule, forcing a generic left-hold with extra moves.
+- **Decision**: Peel parentheses before the homed-right register check in binary lowering.
+- **Consequences**: many_params is byte-identical; the corpus diagnostic is 24/27. Only mandelbrot's frame layout remains; curated parity stays 58/58.

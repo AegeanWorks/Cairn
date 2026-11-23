@@ -2683,11 +2683,12 @@ impl CodeGenerator {
                 }
             }
         }
+        let peeled_right = crate::optimize::peel_parens(Some(right)).unwrap();
         let mut right_home: Option<String> = None;
         if arith.is_some() || op == "-" || op == "*" {
-            if let Expr::Name { slot, .. } = right {
+            if let Expr::Name { slot, .. } = peeled_right {
                 right_home = home_for(*slot, homes).map(str::to_string);
-            } else if let Expr::IntLiteral { value, .. } = right {
+            } else if let Expr::IntLiteral { value, .. } = peeled_right {
                 right_home = self.hoist_imm.get(value).cloned();
             }
         }

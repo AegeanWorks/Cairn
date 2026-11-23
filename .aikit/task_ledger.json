@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795452176.481568,
+    "updated_at": 1795452905.850268,
     "owner": "opencode:session",
-    "lease_until": 1795459376.481568,
+    "lease_until": 1795460105.850268,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[42/N] variable division, nonnegative facts, computed-left comparisons; primes nearly matches; corpus 17/27; curated parity 58/58; ADR-172",
-      "files_affected": [],
-      "handoff": {
-        "evidence": "cargo test, parity, both aikit checks",
-        "next": "pair-mode home reservation for ackermann/fib, copy-home inlining for many_params, final primes byte diff",
-        "state": "102 Rust tests, 58/58 curated parity"
-      },
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795405126.5370338,
-      "timestamp_str": "2026-11-23 06:38:46"
     },
     {
       "agent": "opencode:session",
@@ -329,6 +313,22 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795452176.481568,
       "timestamp_str": "2026-11-23 19:42:56"
+    },
+    {
+      "agent": "opencode:session",
+      "description": "[56/N] peel parens for homed-right combine; many_params byte-identical; corpus 24/27; curated parity 58/58; ADR-187",
+      "files_affected": [],
+      "handoff": {
+        "evidence": "cargo test, parity, cairn gate",
+        "next": "mandelbrot frame layout",
+        "state": "102 Rust tests, 58/58 curated parity"
+      },
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795452905.850268,
+      "timestamp_str": "2026-11-23 19:55:05"
     }
   ]
 }
