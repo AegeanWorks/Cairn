@@ -112,6 +112,39 @@ fn main() {
         }
         return;
     }
+    if (arguments.len() == 4 || arguments.len() == 5) && arguments[1] == "buildexe" {
+        let optimize = arguments.get(4).map(|flag| flag != "--no-optimize").unwrap_or(true);
+        let source_path = Path::new(&arguments[2]);
+        match std::fs::read_to_string(source_path) {
+            Ok(source) => {
+                let normalized = source.trim_start_matches('\u{feff}')
+                    .replace("\r\n", "\n").replace('\r', "\n");
+                match cairn_rs::builder::compile_source(&normalized, &arguments[2], optimize) {
+                    Ok(build) => {
+                        let destination = Path::new(&arguments[3]);
+                        if let Err(error) =
+                            cairn_rs::builder::write_executable(destination, &build.image) {
+                            eprintln!("cannot write {}: {}", destination.display(), error);
+                            std::process::exit(2);
+                        }
+                    }
+                    Err(error) => {
+                        for diagnostic in &error.diagnostics {
+                            println!("ERROR[{},{},{},{}]", diagnostic.code,
+                                     diagnostic.message, diagnostic.fix,
+                                     diagnostic.span.start);
+                        }
+                        std::process::exit(1);
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("cannot read {}: {}", arguments[2], error);
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
     if arguments.len() == 3 && arguments[1] == "build" {
         let path = Path::new(&arguments[2]);
         match std::fs::read_to_string(path) {

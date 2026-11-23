@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "cairn",
-  "test_command": "python -m unittest discover",
+  "test_command": "cargo test --quiet --manifest-path rust/Cargo.toml",
   "topics": [
     "aikit",
     "aikit-integrated",

@@ -188,8 +188,11 @@ def run_command(argv: Sequence[str], timeout: float,
 
 
 def cairn_build_command(source: Path, destination: Path, optimise: bool = True) -> List[str]:
-    """The exact `cairn build` command for one case, with the folding pass optional."""
-    argv = [sys.executable, "-m", "cairn", "build", str(source), "-o", str(destination)]
+    """The exact Rust `cairn-rs buildexe` command for one case."""
+    binary = ROOT / "rust" / "target" / "debug" / "cairn-rs.exe"
+    if not binary.is_file():
+        binary = binary.with_suffix("")
+    argv = [str(binary), "buildexe", str(source), str(destination)]
     if not optimise:
         argv.append("--no-optimize")
     return argv

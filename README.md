@@ -22,7 +22,7 @@ by `cairn capabilities --json` and asserted by `tests/test_values.py`.
 
 | Value | What it means here | Prove it with |
 |---|---|---|
-| **No Dependency** | The compiler imports only the Python standard library; a produced `.exe` needs 64-bit Windows and nothing else. | `python -m unittest tests.test_capabilities` |
+| **No Dependency** | The Rust compiler uses only the standard library; a produced `.exe` needs 64-bit Windows and nothing else. | `cargo test --quiet --manifest-path rust/Cargo.toml` |
 | **AI Compatible** | One JSON object describes the whole surface, and every failure is one object with a stable code. | `python -m cairn capabilities --json` |
 | **Easily Understandable** | One type, one binding form per intent, one flat scope, no implicit conversion. | `python -m cairn capabilities` |
 | **Almost Machine Language Like** | Source maps to emitted x86-64 bytes with no interpreter, GC or hidden runtime, readable label by label. | `python -m cairn listing examples/hello.crn` |
@@ -43,7 +43,7 @@ disagree, `python -m cairn capabilities --json` wins.
   The produced `.exe` needs 64-bit Windows and nothing else.
 - **Canonical Regression Shield Gate**:
   ```bash
-  python -m unittest discover
+  cargo test --quiet --manifest-path rust/Cargo.toml
   cargo test --quiet --manifest-path rust/Cargo.toml
   cargo test --quiet --manifest-path rust/Cargo.toml --test golden_parity
   ```
@@ -211,7 +211,7 @@ python -m cairn capabilities --json   # every accepted form, limit, exit code an
 python -m cairn verify build.exe      # structural proof of a built PE, nothing executed
 python -m cairn verify source.crn     # the same checks on a source compiled in memory
 python -m cairn listing source.crn    # exact .text bytes grouped by label
-python -m unittest discover           # includes the stdlib-only import proof
+cargo test --quiet --manifest-path rust/Cargo.toml   # std-only Rust test suite
 ```
 
 - `capabilities.py` builds its object from the same constants the parser, sema, optimiser and
@@ -389,107 +389,210 @@ outside that band.
 
 ```text
 cairn/
-├── .gitignore                <- transient AIKit state excluded
-├── .aikit/                   <- project memory: map, ADRs, ledger, media
-├── LICENSE                   <- Aegean License 1.1 (AL-1.1): free personal use
-├── COMMERCIAL.md             <- commercial licensing terms
-├── LICENSES/                 <- REUSE license texts
-├── REUSE.toml                <- machine-readable SPDX metadata
-├── README.md
-├── SPEC.md                     <- language law (§-numbered, §16 checklist)
-├── LLM_SYSTEM.md               <- compressed agent card
-├── pyproject.toml            <- package metadata and the `cairn` console script
-├── rust-toolchain.toml       <- the GNU Rust toolchain the twin baselines link with
-├── cairn/                    <- the bootstrap compiler
-│   ├── cli.py                <- build, check, run; exit codes and JSON diagnostics
-│   ├── lexer.py              <- scanner and token model
-│   ├── parser.py             <- recursive-descent parser
-│   ├── syntax.py             <- the syntax tree
-│   ├── ir.py                 <- typed SSA IR, translator and executable interpreter
-│   ├── sema.py               <- names, slots, arity, mutability, return paths
-│   ├── optimize.py           <- folding, neutral operands, dead branches
-│   ├── codegen.py            <- syntax tree to x86-64
-│   ├── machine.py            <- x86-64 encodings and label fixups
-│   ├── runtime.py            <- print, print_char, print_hex and divide-by-zero helpers as machine code
-│   ├── filetable.py          <- qwenFS toy table plus additive emitter (never in default build)
-│   ├── pe.py                 <- PE32+ writer and fixup resolution
-│   ├── builder.py            <- the stages and the atomic file write
-│   ├── capabilities.py       <- the accepted surface as one JSON object
-│   ├── codes.py              <- the diagnostic code registry
-│   ├── diagnostics.py        <- Diagnostic, Span, the JSON contract
-│   ├── image.py              <- artifact and read-only data model
-│   ├── listing.py            <- .text bytes grouped by label
-│   ├── verify.py             <- structural checks over a built image
-│   ├── values.py             <- the six core values with their proving commands
-│   ├── version.py            <- the one version string
-│   ├── __init__.py           <- package docstring and public exports
-│   └── __main__.py           <- `python -m cairn`
-├── rust/                     <- std-only Rust rewrite (ADR-117), kept identical by a parity gate (ADR-118)
-│   ├── Cargo.toml            <- crate manifest and the rust-test gate target
-│   ├── Cargo.lock            <- pinned dependency graph (currently std-only)
+├── .aikit/
+│   ├── cache/
+│   │   ├── hygiene.json
+│   │   └── knowledge_ast.json
+│   ├── benchmark_history.jsonl
+│   ├── codebase_map.md
+│   ├── decisions.md
+│   ├── guidelines.md
+│   ├── media.json
+│   ├── project.json
+│   ├── reforge.json
+│   ├── reforge.json.bak
+│   ├── task_ledger.json
+│   ├── task_ledger.json.bak
+│   ├── task_ledger_archive.jsonl
+│   └── task_ledger_archive.jsonl.bak
+├── LICENSES/
+│   └── LicenseRef-AL-1.1.txt
+├── assets/
+│   ├── logo.svg
+│   └── social-preview.svg
+├── benchmarks/
+│   ├── __init__.py
+│   ├── ackermann.c
+│   ├── ackermann.cpp
+│   ├── ackermann.crn
+│   ├── ackermann.rs
+│   ├── argv_walk.c
+│   ├── argv_walk.cpp
+│   ├── argv_walk.crn
+│   ├── argv_walk.rs
+│   ├── array_sum.c
+│   ├── array_sum.cpp
+│   ├── array_sum.crn
+│   ├── array_sum.rs
+│   ├── binary_gcd.c
+│   ├── binary_gcd.cpp
+│   ├── binary_gcd.crn
+│   ├── binary_gcd.rs
+│   ├── bswap.c
+│   ├── bswap.cpp
+│   ├── bswap.crn
+│   ├── bswap.rs
+│   ├── call_chain.c
+│   ├── call_chain.cpp
+│   ├── call_chain.crn
+│   ├── call_chain.rs
+│   ├── char_stream.c
+│   ├── char_stream.cpp
+│   ├── char_stream.crn
+│   ├── char_stream.rs
+│   ├── clz.c
+│   ├── clz.cpp
+│   ├── clz.crn
+│   ├── clz.rs
+│   ├── collatz.c
+│   ├── collatz.cpp
+│   ├── collatz.crn
+│   ├── collatz.rs
+│   ├── ctz.c
+│   ├── ctz.cpp
+│   ├── ctz.crn
+│   ├── ctz.rs
+│   ├── fib30.c
+│   ├── fib30.cpp
+│   ├── fib30.crn
+│   ├── fib30.rs
+│   ├── folded_math.c
+│   ├── folded_math.cpp
+│   ├── folded_math.crn
+│   ├── folded_math.rs
+│   ├── hex_io.c
+│   ├── hex_io.cpp
+│   ├── hex_io.crn
+│   ├── hex_io.rs
+│   ├── mandelbrot.c
+│   ├── mandelbrot.cpp
+│   ├── mandelbrot.crn
+│   ├── mandelbrot.rs
+│   ├── many_params.c
+│   ├── many_params.cpp
+│   ├── many_params.crn
+│   ├── many_params.rs
+│   ├── nqueens.c
+│   ├── nqueens.cpp
+│   ├── nqueens.crn
+│   ├── nqueens.rs
+│   ├── paired.py
+│   ├── popcount.c
+│   ├── popcount.cpp
+│   ├── popcount.crn
+│   ├── popcount.rs
+│   ├── primes.c
+│   ├── primes.cpp
+│   ├── primes.crn
+│   ├── primes.rs
+│   ├── rotl.c
+│   ├── rotl.cpp
+│   ├── rotl.crn
+│   ├── rotl.rs
+│   ├── run_benchmarks.py
+│   ├── sieve.c
+│   ├── sieve.cpp
+│   ├── sieve.crn
+│   ├── sieve.rs
+│   ├── splitmix.c
+│   ├── splitmix.cpp
+│   ├── splitmix.crn
+│   ├── splitmix.rs
+│   ├── str_scan.c
+│   ├── str_scan.cpp
+│   ├── str_scan.crn
+│   ├── str_scan.rs
+│   ├── tak.c
+│   ├── tak.cpp
+│   ├── tak.crn
+│   ├── tak.rs
+│   ├── xorshift.c
+│   ├── xorshift.cpp
+│   ├── xorshift.crn
+│   └── xorshift.rs
+├── examples/
+│   ├── alloy_probe/
+│   │   ├── src/
+│   │   │   └── main.al
+│   │   ├── README.md
+│   │   ├── alloy.toml
+│   │   └── lowered.crn
+│   ├── arithmetic.crn
+│   ├── fib.crn
+│   └── hello.crn
+├── parity/
+│   ├── specs/
+│   │   ├── codegen/
+│   │   │   ├── array.crn
+│   │   │   ├── arrayfill.crn
+│   │   │   ├── arraywrite.crn
+│   │   │   ├── bigliteral.crn
+│   │   │   ├── binary.crn
+│   │   │   ├── callvar.crn
+│   │   │   ├── delta.crn
+│   │   │   ├── frame.crn
+│   │   │   ├── if.crn
+│   │   │   ├── mutual.crn
+│   │   │   ├── simple_print.crn
+│   │   │   ├── simple_return.crn
+│   │   │   ├── simple_str.crn
+│   │   │   ├── slot.crn
+│   │   │   ├── usercall.crn
+│   │   │   ├── vecrmw.crn
+│   │   │   └── while.crn
+│   │   ├── fold_calls.txt
+│   │   ├── magic.txt
+│   │   └── pe_basic.txt
+│   └── golden.sha256
+├── rust/
 │   ├── src/
-│   │   ├── builder.rs        <- source-to-image pipeline and atomic write
-│   │   ├── capabilities.rs   <- byte-exact JSON surface manifest
-│   │   ├── cli.rs            <- pure check --json envelope builder
-│   │   ├── codegen.rs        <- codegen helper layer (labels, slots, magic divide)
-│   │   ├── codes.rs          <- diagnostic code registry
-│   │   ├── diagnostics.rs    <- spans, diagnostics and the JSON contract
-│   │   ├── dump.rs           <- canonical dump emitted by `cairn-rs dump`
-│   │   ├── generator.rs      <- first generator slice: entry, frameless functions
-│   │   ├── image.rs          <- read-only and writable data, artifact model
-│   │   ├── lexer.rs          <- scanner and token model
-│   │   ├── listing.rs        <- label-grouped .text bytes
-│   │   ├── machine.rs        <- x86-64 emitter: byte-exact instruction encodings
-│   │   ├── optimize.rs       <- constant folding and safe algebraic identities
-│   │   ├── main.rs           <- binary entry point and dump commands
-│   │   ├── parser.rs         <- recursive-descent parser
-│   │   ├── pe.rs             <- PE32+ writer and fixup resolution
-│   │   ├── pipeline.rs       <- explicit compiler-stage state machine
-│   │   ├── runtime.rs        <- emitted printer, input and trap helpers
-│   │   ├── sema.rs           <- names, slots, arity, mutability and return paths
-│   │   ├── spec.rs           <- shared artifact spec reader
-│   │   ├── verify.rs         <- structural checks over a built image
-│   │   ├── syntax.rs         <- the syntax tree
-│   │   ├── values.rs         <- the six core values
-│   │   ├── version.rs        <- the one version string
-│   │   └── lib.rs            <- crate root
-│   └── tests/
-│       ├── backend.rs        <- PE linking, verifier and listing tests
-│       ├── front_end.rs      <- lexer, parser and contract tests ported from Python
-│       ├── machine.rs        <- exact emitter byte tests ported from Python
-│       ├── optimize.rs       <- folding, wrapping and trap-safety tests
-│       ├── runtime.rs        <- emitted runtime labels, state and fixup tests
-│       ├── sema.rs           <- semantic rule tests ported from Python
-│       └── golden_parity.rs  <- Rust-only golden verification (591 frozen hashes)
-├── parity/                   <- evidence tooling, outside the Rust-only crate
-│   ├── capture_golden.py     <- one-time capture of the frozen reference hash manifest
-│   ├── golden.sha256         <- frozen reference hashes, captured after Python parity
-│   ├── check_parity.py       <- legacy Python reference comparator (not a gate)
-│   ├── dump.py               <- canonical front-end oracle
-│   ├── alg_dump.py           <- algebraic oracle
-│   ├── builder_dump.py       <- build pipeline oracle
-│   ├── cap_dump.py           <- capability manifest oracle
-│   ├── cli_dump.py           <- check --json envelope oracle
-│   ├── codegen_dump.py       <- generated artifact oracle
-│   ├── copy_dump.py          <- copy-propagation oracle
-│   ├── count_dump.py         <- countdown oracle
-│   ├── final_dump.py         <- final loop passes oracle
-│   ├── fold_dump.py          <- folding oracle
-│   ├── fuse_dump.py          <- odd-pair fusion oracle
-│   ├── inline_dump.py        <- inlining oracle
-│   ├── listing_dump.py       <- listing --json oracle
-│   ├── lower_dump.py         <- for-loop lowering oracle
-│   ├── magic_dump.py         <- magic-division oracle
-│   ├── pe_dump.py            <- PE artifact oracle
-│   ├── runtime_dump.py       <- runtime helper oracle
-│   ├── run_dump.py           <- run --json oracle
-│   ├── unroll_dump.py        <- unrolling oracle
-│   └── verify_dump.py        <- verify --json oracle
-│   └── specs/                <- shared specs: codegen sources, divisors, PE artifact, folds
-├── benchmarks/               <- three cases, their C and Rust twins, and the harness
-├── examples/                 <- hello, fibonacci, arithmetic, alloy_probe (Alloy backend probe)
-├── tests/                    <- lexer, parser, sema, optimiser, codegen, emitter, PE, CLI, harness, capabilities, verifier, values, filetable, end-to-end, IR differential
-└── assets/                   <- generated brand candidates
+│   │   ├── builder.rs
+│   │   ├── capabilities.rs
+│   │   ├── cli.rs
+│   │   ├── codegen.rs
+│   │   ├── codes.rs
+│   │   ├── diagnostics.rs
+│   │   ├── dump.rs
+│   │   ├── generator.rs
+│   │   ├── image.rs
+│   │   ├── lexer.rs
+│   │   ├── lib.rs
+│   │   ├── listing.rs
+│   │   ├── machine.rs
+│   │   ├── main.rs
+│   │   ├── optimize.rs
+│   │   ├── parser.rs
+│   │   ├── pe.rs
+│   │   ├── pipeline.rs
+│   │   ├── runtime.rs
+│   │   ├── sema.rs
+│   │   ├── spec.rs
+│   │   ├── syntax.rs
+│   │   ├── values.rs
+│   │   ├── verify.rs
+│   │   └── version.rs
+│   ├── tests/
+│   │   ├── backend.rs
+│   │   ├── front_end.rs
+│   │   ├── golden_parity.rs
+│   │   ├── machine.rs
+│   │   ├── optimize.rs
+│   │   ├── runtime.rs
+│   │   └── sema.rs
+│   ├── Cargo.lock
+│   └── Cargo.toml
+├── .gitignore
+├── COMMERCIAL.md
+├── LICENSE
+├── LLM_SYSTEM.md
+├── README.md
+├── REUSE.toml
+├── SPEC.md
+├── char_stream.old.exe
+├── hex_io.old.exe
+├── pyproject.toml
+├── rust-toolchain.toml
+└── xorshift.old.exe
 ```
 
 <!-- aegean:brand-assets:start -->

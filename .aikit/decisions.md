@@ -1746,3 +1746,10 @@ external compiler and was verified end to end.
 - **Context**: The Python codegen oracle ignored the program returned by optimize and never ran lower_for_loops, so argv_walk and hex_io errored; the Rust generator also lacked inlined arg_byte and fused hex-plus-newline emission.
 - **Decision**: Run lower_for_loops before optimize in the oracle, inline arg_byte for token zero with a leaf index, fuse print_hex followed by print_char(10), and extend the Rust golden manifest to all 27 corpus sources while excluding the two environment-dependent run envelopes.
 - **Consequences**: All 27 examples and benchmarks are byte-identical; the Rust golden manifest holds 591 frozen hashes and the corpus diagnostic is 27/27.
+
+### ADR-190: remove the Python bootstrap compiler
+- **Date**: 2026-11-24
+- **Status**: Accepted
+- **Context**: The Rust compiler now matches all 25 valid corpus programs byte-for-byte and its golden verification is Rust-only, so the Python implementation and its oracles are dead weight.
+- **Decision**: Delete the Python cairn package, its unittest suite and the Python parity oracles; migrate the benchmark harness to cairn-rs buildexe with a --no-optimize flag and point the project test command at cargo test.
+- **Consequences**: The project is Rust-only; 6 AIKit gates pass, cargo tests and 591 golden hashes pass, and the cross-language harness now compiles with the Rust binary (about 31-115 ms versus 300-2000 ms for Python).
