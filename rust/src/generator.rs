@@ -2247,6 +2247,16 @@ impl CodeGenerator {
             _ => None,
         };
         if let Expr::IntLiteral { value, .. } = right {
+            if (op == "+" || op == "-") && *value >= -0x80000000 && *value <= 0x7FFFFFFF {
+                if let Expr::Name { slot, .. } =
+                    crate::optimize::peel_parens(Some(left)).unwrap() {
+                    if let Some(home) = home_for(*slot, homes) {
+                        let effective = if op == "-" { -*value } else { *value };
+                        self.assembler.lea_imm("rax", home, effective as i64);
+                        return;
+                    }
+                }
+            }
             if *value >= -0x80000000 && *value <= 0x7FFFFFFF {
                 if let Some(ext) = imm_ext {
                     self.emit_expression(left, homes);

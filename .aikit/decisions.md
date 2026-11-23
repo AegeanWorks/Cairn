@@ -1613,3 +1613,10 @@ external compiler and was verified end to end.
 - **Context**: Arguments containing nested calls would clobber already-bound caller-saved argument registers, so the reference parks each result on the stack before binding in reverse.
 - **Decision**: Detect a multi-argument call whose arguments contain calls, evaluate them left to right pushing each result, then pop them into the ABI registers in reverse order before the call or inline copy.
 - **Consequences**: tak is byte-identical; the corpus diagnostic is 17/27. Remaining shapes are delta pair inlining, multi-slot recursion, magic-division calls and frame layout. Curated parity stays 58/58.
+
+### ADR-171: homed name plus or minus literal uses one lea
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A homed name with a small literal offset can compute into rax with one lea, but the generic binary path emitted a move and an arithmetic immediate.
+- **Decision**: In the rax binary path, lower a Name plus or minus a 32-bit literal with lea_imm from its home before falling back to the arith-immediate form.
+- **Consequences**: Curated parity stays 58/58 and the corpus diagnostic is 17/27; ackermann's remaining gap is the reference's pair-machine home reservation.
