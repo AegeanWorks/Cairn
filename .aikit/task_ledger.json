@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795406984.8927007,
+    "updated_at": 1795407692.9871352,
     "owner": "opencode:session",
-    "lease_until": 1795414184.8927007,
+    "lease_until": 1795414892.9871352,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[32/N] logical-shift peephole and hoist counting; splitmix hoists now match; corpus 13/27; curated parity 58/58; ADR-162",
-      "files_affected": [],
-      "handoff": {
-        "evidence": "cargo test, parity, both aikit checks",
-        "next": "in-place update folding for hash mixers, magic division, pair inlining for fib, multi-slot recursion",
-        "state": "102 Rust tests, 58/58 curated parity"
-      },
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795397016.6496098,
-      "timestamp_str": "2026-11-23 04:23:36"
     },
     {
       "agent": "opencode:session",
@@ -329,6 +313,22 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795406984.892701,
       "timestamp_str": "2026-11-23 07:09:44"
+    },
+    {
+      "agent": "opencode:session",
+      "description": "[46/N] pair machine chain loops and delta copies; ackermann matches through 1185 bytes; corpus 20/27; curated parity 58/58; ADR-176",
+      "files_affected": [],
+      "handoff": {
+        "evidence": "cargo test, parity, cairn gate",
+        "next": "pair copy depth cap for ackermann, copy-home inlining for many_params/call_chain, multi-slot recursion for nqueens, frame layout for mandelbrot",
+        "state": "102 Rust tests, 58/58 curated parity"
+      },
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795407692.9871352,
+      "timestamp_str": "2026-11-23 07:21:32"
     }
   ]
 }

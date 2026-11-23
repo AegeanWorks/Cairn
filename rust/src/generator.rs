@@ -537,6 +537,10 @@ pub struct CodeGenerator {
     functions: Vec<crate::syntax::Function>,
     /// Slots provably non-negative by literal seeding and non-negative increments.
     nonnegative_slots: std::collections::BTreeSet<i64>,
+    /// The second parameter of a pair-mode function, rebound across inline copies.
+    value_slot: i64,
+    /// Nesting depth of pair chain loops, for parking the counter register.
+    chain_loop_depth: usize,
 }
 
 impl CodeGenerator {
@@ -569,6 +573,8 @@ impl CodeGenerator {
             continue_targets: Vec::new(),
             functions: Vec::new(),
             nonnegative_slots: std::collections::BTreeSet::new(),
+            value_slot: -1,
+            chain_loop_depth: 0,
         }
     }
 
@@ -917,7 +923,12 @@ impl CodeGenerator {
             && !body_assigns(&function.body)
             && has_delta_self_call(&function.body, &function.name, function.parameters[0].slot);
         let pair_mode = !frame_function && !delta_eligible && is_pair_shape(function);
-        self.delta_slot = if delta_eligible { function.parameters[0].slot } else { -1 };
+        self.delta_slot = if delta_eligible || pair_mode {
+            function.parameters[0].slot
+        } else {
+            -1
+        };
+        self.value_slot = if pair_mode { function.parameters[1].slot } else { -1 };
         self.delta_value = 0;
         self.inline_depth = 0;
         self.current_name = function.name.clone();
@@ -1086,6 +1097,7 @@ impl CodeGenerator {
         }
         self.delta_slot = -1;
         self.delta_value = 0;
+        self.value_slot = -1;
         self.inline_depth = 0;
         self.current_name.clear();
     }
@@ -2504,6 +2516,89 @@ impl CodeGenerator {
     }
 
     /// Lower a constant-delta self-call as a pure-text copy of the current body.
+    /// Emit one inlined copy of the pair-mode body with an accumulated first-parameter delta.
+    fn emit_pair_body_copy(&mut self, delta: i64, homes: &[(i64, &str)]) {
+        let saved_epilogue = self.epilogue.clone();
+        let saved_delta = self.delta_value;
+        let saved_depth = self.inline_depth;
+        self.epilogue = self.fresh(&format!(
+            "{}.pair", crate::codegen::function_label(&self.current_name)));
+        self.delta_value -= delta;
+        self.inline_depth += 1;
+        let body = self.current_body.clone();
+        for (index, statement) in body.statements.iter().enumerate() {
+            self.emit_statement(statement, index + 1 == body.statements.len(), homes);
+        }
+        let end = self.epilogue.clone();
+        self.assembler.label(&end);
+        self.epilogue = saved_epilogue;
+        self.delta_value = saved_delta;
+        self.inline_depth = saved_depth;
+    }
+
+    /// Lower `f(m - delta, n - 1)` as a counted chain loop around one pair copy.
+    fn emit_pair_chain_loop(&mut self, homes: &[(i64, &str)]) {
+        let Some(value_home) = home_for(self.value_slot, homes).map(str::to_string) else { return };
+        let top = self.fresh("pair.loop");
+        let exit = self.fresh("pair.exit");
+        let nested = self.chain_loop_depth > 0;
+        if nested {
+            self.assembler.push("r13");
+        }
+        self.chain_loop_depth += 1;
+        self.assembler.mov_reg_reg("r13", &value_home);
+        self.assembler.mov_imm64(&value_home, 1);
+        let padding = (16 - self.assembler.here() % 16) % 16;
+        if padding > 0 {
+            self.assembler.nop_pad(padding);
+        }
+        let t = top.clone();
+        self.assembler.label(&t);
+        self.assembler.cmp_imm("r13", 0);
+        self.assembler.jcc("e", &exit);
+        self.emit_pair_body_copy(-1, homes);
+        self.assembler.mov_reg_reg(&value_home, "rax");
+        self.assembler.sub_imm("r13", 1);
+        let again = top.clone();
+        self.assembler.jcc("nz", &again);
+        let e = exit.clone();
+        self.assembler.label(&e);
+        self.assembler.mov_reg_reg("rax", &value_home);
+        self.chain_loop_depth -= 1;
+        if nested {
+            self.assembler.pop("r13");
+        }
+    }
+
+    /// Lower a two-parameter self-call as a pure-text pair copy.
+    fn emit_pair_self_call(&mut self, delta: i64, value: &Expr, homes: &[(i64, &str)]) {
+        let Some(value_home) = home_for(self.value_slot, homes).map(str::to_string) else { return };
+        let value = crate::optimize::peel_parens(Some(value)).unwrap();
+        // A step of exactly `n - 1` is the chain loop's counted iteration.
+        if let Expr::Binary { op, left, right, .. } = value {
+            if op == "-" && expr_slot(left) == Some(self.value_slot)
+                && matches!(crate::optimize::peel_parens(Some(right)).unwrap(),
+                    Expr::IntLiteral { value, .. } if *value == 1) {
+                self.emit_pair_chain_loop(homes);
+                return;
+            }
+            if op == "+" || op == "-" {
+                if let Expr::IntLiteral { value: amount, .. } =
+                    crate::optimize::peel_parens(Some(right)).unwrap() {
+                    let effective = if op == "-" { -*amount } else { *amount };
+                    self.assembler.lea_imm(&value_home, &value_home, effective as i64);
+                    self.emit_pair_body_copy(delta, homes);
+                    return;
+                }
+            }
+        }
+        if let Expr::Call { .. } = value {
+            self.emit_expression(value, homes);
+            self.assembler.mov_reg_reg(&value_home, "rax");
+        }
+        self.emit_pair_body_copy(delta, homes);
+    }
+
     fn emit_delta_self_call(&mut self, delta: i64, homes: &[(i64, &str)]) {
         let saved_epilogue = self.epilogue.clone();
         let saved_value = self.delta_value;
@@ -2801,9 +2896,33 @@ impl CodeGenerator {
                         return;
                     }
                 }
+                if name == &self.current_name
+                    && self.value_slot >= 0
+                    && self.inline_depth < 7
+                    && arguments.len() == 2 {
+                    let second = crate::optimize::peel_parens(Some(&arguments[1])).unwrap();
+                    if !matches!(second, Expr::IntLiteral { .. } | Expr::Call { .. }) {
+                        if let Some(delta) = delta_argument(&arguments[0], self.delta_slot) {
+                            self.emit_pair_self_call(delta, second, homes);
+                            return;
+                        }
+                    }
+                }
                 // Pure arguments bind straight into their registers in reverse order. An
                 // argument that calls must be evaluated first and parked, because a nested
                 // call clobbers the caller-saved argument registers already bound.
+                if arguments.len() == 2 && !expr_has_call(&arguments[0])
+                    && expr_has_call(&arguments[1]) {
+                    self.emit_expression(&arguments[1], homes);
+                    self.assembler.mov_reg_reg("rdx", "rax");
+                    self.emit_into(&arguments[0], "rcx", homes);
+                    if self.try_emit_foreign_inline(name, homes) {
+                        return;
+                    }
+                    let label = function_label(name);
+                    self.call_site(&label);
+                    return;
+                }
                 if arguments.len() > 1 && arguments.iter().any(expr_has_call) {
                     for argument in arguments {
                         self.emit_expression(argument, homes);

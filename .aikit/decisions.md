@@ -1648,3 +1648,10 @@ external compiler and was verified end to end.
 - **Context**: The reference's two-parameter pair-inline shape reserves r13 as the chain-counter save slot in the prologue and epilogue.
 - **Decision**: Detect the two-slot, two-parameter self-call shape with a zero guard on the second parameter and push/pop r13 around the frameless body, matching the reference's extra saved home.
 - **Consequences**: ackermann's prologue now matches; its remaining gap is the pair-machine chain loop and delta copies. Curated parity stays 58/58 and the corpus diagnostic is 20/27.
+
+### ADR-176: pair machine chain loops and delta copies
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: The two-parameter pure-text inline shape lowers self-calls as counted chain loops around inlined body copies, with the value parameter rebound in its home and the first parameter read through an accumulated delta.
+- **Decision**: Track the value slot and chain-loop depth, detect pair-shaped self-calls, emit chain loops with the r13 counter, emit body copies with accumulated deltas, and bind two-argument calls with a pure first argument right-to-left.
+- **Consequences**: ackermann's chain loop and copies now match through byte 1185 but an extra nested copy remains; curated parity stays 58/58 and the corpus diagnostic is 20/27.
