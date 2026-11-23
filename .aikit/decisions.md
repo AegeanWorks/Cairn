@@ -1585,3 +1585,10 @@ external compiler and was verified end to end.
 - **Context**: The fused odd-pair Collatz loop halves first and folds the parity into a carry-selecting cmov and adc, so the generic branch-heavy lowering never matched.
 - **Decision**: Detect the guarded k>1 loop with an even k/2 branch and an odd (3k+1)/2 branch, then emit one shr, a scaled lea, cmov on carry and adc for the step counter, preserving the generic loop's label numbering.
 - **Consequences**: collatz is byte-identical; the corpus diagnostic is 16/27. Remaining shapes are delta pair inlining, multi-slot recursion, magic-division call shapes and frame layout. Curated parity stays 58/58.
+
+### ADR-167: big bit-test masks use and-immediate instead of test imm8
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A large array-index mask overflowed the assembler's imm8 test encoding and panicked, which broke nqueens generation.
+- **Decision**: Keep the test-immediate home peephole only for masks up to 127; otherwise evaluate the operand into rax and lower the mask as and-immediate or a scratch register before branching.
+- **Consequences**: The nqueens panic is fixed and all 58 curated specs still pass; the corpus diagnostic remains 16/27.

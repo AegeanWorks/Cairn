@@ -1861,17 +1861,30 @@ impl CodeGenerator {
                             }
                         } else { None };
                         if let Some((value, mask)) = bit_test {
-                            if let Some(slot) = expr_slot(value) {
-                                if let Some(home) = home_for(slot, homes) {
-                                    self.assembler.test_imm(home, mask as i64);
-                                    let parity = if op == "==" { "e" } else { "ne" };
-                                    let parity = if when_true { parity } else {
-                                        match parity { "e" => "ne", "ne" => "e", other => other }
-                                    };
-                                    self.assembler.jcc(parity, target);
-                                    return;
+                            let parity = if op == "==" { "e" } else { "ne" };
+                            let parity = if when_true { parity } else {
+                                match parity { "e" => "ne", "ne" => "e", other => other }
+                            };
+                            if mask <= 127 {
+                                if let Some(slot) = expr_slot(value) {
+                                    if let Some(home) = home_for(slot, homes) {
+                                        self.assembler.test_imm(home, mask as i64);
+                                        self.assembler.jcc(parity, target);
+                                        return;
+                                    }
                                 }
                             }
+                            self.emit_expression(value, homes);
+                            if mask <= 127 {
+                                self.assembler.test_imm("rax", mask as i64);
+                            } else if mask <= 0x7FFFFFFF {
+                                self.assembler.arith_imm(4, "rax", mask as i64);
+                            } else {
+                                self.assembler.mov_imm64("rsi", mask as i64);
+                                self.assembler.binary(0x21, "rax", "rsi");
+                            }
+                            self.assembler.jcc(parity, target);
+                            return;
                         }
                     }
                 }
@@ -2195,6 +2208,11 @@ impl CodeGenerator {
             if let Expr::Name { slot, .. } = left {
                 if let (Some(home), Expr::IntLiteral { value, .. }) =
                     (home_for(*slot, homes), right) {
+                    let scale = match *value { 3 => Some(1u8), 5 => Some(2), 9 => Some(3), _ => None };
+                    if let Some(scale) = scale {
+                        self.assembler.lea_scale("rax", home, home, scale, 0);
+                        return;
+                    }
                     if *value >= -2147483648 && *value <= 2147483647 {
                         self.assembler.imul_imm("rax", home, *value as i64);
                         return;
