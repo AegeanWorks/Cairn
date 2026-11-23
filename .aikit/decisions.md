@@ -1480,3 +1480,24 @@ external compiler and was verified end to end.
 - **Context**: The parked vecrmw spec differed by one xor-zero clear; fixing it required matching the reference home ranking, not a special case.
 - **Decision**: Rank frame-function slots by deepest loop nesting with ties by descending slot, clear unassigned non-parameter homes, and drop the extra operand-slot check from the RMW matcher because sema leaves it at -1. Return the spec to the gated set.
 - **Consequences**: Curated parity is 57/57 including the two-lane array RMW loop. Other real benchmarks still use summation and stdin-scan loop shapes that are not lowered.
+
+### ADR-152: self-index array writes lower to one indexed store
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A fill loop a[i]=i was taking a temp-slot round trip while the reference uses one SIB store based on rbp.
+- **Decision**: For an array element store whose value and index are the same homed name, emit mov [rbp + index*8 + array_element_base(slot,size)], index directly via Assembler::mov_store_indexed. Other stores keep the generic path.
+- **Consequences**: Curated parity is 58/58 including the indexed write loop. Summation, stdin-scan and multi-slot recursive shapes still block full corpus parity.
+
+### ADR-153: array accumulator loads, latch numbering and self-index stores are byte-exact
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: The array_sum loop needed an indexed load added to the accumulator, a latch label allocated before the body, and self-index stores lowered to one SIB write.
+- **Decision**: Add emit_index_load for dynamic indices, lower slot=slot+a[i] with add into the home, allocate while.latch before the body to match counter order, and emit a[i]=i as mov [rbp+index*8+base], index. Add arraywrite and vecrmw specs to the gate.
+- **Consequences**: Curated parity is 58/58; array_sum now produces a byte-identical full dump including labels and fixups.
+
+### ADR-154: constant hoisting and general binary lowering close the bitop family
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Big literals in loops were materialised with movabs on every iteration and general binary expressions emitted nothing, so bswap, clz, ctz and popcount diverged completely.
+- **Decision**: Plan spare homes per loop for the most-used big literals, save them in the frameless prologue, load them at loop entry, and consult the hoist map at every literal site. Port binary-into-destination, a general rax binary lowering, frameless home clears and the inline clz/ctz/bswap/rotl builtins.
+- **Consequences**: bswap now produces a byte-identical full dump; the corpus diagnostic rises from 2/27 to 4/27 (argv_walk and hex_io are excluded because the Python oracle itself errors). Curated parity stays 58/58.

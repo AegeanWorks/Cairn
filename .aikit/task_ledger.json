@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795388804.9373586,
+    "updated_at": 1795391763.6852746,
     "owner": "opencode:session",
-    "lease_until": 1795396004.9373586,
+    "lease_until": 1795398963.6852746,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,40 +105,6 @@
         "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
       },
       "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[9/N] capability manifest ported with byte-exact JSON parity; parity 51/51; ADR-138; real-program .text diagnostic still 2/27 and builder/CLI remain Python-only",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795370327.3409455,
-      "timestamp_str": "2026-11-22 20:58:47",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "handoff": {
-        "state": "102 Rust tests, 51/51 curated parity",
-        "next": "port builder and CLI, then return to delta-inlined recursive codegen for full .text parity",
-        "evidence": "cargo test, parity, both aikit checks"
-      }
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[10/N] else-less if uses inverted branch and if.else label; parity 52/52 including mutual calls; ADR-139; real-program .text diagnostic still 2/27",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795371193.820838,
-      "timestamp_str": "2026-11-22 21:13:13",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "handoff": {
-        "state": "102 Rust tests, 52/52 curated parity",
-        "next": "delta-inlined recursive callees and builder/CLI port",
-        "evidence": "cargo test, parity, both aikit checks"
-      }
     },
     {
       "task_id": "cairn-rs-codegen",
@@ -339,6 +305,38 @@
       "handoff": {
         "state": "102 Rust tests, 57/57 curated parity",
         "next": "summation and stdin-scan loop shapes, then multi-slot recursion",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[23/N] self-index array writes emit one indexed store; parity 58/58; ADR-152; summation/stdin-scan and multi-slot recursion remain",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795389586.1790593,
+      "timestamp_str": "2026-11-23 02:19:46",
+      "agent": "opencode:session",
+      "handoff": {
+        "state": "102 Rust tests, 58/58 curated parity",
+        "next": "summation and stdin-scan loops, then multi-slot recursive frames",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[24/N] constant hoisting, general binary lowering, inline builtins and indexed accumulator loads; corpus 4/27; curated parity 58/58; ADR-153/154",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795391763.6852746,
+      "timestamp_str": "2026-11-23 02:56:03",
+      "agent": "opencode:session",
+      "handoff": {
+        "state": "102 Rust tests, 58/58 curated parity",
+        "next": "pair inlining for fib, home-count fixes for clz/ctz/popcount/char_stream, then remaining bitops and recursion",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }

@@ -129,6 +129,12 @@ pub struct CodeGenerator {
     current_name: String,
     current_body: crate::syntax::Block,
     arrays: Vec<(i64, usize)>,
+    /// Per-loop invariant big-literal hoists, keyed by the While statement address.
+    hoist_plans: std::collections::BTreeMap<usize, Vec<(i128, String)>>,
+    /// Active value -> spare home map while a hoisted loop body lowers.
+    hoist_imm: std::collections::BTreeMap<i128, String>,
+    /// Spare homes saved by the frameless prologue for hoisted constants.
+    hoist_homes: Vec<String>,
 }
 
 impl CodeGenerator {
@@ -150,12 +156,136 @@ impl CodeGenerator {
                 statements: Vec::new(),
             },
             arrays: Vec::new(),
+            hoist_plans: std::collections::BTreeMap::new(),
+            hoist_imm: std::collections::BTreeMap::new(),
+            hoist_homes: Vec::new(),
         }
     }
 
     fn fresh(&mut self, stem: &str) -> String {
         self.counter += 1;
         format!("{}.{}", stem, self.counter)
+    }
+
+    fn loops_within(block: &crate::syntax::Block, found: &mut Vec<*const Stmt>) {
+        for statement in &block.statements {
+            match statement {
+                Stmt::While { body, .. } => {
+                    found.push(statement as *const Stmt);
+                    Self::loops_within(body, found);
+                }
+                Stmt::If { then_block, else_block, .. } => {
+                    Self::loops_within(then_block, found);
+                    if let Some(otherwise) = else_block {
+                        Self::loops_within(otherwise, found);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn count_add(counts: &mut Vec<(i128, usize)>, value: i128) {
+        if value < -0x80000000 || value > 0x7FFFFFFF {
+            if let Some(entry) = counts.iter_mut().find(|(found, _)| *found == value) {
+                entry.1 += 1;
+            } else {
+                counts.push((value, 1));
+            }
+        }
+    }
+
+    fn count_literals(expr: &Expr, counts: &mut Vec<(i128, usize)>) {
+        match expr {
+            Expr::IntLiteral { value, .. } => Self::count_add(counts, *value),
+            Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => {
+                Self::count_literals(inner, counts);
+            }
+            Expr::Binary { left, right, .. } | Expr::Index { operand: left, index: right, .. } => {
+                Self::count_literals(left, counts);
+                Self::count_literals(right, counts);
+            }
+            Expr::Call { arguments, .. } | Expr::ArrayLiteral { elements: arguments, .. } => {
+                for argument in arguments {
+                    Self::count_literals(argument, counts);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn count_literals_block(block: &crate::syntax::Block, counts: &mut Vec<(i128, usize)>) {
+        for statement in &block.statements {
+            match statement {
+                Stmt::Let { value, .. } | Stmt::Assign { value, .. } => {
+                    Self::count_literals(value, counts);
+                }
+                Stmt::If { condition, then_block, else_block, .. } => {
+                    Self::count_literals(condition, counts);
+                    Self::count_literals_block(then_block, counts);
+                    if let Some(otherwise) = else_block {
+                        Self::count_literals_block(otherwise, counts);
+                    }
+                }
+                Stmt::While { condition, body, .. } => {
+                    Self::count_literals(condition, counts);
+                    Self::count_literals_block(body, counts);
+                }
+                Stmt::Return { value, .. } | Stmt::ExprStmt { expression: value, .. } => {
+                    Self::count_literals(value, counts);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Reserve spare homes for each loop's most-used big literals, outer loops first.
+    fn plan_constant_hoists(&mut self, body: &crate::syntax::Block, homes_len: usize) {
+        self.hoist_plans.clear();
+        self.hoist_imm.clear();
+        self.hoist_homes.clear();
+        let spare: Vec<String> = crate::codegen::HOME_REGISTERS
+            .iter().skip(homes_len).map(|name| name.to_string()).collect();
+        if spare.is_empty() {
+            return;
+        }
+        let mut loops = Vec::new();
+        Self::loops_within(body, &mut loops);
+        let mut cursor = 0usize;
+        for statement in loops {
+            let Stmt::While { condition, body: loop_body, .. } =
+                (unsafe { &*statement }) else { continue };
+            let mut counts = Vec::new();
+            Self::count_literals(condition, &mut counts);
+            Self::count_literals_block(loop_body, &mut counts);
+            if counts.is_empty() || cursor >= spare.len() {
+                continue;
+            }
+            counts.sort_by(|a, b| b.1.cmp(&a.1)); // stable: ties keep first-seen order
+            let take = 3.min(spare.len() - cursor);
+            let mut plan = Vec::new();
+            for ((value, _), home) in counts.into_iter().take(take)
+                .zip(spare[cursor..cursor + take].iter()) {
+                plan.push((value, home.clone()));
+                self.hoist_homes.push(home.clone());
+            }
+            cursor += take;
+            self.hoist_plans.insert(statement as usize, plan);
+            if cursor >= spare.len() {
+                break;
+            }
+        }
+    }
+
+    /// Materialise a literal from its hoisted spare home when one is active.
+    fn emit_literal(&mut self, value: i128, destination: &str) {
+        if let Some(home) = self.hoist_imm.get(&value).cloned() {
+            if home != destination {
+                self.assembler.mov_reg_reg(destination, &home);
+            }
+        } else {
+            self.assembler.mov_imm64(destination, value as i64);
+        }
     }
 
     fn string_label(&mut self, text: &str) -> String {
@@ -309,6 +439,15 @@ impl CodeGenerator {
             .iter()
             .map(|(_, register)| *register)
             .collect();
+        let body = function.body.clone();
+        if !frame_function && !delta_eligible && self.inline_depth == 0 {
+            self.plan_constant_hoists(&body, callee_count);
+        } else {
+            self.hoist_plans.clear();
+            self.hoist_imm.clear();
+            self.hoist_homes.clear();
+        }
+        let saved_units = callee_count + self.hoist_homes.len();
         if frame_function {
             let frame = crate::codegen::align16((function.slots as usize + callee_count) * 8);
             self.assembler.push("rbp");
@@ -330,10 +469,19 @@ impl CodeGenerator {
             for register in &callee_registers {
                 self.assembler.push(register);
             }
+            for register in &self.hoist_homes {
+                self.assembler.push(register);
+            }
             if delta_eligible {
                 self.assembler.sub_rsp(8 * 8);
-            } else if callee_count % 2 == 0 {
+            } else if saved_units % 2 == 0 {
                 self.assembler.sub_rsp(8);
+            }
+            let assigned = assigned_slots(&body);
+            for (slot, register) in &homes {
+                if *slot as usize >= function.parameters.len() && !assigned.contains(slot) {
+                    self.assembler.xor_zero(register);
+                }
             }
         }
         self.depth = 0;
@@ -346,7 +494,6 @@ impl CodeGenerator {
                 self.store_slot(parameter.slot, "rax", &homes);
             }
         }
-        let body = function.body.clone();
         let ends_in_return = matches!(body.statements.last(), Some(Stmt::Return { .. }));
         if !ends_in_return {
             self.assembler.mov_imm64("rax", 0);
@@ -366,8 +513,11 @@ impl CodeGenerator {
         } else {
             if delta_eligible {
                 self.assembler.add_rsp(8 * 8);
-            } else if callee_count % 2 == 0 {
+            } else if saved_units % 2 == 0 {
                 self.assembler.add_rsp(8);
+            }
+            for register in self.hoist_homes.iter().rev() {
+                self.assembler.pop(register);
             }
             for register in callee_registers.iter().rev() {
                 self.assembler.pop(register);
@@ -404,6 +554,168 @@ impl CodeGenerator {
         }
     }
 
+    /// Leave array element `a[index]` in `rax`, matching Python's `_emit_index_load`.
+    fn emit_index_load(&mut self, index: &Expr, slot: i64, size: usize,
+                       homes: &[(i64, &str)]) -> bool {
+        match index {
+            Expr::IntLiteral { value, .. } => {
+                self.assembler.mov_load_rbp(
+                    "rax", crate::codegen::slot_offset(slot + size as i64 - 1 - *value as i64));
+                true
+            }
+            Expr::Name { slot: index_slot, .. } => {
+                match home_for(*index_slot, homes) {
+                    Some(index_home) => {
+                        self.assembler.mov_load_indexed(
+                            "rax", "rbp", index_home, 3,
+                            crate::codegen::array_element_base(slot, size as i64));
+                        true
+                    }
+                    None => false,
+                }
+            }
+            Expr::Parens { inner, .. } => self.emit_index_load(inner, slot, size, homes),
+            _ => false,
+        }
+    }
+
+    fn emit_left_into(&mut self, expression: &Expr, destination: &str,
+                      homes: &[(i64, &str)]) -> bool {
+        let expr = crate::optimize::peel_parens(Some(expression)).unwrap();
+        match expr {
+            Expr::IntLiteral { value, .. } => {
+                self.emit_literal(*value, destination);
+                true
+            }
+            Expr::Name { slot, .. } => match home_for(*slot, homes) {
+                Some(home) if home == destination => true,
+                Some(home) if destination == "rax" => {
+                    self.assembler.mov_reg_reg("rax", home);
+                    true
+                }
+                Some(home) => {
+                    self.assembler.mov_reg_reg(destination, home);
+                    true
+                }
+                None => {
+                    self.load_slot(*slot, destination, homes);
+                    true
+                }
+            },
+            Expr::Binary { .. } => self.try_emit_binary_into(expr, destination, homes),
+            _ => false,
+        }
+    }
+
+    fn combines_in_rax_only(&self, expression: &Expr, destination: &str,
+                            parked_noop: bool, homes: &[(i64, &str)]) -> bool {
+        let expr = crate::optimize::peel_parens(Some(expression)).unwrap();
+        match expr {
+            Expr::IntLiteral { .. } => true,
+            Expr::Name { slot, .. } => match home_for(*slot, homes) {
+                Some(home) => home != destination || parked_noop,
+                None => true,
+            },
+            Expr::Binary { op, left, right, .. } => {
+                if matches!(op.as_str(), "*" | "/" | "%" | "&&" | "||"
+                    | "==" | "!=" | "<" | "<=" | ">" | ">=") {
+                    return false;
+                }
+                let right = crate::optimize::peel_parens(Some(right)).unwrap();
+                let Expr::IntLiteral { value, .. } = right else { return false };
+                let in_range = *value >= -0x80000000 && *value <= 0x7FFFFFFF;
+                if matches!(op.as_str(), "+" | "-" | "&" | "|" | "^") && in_range {
+                    return self.combines_in_rax_only(left, destination, parked_noop, homes);
+                }
+                if matches!(op.as_str(), "<<" | ">>") && *value >= 0 && *value <= 63 {
+                    return self.combines_in_rax_only(left, destination, parked_noop, homes);
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Compute a binary expression straight into `destination`, matching Python's
+    /// `_emit_binary_into`; refuses shapes it cannot keep destination untouched.
+    fn try_emit_binary_into(&mut self, expression: &Expr, destination: &str,
+                            homes: &[(i64, &str)]) -> bool {
+        if destination == "rax" {
+            return false;
+        }
+        let Expr::Binary { op, left, right, .. } =
+            crate::optimize::peel_parens(Some(expression)).unwrap() else { return false };
+        let right = crate::optimize::peel_parens(Some(right)).unwrap();
+        if let Expr::IntLiteral { value, .. } = right {
+            let ext = match op.as_str() {
+                "+" => Some(0), "-" => Some(5), "&" => Some(4), "|" => Some(1), "^" => Some(6),
+                _ => None,
+            };
+            if let Some(ext) = ext {
+                if *value >= -0x80000000 && *value <= 0x7FFFFFFF
+                    && self.emit_left_into(left, destination, homes) {
+                    self.assembler.arith_imm(ext, destination, *value as i64);
+                    return true;
+                }
+            }
+        }
+        if op == "*" {
+            let peeled_left = crate::optimize::peel_parens(Some(left)).unwrap();
+            if let Expr::Name { slot, .. } = peeled_left {
+                if let (Some(home), Expr::IntLiteral { value, .. }) =
+                    (home_for(*slot, homes), right) {
+                    if *value >= -2147483648 && *value <= 2147483647 {
+                        self.assembler.imul_imm(destination, home, *value as i64);
+                        return true;
+                    }
+                }
+            }
+            if self.emit_left_into(left, destination, homes) {
+                if let Expr::Name { slot, .. } = right {
+                    if let Some(home) = home_for(*slot, homes) {
+                        self.assembler.imul(destination, home);
+                        return true;
+                    }
+                }
+                self.emit_expression(right, homes);
+                self.assembler.imul(destination, "rax");
+                return true;
+            }
+            return false;
+        }
+        if op == "<<" || op == ">>" {
+            if let Expr::IntLiteral { value, .. } = right {
+                if *value >= 0 && *value <= 63 && self.emit_left_into(left, destination, homes) {
+                    self.assembler.shift_imm(if op == "<<" { 4 } else { 7 },
+                                             destination, *value as u8);
+                    return true;
+                }
+            }
+            return false;
+        }
+        if let Some(opcode) = match op.as_str() {
+            "+" => Some(0x01), "&" => Some(0x21), "|" => Some(0x09), "^" => Some(0x31),
+            _ => None,
+        } {
+            let peeled_left = crate::optimize::peel_parens(Some(left)).unwrap();
+            let parked_noop = matches!(peeled_left, Expr::Name { slot, .. }
+                if home_for(*slot, homes) == Some(destination));
+            if self.combines_in_rax_only(right, destination, parked_noop, homes)
+                && self.emit_left_into(left, destination, homes) {
+                if let Expr::Name { slot, .. } = right {
+                    if let Some(home) = home_for(*slot, homes) {
+                        self.assembler.binary(opcode, destination, home);
+                        return true;
+                    }
+                }
+                self.emit_expression(right, homes);
+                self.assembler.binary(opcode, destination, "rax");
+                return true;
+            }
+        }
+        false
+    }
+
     fn emit_value(&mut self, slot: i64, expression: &Expr, homes: &[(i64, &str)]) {
         match expression {
             Expr::IntLiteral { value, .. } => {
@@ -413,7 +725,7 @@ impl CodeGenerator {
                         return;
                     }
                 }
-                self.assembler.mov_imm64("rax", *value as i64);
+                self.emit_literal(*value, "rax");
                 self.store_slot(slot, "rax", homes);
             }
             Expr::Name { slot: source, .. } => {
@@ -475,16 +787,49 @@ impl CodeGenerator {
                     }
                 }
                 if let Some(home) = home_for(slot, homes) {
-                    self.assembler.mov_imm64("rax", *value as i64);
+                    self.emit_literal(*value, "rax");
                     self.assembler.binary(0x01, home, "rax");
                 } else {
                     self.load_slot(slot, "rax", homes);
-                    self.assembler.mov_imm64("rcx", *value as i64);
+                    self.emit_literal(*value, "rcx");
                     self.assembler.binary(0x01, "rax", "rcx");
                     self.store_slot(slot, "rax", homes);
                 }
             }
+            Expr::Binary { op, left, right, .. }
+                if op == "+" && matches!(left.as_ref(), Expr::Name { slot: src, .. } if *src == slot)
+                    && matches!(right.as_ref(), Expr::Index { .. }) =>
+            {
+                let Expr::Index { slot: array_slot, size, index, .. } = right.as_ref()
+                    else { unreachable!() };
+                let home = home_for(slot, homes);
+                if let Some(home) = home {
+                    if self.emit_index_load(index, *array_slot, *size, homes) {
+                        self.assembler.binary(0x01, home, "rax");
+                        return;
+                    }
+                }
+            }
+            Expr::Binary { op, left, right, .. }
+                if op == "+" && matches!(right.as_ref(), Expr::Name { slot: src, .. } if *src == slot)
+                    && matches!(left.as_ref(), Expr::Index { .. }) =>
+            {
+                let Expr::Index { slot: array_slot, size, index, .. } = left.as_ref()
+                    else { unreachable!() };
+                let home = home_for(slot, homes);
+                if let Some(home) = home {
+                    if self.emit_index_load(index, *array_slot, *size, homes) {
+                        self.assembler.binary(0x01, home, "rax");
+                        return;
+                    }
+                }
+            }
             other => {
+                if let Some(home) = home_for(slot, homes) {
+                    if self.try_emit_binary_into(other, home, homes) {
+                        return;
+                    }
+                }
                 self.emit_expression(other, homes);
                 self.store_slot(slot, "rax", homes);
             }
@@ -501,6 +846,21 @@ impl CodeGenerator {
                 }
             }
             Stmt::ExprStmt { expression, .. } => self.emit_expression(expression, homes),
+            Stmt::Assign { slot, value, index: Some(index), array_size: Some(size), .. }
+                if matches!(value, Expr::Name { .. })
+                    && matches!(index, Expr::Name { .. }) =>
+            {
+                let Expr::Name { slot: index_slot, .. } = index else { unreachable!() };
+                let Expr::Name { slot: value_slot, .. } = value else { unreachable!() };
+                match (home_for(*index_slot, homes), home_for(*value_slot, homes)) {
+                    (Some(index_home), Some(value_home)) if index_home == value_home => {
+                        let displacement = crate::codegen::array_element_base(*slot, *size as i64);
+                        self.assembler.mov_store_indexed(
+                            "rbp", index_home, 3, displacement, value_home);
+                    }
+                    _ => self.emit_value(*slot, value, homes),
+                }
+            }
             Stmt::Let { slot, value, .. } | Stmt::Assign { slot, value, .. } => {
                 self.emit_value(*slot, value, homes);
             }
@@ -513,9 +873,20 @@ impl CodeGenerator {
                 self.emit_if(condition, then_block, else_block.as_ref(), tail, homes);
             }
             Stmt::While { condition, body, .. } => {
+                let plan = self.hoist_plans.get(&(statement as *const Stmt as usize)).cloned();
+                let saved = self.hoist_imm.clone();
+                if let Some(plan) = plan {
+                    for (value, home) in &plan {
+                        self.assembler.mov_imm64(home, *value as i64);
+                    }
+                    for (value, home) in &plan {
+                        self.hoist_imm.insert(*value, home.clone());
+                    }
+                }
                 if !self.try_emit_rmw_vector(condition, body, homes) {
                     self.emit_while(condition, body, homes);
                 }
+                self.hoist_imm = saved;
             }
             Stmt::Break { .. } | Stmt::Continue { .. } => {}
             // Wider shapes are added in later slices; refusing beats emitting wrong bytes.
@@ -607,8 +978,8 @@ impl CodeGenerator {
         }
         let start_label = start.clone();
         self.assembler.label(&start_label);
-        self.emit_block(body, false, homes);
         let latch = self.fresh("while.latch");
+        self.emit_block(body, false, homes);
         let latch_label = latch.clone();
         self.assembler.label(&latch_label);
         self.emit_condition_polarity(condition, &start, homes, true);
@@ -682,7 +1053,7 @@ impl CodeGenerator {
 
     fn emit_expression(&mut self, expression: &Expr, homes: &[(i64, &str)]) {
         match expression {
-            Expr::IntLiteral { value, .. } => self.assembler.mov_imm64("rax", *value as i64),
+            Expr::IntLiteral { value, .. } => self.emit_literal(*value, "rax"),
             Expr::Parens { inner, .. } => self.emit_expression(inner, homes),
             Expr::StrLiteral { text, .. } => {
                 let label = self.string_label(text);
@@ -715,8 +1086,78 @@ impl CodeGenerator {
                 self.assembler.mov_load_rbp(
                     "rax", crate::codegen::slot_offset(*base + size as i64 - 1 - *value as i64));
             }
-            Expr::Unary { .. } | Expr::Binary { .. } | Expr::Index { .. }
-            | Expr::ArrayLiteral { .. } => {}
+            Expr::Binary { op, left, right, .. } => {
+                self.emit_binary(op, left, right, homes);
+            }
+            Expr::Unary { .. } | Expr::Index { .. } | Expr::ArrayLiteral { .. } => {}
+        }
+    }
+
+    /// General binary lowering into `rax`, mirroring Python's `_emit_binary` core.
+    fn emit_binary(&mut self, op: &str, left: &Expr, right: &Expr,
+                   homes: &[(i64, &str)]) {
+        let arith: Option<u8> = match op {
+            "+" => Some(0x01), "&" => Some(0x21), "|" => Some(0x09), "^" => Some(0x31),
+            _ => None,
+        };
+        let imm_ext: Option<u8> = match op {
+            "+" => Some(0), "-" => Some(5), "&" => Some(4), "|" => Some(1), "^" => Some(6),
+            _ => None,
+        };
+        if let Expr::IntLiteral { value, .. } = right {
+            if *value >= -0x80000000 && *value <= 0x7FFFFFFF {
+                if let Some(ext) = imm_ext {
+                    self.emit_expression(left, homes);
+                    self.assembler.arith_imm(ext, "rax", *value as i64);
+                    return;
+                }
+            }
+            if *value >= 0 && *value <= 63 {
+                let ext = match op { "<<" => Some(4), ">>" => Some(7), _ => None };
+                if let Some(ext) = ext {
+                    self.emit_expression(left, homes);
+                    self.assembler.shift_imm(ext, "rax", *value as u8);
+                    return;
+                }
+            }
+        }
+        if let Some(opcode) = arith {
+            if let Expr::Name { slot, .. } = left {
+                if let Some(left_home) = home_for(*slot, homes) {
+                    self.emit_expression(right, homes);
+                    self.assembler.binary(opcode, "rax", left_home);
+                    return;
+                }
+            }
+        }
+        let mut right_home: Option<String> = None;
+        if let Expr::Name { slot, .. } = right {
+            right_home = home_for(*slot, homes).map(str::to_string);
+        } else if let Expr::IntLiteral { value, .. } = right {
+            right_home = self.hoist_imm.get(value).cloned();
+        }
+        if let Some(right_home) = right_home {
+            self.emit_expression(left, homes);
+            if op == "-" {
+                self.assembler.binary(0x29, "rax", &right_home);
+            } else if op == "*" {
+                self.assembler.imul("rax", &right_home);
+            } else if let Some(opcode) = arith {
+                self.assembler.binary(opcode, "rax", &right_home);
+            }
+            return;
+        }
+        self.emit_expression(left, homes);
+        self.assembler.mov_reg_reg("rcx", "rax");
+        self.emit_expression(right, homes);
+        match op {
+            "+" | "&" | "|" | "^" => self.assembler.binary(arith.unwrap(), "rax", "rcx"),
+            "-" => {
+                self.assembler.binary(0x29, "rcx", "rax");
+                self.assembler.mov_reg_reg("rax", "rcx");
+            }
+            "*" => self.assembler.imul("rax", "rcx"),
+            _ => {}
         }
     }
 
@@ -740,6 +1181,32 @@ impl CodeGenerator {
 
     fn emit_call(&mut self, name: &str, arguments: &[Expr], homes: &[(i64, &str)]) {
         match name {
+            "clz" => {
+                self.emit_expression(&arguments[0], homes);
+                self.assembler.lzcnt("rax", "rax");
+                return;
+            }
+            "ctz" => {
+                self.emit_expression(&arguments[0], homes);
+                self.assembler.tzcnt("rax", "rax");
+                return;
+            }
+            "bswap" => {
+                self.emit_expression(&arguments[0], homes);
+                self.assembler.bswap("rax");
+                return;
+            }
+            "rotl" => {
+                self.emit_expression(&arguments[0], homes);
+                self.assembler.push("rax");
+                self.depth += 8;
+                self.emit_expression(&arguments[1], homes);
+                self.assembler.mov_reg_reg("rcx", "rax");
+                self.assembler.pop("rax");
+                self.depth -= 8;
+                self.assembler.rotate_cl(0);
+                return;
+            }
             "argc" => {
                 let label = crate::runtime::ARGC_LABEL.to_string();
                 self.call_site(&label);
