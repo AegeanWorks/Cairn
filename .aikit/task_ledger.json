@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795429895.4879293,
+    "updated_at": 1795446985.9544818,
     "owner": "opencode:session",
-    "lease_until": 1795437095.4879293,
+    "lease_until": 1795454185.9544818,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[40/N] nested-call argument parking; tak byte-identical; corpus 17/27; curated parity 58/58; ADR-170",
-      "files_affected": [],
-      "handoff": {
-        "evidence": "cargo test, parity, both aikit checks",
-        "next": "delta pair inlining for fib, recursion for ackermann/nqueens, magic-division calls for primes, frame layout",
-        "state": "102 Rust tests, 58/58 curated parity"
-      },
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795403531.669511,
-      "timestamp_str": "2026-11-23 06:12:11"
     },
     {
       "agent": "opencode:session",
@@ -329,6 +313,22 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795429895.487929,
       "timestamp_str": "2026-11-23 13:31:35"
+    },
+    {
+      "agent": "opencode:session",
+      "description": "[54/N] copy-return destination emission; corpus 23/27; curated parity 58/58; ADR-185",
+      "files_affected": [],
+      "handoff": {
+        "evidence": "cargo test, parity, cairn gate",
+        "next": "many_params temp-hold for accumulator chains, mandelbrot frame layout",
+        "state": "102 Rust tests, 58/58 curated parity"
+      },
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795446985.9544818,
+      "timestamp_str": "2026-11-23 18:16:25"
     }
   ]
 }

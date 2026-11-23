@@ -1704,3 +1704,10 @@ external compiler and was verified end to end.
 - **Context**: A value already in the source register was copied into rax immediately before a movzx of that same register, producing three dead bytes and a stale inline-copy label offset.
 - **Decision**: Drop the preceding mov rax,src in the assembler's movzx emitters and clamp label/fixup offsets past the truncated end.
 - **Consequences**: call_chain is byte-identical; the corpus diagnostic is 23/27. Remaining valid gaps are many_params and mandelbrot; curated parity stays 58/58.
+
+### ADR-184: tail returns emit into the copy return home
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A foreign-inline copy with a return destination lowers its tail return directly into that home rather than computing in rax and moving.
+- **Decision**: Track a copy-return home alongside the copy state and use destination-driven emission for tail returns inside an inline copy, restoring it on exit.
+- **Consequences**: Curated parity stays 58/58 and the corpus diagnostic is 23/27; many_params still differs in its accumulator-chain register choice.

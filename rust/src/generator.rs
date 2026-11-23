@@ -636,6 +636,8 @@ pub struct CodeGenerator {
     copy_home: Option<String>,
     /// Whether the last foreign-inline copy honored `copy_home`.
     copy_home_used: bool,
+    /// Destination home for a tail return inside the current inline copy.
+    copy_return: Option<String>,
 }
 
 impl CodeGenerator {
@@ -674,6 +676,7 @@ impl CodeGenerator {
             shift_through: std::collections::BTreeMap::new(),
             copy_home: None,
             copy_home_used: false,
+            copy_return: None,
         }
     }
 
@@ -1644,7 +1647,15 @@ impl CodeGenerator {
     fn emit_statement(&mut self, statement: &Stmt, tail: bool, homes: &[(i64, &str)]) {
         match statement {
             Stmt::Return { value, .. } => {
-                self.emit_expression(value, homes);
+                if tail {
+                    if let Some(destination) = self.copy_return.clone() {
+                        self.emit_into(value, &destination, homes);
+                    } else {
+                        self.emit_expression(value, homes);
+                    }
+                } else {
+                    self.emit_expression(value, homes);
+                }
                 if !tail {
                     let epilogue = self.epilogue.clone();
                     self.assembler.jmp(&epilogue);
@@ -2907,6 +2918,13 @@ impl CodeGenerator {
             return false;
         }
         let copy_home = self.copy_home.clone();
+        let copy_return = if !rebinds
+            && callee.body.statements.last().is_some_and(|s| matches!(s, Stmt::Return { .. }))
+            && copy_home.as_ref().is_some_and(|home| !spill.iter().any(|h| *h == home)) {
+            copy_home.clone()
+        } else {
+            None
+        };
         let mut return_slot: Option<i64> = None;
         if let Some(copy_home) = &copy_home {
             if let Some(Stmt::Return { value, .. }) = callee.body.statements.last() {
@@ -2975,6 +2993,7 @@ impl CodeGenerator {
             self.hoist_plans.clone(), self.hoist_imm.clone(), self.hoist_homes.clone(),
             self.string_bounds.clone(), self.stdin_base.clone(), self.stdin_cursor.clone(),
             self.stdin_count.clone(), self.arrays.clone(), self.shift_through.clone(),
+            self.copy_return.clone(),
         );
         self.current_name = callee.name.clone();
         self.current_body = callee.body.clone();
@@ -2992,6 +3011,7 @@ impl CodeGenerator {
         self.arrays.clear();
         collect_arrays(&callee.body, &mut self.arrays);
         self.shift_through = shift_plan.clone();
+        self.copy_return = copy_return;
         for home in &spill {
             self.assembler.push(home);
         }
@@ -3038,6 +3058,7 @@ impl CodeGenerator {
         self.stdin_count = saved.12;
         self.arrays = saved.13;
         self.shift_through = saved.14;
+        self.copy_return = saved.15;
         true
     }
 
