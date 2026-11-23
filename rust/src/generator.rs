@@ -638,6 +638,8 @@ pub struct CodeGenerator {
     copy_home_used: bool,
     /// Destination home for a tail return inside the current inline copy.
     copy_return: Option<String>,
+    /// Whether the current frame reserved a pad slot usable as a call left-hold.
+    pad_slot_active: bool,
 }
 
 impl CodeGenerator {
@@ -677,6 +679,7 @@ impl CodeGenerator {
             copy_home: None,
             copy_home_used: false,
             copy_return: None,
+            pad_slot_active: false,
         }
     }
 
@@ -1079,6 +1082,7 @@ impl CodeGenerator {
         let merging = !frame_function && !delta_eligible && body_may_hold(&body);
         let pad = frame_function || saved_units % 2 == 0 || merging;
         let filler = merging && saved_units % 2 == 1;
+        self.pad_slot_active = !frame_function && pad && !filler && !delta_eligible;
         if frame_function {
             let frame = crate::codegen::align16((function.slots as usize + callee_count) * 8);
             self.assembler.push("rbp");
@@ -1299,7 +1303,23 @@ impl CodeGenerator {
                 None => true,
             },
             Expr::Binary { op, left, right, .. } => {
-                if matches!(op.as_str(), "*" | "/" | "%" | "&&" | "||"
+                if op == "*" {
+                    let product = match (crate::optimize::peel_parens(Some(left)).unwrap(),
+                                         crate::optimize::peel_parens(Some(right)).unwrap()) {
+                        (Expr::Name { slot, .. }, Expr::IntLiteral { .. }) => Some(*slot),
+                        (Expr::IntLiteral { .. }, Expr::Name { slot, .. }) => Some(*slot),
+                        _ => None,
+                    };
+                    if let Some(slot) = product {
+                        return match home_for(slot, homes) {
+                            Some(home) if home == destination => false,
+                            Some(_) => true,
+                            None => false,
+                        };
+                    }
+                    return false;
+                }
+                if matches!(op.as_str(), "/" | "%" | "&&" | "||"
                     | "==" | "!=" | "<" | "<=" | ">" | ">=") {
                     return false;
                 }
@@ -2712,6 +2732,10 @@ impl CodeGenerator {
                 self.assembler.mov_store_rsp_disp(offset, "rax");
                 self.emit_expression(right, homes);
                 self.assembler.mov_load_rsp_disp(offset, "rcx");
+            } else if self.pad_slot_active {
+                self.assembler.mov_store_rsp("rax");
+                self.emit_expression(right, homes);
+                self.assembler.mov_load_rsp("rcx");
             } else {
                 self.assembler.push("rax");
                 self.depth += 8;

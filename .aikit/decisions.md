@@ -1711,3 +1711,10 @@ external compiler and was verified end to end.
 - **Context**: A foreign-inline copy with a return destination lowers its tail return directly into that home rather than computing in rax and moving.
 - **Decision**: Track a copy-return home alongside the copy state and use destination-driven emission for tail returns inside an inline copy, restoring it on exit.
 - **Consequences**: Curated parity stays 58/58 and the corpus diagnostic is 23/27; many_params still differs in its accumulator-chain register choice.
+
+### ADR-185: pad slot holds call lefts; homed product combines
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Frame functions with a pad slot park a call left operand in [rsp] rather than pushing, and a homed-name times literal right operand can combine into a destination with rax alone.
+- **Decision**: Track the active pad slot for call left-holds and recognize homed-name products in combines_in_rax_only.
+- **Consequences**: many_params' byte gap narrowed from 44 to 12 bytes; curated parity stays 58/58 and the corpus diagnostic is 23/27.

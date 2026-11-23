@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795446985.9544818,
+    "updated_at": 1795452176.481568,
     "owner": "opencode:session",
-    "lease_until": 1795454185.9544818,
+    "lease_until": 1795459376.481568,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[41/N] lea for homed name plus/minus literal; corpus 17/27; curated parity 58/58; ADR-171",
-      "files_affected": [],
-      "handoff": {
-        "evidence": "cargo test, parity, both aikit checks",
-        "next": "pair-mode home reservation and delta inlining for fib/ackermann, magic-division calls for primes, frame layout",
-        "state": "102 Rust tests, 58/58 curated parity"
-      },
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795403894.383405,
-      "timestamp_str": "2026-11-23 06:18:14"
     },
     {
       "agent": "opencode:session",
@@ -329,6 +313,22 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795446985.9544818,
       "timestamp_str": "2026-11-23 18:16:25"
+    },
+    {
+      "agent": "opencode:session",
+      "description": "[55/N] pad-slot holds and homed products; many_params within 12 bytes; corpus 23/27; curated parity 58/58; ADR-186",
+      "files_affected": [],
+      "handoff": {
+        "evidence": "cargo test, parity, cairn gate",
+        "next": "many_params final xor register choice, mandelbrot frame layout",
+        "state": "102 Rust tests, 58/58 curated parity"
+      },
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795452176.481568,
+      "timestamp_str": "2026-11-23 19:42:56"
     }
   ]
 }
