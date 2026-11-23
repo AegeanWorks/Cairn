@@ -240,6 +240,29 @@ fn rebinds_parameters(block: &crate::syntax::Block, count: usize) -> bool {
     false
 }
 
+/// The `(operand, count)` of `(a >> k) << k`, the drop-then-restore mask.
+fn shift_through_shape(expression: &Expr) -> Option<(&Expr, u8)> {
+    let Expr::Binary { op, left, right, .. } =
+        crate::optimize::peel_parens(Some(expression)).unwrap() else { return None };
+    if op != "<<" {
+        return None;
+    }
+    let count = match crate::optimize::peel_parens(Some(right)).unwrap() {
+        Expr::IntLiteral { value, .. } if *value >= 1 && *value <= 63 => *value as u32,
+        _ => return None,
+    };
+    let Expr::Binary { op: inner_op, left: operand, right: inner_count, .. } =
+        crate::optimize::peel_parens(Some(left)).unwrap() else { return None };
+    if inner_op != ">>" {
+        return None;
+    }
+    if !matches!(crate::optimize::peel_parens(Some(inner_count)).unwrap(),
+        Expr::IntLiteral { value, .. } if *value as u32 == count) {
+        return None;
+    }
+    Some((crate::optimize::peel_parens(Some(operand)).unwrap(), count as u8))
+}
+
 fn logical_shift_shape(expression: &Expr) -> Option<(&Expr, u8)> {
     let Expr::Binary { op, left, right, .. } = expression else { return None };
     if op != "&" {
@@ -541,6 +564,8 @@ pub struct CodeGenerator {
     value_slot: i64,
     /// Nesting depth of pair chain loops, for parking the counter register.
     chain_loop_depth: usize,
+    /// Number of temporary registers currently held across a right operand.
+    temporaries: usize,
 }
 
 impl CodeGenerator {
@@ -575,6 +600,7 @@ impl CodeGenerator {
             nonnegative_slots: std::collections::BTreeSet::new(),
             value_slot: -1,
             chain_loop_depth: 0,
+            temporaries: 0,
         }
     }
 
@@ -1230,6 +1256,32 @@ impl CodeGenerator {
                 if self.emit_left_into(operand, destination, homes) {
                     self.assembler.shift_imm(5, destination, shift);
                     return true;
+                }
+            }
+            if self.delta_value == 0 {
+                let mask_and_slot = match (crate::optimize::peel_parens(Some(left)).unwrap(),
+                                           crate::optimize::peel_parens(Some(right)).unwrap()) {
+                    (Expr::IntLiteral { value, .. }, other) => Some((*value, other)),
+                    (other, Expr::IntLiteral { value, .. }) => Some((*value, other)),
+                    _ => None,
+                };
+                if let Some((mask, other)) = mask_and_slot {
+                    if matches!(mask, 255 | 65535) {
+                        if let Some(slot) = expr_slot(other) {
+                            if slot != self.delta_slot && slot != self.value_slot {
+                                if let Some(home) = home_for(slot, homes) {
+                                    if home != destination {
+                                        if mask == 255 {
+                                            self.assembler.movzx_from8(destination, home);
+                                        } else {
+                                            self.assembler.movzx_from16(destination, home);
+                                        }
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -2246,6 +2298,15 @@ impl CodeGenerator {
                 }
             }
             Expr::Binary { op, left, right, .. } => {
+                if op == "<<" {
+                    if let Some((operand, count)) = shift_through_shape(expression) {
+                        if matches!(operand, Expr::Name { .. } | Expr::IntLiteral { .. }) {
+                            self.emit_expression(operand, homes);
+                            self.assembler.arith_imm(4, "rax", -(1i64 << count));
+                            return;
+                        }
+                    }
+                }
                 if self.try_emit_power_of_two_division(op, left, right, homes)
                     || self.try_emit_magic_division(op, left, right, homes) {
                     return;
@@ -2496,6 +2557,7 @@ impl CodeGenerator {
             self.assembler.shift_cl(if op == "<<" { 4 } else { 7 });
             return;
         }
+        let mut hold = "rcx".to_string();
         if expr_has_call(right) {
             self.emit_expression(left, homes);
             if self.delta_slot >= 0 {
@@ -2510,18 +2572,28 @@ impl CodeGenerator {
                 self.assembler.pop("rcx");
                 self.depth -= 8;
             }
+        } else if !matches!(crate::optimize::peel_parens(Some(right)).unwrap(),
+            Expr::Name { .. } | Expr::IntLiteral { .. }) && self.temporaries < 2 {
+            hold = ["r11", "r10"][self.temporaries].to_string();
+            self.emit_into(left, &hold, homes);
+            self.temporaries += 1;
+            self.emit_expression(right, homes);
+            self.temporaries -= 1;
         } else {
             self.emit_expression(left, homes);
             self.assembler.mov_reg_reg("rcx", "rax");
             self.emit_expression(right, homes);
         }
         match op {
-            "+" | "&" | "|" | "^" => self.assembler.binary(arith.unwrap(), "rax", "rcx"),
+            "+" | "&" | "|" | "^" => self.assembler.binary(arith.unwrap(), "rax", &hold),
             "-" => {
+                if hold != "rcx" {
+                    self.assembler.mov_reg_reg("rcx", &hold);
+                }
                 self.assembler.binary(0x29, "rcx", "rax");
                 self.assembler.mov_reg_reg("rax", "rcx");
             }
-            "*" => self.assembler.imul("rax", "rcx"),
+            "*" => self.assembler.imul("rax", &hold),
             _ => {}
         }
     }

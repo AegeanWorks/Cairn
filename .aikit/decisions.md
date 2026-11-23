@@ -1662,3 +1662,10 @@ external compiler and was verified end to end.
 - **Context**: The pair machine used the general inline depth cap and omitted the accumulated delta from home-offset lea folds, leaving one extra copy and wrong literal shifts.
 - **Decision**: Use the pair-specific depth cap of six and fold the current delta into name-plus-literal lea offsets in both rax and destination forms.
 - **Consequences**: ackermann is byte-identical; the corpus diagnostic is 21/27. Remaining shapes are copy-home inlining, multi-slot recursion and frame layout. Curated parity stays 58/58.
+
+### ADR-178: temp-pool left hold closes nqueens
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A binary whose right operand is a nested expression kept its left value in rcx, but the reference parks it in the spare temporary registers r11/r10 so nested lowerings cannot clobber it.
+- **Decision**: Hold the left operand in the level-indexed temp register for a call-free non-leaf right, use the delta hold slot or stack for calling rights, and add the movzx mask and shift-through mask peepholes used by inline bodies.
+- **Consequences**: nqueens is byte-identical; the corpus diagnostic is 22/27. Remaining shapes are copy-home inlining and frame layout. Curated parity stays 58/58.
