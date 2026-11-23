@@ -735,7 +735,10 @@ impl CodeGenerator {
                 if let Expr::Name { slot, .. } = crate::optimize::peel_parens(Some(target)).unwrap() {
                     if let Some(home) = home_for(*slot, homes) {
                         if value >= -0x80000000 && value < 0x80000000 {
-                            let effective = if op == "-" { -value } else { value };
+                            let mut effective = if op == "-" { -value } else { value };
+                            if *slot == self.delta_slot && self.delta_value != 0 {
+                                effective -= self.delta_value as i128;
+                            }
                             if home != destination || effective != 0 {
                                 self.assembler.lea_imm(destination, home, effective as i64);
                                 return;
@@ -2391,7 +2394,10 @@ impl CodeGenerator {
                 if let Expr::Name { slot, .. } =
                     crate::optimize::peel_parens(Some(left)).unwrap() {
                     if let Some(home) = home_for(*slot, homes) {
-                        let effective = if op == "-" { -*value } else { *value };
+                        let mut effective = if op == "-" { -*value } else { *value };
+                        if *slot == self.delta_slot && self.delta_value != 0 {
+                            effective -= self.delta_value as i128;
+                        }
                         self.assembler.lea_imm("rax", home, effective as i64);
                         return;
                     }
@@ -2898,7 +2904,7 @@ impl CodeGenerator {
                 }
                 if name == &self.current_name
                     && self.value_slot >= 0
-                    && self.inline_depth < 7
+                    && self.inline_depth < 6
                     && arguments.len() == 2 {
                     let second = crate::optimize::peel_parens(Some(&arguments[1])).unwrap();
                     if !matches!(second, Expr::IntLiteral { .. } | Expr::Call { .. }) {

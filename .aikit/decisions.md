@@ -1655,3 +1655,10 @@ external compiler and was verified end to end.
 - **Context**: The two-parameter pure-text inline shape lowers self-calls as counted chain loops around inlined body copies, with the value parameter rebound in its home and the first parameter read through an accumulated delta.
 - **Decision**: Track the value slot and chain-loop depth, detect pair-shaped self-calls, emit chain loops with the r13 counter, emit body copies with accumulated deltas, and bind two-argument calls with a pure first argument right-to-left.
 - **Consequences**: ackermann's chain loop and copies now match through byte 1185 but an extra nested copy remains; curated parity stays 58/58 and the corpus diagnostic is 20/27.
+
+### ADR-177: pair depth cap and delta-folded offsets close ackermann
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: The pair machine used the general inline depth cap and omitted the accumulated delta from home-offset lea folds, leaving one extra copy and wrong literal shifts.
+- **Decision**: Use the pair-specific depth cap of six and fold the current delta into name-plus-literal lea offsets in both rax and destination forms.
+- **Consequences**: ackermann is byte-identical; the corpus diagnostic is 21/27. Remaining shapes are copy-home inlining, multi-slot recursion and frame layout. Curated parity stays 58/58.
