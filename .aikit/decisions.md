@@ -1725,3 +1725,10 @@ external compiler and was verified end to end.
 - **Context**: A homed right operand wrapped in parentheses was missed by the in-place combine rule, forcing a generic left-hold with extra moves.
 - **Decision**: Peel parentheses before the homed-right register check in binary lowering.
 - **Consequences**: many_params is byte-identical; the corpus diagnostic is 24/27. Only mandelbrot's frame layout remains; curated parity stays 58/58.
+
+### ADR-187: frame update folds and extra-home call saves close the corpus
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Frame functions lower slot self-updates as memory-operand instructions and save r10/r11 around calls; together with peeled homed-right combines this completes byte-identical lowering for all 25 valid corpus programs.
+- **Decision**: Fold frame-slot updates into group-1 memory instructions, save extra homes across call sites with alignment padding, and peel parentheses before the homed-right binary combine.
+- **Consequences**: All 25 valid examples and benchmarks now produce byte-identical dumps; curated parity remains 58/58. Python parity oracles are still used for verification; the argv_walk and hex_io sources error in the Python oracle and are excluded.

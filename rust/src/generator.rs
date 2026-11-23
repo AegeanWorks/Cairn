@@ -640,6 +640,8 @@ pub struct CodeGenerator {
     copy_return: Option<String>,
     /// Whether the current frame reserved a pad slot usable as a call left-hold.
     pad_slot_active: bool,
+    /// Caller-saved extra homes that must be preserved across machine calls.
+    extra_homes: Vec<String>,
 }
 
 impl CodeGenerator {
@@ -680,6 +682,7 @@ impl CodeGenerator {
             copy_home_used: false,
             copy_return: None,
             pad_slot_active: false,
+            extra_homes: Vec::new(),
         }
     }
 
@@ -901,6 +904,10 @@ impl CodeGenerator {
 
     /// A call padded so rsp stays 16-byte aligned at the ABI boundary.
     fn call_site(&mut self, target: &str) {
+        for home in &self.extra_homes {
+            self.assembler.push(home);
+            self.depth += 8;
+        }
         let padding = if self.depth % 16 != 0 { 8 } else { 0 };
         if padding > 0 {
             self.assembler.sub_rsp(padding);
@@ -908,6 +915,10 @@ impl CodeGenerator {
         self.assembler.call(target);
         if padding > 0 {
             self.assembler.add_rsp(padding);
+        }
+        for home in self.extra_homes.iter().rev() {
+            self.assembler.pop(home);
+            self.depth -= 8;
         }
     }
 
@@ -1017,6 +1028,8 @@ impl CodeGenerator {
             .zip(crate::codegen::HOME_REGISTERS.iter().take(callee_count))
             .map(|(slot, register)| (*slot, *register))
             .collect();
+        self.extra_homes = crate::codegen::EXTRA_HOME_REGISTERS.iter()
+            .take(extra_count).map(|name| name.to_string()).collect();
         homes.extend(
             ranked[callee_count..callee_count + extra_count]
                 .iter()
@@ -1473,6 +1486,55 @@ impl CodeGenerator {
         false
     }
 
+    /// Emit `slot = slot op value` as one memory-operand instruction on a frame slot.
+    fn try_fold_frame_update(&mut self, slot: i64, expression: &Expr,
+                             homes: &[(i64, &str)]) -> bool {
+        if home_for(slot, homes).is_some() {
+            return false;
+        }
+        let Expr::Binary { op, left, right, .. } =
+            crate::optimize::peel_parens(Some(expression)).unwrap() else { return false };
+        let opcode = match op.as_str() {
+            "+" => Some(0x01), "-" => Some(0x29), "&" => Some(0x21),
+            "|" => Some(0x09), "^" => Some(0x31), _ => None,
+        };
+        let Some(opcode) = opcode else { return false };
+        let commutative = op != "-";
+        let other = if commutative {
+            if expr_slot(left) == Some(slot) {
+                right.as_ref()
+            } else if expr_slot(right) == Some(slot) {
+                left.as_ref()
+            } else {
+                return false;
+            }
+        } else if expr_slot(left) == Some(slot) {
+            right.as_ref()
+        } else {
+            return false;
+        };
+        let offset = crate::codegen::slot_offset(slot);
+        let other = crate::optimize::peel_parens(Some(other)).unwrap();
+        if op == "+" || op == "-" {
+            if let Expr::IntLiteral { value, .. } = other {
+                if *value >= -0x80000000 && *value <= 0x7FFFFFFF {
+                    let extension = if op == "+" { 0 } else { 5 };
+                    self.assembler.group1_store_rbp_imm(extension, offset, *value as i64);
+                    return true;
+                }
+            }
+        }
+        if let Expr::Name { slot: other_slot, .. } = other {
+            if let Some(home) = home_for(*other_slot, homes) {
+                self.assembler.binary_store_rbp(opcode, offset, home);
+                return true;
+            }
+        }
+        self.emit_into(other, "rax", homes);
+        self.assembler.binary_store_rbp(opcode, offset, "rax");
+        true
+    }
+
     /// Emit `home = home op value` directly when the expression updates its own slot.
     fn try_fold_update(&mut self, slot: i64, expression: &Expr, home: &str,
                        homes: &[(i64, &str)]) -> bool {
@@ -1713,7 +1775,9 @@ impl CodeGenerator {
                 }
             }
             Stmt::Let { slot, value, .. } | Stmt::Assign { slot, value, .. } => {
-                self.emit_value(*slot, value, homes);
+                if !self.try_fold_frame_update(*slot, value, homes) {
+                    self.emit_value(*slot, value, homes);
+                }
             }
             Stmt::Block(block) => {
                 for (index, inner) in block.statements.iter().enumerate() {
