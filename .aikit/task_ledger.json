@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795405126.5370338,
+    "updated_at": 1795405612.7184129,
     "owner": "opencode:session",
-    "lease_until": 1795412326.5370338,
+    "lease_until": 1795412812.7184129,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
         "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
       },
       "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[29/N] stdin cursor promotion; char_stream prologue and read_char match; corpus 12/27; curated parity 58/58; ADR-159",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795395576.625333,
-      "timestamp_str": "2026-11-23 03:59:36",
-      "agent": "opencode:session",
-      "handoff": {
-        "state": "102 Rust tests, 58/58 curated parity",
-        "next": "char_stream loop rotation, pair inlining for fib, multi-slot recursion",
-        "evidence": "cargo test, parity, both aikit checks"
-      }
     },
     {
       "task_id": "cairn-rs-codegen",
@@ -328,6 +312,22 @@
         "state": "102 Rust tests, 58/58 curated parity",
         "next": "pair-mode home reservation for ackermann/fib, copy-home inlining for many_params, final primes byte diff",
         "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[43/N] direct dividend binding; primes byte-identical; corpus 18/27; curated parity 58/58; ADR-173",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795405612.7184129,
+      "timestamp_str": "2026-11-23 06:46:52",
+      "agent": "opencode:session",
+      "handoff": {
+        "state": "102 Rust tests, 58/58 curated parity",
+        "next": "pair-mode home reservation for fib/ackermann, copy-home inlining for many_params/call_chain, frame layout for mandelbrot/nqueens",
+        "evidence": "cargo test, parity, cairn gate"
       }
     }
   ]

@@ -2416,8 +2416,7 @@ impl CodeGenerator {
         if op == "/" || op == "%" {
             let nonnegative = expr_slot(right)
                 .is_some_and(|slot| self.nonnegative_slots.contains(&slot));
-            self.emit_expression(left, homes);
-            self.assembler.mov_reg_reg("rcx", "rax");
+            self.emit_into(left, "rcx", homes);
             self.emit_expression(right, homes);
             self.emit_variable_division(op == "%", nonnegative);
             return;

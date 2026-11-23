@@ -1627,3 +1627,10 @@ external compiler and was verified end to end.
 - **Context**: Variable divisors emitted nothing and conditions comparing a computed left against a home were dropped, so trial-division loops diverged completely.
 - **Decision**: Lower variable / and % with a guarded 32-bit fast path and a 64-bit fallback, track non-negative slots to skip the overflow probe, and compare a computed left operand by emitting it into rcx before comparing against the right home.
 - **Consequences**: primes now generates the division guards and d*d test with only a few bytes of difference; curated parity stays 58/58 and the corpus diagnostic remains 17/27.
+
+### ADR-173: bind division dividend straight into rcx
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: The reference binds the dividend directly into the ABI register used by its guarded division chain; the generic path round-tripped it through rax.
+- **Decision**: Use the destination-driven emit_into when binding the left operand of a variable division into rcx, removing the extra move.
+- **Consequences**: primes is byte-identical; the corpus diagnostic is 18/27. Remaining shapes are pair inlining, recursion, copy-home inlining and frame layout. Curated parity stays 58/58.
