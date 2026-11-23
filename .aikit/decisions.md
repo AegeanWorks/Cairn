@@ -1543,3 +1543,10 @@ external compiler and was verified end to end.
 - **Context**: The stdin-reading loop hoists its first fetch and uses the EOF guard as the only back-edge, a shape the generic while lowering cannot produce.
 - **Decision**: Detect the three-statement read/guard/update stdin scan, emit one fetch site with jmp into it, add the accumulator at the top, and branch back only on the non-negative EOF test.
 - **Consequences**: char_stream is byte-identical; the corpus diagnostic is 13/27 with curated parity unchanged at 58/58.
+
+### ADR-161: bit tests, logical branches and frame width close string and gcd shapes
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Low-bit comparisons, logical short-circuit conditions and functions with more than four parameters were lowered generically or with the wrong frame shape.
+- **Decision**: Add test-based bit peepholes for (x&m)==0 and x%2**b==0, lower &&/|| as branching chains, force a frame when parameters exceed four, and add the missing runtime-call ABIs.
+- **Consequences**: Thirteen of twenty-five valid corpus programs are byte-identical; curated parity stays 58/58. Pair inlining, magic division and multi-slot recursion remain open.

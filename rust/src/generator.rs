@@ -624,7 +624,9 @@ impl CodeGenerator {
                 .zip(crate::codegen::EXTRA_HOME_REGISTERS.iter().take(extra_count))
                 .map(|(slot, register)| (*slot, *register)),
         );
-        let frame_function = function.slots > callee_homes || !array_spans.is_empty();
+        let frame_function = function.slots > callee_homes
+            || function.parameters.len() > 4
+            || !array_spans.is_empty();
         let delta_eligible = function.slots == 1
             && function.parameters.len() == 1
             && !body_assigns(&function.body)
@@ -1408,9 +1410,37 @@ impl CodeGenerator {
 
     fn emit_condition_polarity(&mut self, expression: &Expr, target: &str, homes: &[(i64, &str)],
                                when_true: bool) {
-        let Expr::Binary { op, left, right, .. } = expression else {
+        let peeled = crate::optimize::peel_parens(Some(expression)).unwrap();
+        if let Expr::IntLiteral { value, .. } = peeled {
+            if (*value == 0 || *value == 1) && (*value != 0) == when_true {
+                self.assembler.jmp(target);
+            }
+            return;
+        }
+        let Expr::Binary { op, left, right, .. } = peeled else {
             return;
         };
+        if op == "&&" || op == "||" {
+            if op == "&&" {
+                if when_true {
+                    let skipped = self.fresh("and.short");
+                    self.emit_condition_polarity(left, &skipped, homes, false);
+                    self.emit_condition_polarity(right, target, homes, true);
+                    let s = skipped.clone();
+                    self.assembler.label(&s);
+                } else {
+                    self.emit_condition_polarity(left, target, homes, false);
+                    self.emit_condition_polarity(right, target, homes, false);
+                }
+            } else {
+                let skipped = self.fresh("or.short");
+                self.emit_condition_polarity(left, &skipped, homes, true);
+                self.emit_condition_polarity(right, target, homes, when_true);
+                let s = skipped.clone();
+                self.assembler.label(&s);
+            }
+            return;
+        }
         let base_condition = match op.as_str() {
             "==" => "e", "!=" => "ne", "<" => "l", "<=" => "le", ">" => "g", ">=" => "ge",
             _ => return,
@@ -1423,6 +1453,49 @@ impl CodeGenerator {
                 other => other,
             }
         };
+        // `(x & m) == 0` / `x % 2**b == 0` reads the low bits directly with test.
+        if matches!(op.as_str(), "==" | "!=") {
+            if let Expr::IntLiteral { value: zero, .. } = right.as_ref() {
+                if *zero == 0 {
+                    if let Expr::Binary { op: inner_op, left: inner_left, right: inner_right, .. } =
+                        crate::optimize::peel_parens(Some(left)).unwrap() {
+                        let bit_test = if inner_op == "%" {
+                            match crate::optimize::peel_parens(Some(inner_right)).unwrap() {
+                                Expr::IntLiteral { value: divisor, .. } if *divisor >= 2 => {
+                                    let power = (*divisor as u64).trailing_zeros() as u32;
+                                    if (1i128 << power) == *divisor {
+                                        Some((inner_left.as_ref(), (1i128 << power) - 1))
+                                    } else { None }
+                                }
+                                _ => None,
+                            }
+                        } else if inner_op == "&" {
+                            match (crate::optimize::peel_parens(Some(inner_left)).unwrap(),
+                                   crate::optimize::peel_parens(Some(inner_right)).unwrap()) {
+                                (Expr::IntLiteral { value: mask, .. }, other)
+                                    if *mask > 0 => Some((other, *mask)),
+                                (other, Expr::IntLiteral { value: mask, .. })
+                                    if *mask > 0 => Some((other, *mask)),
+                                _ => None,
+                            }
+                        } else { None };
+                        if let Some((value, mask)) = bit_test {
+                            if let Some(slot) = expr_slot(value) {
+                                if let Some(home) = home_for(slot, homes) {
+                                    self.assembler.test_imm(home, mask as i64);
+                                    let parity = if op == "==" { "e" } else { "ne" };
+                                    let parity = if when_true { parity } else {
+                                        match parity { "e" => "ne", "ne" => "e", other => other }
+                                    };
+                                    self.assembler.jcc(parity, target);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if let (Expr::Name { slot: left_slot, .. }, Expr::Name { slot: right_slot, .. }) =
             (left.as_ref(), right.as_ref()) {
             if let (Some(left_home), Some(right_home)) =
