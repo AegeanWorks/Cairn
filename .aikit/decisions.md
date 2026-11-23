@@ -1536,3 +1536,10 @@ external compiler and was verified end to end.
 - **Context**: A stdin-reading leaf keeps the buffer base, cursor and count in spare homes so each read_char need not reload the memory words.
 - **Decision**: Detect functions whose only calls are builtins and that read stdin, promote up to three spare homes for buffer/cursor/count, save them in the prologue, load them at entry, store the cursor in the epilogue, and inline the have/drained branches of read_char.
 - **Consequences**: char_stream's prologue and read_char sequence are now byte-identical; its remaining difference is loop rotation. Curated parity stays 58/58 and the corpus diagnostic is 12/27.
+
+### ADR-160: rotated stdin scan closes char_stream
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: The stdin-reading loop hoists its first fetch and uses the EOF guard as the only back-edge, a shape the generic while lowering cannot produce.
+- **Decision**: Detect the three-statement read/guard/update stdin scan, emit one fetch site with jmp into it, add the accumulator at the top, and branch back only on the non-negative EOF test.
+- **Consequences**: char_stream is byte-identical; the corpus diagnostic is 13/27 with curated parity unchanged at 58/58.

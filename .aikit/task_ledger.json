@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795395576.625333,
+    "updated_at": 1795395969.592869,
     "owner": "opencode:session",
-    "lease_until": 1795402776.625333,
+    "lease_until": 1795403169.592869,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,23 +105,6 @@
         "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
       },
       "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[16/N] listing --json command implemented with documented label-tie gap; curated parity 55/55; ADR-145; both projects gated",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795381453.9209075,
-      "timestamp_str": "2026-11-23 00:04:13",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "handoff": {
-        "state": "102 Rust tests, 55/55 curated parity",
-        "next": "preserve label insertion order to gate listing, then finish vectorised loops and multi-slot recursion",
-        "evidence": "cargo test, parity, both aikit checks"
-      }
     },
     {
       "task_id": "cairn-rs-codegen",
@@ -332,6 +315,22 @@
       "handoff": {
         "state": "102 Rust tests, 58/58 curated parity",
         "next": "char_stream loop rotation, pair inlining for fib, multi-slot recursion",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[30/N] rotated stdin scan; char_stream byte-identical; corpus 13/27; curated parity 58/58; ADR-160",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795395969.592869,
+      "timestamp_str": "2026-11-23 04:06:09",
+      "agent": "opencode:session",
+      "handoff": {
+        "state": "102 Rust tests, 58/58 curated parity",
+        "next": "parity/magic-division peepholes, pair inlining for fib, multi-slot recursion",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }
