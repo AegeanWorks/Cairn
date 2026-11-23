@@ -188,6 +188,37 @@ fn body_is_copy_free(block: &crate::syntax::Block) -> bool {
     statements(block)
 }
 
+/// Whether a function is a two-parameter pure-text pair-inline candidate.
+fn is_pair_shape(function: &crate::syntax::Function) -> bool {
+    if function.slots != 2 || function.parameters.len() != 2 {
+        return false;
+    }
+    let value_slot = function.parameters[1].slot;
+    fn block_has_guard(block: &crate::syntax::Block, slot: i64) -> bool {
+        for statement in &block.statements {
+            if let Stmt::If { condition, .. } = statement {
+                if let Expr::Binary { op, left, right, .. } =
+                    crate::optimize::peel_parens(Some(condition)).unwrap() {
+                    if op == "==" {
+                        let names = [expr_slot(left), expr_slot(right)];
+                        let zeros = [
+                            matches!(crate::optimize::peel_parens(Some(left)).unwrap(),
+                                Expr::IntLiteral { value, .. } if *value == 0),
+                            matches!(crate::optimize::peel_parens(Some(right)).unwrap(),
+                                Expr::IntLiteral { value, .. } if *value == 0),
+                        ];
+                        if names.contains(&Some(slot)) && zeros.contains(&true) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+    block_has_guard(&function.body, value_slot)
+}
+
 fn rebinds_parameters(block: &crate::syntax::Block, count: usize) -> bool {
     for statement in &block.statements {
         match statement {
@@ -885,6 +916,7 @@ impl CodeGenerator {
             && function.parameters.len() == 1
             && !body_assigns(&function.body)
             && has_delta_self_call(&function.body, &function.name, function.parameters[0].slot);
+        let pair_mode = !frame_function && !delta_eligible && is_pair_shape(function);
         self.delta_slot = if delta_eligible { function.parameters[0].slot } else { -1 };
         self.delta_value = 0;
         self.inline_depth = 0;
@@ -974,6 +1006,9 @@ impl CodeGenerator {
             for register in &self.hoist_homes {
                 self.assembler.push(register);
             }
+            if pair_mode {
+                self.assembler.push("r13");
+            }
             if delta_eligible {
                 self.assembler.sub_rsp(8 * 8);
             } else {
@@ -1037,6 +1072,9 @@ impl CodeGenerator {
                 if filler {
                     self.assembler.pop(crate::codegen::HOME_REGISTERS.last().unwrap());
                 }
+            }
+            if pair_mode {
+                self.assembler.pop("r13");
             }
             for register in self.hoist_homes.iter().rev() {
                 self.assembler.pop(register);

@@ -1641,3 +1641,10 @@ external compiler and was verified end to end.
 - **Context**: Delta self-call copies reserve per-level hold slots in the function frame; parking a binary's left operand in rcx across a nested call was clobbered and byte-diverged.
 - **Decision**: When a binary's right operand calls in a delta-eligible function, store the left value into the level-indexed rsp hold slot and reload it into rcx after the call; use push/pop elsewhere.
 - **Consequences**: fib and fib30 are byte-identical; the corpus diagnostic is 20/27. Remaining shapes are pair-mode reservation, copy-home inlining and multi-slot recursion. Curated parity stays 58/58.
+
+### ADR-175: pair-mode detection reserves the chain counter home
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: The reference's two-parameter pair-inline shape reserves r13 as the chain-counter save slot in the prologue and epilogue.
+- **Decision**: Detect the two-slot, two-parameter self-call shape with a zero guard on the second parameter and push/pop r13 around the frameless body, matching the reference's extra saved home.
+- **Consequences**: ackermann's prologue now matches; its remaining gap is the pair-machine chain loop and delta copies. Curated parity stays 58/58 and the corpus diagnostic is 20/27.
