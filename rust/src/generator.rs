@@ -899,7 +899,26 @@ impl CodeGenerator {
                     register,
                 );
             }
-            let assigned = assigned_slots(&function.body);
+            let mut assigned = assigned_slots(&function.body);
+            for (base, size) in &array_spans {
+                if assigned.contains(base) {
+                    for slot in *base..*base + *size as i64 {
+                        assigned.insert(slot);
+                    }
+                }
+            }
+            let homed: std::collections::BTreeSet<i64> =
+                homes.iter().map(|(slot, _)| *slot).collect();
+            let frame_slots: Vec<i64> = (0..function.slots as i64)
+                .filter(|slot| !homed.contains(slot) && !assigned.contains(slot))
+                .collect();
+            if !frame_slots.is_empty() {
+                self.assembler.xor_zero("rax");
+                for slot in frame_slots {
+                    self.assembler.mov_store_rbp(
+                        crate::codegen::slot_offset(slot), "rax");
+                }
+            }
             for (slot, register) in &homes {
                 if *slot as usize >= function.parameters.len() && !assigned.contains(slot) {
                     self.assembler.xor_zero(register);
@@ -1900,6 +1919,10 @@ impl CodeGenerator {
             }
         }
         match (left.as_ref(), right.as_ref()) {
+            (Expr::Binary { .. }, Expr::IntLiteral { value, .. }) => {
+                self.emit_expression(left.as_ref(), homes);
+                self.assembler.cmp_imm("rax", *value as i64);
+            }
             (Expr::Index { .. }, Expr::IntLiteral { value, .. }) => {
                 self.emit_expression(left.as_ref(), homes);
                 self.assembler.cmp_imm("rax", *value as i64);
@@ -2117,7 +2140,8 @@ impl CodeGenerator {
                 }
             }
             Expr::Binary { op, left, right, .. } => {
-                if self.try_emit_magic_division(op, left, right, homes) {
+                if self.try_emit_power_of_two_division(op, left, right, homes)
+                    || self.try_emit_magic_division(op, left, right, homes) {
                     return;
                 }
                 if op == "&" {
@@ -2133,6 +2157,41 @@ impl CodeGenerator {
             }
             Expr::Unary { .. } | Expr::Index { .. } | Expr::ArrayLiteral { .. } => {}
         }
+    }
+
+    /// Lower division by a positive power of two as a sign-fixup shift chain.
+    fn try_emit_power_of_two_division(&mut self, op: &str, left: &Expr, right: &Expr,
+                                      homes: &[(i64, &str)]) -> bool {
+        if op != "/" && op != "%" {
+            return false;
+        }
+        let Expr::IntLiteral { value: divisor, .. } =
+            crate::optimize::peel_parens(Some(right)).unwrap() else { return false };
+        if *divisor <= 0 {
+            return false;
+        }
+        let power = (127 - (*divisor as u128).leading_zeros()) as u32;
+        if power < 1 || power > 63 || (1i128 << power) != *divisor {
+            return false;
+        }
+        self.emit_expression(left, homes);
+        self.assembler.mov_reg_reg("rcx", "rax");
+        self.assembler.shift_imm(7, "rcx", 63);
+        self.assembler.shift_imm(5, "rcx", (64 - power) as u8);
+        self.assembler.binary(0x01, "rax", "rcx");
+        if op == "/" {
+            self.assembler.shift_imm(7, "rax", power as u8);
+        } else {
+            let mask = (1i128 << power) - 1;
+            if mask <= 0x7FFFFFFF {
+                self.assembler.arith_imm(4, "rax", mask as i64);
+            } else {
+                self.assembler.mov_imm64("rsi", mask as i64);
+                self.assembler.binary(0x21, "rax", "rsi");
+            }
+            self.assembler.binary(0x29, "rax", "rcx");
+        }
+        true
     }
 
     /// Lower `x / d` or `x % d` for a positive literal divisor as a magic multiply.

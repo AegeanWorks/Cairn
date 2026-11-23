@@ -1599,3 +1599,10 @@ external compiler and was verified end to end.
 - **Context**: A multiply whose left operand already lives in a home can read that home directly instead of parking it in rcx and reading it back.
 - **Decision**: Extend the homed-left in-place rule to multiplication, emitting imul rax, left_home whenever the right operand is call-free, while keeping the literal-product lea and imul fast paths.
 - **Consequences**: Curated parity stays 58/58 and the corpus diagnostic remains 16/27; the remaining call and frame shapes are still open.
+
+### ADR-169: frame clearing, computed conditions and power-of-two division
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Frame functions left non-homed slots unclear, and comparisons whose left side is computed or divides by a power of two were lowered generically.
+- **Decision**: Clear non-homed frame slots from a zeroed rax while marking array spans assigned, compare a computed left operand against a literal, and lower power-of-two division with the sign-fixup shift chain.
+- **Consequences**: Curated parity stays 58/58 after repairing the array-span regression; the corpus diagnostic remains 16/27 and the remaining gaps are destination-driven inlining and recursion.
