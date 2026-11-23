@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795410781.554545,
+    "updated_at": 1795411865.9949915,
     "owner": "opencode:session",
-    "lease_until": 1795417981.554545,
+    "lease_until": 1795419065.9949915,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[37/N] fix big bit-test mask panic; nqueens generates again; corpus 16/27; curated parity 58/58; ADR-167",
-      "files_affected": [],
-      "handoff": {
-        "evidence": "cargo test, parity, both aikit checks",
-        "next": "delta pair inlining for fib, multi-slot recursion, call argument shapes, frame layout",
-        "state": "102 Rust tests, 58/58 curated parity"
-      },
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795401806.6421745,
-      "timestamp_str": "2026-11-23 05:43:26"
     },
     {
       "agent": "opencode:session",
@@ -329,6 +313,22 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795410781.554545,
       "timestamp_str": "2026-11-23 08:13:01"
+    },
+    {
+      "agent": "opencode:session",
+      "description": "[51/N] in-place homed subtraction; corpus 22/27; curated parity 58/58; ADR-182",
+      "files_affected": [],
+      "handoff": {
+        "evidence": "cargo test, parity, cairn gate",
+        "next": "final call_chain/many_params destination details, mandelbrot frame layout",
+        "state": "102 Rust tests, 58/58 curated parity"
+      },
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795411865.9949915,
+      "timestamp_str": "2026-11-23 08:31:05"
     }
   ]
 }

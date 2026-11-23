@@ -1377,6 +1377,17 @@ impl CodeGenerator {
                 }
             }
         }
+        if op == "-" {
+            if let Expr::Name { slot, .. } = right {
+                if let Some(right_home) = home_for(*slot, homes) {
+                    if self.emit_left_into(left, destination, homes) {
+                        self.assembler.binary(0x29, destination, right_home);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
         if op == "*" {
             let peeled_left = crate::optimize::peel_parens(Some(left)).unwrap();
             if let Expr::Name { slot, .. } = peeled_left {

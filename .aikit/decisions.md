@@ -1683,3 +1683,10 @@ external compiler and was verified end to end.
 - **Context**: An inlined copy's final result normally needs one move into the caller's destination; when the returned local is defined before its first read, that local can home directly in the destination register.
 - **Decision**: Track the caller's destination home through emit_value, detect a return of an assigned local in the foreign-inline copy, and remap that local's guest home to the destination so the final move disappears.
 - **Consequences**: call_chain and many_params advanced but still have small byte differences; curated parity stays 58/58 and the corpus diagnostic is 22/27.
+
+### ADR-181: subtract homed right operand in place
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Destination-driven binary lowering handled addition and bitwise ops with a homed right operand but not subtraction, leaving accumulator chains in a rax round trip.
+- **Decision**: Lower subtraction with a homed right operand directly into the destination via binary sub, extending the in-place compound.
+- **Consequences**: mandelbrot's divergence moved later; curated parity stays 58/58 and the corpus diagnostic remains 22/27.
