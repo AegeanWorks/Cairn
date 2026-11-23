@@ -1732,3 +1732,10 @@ external compiler and was verified end to end.
 - **Context**: Frame functions lower slot self-updates as memory-operand instructions and save r10/r11 around calls; together with peeled homed-right combines this completes byte-identical lowering for all 25 valid corpus programs.
 - **Decision**: Fold frame-slot updates into group-1 memory instructions, save extra homes across call sites with alignment padding, and peel parentheses before the homed-right binary combine.
 - **Consequences**: All 25 valid examples and benchmarks now produce byte-identical dumps; curated parity remains 58/58. Python parity oracles are still used for verification; the argv_walk and hex_io sources error in the Python oracle and are excluded.
+
+### ADR-188: Rust golden verification replaces Python parity oracles
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: After proving byte-identical output across all 25 valid corpus sources, the reference outputs were captured once as a frozen SHA-256 manifest and the front-end-parity gate now runs a Rust integration test.
+- **Decision**: Add parity/golden.sha256 with 431 frozen hashes, a Rust golden_parity integration test that recomputes them with the Rust binary, and point the front-end-parity gate at that test instead of the Python comparator.
+- **Consequences**: Ongoing verification is Rust-only; all 7 cairn gates pass and the corpus is byte-identical for all 25 valid sources.

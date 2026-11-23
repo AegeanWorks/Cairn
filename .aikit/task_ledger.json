@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795454347.1901474,
+    "updated_at": 1795459110.08384,
     "owner": "opencode:session",
-    "lease_until": 1795461547.1901474,
+    "lease_until": 1795466310.08384,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[44/N] delta hold slots; fib and fib30 byte-identical; corpus 20/27; curated parity 58/58; ADR-174",
-      "files_affected": [],
-      "handoff": {
-        "evidence": "cargo test, parity, cairn gate",
-        "next": "pair-mode home reservation for ackermann, copy-home inlining for many_params/call_chain, multi-slot recursion for nqueens, frame layout for mandelbrot",
-        "state": "102 Rust tests, 58/58 curated parity"
-      },
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795406259.5544791,
-      "timestamp_str": "2026-11-23 06:57:39"
     },
     {
       "agent": "opencode:session",
@@ -329,6 +313,22 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795454347.1901474,
       "timestamp_str": "2026-11-23 20:19:07"
+    },
+    {
+      "agent": "opencode:session",
+      "description": "[58/N] MILESTONE: all 25 valid programs byte-identical; front-end-parity gate is now Rust golden verification (431 hashes); both projects gated",
+      "files_affected": [],
+      "handoff": {
+        "evidence": "cargo test, golden_parity 431/431, aikit check 7/7",
+        "next": "final review and any remaining AIKit cleanup",
+        "state": "25/25 valid corpus parity, Rust-only verification, both gate suites green"
+      },
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795459110.08384,
+      "timestamp_str": "2026-11-23 21:38:30"
     }
   ]
 }

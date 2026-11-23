@@ -45,7 +45,7 @@ disagree, `python -m cairn capabilities --json` wins.
   ```bash
   python -m unittest discover
   cargo test --quiet --manifest-path rust/Cargo.toml
-  python parity/check_parity.py
+  cargo test --quiet --manifest-path rust/Cargo.toml --test golden_parity
   ```
   (run from `projects/cairn`)
 - **Compile and run something now** (under 10 seconds):
@@ -459,9 +459,12 @@ cairn/
 │       ├── machine.rs        <- exact emitter byte tests ported from Python
 │       ├── optimize.rs       <- folding, wrapping and trap-safety tests
 │       ├── runtime.rs        <- emitted runtime labels, state and fixup tests
-│       └── sema.rs           <- semantic rule tests ported from Python
+│       ├── sema.rs           <- semantic rule tests ported from Python
+│       └── golden_parity.rs  <- Rust-only golden verification (431 frozen hashes)
 ├── parity/                   <- evidence tooling, outside the Rust-only crate
-│   ├── check_parity.py       <- gate driver comparing Rust with the Python reference
+│   ├── capture_golden.py     <- one-time capture of the frozen reference hash manifest
+│   ├── golden.sha256         <- frozen reference hashes, captured after Python parity
+│   ├── check_parity.py       <- legacy Python reference comparator (not a gate)
 │   ├── dump.py               <- canonical front-end oracle
 │   ├── alg_dump.py           <- algebraic oracle
 │   ├── builder_dump.py       <- build pipeline oracle

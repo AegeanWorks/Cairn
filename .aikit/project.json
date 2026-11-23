@@ -16,7 +16,7 @@
   ],
   "gates": {
     "rust-test": "cargo test --quiet --manifest-path rust/Cargo.toml",
-    "front-end-parity": "python parity/check_parity.py"
+    "front-end-parity": "cargo build --quiet --manifest-path rust/Cargo.toml && cargo test --quiet --manifest-path rust/Cargo.toml --test golden_parity"
   },
   "ui_required": false,
   "created": "2026-10-29",

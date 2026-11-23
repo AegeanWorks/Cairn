@@ -6,15 +6,15 @@
 ---
 
 ## 📊 Codebase Metrics
-- **Total Python Modules**: `68`
+- **Total Python Modules**: `69`
 - **Total Classes**: `224`
-- **Total Top-Level Functions**: `286`
+- **Total Top-Level Functions**: `288`
 - **Total Class Methods**: `1202`
-- **Total Source Lines**: `23193`
+- **Total Source Lines**: `23293`
 
 ## 🧭 Map Coverage
-- **Indexed**: python (`68` module(s))
-- **Not indexed by this map**: cpp (`48` file(s)), rust (`55` file(s))
+- **Indexed**: python (`69` module(s))
+- **Not indexed by this map**: cpp (`48` file(s)), rust (`56` file(s))
 
 > Only Python symbols are catalogued. A language above is reported as not indexed, never as verified by this map.
 
@@ -907,6 +907,17 @@
 **Size**: `17` lines
 
 **Functions:**
+- `def main()`
+
+---
+
+### [`parity/capture_golden.py`](parity/capture_golden.py)
+> *One-time capture of the canonical reference-output hash manifest.*
+
+**Size**: `100` lines
+
+**Functions:**
+- `def capture(name, source, oracle, filename)`
 - `def main()`
 
 ---
