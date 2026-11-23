@@ -44,6 +44,64 @@ fn in_array(slot: i64, arrays: &[(i64, usize)]) -> bool {
     arrays.iter().any(|(base, size)| slot >= *base && slot < *base + *size as i64)
 }
 
+fn collect_str_lens(block: &crate::syntax::Block,
+                    found: &mut std::collections::BTreeMap<i64, i64>) {
+    for statement in &block.statements {
+        match statement {
+            Stmt::Let { slot, value, .. } | Stmt::Assign { slot, value, .. } => {
+                if let Expr::Call { name, arguments, .. } = value {
+                    if name == "str_len" {
+                        if let Some(pointer) = arguments.first().and_then(expr_slot) {
+                            found.insert(*slot, pointer);
+                        }
+                    }
+                }
+            }
+            Stmt::If { then_block, else_block, .. } => {
+                collect_str_lens(then_block, found);
+                if let Some(otherwise) = else_block {
+                    collect_str_lens(otherwise, found);
+                }
+            }
+            Stmt::While { body, .. } | Stmt::Block(body) => collect_str_lens(body, found),
+            _ => {}
+        }
+    }
+}
+
+fn collect_string_bounds(block: &crate::syntax::Block,
+                          str_lens: &std::collections::BTreeMap<i64, i64>,
+                          bounds: &mut std::collections::BTreeMap<i64, i64>) {
+    for statement in &block.statements {
+        match statement {
+            Stmt::While { condition, body, .. } => {
+                if let Expr::Binary { op, left, right, .. } =
+                    crate::optimize::peel_parens(Some(condition)).unwrap() {
+                    let pair = match op.as_str() {
+                        "<" => Some((expr_slot(left), expr_slot(right))),
+                        ">" => Some((expr_slot(right), expr_slot(left))),
+                        _ => None,
+                    };
+                    if let Some((Some(index), Some(length))) = pair {
+                        if let Some(pointer) = str_lens.get(&length) {
+                            bounds.insert(index, *pointer);
+                        }
+                    }
+                }
+                collect_string_bounds(body, str_lens, bounds);
+            }
+            Stmt::If { then_block, else_block, .. } => {
+                collect_string_bounds(then_block, str_lens, bounds);
+                if let Some(otherwise) = else_block {
+                    collect_string_bounds(otherwise, str_lens, bounds);
+                }
+            }
+            Stmt::Block(inner) => collect_string_bounds(inner, str_lens, bounds),
+            _ => {}
+        }
+    }
+}
+
 fn expr_slot(expr: &Expr) -> Option<i64> {
     match crate::optimize::peel_parens(Some(expr)).unwrap() {
         Expr::Name { slot, .. } => Some(*slot),
@@ -210,6 +268,8 @@ pub struct CodeGenerator {
     hoist_imm: std::collections::BTreeMap<i128, String>,
     /// Spare homes saved by the frameless prologue for hoisted constants.
     hoist_homes: Vec<String>,
+    /// Index slot -> string pointer slot for `str_byte` calls inside a str_len guard.
+    string_bounds: std::collections::BTreeMap<i64, i64>,
 }
 
 impl CodeGenerator {
@@ -234,6 +294,7 @@ impl CodeGenerator {
             hoist_plans: std::collections::BTreeMap::new(),
             hoist_imm: std::collections::BTreeMap::new(),
             hoist_homes: Vec::new(),
+            string_bounds: std::collections::BTreeMap::new(),
         }
     }
 
@@ -515,6 +576,10 @@ impl CodeGenerator {
             .map(|(_, register)| *register)
             .collect();
         let body = function.body.clone();
+        let mut str_lens = std::collections::BTreeMap::new();
+        collect_str_lens(&body, &mut str_lens);
+        self.string_bounds.clear();
+        collect_string_bounds(&body, &str_lens, &mut self.string_bounds);
         if !frame_function && !delta_eligible && self.inline_depth == 0 {
             self.plan_constant_hoists(&body, callee_count);
         } else {
@@ -1189,6 +1254,23 @@ impl CodeGenerator {
             "==" => "e", "!=" => "ne", "<" => "l", "<=" => "le", ">" => "g", ">=" => "ge",
             _ => return,
         };
+        let condition = if when_true {
+            base_condition
+        } else {
+            match base_condition {
+                "e" => "ne", "ne" => "e", "l" => "ge", "ge" => "l", "le" => "g", "g" => "le",
+                other => other,
+            }
+        };
+        if let (Expr::Name { slot: left_slot, .. }, Expr::Name { slot: right_slot, .. }) =
+            (left.as_ref(), right.as_ref()) {
+            if let (Some(left_home), Some(right_home)) =
+                (home_for(*left_slot, homes), home_for(*right_slot, homes)) {
+                self.assembler.cmp_reg_reg(left_home, right_home);
+                self.assembler.jcc(condition, target);
+                return;
+            }
+        }
         match (left.as_ref(), right.as_ref()) {
             (Expr::Index { .. }, Expr::IntLiteral { value, .. }) => {
                 self.emit_expression(left.as_ref(), homes);
@@ -1221,15 +1303,6 @@ impl CodeGenerator {
                 }
             }
         }
-        let condition = base_condition;
-        let condition = if when_true {
-            condition
-        } else {
-            match condition {
-                "e" => "ne", "ne" => "e", "l" => "ge", "ge" => "l", "le" => "g", "g" => "le",
-                other => other,
-            }
-        };
         self.assembler.jcc(condition, target);
     }
 
@@ -1410,6 +1483,45 @@ impl CodeGenerator {
                 self.emit_expression(&arguments[0], homes);
                 self.assembler.bswap("rax");
                 return;
+            }
+            "popcount" => {
+                self.emit_expression(&arguments[0], homes);
+                self.call_site(crate::runtime::POPCOUNT_LABEL);
+                return;
+            }
+            "str_len" => {
+                self.emit_expression(&arguments[0], homes);
+                self.call_site(crate::runtime::STR_LEN_LABEL);
+                return;
+            }
+            "str_byte" => {
+                let pointer = crate::optimize::peel_parens(Some(&arguments[0])).unwrap();
+                let index = crate::optimize::peel_parens(Some(&arguments[1])).unwrap();
+                if let (Expr::Name { slot: pointer_slot, .. },
+                        Expr::Name { slot: index_slot, .. }) = (pointer, index) {
+                    if let (Some(base), Some(index_home)) =
+                        (home_for(*pointer_slot, homes), home_for(*index_slot, homes)) {
+                        if self.string_bounds.get(index_slot) == Some(pointer_slot) {
+                            self.assembler.movzx_load8_sib("rax", base, index_home);
+                            return;
+                        }
+                        let miss = self.fresh("str_byte.inline.miss");
+                        let done = self.fresh("str_byte.inline.done");
+                        self.assembler.test(index_home);
+                        let m = miss.clone();
+                        self.assembler.jcc("s", &m);
+                        self.assembler.movzx_load8_sib("rax", base, index_home);
+                        self.assembler.test("rax");
+                        let d = done.clone();
+                        self.assembler.jcc("nz", &d);
+                        let mi = miss.clone();
+                        self.assembler.label(&mi);
+                        self.assembler.mov_imm64("rax", -1);
+                        let dn = done.clone();
+                        self.assembler.label(&dn);
+                        return;
+                    }
+                }
             }
             "rotl" => {
                 let value = &arguments[0];

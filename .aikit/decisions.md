@@ -1522,3 +1522,10 @@ external compiler and was verified end to end.
 - **Context**: Sieve's membership test compares a dynamic array element to zero and its mark store writes a literal through a scaled index.
 - **Decision**: Let condition lowering emit a dynamic index load before the compare and lower array element stores with an immediate value to one mov_store_indexed_imm.
 - **Consequences**: Ten of twenty-five valid corpus programs are byte-identical; curated parity remains 58/58.
+
+### ADR-158: runtime call ABIs and inlined str_byte close string scans
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: popcount and str_len take their argument in rax, str_byte inlines for bounded leaf indices, and loop latches compare two homes rather than a home against a literal.
+- **Decision**: Route popcount and str_len through the rax-ABI runtime call sites, inline str_byte with string-bound facts derived from str_len guards, and lower Name-vs-Name conditions with cmp_reg_reg.
+- **Consequences**: popcount and str_scan are byte-identical; the corpus diagnostic is 12/27 with curated parity unchanged at 58/58.
