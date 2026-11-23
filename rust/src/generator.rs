@@ -44,6 +44,63 @@ fn in_array(slot: i64, arrays: &[(i64, usize)]) -> bool {
     arrays.iter().any(|(base, size)| slot >= *base && slot < *base + *size as i64)
 }
 
+/// Whether a function reads stdin and every call it makes is a builtin.
+fn promotes_stdin_cursor(block: &crate::syntax::Block) -> bool {
+    fn expression(expr: &Expr, reads: &mut bool, builtins: &mut bool) {
+        match expr {
+            Expr::Call { name, arguments, .. } => {
+                if name == "read_char" {
+                    *reads = true;
+                } else if !crate::sema::BUILTINS.iter().any(|(known, _)| *known == name) {
+                    *builtins = false;
+                }
+                for argument in arguments {
+                    expression(argument, reads, builtins);
+                }
+            }
+            Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => {
+                expression(inner, reads, builtins);
+            }
+            Expr::Binary { left, right, .. } | Expr::Index { operand: left, index: right, .. } => {
+                expression(left, reads, builtins);
+                expression(right, reads, builtins);
+            }
+            Expr::ArrayLiteral { elements, .. } => {
+                for element in elements {
+                    expression(element, reads, builtins);
+                }
+            }
+            _ => {}
+        }
+    }
+    fn statements(block: &crate::syntax::Block, reads: &mut bool, builtins: &mut bool) {
+        for statement in &block.statements {
+            match statement {
+                Stmt::Let { value, .. } | Stmt::Assign { value, .. }
+                | Stmt::Return { value, .. } | Stmt::ExprStmt { expression: value, .. } => {
+                    expression(value, reads, builtins);
+                }
+                Stmt::If { condition, then_block, else_block, .. } => {
+                    expression(condition, reads, builtins);
+                    statements(then_block, reads, builtins);
+                    if let Some(otherwise) = else_block {
+                        statements(otherwise, reads, builtins);
+                    }
+                }
+                Stmt::While { condition, body, .. } => {
+                    expression(condition, reads, builtins);
+                    statements(body, reads, builtins);
+                }
+                Stmt::Block(inner) => statements(inner, reads, builtins),
+                _ => {}
+            }
+        }
+    }
+    let (mut reads, mut builtins) = (false, true);
+    statements(block, &mut reads, &mut builtins);
+    reads && builtins
+}
+
 fn collect_str_lens(block: &crate::syntax::Block,
                     found: &mut std::collections::BTreeMap<i64, i64>) {
     for statement in &block.statements {
@@ -270,6 +327,10 @@ pub struct CodeGenerator {
     hoist_homes: Vec<String>,
     /// Index slot -> string pointer slot for `str_byte` calls inside a str_len guard.
     string_bounds: std::collections::BTreeMap<i64, i64>,
+    /// Spare homes promoted to hold the stdin buffer base, cursor and count word.
+    stdin_base: Option<String>,
+    stdin_cursor: Option<String>,
+    stdin_count: Option<String>,
 }
 
 impl CodeGenerator {
@@ -295,6 +356,9 @@ impl CodeGenerator {
             hoist_imm: std::collections::BTreeMap::new(),
             hoist_homes: Vec::new(),
             string_bounds: std::collections::BTreeMap::new(),
+            stdin_base: None,
+            stdin_cursor: None,
+            stdin_count: None,
         }
     }
 
@@ -587,7 +651,25 @@ impl CodeGenerator {
             self.hoist_imm.clear();
             self.hoist_homes.clear();
         }
-        let saved_units = callee_count + self.hoist_homes.len();
+        self.stdin_base = None;
+        self.stdin_cursor = None;
+        self.stdin_count = None;
+        let mut pushed: Vec<String> = callee_registers.iter().map(|name| name.to_string()).collect();
+        if !frame_function && !delta_eligible && promotes_stdin_cursor(&body) {
+            let spare: Vec<String> = crate::codegen::HOME_REGISTERS
+                .iter().skip(callee_count).take(3)
+                .filter(|name| !self.hoist_homes.iter().any(|home| home == **name))
+                .map(|name| name.to_string()).collect();
+            if spare.len() >= 2 {
+                self.stdin_base = Some(spare[0].clone());
+                self.stdin_cursor = Some(spare[1].clone());
+                self.stdin_count = spare.get(2).cloned();
+                for register in &spare {
+                    pushed.push(register.clone());
+                }
+            }
+        }
+        let saved_units = pushed.len() + self.hoist_homes.len();
         let merging = !frame_function && !delta_eligible && body_may_hold(&body);
         let pad = frame_function || saved_units % 2 == 0 || merging;
         let filler = merging && saved_units % 2 == 1;
@@ -609,7 +691,7 @@ impl CodeGenerator {
                 }
             }
         } else {
-            for register in &callee_registers {
+            for register in &pushed {
                 self.assembler.push(register);
             }
             for register in &self.hoist_homes {
@@ -642,6 +724,13 @@ impl CodeGenerator {
                 self.store_slot(parameter.slot, "rax", &homes);
             }
         }
+        if let (Some(base), Some(cursor)) = (self.stdin_base.clone(), self.stdin_cursor.clone()) {
+            self.assembler.lea_rip(&base, crate::runtime::STDIN_BUFFER_LABEL);
+            self.assembler.mov_load_rip(&cursor, crate::runtime::STDIN_CURSOR_LABEL);
+            if let Some(count) = self.stdin_count.clone() {
+                self.assembler.mov_load_rip(&count, crate::runtime::STDIN_COUNT_LABEL);
+            }
+        }
         let ends_in_return = matches!(body.statements.last(), Some(Stmt::Return { .. }));
         if !ends_in_return {
             self.assembler.mov_imm64("rax", 0);
@@ -650,6 +739,9 @@ impl CodeGenerator {
             self.emit_statement(statement, index + 1 == body.statements.len(), &homes);
         }
         self.assembler.label(&self.epilogue.clone());
+        if let Some(cursor) = self.stdin_cursor.clone() {
+            self.assembler.mov_store_rip(&cursor, crate::runtime::STDIN_CURSOR_LABEL);
+        }
         if frame_function {
             for (index, register) in callee_registers.iter().enumerate() {
                 self.assembler.mov_load_rbp(
@@ -672,7 +764,7 @@ impl CodeGenerator {
             for register in self.hoist_homes.iter().rev() {
                 self.assembler.pop(register);
             }
-            for register in callee_registers.iter().rev() {
+            for register in pushed.iter().rev() {
                 self.assembler.pop(register);
             }
             self.assembler.ret();
@@ -1492,6 +1584,37 @@ impl CodeGenerator {
             "str_len" => {
                 self.emit_expression(&arguments[0], homes);
                 self.call_site(crate::runtime::STR_LEN_LABEL);
+                return;
+            }
+            "read_char" => {
+                if let (Some(base), Some(cursor)) =
+                    (self.stdin_base.clone(), self.stdin_cursor.clone()) {
+                    let have = self.fresh("readchar.cursor.have");
+                    let done = self.fresh("readchar.cursor.done");
+                    if let Some(count) = self.stdin_count.clone() {
+                        self.assembler.cmp_reg_reg(&cursor, &count);
+                    } else {
+                        self.assembler.cmp_reg_rip(
+                            &cursor, crate::runtime::STDIN_COUNT_LABEL);
+                    }
+                    self.assembler.jcc("b", &have);
+                    self.assembler.mov_store_rip(&cursor, crate::runtime::STDIN_CURSOR_LABEL);
+                    self.call_site(crate::runtime::READ_CHAR_LABEL);
+                    self.assembler.mov_load_rip(&cursor, crate::runtime::STDIN_CURSOR_LABEL);
+                    if let Some(count) = self.stdin_count.clone() {
+                        self.assembler.mov_load_rip(&count, crate::runtime::STDIN_COUNT_LABEL);
+                    }
+                    let d = done.clone();
+                    self.assembler.jmp(&d);
+                    let h = have.clone();
+                    self.assembler.label(&h);
+                    self.assembler.movzx_load8_sib("rax", &base, &cursor);
+                    self.assembler.add_imm(&cursor, 1);
+                    let dn = done.clone();
+                    self.assembler.label(&dn);
+                    return;
+                }
+                self.call_site(crate::runtime::READ_CHAR_LABEL);
                 return;
             }
             "str_byte" => {

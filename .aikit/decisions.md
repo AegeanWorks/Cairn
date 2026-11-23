@@ -1529,3 +1529,10 @@ external compiler and was verified end to end.
 - **Context**: popcount and str_len take their argument in rax, str_byte inlines for bounded leaf indices, and loop latches compare two homes rather than a home against a literal.
 - **Decision**: Route popcount and str_len through the rax-ABI runtime call sites, inline str_byte with string-bound facts derived from str_len guards, and lower Name-vs-Name conditions with cmp_reg_reg.
 - **Consequences**: popcount and str_scan are byte-identical; the corpus diagnostic is 12/27 with curated parity unchanged at 58/58.
+
+### ADR-159: stdin cursor promotion lowers read_char in leaf functions
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A stdin-reading leaf keeps the buffer base, cursor and count in spare homes so each read_char need not reload the memory words.
+- **Decision**: Detect functions whose only calls are builtins and that read stdin, promote up to three spare homes for buffer/cursor/count, save them in the prologue, load them at entry, store the cursor in the epilogue, and inline the have/drained branches of read_char.
+- **Consequences**: char_stream's prologue and read_char sequence are now byte-identical; its remaining difference is loop rotation. Curated parity stays 58/58 and the corpus diagnostic is 12/27.
