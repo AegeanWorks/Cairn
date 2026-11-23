@@ -1606,3 +1606,10 @@ external compiler and was verified end to end.
 - **Context**: Frame functions left non-homed slots unclear, and comparisons whose left side is computed or divides by a power of two were lowered generically.
 - **Decision**: Clear non-homed frame slots from a zeroed rax while marking array spans assigned, compare a computed left operand against a literal, and lower power-of-two division with the sign-fixup shift chain.
 - **Consequences**: Curated parity stays 58/58 after repairing the array-span regression; the corpus diagnostic remains 16/27 and the remaining gaps are destination-driven inlining and recursion.
+
+### ADR-170: call-argument parking preserves nested call order
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Arguments containing nested calls would clobber already-bound caller-saved argument registers, so the reference parks each result on the stack before binding in reverse.
+- **Decision**: Detect a multi-argument call whose arguments contain calls, evaluate them left to right pushing each result, then pop them into the ABI registers in reverse order before the call or inline copy.
+- **Consequences**: tak is byte-identical; the corpus diagnostic is 17/27. Remaining shapes are delta pair inlining, multi-slot recursion, magic-division calls and frame layout. Curated parity stays 58/58.

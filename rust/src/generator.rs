@@ -2639,8 +2639,27 @@ impl CodeGenerator {
                         return;
                     }
                 }
-                // Pure arguments: a literal goes straight into its ABI register; any other form is
-                // evaluated into rax and moved. Wider shapes are added in later slices.
+                // Pure arguments bind straight into their registers in reverse order. An
+                // argument that calls must be evaluated first and parked, because a nested
+                // call clobbers the caller-saved argument registers already bound.
+                if arguments.len() > 1 && arguments.iter().any(expr_has_call) {
+                    for argument in arguments {
+                        self.emit_expression(argument, homes);
+                        self.assembler.push("rax");
+                        self.depth += 8;
+                    }
+                    for index in (0..arguments.len()).rev() {
+                        let register = ["rcx", "rdx", "r8", "r9"][index];
+                        self.assembler.pop(register);
+                        self.depth -= 8;
+                    }
+                    if self.try_emit_foreign_inline(name, homes) {
+                        return;
+                    }
+                    let label = function_label(name);
+                    self.call_site(&label);
+                    return;
+                }
                 if arguments.len() <= 4 {
                     for index in (0..arguments.len()).rev() {
                         let argument = &arguments[index];

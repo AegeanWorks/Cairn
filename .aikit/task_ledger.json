@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795403081.9795444,
+    "updated_at": 1795403531.669511,
     "owner": "opencode:session",
-    "lease_until": 1795410281.9795444,
+    "lease_until": 1795410731.669511,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
         "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
       },
       "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[26/N] countdown latches and dynamic index loads; corpus 9/25 valid; curated parity 58/58; ADR-156; report updated",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795393474.5232606,
-      "timestamp_str": "2026-11-23 03:24:34",
-      "agent": "opencode:session",
-      "handoff": {
-        "state": "102 Rust tests, 58/58 curated parity",
-        "next": "pair inlining for fib, stdin scans, runtime call argument registers, multi-slot recursion",
-        "evidence": "cargo test, parity, both aikit checks"
-      }
     },
     {
       "task_id": "cairn-rs-codegen",
@@ -327,6 +311,22 @@
       "handoff": {
         "state": "102 Rust tests, 58/58 curated parity",
         "next": "copy-home foreign inlining, delta pair inlining, multi-slot recursion",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[40/N] nested-call argument parking; tak byte-identical; corpus 17/27; curated parity 58/58; ADR-170",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795403531.669511,
+      "timestamp_str": "2026-11-23 06:12:11",
+      "agent": "opencode:session",
+      "handoff": {
+        "state": "102 Rust tests, 58/58 curated parity",
+        "next": "delta pair inlining for fib, recursion for ackermann/nqueens, magic-division calls for primes, frame layout",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }
