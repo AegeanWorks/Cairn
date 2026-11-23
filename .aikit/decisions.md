@@ -1592,3 +1592,10 @@ external compiler and was verified end to end.
 - **Context**: A large array-index mask overflowed the assembler's imm8 test encoding and panicked, which broke nqueens generation.
 - **Decision**: Keep the test-immediate home peephole only for masks up to 127; otherwise evaluate the operand into rax and lower the mask as and-immediate or a scratch register before branching.
 - **Consequences**: The nqueens panic is fixed and all 58 curated specs still pass; the corpus diagnostic remains 16/27.
+
+### ADR-168: homed-left multiply combines in place
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A multiply whose left operand already lives in a home can read that home directly instead of parking it in rcx and reading it back.
+- **Decision**: Extend the homed-left in-place rule to multiplication, emitting imul rax, left_home whenever the right operand is call-free, while keeping the literal-product lea and imul fast paths.
+- **Consequences**: Curated parity stays 58/58 and the corpus diagnostic remains 16/27; the remaining call and frame shapes are still open.

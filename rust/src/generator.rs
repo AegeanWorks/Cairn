@@ -2220,12 +2220,18 @@ impl CodeGenerator {
                 }
             }
         }
-        if let Some(opcode) = arith {
+        if op == "*" || arith.is_some() {
             if let Expr::Name { slot, .. } = left {
                 if let Some(left_home) = home_for(*slot, homes) {
-                    self.emit_expression(right, homes);
-                    self.assembler.binary(opcode, "rax", left_home);
-                    return;
+                    if op != "*" || !expr_has_call(right) {
+                        self.emit_expression(right, homes);
+                        if op == "*" {
+                            self.assembler.imul("rax", left_home);
+                        } else {
+                            self.assembler.binary(arith.unwrap(), "rax", left_home);
+                        }
+                        return;
+                    }
                 }
             }
         }
