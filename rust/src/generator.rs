@@ -2565,6 +2565,32 @@ impl CodeGenerator {
             "+" => Some(0), "-" => Some(5), "&" => Some(4), "|" => Some(1), "^" => Some(6),
             _ => None,
         };
+        if op == "&" && self.delta_value == 0 {
+            let mask_and_slot = match (crate::optimize::peel_parens(Some(left)).unwrap(),
+                                       crate::optimize::peel_parens(Some(right)).unwrap()) {
+                (Expr::IntLiteral { value, .. }, other) => Some((*value, other)),
+                (other, Expr::IntLiteral { value, .. }) => Some((*value, other)),
+                _ => None,
+            };
+            if let Some((mask, other)) = mask_and_slot {
+                if matches!(mask, 255 | 65535) {
+                    if let Some(slot) = expr_slot(other) {
+                        if slot != self.delta_slot && slot != self.value_slot {
+                            if let Some(home) = home_for(slot, homes) {
+                                if home != "rax" {
+                                    if mask == 255 {
+                                        self.assembler.movzx_from8("rax", home);
+                                    } else {
+                                        self.assembler.movzx_from16("rax", home);
+                                    }
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if let Expr::IntLiteral { value, .. } = right {
             if (op == "+" || op == "-") && *value >= -0x80000000 && *value <= 0x7FFFFFFF {
                 if let Expr::Name { slot, .. } =
@@ -2923,6 +2949,26 @@ impl CodeGenerator {
                 }
             }
         }
+        let mut aliases: std::collections::BTreeMap<i64, String> =
+            std::collections::BTreeMap::new();
+        if !rebinds && self.delta_value == 0 && self.value_slot < 0 {
+            for (index, argument) in arguments.iter().take(parameters).enumerate() {
+                if shift_plan.contains_key(&(index as i64)) {
+                    continue;
+                }
+                if let Expr::Name { slot, .. } =
+                    crate::optimize::peel_parens(Some(argument)).unwrap() {
+                    if let Some(home) = home_for(*slot, homes) {
+                        if !spill.iter().any(|borrowed| *borrowed == home) {
+                            aliases.insert(index as i64, home.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        for (index, home) in &aliases {
+            guest[*index as usize] = home.as_str();
+        }
         let saved = (
             self.current_name.clone(), self.current_body.clone(), self.epilogue.clone(),
             self.inline_depth, self.delta_slot, self.delta_value,
@@ -3002,10 +3048,21 @@ impl CodeGenerator {
         let Some(callee) = self.functions.iter().find(|function| function.name == name)
             else { return skips };
         if rebinds_parameters(&callee.body, callee.parameters.len())
+            || !body_is_copy_free(&callee.body)
             || callee.parameters.len() != arguments.len() {
             return skips;
         }
+        let aliasable = self.delta_value == 0 && self.value_slot < 0;
         for (index, argument) in arguments.iter().enumerate() {
+            if aliasable {
+                if let Expr::Name { slot, .. } =
+                    crate::optimize::peel_parens(Some(argument)).unwrap() {
+                    if home_for(*slot, homes).is_some() {
+                        skips.insert(index);
+                    }
+                    continue;
+                }
+            }
             let Expr::Binary { op, left, right, .. } =
                 crate::optimize::peel_parens(Some(argument)).unwrap() else { continue };
             if op != ">>" {

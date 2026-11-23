@@ -1690,3 +1690,10 @@ external compiler and was verified end to end.
 - **Context**: Destination-driven binary lowering handled addition and bitwise ops with a homed right operand but not subtraction, leaving accumulator chains in a rax round trip.
 - **Decision**: Lower subtraction with a homed right operand directly into the destination via binary sub, extending the in-place compound.
 - **Consequences**: mandelbrot's divergence moved later; curated parity stays 58/58 and the corpus diagnostic remains 22/27.
+
+### ADR-182: guarded alias substitution and rax movzx masks
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Bare-name arguments alias into an inline copy only when no inline is skipped by a call or rebind, and 8/16-bit masks lower as movzx in the value path too.
+- **Decision**: Gate argument substitution and binding skips on the copy actually being applicable, and add the movzx mask peephole to rax-path binary lowering.
+- **Consequences**: call_chain's first divergence moved past the inline copy into its final mask; curated parity stays 58/58 and the corpus diagnostic is 22/27.
