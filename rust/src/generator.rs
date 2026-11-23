@@ -102,6 +102,73 @@ fn promotes_stdin_cursor(block: &crate::syntax::Block) -> bool {
 }
 
 /// The `(operand, count)` of `(a >> k) & (2**(64-k)-1)`, the logical-shift peephole.
+fn body_is_copy_free(block: &crate::syntax::Block) -> bool {
+    fn expression(expr: &Expr) -> bool {
+        match expr {
+            Expr::Call { .. } => true,
+            Expr::Binary { op, left, right, .. } => {
+                op == "/" || op == "%" || expression(left) || expression(right)
+            }
+            Expr::Unary { operand, .. } | Expr::Parens { inner: operand, .. } => expression(operand),
+            Expr::Index { operand, index, .. } => expression(operand) || expression(index),
+            Expr::ArrayLiteral { elements, .. } => elements.iter().any(expression),
+            _ => false,
+        }
+    }
+    fn statements(block: &crate::syntax::Block) -> bool {
+        for statement in &block.statements {
+            match statement {
+                Stmt::Let { value, .. } | Stmt::Assign { value, .. }
+                | Stmt::Return { value, .. } | Stmt::ExprStmt { expression: value, .. } => {
+                    if expression(value) {
+                        return false;
+                    }
+                }
+                Stmt::If { condition, then_block, else_block, .. } => {
+                    if expression(condition) || !statements(then_block)
+                        || else_block.as_ref().is_some_and(|other| !statements(other)) {
+                        return false;
+                    }
+                }
+                Stmt::While { condition, body, .. } => {
+                    if expression(condition) || !statements(body) {
+                        return false;
+                    }
+                }
+                Stmt::Block(inner) => {
+                    if !statements(inner) {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        true
+    }
+    statements(block)
+}
+
+fn rebinds_parameters(block: &crate::syntax::Block, count: usize) -> bool {
+    for statement in &block.statements {
+        match statement {
+            Stmt::Assign { slot, .. } if *slot >= 0 && (*slot as usize) < count => return true,
+            Stmt::If { then_block, else_block, .. } => {
+                if rebinds_parameters(then_block, count)
+                    || else_block.as_ref().is_some_and(|other| rebinds_parameters(other, count)) {
+                    return true;
+                }
+            }
+            Stmt::While { body, .. } | Stmt::Block(body) => {
+                if rebinds_parameters(body, count) {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 fn logical_shift_shape(expression: &Expr) -> Option<(&Expr, u8)> {
     let Expr::Binary { op, left, right, .. } = expression else { return None };
     if op != "&" {
@@ -357,6 +424,8 @@ pub struct CodeGenerator {
     /// Jump targets of the innermost loop, for break and continue.
     break_targets: Vec<String>,
     continue_targets: Vec<String>,
+    /// All functions in the program, for code-generation-time foreign inlining.
+    functions: Vec<crate::syntax::Function>,
 }
 
 impl CodeGenerator {
@@ -387,6 +456,7 @@ impl CodeGenerator {
             stdin_count: None,
             break_targets: Vec::new(),
             continue_targets: Vec::new(),
+            functions: Vec::new(),
         }
     }
 
@@ -1273,8 +1343,9 @@ impl CodeGenerator {
                         return;
                     }
                 }
-                if !self.try_emit_cmov_swap(condition, then_block,
-                                            else_block.as_ref(), homes) {
+                if !self.try_emit_select_if(condition, then_block, else_block.as_ref(), homes)
+                    && !self.try_emit_cmov_swap(condition, then_block,
+                                                else_block.as_ref(), homes) {
                     self.emit_if(condition, then_block, else_block.as_ref(), tail, homes);
                 }
             }
@@ -1643,6 +1714,57 @@ impl CodeGenerator {
         self.assembler.jcc(condition, target);
     }
 
+    /// Lower `if t > c { t = t - c; } else { t = t + c; }` as lea, sub, cmov.
+    fn try_emit_select_if(&mut self, condition: &Expr, then_block: &crate::syntax::Block,
+                          else_block: Option<&crate::syntax::Block>,
+                          homes: &[(i64, &str)]) -> bool {
+        let Some(else_block) = else_block else { return false };
+        if then_block.statements.len() != 1 || else_block.statements.len() != 1 {
+            return false;
+        }
+        let Stmt::Assign { slot, value: then_value, .. } = &then_block.statements[0]
+            else { return false };
+        let Stmt::Assign { slot: else_slot, value: else_value, .. } = &else_block.statements[0]
+            else { return false };
+        if slot != else_slot || self.delta_value != 0 {
+            return false;
+        }
+        let Some(home) = home_for(*slot, homes) else { return false };
+        let Expr::Binary { op, left, right, .. } =
+            crate::optimize::peel_parens(Some(condition)).unwrap() else { return false };
+        let base = match op.as_str() {
+            "==" => "e", "!=" => "ne", "<" => "l", "<=" => "le", ">" => "g", ">=" => "ge",
+            _ => return false,
+        };
+        if expr_slot(left) != Some(*slot) {
+            return false;
+        }
+        let Some(other_slot) = expr_slot(right) else { return false };
+        if other_slot == *slot {
+            return false;
+        }
+        let Some(other_home) = home_for(other_slot, homes) else { return false };
+        let side = |expression: &Expr, operator: &str| {
+            let Expr::Binary { op, left, right, .. } =
+                crate::optimize::peel_parens(Some(expression)).unwrap() else { return false };
+            op == operator && expr_slot(left) == Some(*slot) && expr_slot(right) == Some(other_slot)
+        };
+        let move_condition = if side(then_value, "-") && side(else_value, "+") {
+            match base {
+                "e" => "ne", "ne" => "e", "l" => "ge", "ge" => "l", "le" => "g", "g" => "le",
+                other => other,
+            }
+        } else if side(then_value, "+") && side(else_value, "-") {
+            base
+        } else {
+            return false;
+        };
+        self.assembler.lea_scale("rax", home, other_home, 0, 0);
+        self.assembler.binary(0x29, home, other_home);
+        self.assembler.cmov(move_condition, home, "rax");
+        true
+    }
+
     /// Lower `if a > b { var t = a; a = b; b = t; }` as a flag-driven pair of cmovs.
     fn try_emit_cmov_swap(&mut self, condition: &Expr, then_block: &crate::syntax::Block,
                           else_block: Option<&crate::syntax::Block>,
@@ -1973,6 +2095,84 @@ impl CodeGenerator {
         true
     }
 
+    /// Copy a copy-free callee into this call site instead of emitting a machine call.
+    fn try_emit_foreign_inline(&mut self, name: &str, homes: &[(i64, &str)]) -> bool {
+        if self.inline_depth >= 7 || name == self.current_name {
+            return false;
+        }
+        let Some(callee) = self.functions.iter().find(|function| function.name == name).cloned()
+            else { return false };
+        let parameters = callee.parameters.len();
+        if parameters == 0 || parameters > 4 || callee.slots > crate::codegen::HOME_REGISTERS.len() {
+            return false;
+        }
+        if !body_is_copy_free(&callee.body) || rebinds_parameters(&callee.body, parameters) {
+            return false;
+        }
+        let reserved: std::collections::BTreeSet<&str> = homes.iter()
+            .map(|(_, register)| *register)
+            .chain(self.hoist_homes.iter().map(String::as_str))
+            .collect();
+        let entry: Vec<&str> = crate::codegen::ARGUMENT_REGISTERS
+            .iter().take(parameters).copied().collect();
+        let spare: Vec<&str> = crate::codegen::HOME_REGISTERS.iter()
+            .filter(|register| !reserved.contains(**register) && !entry.contains(register))
+            .take(callee.slots - parameters).copied().collect();
+        let mut guest: Vec<&str> = entry;
+        guest.extend(spare);
+        if guest.len() < callee.slots {
+            return false;
+        }
+        let saved = (
+            self.current_name.clone(), self.current_body.clone(), self.epilogue.clone(),
+            self.inline_depth, self.delta_slot, self.delta_value,
+            self.hoist_plans.clone(), self.hoist_imm.clone(), self.hoist_homes.clone(),
+            self.string_bounds.clone(), self.stdin_base.clone(), self.stdin_cursor.clone(),
+            self.stdin_count.clone(), self.arrays.clone(),
+        );
+        self.current_name = callee.name.clone();
+        self.current_body = callee.body.clone();
+        self.epilogue = self.fresh(&format!("{}.copy", crate::codegen::function_label(name)));
+        self.inline_depth += 1;
+        self.delta_slot = -1;
+        self.delta_value = 0;
+        self.hoist_plans.clear();
+        self.hoist_imm.clear();
+        self.hoist_homes.clear();
+        self.string_bounds.clear();
+        self.stdin_base = None;
+        self.stdin_cursor = None;
+        self.stdin_count = None;
+        self.arrays.clear();
+        collect_arrays(&callee.body, &mut self.arrays);
+        let guest_homes: Vec<(i64, &str)> = guest.iter().enumerate()
+            .map(|(slot, register)| (slot as i64, *register)).collect();
+        let statements = &callee.body.statements;
+        if !statements.last().is_some_and(|last| matches!(last, Stmt::Return { .. })) {
+            self.assembler.mov_imm64("rax", 0);
+        }
+        for (index, statement) in statements.iter().enumerate() {
+            self.emit_statement(statement, index + 1 == statements.len(), &guest_homes);
+        }
+        let epilogue = self.epilogue.clone();
+        self.assembler.label(&epilogue);
+        self.current_name = saved.0;
+        self.current_body = saved.1;
+        self.epilogue = saved.2;
+        self.inline_depth = saved.3;
+        self.delta_slot = saved.4;
+        self.delta_value = saved.5;
+        self.hoist_plans = saved.6;
+        self.hoist_imm = saved.7;
+        self.hoist_homes = saved.8;
+        self.string_bounds = saved.9;
+        self.stdin_base = saved.10;
+        self.stdin_cursor = saved.11;
+        self.stdin_count = saved.12;
+        self.arrays = saved.13;
+        true
+    }
+
     fn emit_call(&mut self, name: &str, arguments: &[Expr], homes: &[(i64, &str)]) {
         match name {
             "clz" => {
@@ -2145,6 +2345,9 @@ impl CodeGenerator {
                             self.assembler.mov_reg_reg(register, "rax");
                         }
                     }
+                    if self.try_emit_foreign_inline(name, homes) {
+                        return;
+                    }
                     let label = function_label(name);
                     self.call_site(&label);
                 }
@@ -2154,6 +2357,7 @@ impl CodeGenerator {
 
     /// Emit the entry stub, every function, then the runtime helpers.
     pub fn generate(mut self, program: &Program) -> Artifact {
+        self.functions = program.functions.clone();
         self.emit_entry();
         for function in &program.functions {
             self.emit_function(function);

@@ -1564,3 +1564,10 @@ external compiler and was verified end to end.
 - **Context**: Hash-mixer updates, branchless gcd swaps and literal modulo all needed destination-driven lowering rather than a generic rax round trip.
 - **Decision**: Recognise logical-shift operands in combines_in_rax_only, lower three-statement swaps as two cmovs, track break/continue targets, reuse ZF from the last writer, lower variable-count shifts, and emit magic multiply for literal division and modulo, counting the divisor and multiplier in hoist planning.
 - **Consequences**: splitmix is byte-identical and binary_gcd's bgcd function matches; the corpus diagnostic is 14/27. The remaining gaps are user-function inlining, magic-division call shapes, recursion and frame layout. Curated parity stays 58/58.
+
+### ADR-164: copy-free user functions inline at call sites
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Copy-free callees with no parameter rebinds can fold into the caller with their parameters living in the ABI argument registers, avoiding a machine call.
+- **Decision**: Store program functions in the generator, detect copy-free non-rebinding callees, bind their parameters to the argument registers and locals to free homes, emit the body with a fresh copy epilogue, and add the select-if and cmov swap peepholes that inline bodies rely on.
+- **Consequences**: call_chain's mix3 now inlines and its body matches through the select; the corpus diagnostic is 14/27. Rebinding callees, delta pair inlining and multi-slot recursion remain open. Curated parity stays 58/58.

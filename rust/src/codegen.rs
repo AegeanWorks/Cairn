@@ -160,6 +160,7 @@ pub const COMPARISON_CONDITIONS: &[(&str, &str)] = &[
 pub const TEMPORARY_REGISTERS: &[&str] = &["r11", "r10"];
 pub const SCRATCH: &str = "rsi";
 pub const HOME_REGISTERS: &[&str] = &["rbx", "r12", "r13", "r14", "r15", "rdi"];
+pub const ARGUMENT_REGISTERS: &[&str] = &["rcx", "rdx", "r8", "r9"];
 pub const EXTRA_HOME_REGISTERS: &[&str] = &["r10", "r11"];
 pub const ARRAY_UNROLL_LIMIT: usize = 8;
 pub const MAX_INLINE_DEPTH: usize = 7;
