@@ -1571,3 +1571,10 @@ external compiler and was verified end to end.
 - **Context**: Copy-free callees with no parameter rebinds can fold into the caller with their parameters living in the ABI argument registers, avoiding a machine call.
 - **Decision**: Store program functions in the generator, detect copy-free non-rebinding callees, bind their parameters to the argument registers and locals to free homes, emit the body with a fresh copy epilogue, and add the select-if and cmov swap peepholes that inline bodies rely on.
 - **Consequences**: call_chain's mix3 now inlines and its body matches through the select; the corpus diagnostic is 14/27. Rebinding callees, delta pair inlining and multi-slot recursion remain open. Curated parity stays 58/58.
+
+### ADR-165: rebinding callees inline with spill and reverse argument binding
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A callee that reassigns its parameters needs bind-once guest homes and spill of borrowed caller homes; pure arguments also bind right-to-left.
+- **Decision**: Plan free-then-borrowed guest homes for rebinding callees, push and pop spilled caller homes, move ABI registers into parameter homes at copy entry, clear unassigned locals, lower name-plus-literal arguments with one lea, and bind pure arguments in reverse order.
+- **Consequences**: binary_gcd is byte-identical; the corpus diagnostic is 15/27. The remaining shapes are delta pair inlining, multi-slot recursion, magic-division call shapes and frame layout. Curated parity stays 58/58.

@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795399589.1693044,
+    "updated_at": 1795400340.7453403,
     "owner": "opencode:session",
-    "lease_until": 1795406789.1693044,
+    "lease_until": 1795407540.7453403,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
         "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
       },
       "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[21/N] two-lane array RMW loop lowered; one home-clear difference remains and its spec is parked as a known gap; parity 56/56; ADR-150",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795387461.7672687,
-      "timestamp_str": "2026-11-23 01:44:21",
-      "agent": "opencode:session",
-      "handoff": {
-        "state": "102 Rust tests, 56/56 curated parity",
-        "next": "reproduce _clear_frame home clearing, then multi-slot recursive frames",
-        "evidence": "cargo test, parity, both aikit checks"
-      }
     },
     {
       "task_id": "cairn-rs-codegen",
@@ -327,6 +311,22 @@
       "handoff": {
         "state": "102 Rust tests, 58/58 curated parity",
         "next": "rebinding callee inlining, delta pair inlining for fib, multi-slot recursion",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[35/N] rebinding-callee inlining, lea arguments and reverse binding; binary_gcd byte-identical; corpus 15/27; curated parity 58/58; ADR-165",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795400340.7453403,
+      "timestamp_str": "2026-11-23 05:19:00",
+      "agent": "opencode:session",
+      "handoff": {
+        "state": "102 Rust tests, 58/58 curated parity",
+        "next": "delta pair inlining for fib, multi-slot recursion, magic-division call shapes, frame layout",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }

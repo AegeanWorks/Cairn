@@ -603,6 +603,53 @@ impl CodeGenerator {
         }
     }
 
+    /// Compute an expression directly into `destination`, using home-offset lea where possible.
+    fn emit_into(&mut self, expression: &Expr, destination: &str,
+                 homes: &[(i64, &str)]) {
+        let expr = crate::optimize::peel_parens(Some(expression)).unwrap();
+        if let Expr::Binary { op, left, right, .. } = expr {
+            if op == "+" || op == "-" {
+                let (target, value) = match (left.as_ref(), right.as_ref()) {
+                    (_, Expr::IntLiteral { value, .. }) => (left.as_ref(), *value),
+                    (Expr::IntLiteral { value, .. }, _) if op == "+" => (right.as_ref(), *value),
+                    _ => (expr, 0),
+                };
+                if let Expr::Name { slot, .. } = crate::optimize::peel_parens(Some(target)).unwrap() {
+                    if let Some(home) = home_for(*slot, homes) {
+                        if value >= -0x80000000 && value < 0x80000000 {
+                            let effective = if op == "-" { -value } else { value };
+                            if home != destination || effective != 0 {
+                                self.assembler.lea_imm(destination, home, effective as i64);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if self.try_emit_binary_into(expr, destination, homes) {
+            return;
+        }
+        match expr {
+            Expr::IntLiteral { value, .. } => self.emit_literal(*value, destination),
+            Expr::Name { slot, .. } => {
+                if let Some(home) = home_for(*slot, homes) {
+                    if home != destination {
+                        self.assembler.mov_reg_reg(destination, home);
+                    }
+                } else {
+                    self.load_slot(*slot, destination, homes);
+                }
+            }
+            _ => {
+                self.emit_expression(expr, homes);
+                if destination != "rax" {
+                    self.assembler.mov_reg_reg(destination, "rax");
+                }
+            }
+        }
+    }
+
     /// Materialise a literal from its hoisted spare home when one is active.
     fn emit_literal(&mut self, value: i128, destination: &str) {
         if let Some(home) = self.hoist_imm.get(&value).cloned() {
@@ -2106,20 +2153,32 @@ impl CodeGenerator {
         if parameters == 0 || parameters > 4 || callee.slots > crate::codegen::HOME_REGISTERS.len() {
             return false;
         }
-        if !body_is_copy_free(&callee.body) || rebinds_parameters(&callee.body, parameters) {
+        if !body_is_copy_free(&callee.body) {
             return false;
         }
-        let reserved: std::collections::BTreeSet<&str> = homes.iter()
-            .map(|(_, register)| *register)
+        let rebinds = rebinds_parameters(&callee.body, parameters);
+        let caller_homes: Vec<&str> = homes.iter().map(|(_, register)| *register).collect();
+        let reserved: std::collections::BTreeSet<&str> = caller_homes.iter().copied()
             .chain(self.hoist_homes.iter().map(String::as_str))
             .collect();
-        let entry: Vec<&str> = crate::codegen::ARGUMENT_REGISTERS
-            .iter().take(parameters).copied().collect();
-        let spare: Vec<&str> = crate::codegen::HOME_REGISTERS.iter()
-            .filter(|register| !reserved.contains(**register) && !entry.contains(register))
-            .take(callee.slots - parameters).copied().collect();
-        let mut guest: Vec<&str> = entry;
-        guest.extend(spare);
+        let mut guest: Vec<&str>;
+        let mut spill: Vec<&str> = Vec::new();
+        if rebinds {
+            let free: Vec<&str> = crate::codegen::HOME_REGISTERS.iter()
+                .filter(|register| !reserved.contains(**register)).copied().collect();
+            let mut pool = free;
+            pool.extend(caller_homes.iter().copied());
+            guest = pool.into_iter().take(callee.slots).collect();
+            spill = caller_homes.iter().copied().filter(|home| guest.contains(home)).collect();
+        } else {
+            let entry: Vec<&str> = crate::codegen::ARGUMENT_REGISTERS
+                .iter().take(parameters).copied().collect();
+            let spare: Vec<&str> = crate::codegen::HOME_REGISTERS.iter()
+                .filter(|register| !reserved.contains(**register) && !entry.contains(register))
+                .take(callee.slots - parameters).copied().collect();
+            guest = entry;
+            guest.extend(spare);
+        }
         if guest.len() < callee.slots {
             return false;
         }
@@ -2145,8 +2204,22 @@ impl CodeGenerator {
         self.stdin_count = None;
         self.arrays.clear();
         collect_arrays(&callee.body, &mut self.arrays);
+        for home in &spill {
+            self.assembler.push(home);
+        }
         let guest_homes: Vec<(i64, &str)> = guest.iter().enumerate()
             .map(|(slot, register)| (slot as i64, *register)).collect();
+        if rebinds {
+            for (index, register) in guest.iter().take(parameters).enumerate() {
+                self.assembler.mov_reg_reg(register, crate::codegen::ARGUMENT_REGISTERS[index]);
+            }
+        }
+        let assigned = assigned_slots(&callee.body);
+        for slot in parameters..callee.slots {
+            if !assigned.contains(&(slot as i64)) {
+                self.assembler.xor_zero(guest[slot]);
+            }
+        }
         let statements = &callee.body.statements;
         if !statements.last().is_some_and(|last| matches!(last, Stmt::Return { .. })) {
             self.assembler.mov_imm64("rax", 0);
@@ -2156,6 +2229,9 @@ impl CodeGenerator {
         }
         let epilogue = self.epilogue.clone();
         self.assembler.label(&epilogue);
+        for home in spill.iter().rev() {
+            self.assembler.pop(home);
+        }
         self.current_name = saved.0;
         self.current_body = saved.1;
         self.epilogue = saved.2;
@@ -2318,7 +2394,8 @@ impl CodeGenerator {
                 // Pure arguments: a literal goes straight into its ABI register; any other form is
                 // evaluated into rax and moved. Wider shapes are added in later slices.
                 if arguments.len() <= 4 {
-                    for (index, argument) in arguments.iter().enumerate() {
+                    for index in (0..arguments.len()).rev() {
+                        let argument = &arguments[index];
                         let register = ["rcx", "rdx", "r8", "r9"][index];
                         if let Expr::IntLiteral { value, .. } = argument {
                             self.assembler.mov_imm64(register, *value as i64);
@@ -2341,8 +2418,7 @@ impl CodeGenerator {
                                 }
                             }
                         } else {
-                            self.emit_expression(argument, homes);
-                            self.assembler.mov_reg_reg(register, "rax");
+                            self.emit_into(argument, register, homes);
                         }
                     }
                     if self.try_emit_foreign_inline(name, homes) {
