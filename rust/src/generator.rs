@@ -1010,6 +1010,21 @@ impl CodeGenerator {
                     _ => self.emit_value(*slot, value, homes),
                 }
             }
+            Stmt::Assign { slot, value, index: Some(index), array_size: Some(size), .. }
+                if matches!(value, Expr::IntLiteral { .. })
+                    && matches!(index, Expr::Name { .. }) =>
+            {
+                let Expr::IntLiteral { value: number, .. } = value else { unreachable!() };
+                let Expr::Name { slot: index_slot, .. } = index else { unreachable!() };
+                match home_for(*index_slot, homes) {
+                    Some(index_home) if *number >= -0x80000000 && *number <= 0x7FFFFFFF => {
+                        let displacement = crate::codegen::array_element_base(*slot, *size as i64);
+                        self.assembler.mov_store_indexed_imm(
+                            "rbp", index_home, 3, displacement, *number as i64);
+                    }
+                    _ => self.emit_value(*slot, value, homes),
+                }
+            }
             Stmt::Let { slot, value, .. } | Stmt::Assign { slot, value, .. } => {
                 self.emit_value(*slot, value, homes);
             }
@@ -1170,26 +1185,43 @@ impl CodeGenerator {
         let Expr::Binary { op, left, right, .. } = expression else {
             return;
         };
-        let (name_slot, literal) = match (left.as_ref(), right.as_ref()) {
-            (Expr::Name { slot, .. }, Expr::IntLiteral { value, .. }) => (*slot, *value as i64),
-            (Expr::IntLiteral { value, .. }, Expr::Name { slot, .. }) => (*slot, *value as i64),
-            _ => return,
-        };
-        let literal = if name_slot == self.delta_slot {
-            literal + self.delta_value
-        } else {
-            literal
-        };
-        if let Some(home) = home_for(name_slot, homes) {
-            self.assembler.cmp_imm(home, literal);
-        } else {
-            self.load_slot(name_slot, "rax", homes);
-            self.assembler.cmp_imm("rax", literal);
-        }
-        let condition = match op.as_str() {
+        let base_condition = match op.as_str() {
             "==" => "e", "!=" => "ne", "<" => "l", "<=" => "le", ">" => "g", ">=" => "ge",
             _ => return,
         };
+        match (left.as_ref(), right.as_ref()) {
+            (Expr::Index { .. }, Expr::IntLiteral { value, .. }) => {
+                self.emit_expression(left.as_ref(), homes);
+                self.assembler.cmp_imm("rax", *value as i64);
+            }
+            (Expr::IntLiteral { value, .. }, Expr::Index { .. }) => {
+                self.emit_expression(right.as_ref(), homes);
+                self.assembler.cmp_imm("rax", *value as i64);
+            }
+            _ => {
+                let (name_slot, literal) = match (left.as_ref(), right.as_ref()) {
+                    (Expr::Name { slot, .. }, Expr::IntLiteral { value, .. }) => {
+                        (*slot, *value as i64)
+                    }
+                    (Expr::IntLiteral { value, .. }, Expr::Name { slot, .. }) => {
+                        (*slot, *value as i64)
+                    }
+                    _ => return,
+                };
+                let literal = if name_slot == self.delta_slot {
+                    literal + self.delta_value
+                } else {
+                    literal
+                };
+                if let Some(home) = home_for(name_slot, homes) {
+                    self.assembler.cmp_imm(home, literal);
+                } else {
+                    self.load_slot(name_slot, "rax", homes);
+                    self.assembler.cmp_imm("rax", literal);
+                }
+            }
+        }
+        let condition = base_condition;
         let condition = if when_true {
             condition
         } else {

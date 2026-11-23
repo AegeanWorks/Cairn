@@ -1515,3 +1515,10 @@ external compiler and was verified end to end.
 - **Context**: Countdown loops were lowered as compare-and-branch instead of decrement-and-jnz, and folding slot updates hid dynamic array index loads.
 - **Decision**: Honour the while countdown flag with a sub and jnz latch, and let emit_expression lower a dynamic Name index into a mov_load_indexed so folded accumulator updates keep their load.
 - **Consequences**: Nine of twenty-five valid corpus programs are byte-identical; array_sum is restored and curated parity remains 58/58.
+
+### ADR-157: indexed comparisons and immediate element stores close sieve
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Sieve's membership test compares a dynamic array element to zero and its mark store writes a literal through a scaled index.
+- **Decision**: Let condition lowering emit a dynamic index load before the compare and lower array element stores with an immediate value to one mov_store_indexed_imm.
+- **Consequences**: Ten of twenty-five valid corpus programs are byte-identical; curated parity remains 58/58.
