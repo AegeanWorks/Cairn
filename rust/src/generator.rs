@@ -323,6 +323,70 @@ fn collect_nonnegative_slots(block: &crate::syntax::Block,
     }
 }
 
+/// Whether `slot` is read exactly once in `body`, and that read is `slot << m`.
+fn parameter_single_shift_use(block: &crate::syntax::Block, slot: i64, amount: i64) -> bool {
+    fn expression(expr: &Expr, slot: i64, amount: i64, uses: &mut usize, shaped: &mut bool,
+                  inside_shift: bool) {
+        if *uses > 1 {
+            return;
+        }
+        match expr {
+            Expr::Name { slot: found, .. } => {
+                if *found == slot {
+                    *uses += 1;
+                    *shaped |= inside_shift;
+                }
+            }
+            Expr::Parens { inner, .. } => expression(inner, slot, amount, uses, shaped, inside_shift),
+            Expr::Unary { operand, .. } => expression(operand, slot, amount, uses, shaped, false),
+            Expr::Binary { op, left, right, .. } => {
+                let fused_here = op == "<<" && expr_slot(left) == Some(slot)
+                    && matches!(crate::optimize::peel_parens(Some(right)).unwrap(),
+                        Expr::IntLiteral { value, .. } if *value == amount as i128);
+                expression(left, slot, amount, uses, shaped, fused_here);
+                expression(right, slot, amount, uses, shaped, false);
+            }
+            Expr::Index { operand, index, .. } => {
+                expression(operand, slot, amount, uses, shaped, false);
+                expression(index, slot, amount, uses, shaped, false);
+            }
+            Expr::Call { arguments, .. } | Expr::ArrayLiteral { elements: arguments, .. } => {
+                for argument in arguments {
+                    expression(argument, slot, amount, uses, shaped, false);
+                }
+            }
+            _ => {}
+        }
+    }
+    fn statements(block: &crate::syntax::Block, slot: i64, amount: i64,
+                  uses: &mut usize, shaped: &mut bool) {
+        for statement in &block.statements {
+            match statement {
+                Stmt::Let { value, .. } | Stmt::Assign { value, .. }
+                | Stmt::Return { value, .. } | Stmt::ExprStmt { expression: value, .. } => {
+                    expression(value, slot, amount, uses, shaped, false);
+                }
+                Stmt::If { condition, then_block, else_block, .. } => {
+                    expression(condition, slot, amount, uses, shaped, false);
+                    statements(then_block, slot, amount, uses, shaped);
+                    if let Some(otherwise) = else_block {
+                        statements(otherwise, slot, amount, uses, shaped);
+                    }
+                }
+                Stmt::While { condition, body, .. } => {
+                    expression(condition, slot, amount, uses, shaped, false);
+                    statements(body, slot, amount, uses, shaped);
+                }
+                Stmt::Block(inner) => statements(inner, slot, amount, uses, shaped),
+                _ => {}
+            }
+        }
+    }
+    let (mut uses, mut shaped) = (0, false);
+    statements(block, slot, amount, &mut uses, &mut shaped);
+    uses == 1 && shaped
+}
+
 fn collect_str_lens(block: &crate::syntax::Block,
                     found: &mut std::collections::BTreeMap<i64, i64>) {
     for statement in &block.statements {
@@ -566,6 +630,8 @@ pub struct CodeGenerator {
     chain_loop_depth: usize,
     /// Number of temporary registers currently held across a right operand.
     temporaries: usize,
+    /// Slots whose sole use in an inline copy is a forwarded shift: (source home, count).
+    shift_through: std::collections::BTreeMap<i64, (String, u32)>,
 }
 
 impl CodeGenerator {
@@ -601,6 +667,7 @@ impl CodeGenerator {
             value_slot: -1,
             chain_loop_depth: 0,
             temporaries: 0,
+            shift_through: std::collections::BTreeMap::new(),
         }
     }
 
@@ -1134,6 +1201,11 @@ impl CodeGenerator {
 
 
     fn load_slot(&mut self, slot: i64, destination: &str, homes: &[(i64, &str)]) {
+        if let Some((source, count)) = self.shift_through.get(&slot).cloned() {
+            self.assembler.mov_reg_reg(destination, &source);
+            self.assembler.arith_imm(4, destination, -(1i64 << count));
+            return;
+        }
         if let Some(home) = home_for(slot, homes) {
             if slot == self.delta_slot && self.delta_value != 0 {
                 self.assembler.lea_imm(destination, home, -self.delta_value);
@@ -2299,6 +2371,17 @@ impl CodeGenerator {
             }
             Expr::Binary { op, left, right, .. } => {
                 if op == "<<" {
+                    if let Expr::Name { slot, .. } =
+                        crate::optimize::peel_parens(Some(left)).unwrap() {
+                        if let Some((source, forwarded)) = self.shift_through.get(slot).cloned() {
+                            if matches!(crate::optimize::peel_parens(Some(right)).unwrap(),
+                                Expr::IntLiteral { value, .. } if *value as u32 == forwarded) {
+                                self.assembler.mov_reg_reg("rax", &source);
+                                self.assembler.arith_imm(4, "rax", -(1i64 << forwarded));
+                                return;
+                            }
+                        }
+                    }
                     if let Some((operand, count)) = shift_through_shape(expression) {
                         if matches!(operand, Expr::Name { .. } | Expr::IntLiteral { .. }) {
                             self.emit_expression(operand, homes);
@@ -2731,7 +2814,7 @@ impl CodeGenerator {
     }
 
     /// Copy a copy-free callee into this call site instead of emitting a machine call.
-    fn try_emit_foreign_inline(&mut self, name: &str, homes: &[(i64, &str)]) -> bool {
+    fn try_emit_foreign_inline(&mut self, name: &str, arguments: &[Expr], homes: &[(i64, &str)]) -> bool {
         if self.inline_depth >= 7 || name == self.current_name {
             return false;
         }
@@ -2770,12 +2853,36 @@ impl CodeGenerator {
         if guest.len() < callee.slots {
             return false;
         }
+        let mut shift_plan: std::collections::BTreeMap<i64, (String, u32)> =
+            std::collections::BTreeMap::new();
+        if !rebinds {
+            for (index, argument) in arguments.iter().take(parameters).enumerate() {
+                let Expr::Binary { op, left, right, .. } =
+                    crate::optimize::peel_parens(Some(argument)).unwrap() else { continue };
+                if op != ">>" {
+                    continue;
+                }
+                let count = match crate::optimize::peel_parens(Some(right)).unwrap() {
+                    Expr::IntLiteral { value, .. } if *value >= 1 && *value <= 31 => *value as u32,
+                    _ => continue,
+                };
+                let Some(source_slot) = expr_slot(left) else { continue };
+                let Some(source_home) = home_for(source_slot, homes).map(str::to_string)
+                    else { continue };
+                if spill.iter().any(|home| *home == source_home) {
+                    continue;
+                }
+                if parameter_single_shift_use(&callee.body, index as i64, count as i64) {
+                    shift_plan.insert(index as i64, (source_home, count));
+                }
+            }
+        }
         let saved = (
             self.current_name.clone(), self.current_body.clone(), self.epilogue.clone(),
             self.inline_depth, self.delta_slot, self.delta_value,
             self.hoist_plans.clone(), self.hoist_imm.clone(), self.hoist_homes.clone(),
             self.string_bounds.clone(), self.stdin_base.clone(), self.stdin_cursor.clone(),
-            self.stdin_count.clone(), self.arrays.clone(),
+            self.stdin_count.clone(), self.arrays.clone(), self.shift_through.clone(),
         );
         self.current_name = callee.name.clone();
         self.current_body = callee.body.clone();
@@ -2792,6 +2899,7 @@ impl CodeGenerator {
         self.stdin_count = None;
         self.arrays.clear();
         collect_arrays(&callee.body, &mut self.arrays);
+        self.shift_through = shift_plan.clone();
         for home in &spill {
             self.assembler.push(home);
         }
@@ -2799,6 +2907,9 @@ impl CodeGenerator {
             .map(|(slot, register)| (slot as i64, *register)).collect();
         if rebinds {
             for (index, register) in guest.iter().take(parameters).enumerate() {
+                if shift_plan.contains_key(&(index as i64)) {
+                    continue;
+                }
                 self.assembler.mov_reg_reg(register, crate::codegen::ARGUMENT_REGISTERS[index]);
             }
         }
@@ -2834,7 +2945,39 @@ impl CodeGenerator {
         self.stdin_cursor = saved.11;
         self.stdin_count = saved.12;
         self.arrays = saved.13;
+        self.shift_through = saved.14;
         true
+    }
+
+    /// Arguments whose value is fused into a parameter's sole `<<` use in the copy.
+    fn shift_through_skips(&self, name: &str, arguments: &[Expr],
+                           homes: &[(i64, &str)]) -> std::collections::BTreeSet<usize> {
+        let mut skips = std::collections::BTreeSet::new();
+        let Some(callee) = self.functions.iter().find(|function| function.name == name)
+            else { return skips };
+        if rebinds_parameters(&callee.body, callee.parameters.len())
+            || callee.parameters.len() != arguments.len() {
+            return skips;
+        }
+        for (index, argument) in arguments.iter().enumerate() {
+            let Expr::Binary { op, left, right, .. } =
+                crate::optimize::peel_parens(Some(argument)).unwrap() else { continue };
+            if op != ">>" {
+                continue;
+            }
+            let count = match crate::optimize::peel_parens(Some(right)).unwrap() {
+                Expr::IntLiteral { value, .. } if *value >= 1 && *value <= 31 => *value as u32,
+                _ => continue,
+            };
+            let Some(source_slot) = expr_slot(left) else { continue };
+            if home_for(source_slot, homes).is_none() {
+                continue;
+            }
+            if parameter_single_shift_use(&callee.body, index as i64, count as i64) {
+                skips.insert(index);
+            }
+        }
+        skips
     }
 
     fn emit_call(&mut self, name: &str, arguments: &[Expr], homes: &[(i64, &str)]) {
@@ -2991,15 +3134,20 @@ impl CodeGenerator {
                         }
                     }
                 }
+                let skips = self.shift_through_skips(name, arguments, homes);
                 // Pure arguments bind straight into their registers in reverse order. An
                 // argument that calls must be evaluated first and parked, because a nested
                 // call clobbers the caller-saved argument registers already bound.
                 if arguments.len() == 2 && !expr_has_call(&arguments[0])
                     && expr_has_call(&arguments[1]) {
-                    self.emit_expression(&arguments[1], homes);
-                    self.assembler.mov_reg_reg("rdx", "rax");
-                    self.emit_into(&arguments[0], "rcx", homes);
-                    if self.try_emit_foreign_inline(name, homes) {
+                    if !skips.contains(&1) {
+                        self.emit_expression(&arguments[1], homes);
+                        self.assembler.mov_reg_reg("rdx", "rax");
+                    }
+                    if !skips.contains(&0) {
+                        self.emit_into(&arguments[0], "rcx", homes);
+                    }
+                    if self.try_emit_foreign_inline(name, arguments, homes) {
                         return;
                     }
                     let label = function_label(name);
@@ -3017,7 +3165,7 @@ impl CodeGenerator {
                         self.assembler.pop(register);
                         self.depth -= 8;
                     }
-                    if self.try_emit_foreign_inline(name, homes) {
+                    if self.try_emit_foreign_inline(name, arguments, homes) {
                         return;
                     }
                     let label = function_label(name);
@@ -3026,6 +3174,9 @@ impl CodeGenerator {
                 }
                 if arguments.len() <= 4 {
                     for index in (0..arguments.len()).rev() {
+                        if skips.contains(&index) {
+                            continue;
+                        }
                         let argument = &arguments[index];
                         let register = ["rcx", "rdx", "r8", "r9"][index];
                         if let Expr::IntLiteral { value, .. } = argument {
@@ -3052,7 +3203,7 @@ impl CodeGenerator {
                             self.emit_into(argument, register, homes);
                         }
                     }
-                    if self.try_emit_foreign_inline(name, homes) {
+                    if self.try_emit_foreign_inline(name, arguments, homes) {
                         return;
                     }
                     let label = function_label(name);

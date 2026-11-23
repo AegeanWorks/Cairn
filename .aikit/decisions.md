@@ -1669,3 +1669,10 @@ external compiler and was verified end to end.
 - **Context**: A binary whose right operand is a nested expression kept its left value in rcx, but the reference parks it in the spare temporary registers r11/r10 so nested lowerings cannot clobber it.
 - **Decision**: Hold the left operand in the level-indexed temp register for a call-free non-leaf right, use the delta hold slot or stack for calling rights, and add the movzx mask and shift-through mask peepholes used by inline bodies.
 - **Consequences**: nqueens is byte-identical; the corpus diagnostic is 22/27. Remaining shapes are copy-home inlining and frame layout. Curated parity stays 58/58.
+
+### ADR-179: shift-through arguments fuse across inline copies
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A caller argument of x>>m feeding a parameter used once as p<<m can fuse to x&-2**m across the copy boundary without binding the parameter.
+- **Decision**: Detect forwarded shift-through parameters, skip evaluating and binding those arguments, lower the parameter's sole << use as a masked read of the caller's home, and restore the shift map after the copy.
+- **Consequences**: call_chain's shift fusion now matches but its return destination still differs; curated parity stays 58/58 and the corpus diagnostic is 22/27.
