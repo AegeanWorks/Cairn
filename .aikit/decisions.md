@@ -1697,3 +1697,10 @@ external compiler and was verified end to end.
 - **Context**: Bare-name arguments alias into an inline copy only when no inline is skipped by a call or rebind, and 8/16-bit masks lower as movzx in the value path too.
 - **Decision**: Gate argument substitution and binding skips on the copy actually being applicable, and add the movzx mask peephole to rax-path binary lowering.
 - **Consequences**: call_chain's first divergence moved past the inline copy into its final mask; curated parity stays 58/58 and the corpus diagnostic is 22/27.
+
+### ADR-183: assembler peephole drops redundant source move before movzx
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A value already in the source register was copied into rax immediately before a movzx of that same register, producing three dead bytes and a stale inline-copy label offset.
+- **Decision**: Drop the preceding mov rax,src in the assembler's movzx emitters and clamp label/fixup offsets past the truncated end.
+- **Consequences**: call_chain is byte-identical; the corpus diagnostic is 23/27. Remaining valid gaps are many_params and mandelbrot; curated parity stays 58/58.

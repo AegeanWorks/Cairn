@@ -460,11 +460,40 @@ impl Assembler {
     }
 
     pub fn movzx_from8(&mut self, destination: &str, source: &str) {
+        self.drop_redundant_source_move(destination, source);
         self.movzx(0xB6, destination, source);
     }
 
     pub fn movzx_from16(&mut self, destination: &str, source: &str) {
+        self.drop_redundant_source_move(destination, source);
         self.movzx(0xB7, destination, source);
+    }
+
+    /// A `mov rax, src` immediately before `movzx rax, src` is redundant.
+    fn drop_redundant_source_move(&mut self, destination: &str, source: &str) {
+        if destination != "rax" {
+            return;
+        }
+        let src = register(source);
+        if src >= 8 {
+            return;
+        }
+        let pattern = [0x48, 0x89, 0xC0 | (src << 3)];
+        if self.code.ends_with(&pattern) {
+            let length = self.code.len();
+            let new_length = length - pattern.len();
+            self.code.truncate(new_length);
+            for (_, offset) in self.labels.iter_mut() {
+                if *offset > new_length {
+                    *offset = new_length;
+                }
+            }
+            for entry in self.fixups.iter_mut() {
+                if entry.0 > new_length {
+                    entry.0 = new_length;
+                }
+            }
+        }
     }
 
     fn movzx(&mut self, extension: u8, destination: &str, source: &str) {
