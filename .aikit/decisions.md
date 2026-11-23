@@ -1753,3 +1753,10 @@ external compiler and was verified end to end.
 - **Context**: The Rust compiler now matches all 25 valid corpus programs byte-for-byte and its golden verification is Rust-only, so the Python implementation and its oracles are dead weight.
 - **Decision**: Delete the Python cairn package, its unittest suite and the Python parity oracles; migrate the benchmark harness to cairn-rs buildexe with a --no-optimize flag and point the project test command at cargo test.
 - **Consequences**: The project is Rust-only; 6 AIKit gates pass, cargo tests and 591 golden hashes pass, and the cross-language harness now compiles with the Rust binary (about 31-115 ms versus 300-2000 ms for Python).
+
+### ADR-191: consolidate the two Cairn project folders
+- **Date**: 2026-11-24
+- **Status**: Accepted
+- **Context**: A second AIKit project, projects/cairn-rs, was a thin CLI wrapper with a path dependency on the real compiler in projects/cairn/rust, duplicating its entry point and leaving two folders named Cairn.
+- **Decision**: Remove projects/cairn-rs; projects/cairn/rust is the single compiler and CLI, and all gates run from that one project.
+- **Consequences**: One Cairn project folder remains, with 6/6 AIKit gates and the 591-hash Rust golden verification unchanged.
