@@ -2435,9 +2435,25 @@ impl CodeGenerator {
             self.assembler.shift_cl(if op == "<<" { 4 } else { 7 });
             return;
         }
-        self.emit_expression(left, homes);
-        self.assembler.mov_reg_reg("rcx", "rax");
-        self.emit_expression(right, homes);
+        if expr_has_call(right) {
+            self.emit_expression(left, homes);
+            if self.delta_slot >= 0 {
+                let offset = 8 * self.inline_depth as i64 + self.depth;
+                self.assembler.mov_store_rsp_disp(offset, "rax");
+                self.emit_expression(right, homes);
+                self.assembler.mov_load_rsp_disp(offset, "rcx");
+            } else {
+                self.assembler.push("rax");
+                self.depth += 8;
+                self.emit_expression(right, homes);
+                self.assembler.pop("rcx");
+                self.depth -= 8;
+            }
+        } else {
+            self.emit_expression(left, homes);
+            self.assembler.mov_reg_reg("rcx", "rax");
+            self.emit_expression(right, homes);
+        }
         match op {
             "+" | "&" | "|" | "^" => self.assembler.binary(arith.unwrap(), "rax", "rcx"),
             "-" => {

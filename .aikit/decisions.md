@@ -1634,3 +1634,10 @@ external compiler and was verified end to end.
 - **Context**: The reference binds the dividend directly into the ABI register used by its guarded division chain; the generic path round-tripped it through rax.
 - **Decision**: Use the destination-driven emit_into when binding the left operand of a variable division into rcx, removing the extra move.
 - **Consequences**: primes is byte-identical; the corpus diagnostic is 18/27. Remaining shapes are pair inlining, recursion, copy-home inlining and frame layout. Curated parity stays 58/58.
+
+### ADR-174: delta hold slots carry left values across calls
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Delta self-call copies reserve per-level hold slots in the function frame; parking a binary's left operand in rcx across a nested call was clobbered and byte-diverged.
+- **Decision**: When a binary's right operand calls in a delta-eligible function, store the left value into the level-indexed rsp hold slot and reload it into rcx after the call; use push/pop elsewhere.
+- **Consequences**: fib and fib30 are byte-identical; the corpus diagnostic is 20/27. Remaining shapes are pair-mode reservation, copy-home inlining and multi-slot recursion. Curated parity stays 58/58.
