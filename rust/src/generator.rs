@@ -1252,6 +1252,11 @@ impl CodeGenerator {
             if let Expr::Name { slot, .. } = peeled_left {
                 if let (Some(home), Expr::IntLiteral { value, .. }) =
                     (home_for(*slot, homes), right) {
+                    let scale = match *value { 3 => Some(1u8), 5 => Some(2), 9 => Some(3), _ => None };
+                    if let Some(scale) = scale {
+                        self.assembler.lea_scale(destination, home, home, scale, 0);
+                        return true;
+                    }
                     if *value >= -2147483648 && *value <= 2147483647 {
                         self.assembler.imul_imm(destination, home, *value as i64);
                         return true;
