@@ -102,6 +102,46 @@ fn promotes_stdin_cursor(block: &crate::syntax::Block) -> bool {
 }
 
 /// The `(operand, count)` of `(a >> k) & (2**(64-k)-1)`, the logical-shift peephole.
+/// The `(slot, log2(scale), addend)` of `slot * 2**k + addend`, when it fits one lea.
+fn scaled_sum_terms(expression: &Expr) -> Option<(i64, u32, i128)> {
+    let Expr::Binary { op, left, right, .. } =
+        crate::optimize::peel_parens(Some(expression)).unwrap() else { return None };
+    if op != "+" {
+        return None;
+    }
+    for (literal, product) in [(left.as_ref(), right.as_ref()), (right.as_ref(), left.as_ref())] {
+        let Expr::IntLiteral { value: addend, .. } =
+            crate::optimize::peel_parens(Some(literal)).unwrap() else { continue };
+        let Expr::Binary { op: product_op, left: factor, right: named, .. } =
+            crate::optimize::peel_parens(Some(product)).unwrap() else { continue };
+        if product_op != "*" {
+            continue;
+        }
+        let (slot, scale) = match (crate::optimize::peel_parens(Some(factor)).unwrap(),
+                                   crate::optimize::peel_parens(Some(named)).unwrap()) {
+            (Expr::IntLiteral { value, .. }, Expr::Name { slot, .. }) => (*slot, *value),
+            (Expr::Name { slot, .. }, Expr::IntLiteral { value, .. }) => (*slot, *value),
+            _ => continue,
+        };
+        let log2 = match scale {
+            3 => 1,
+            5 => 2,
+            9 => 3,
+            _ => continue,
+        };
+        return Some((slot, log2, *addend));
+    }
+    None
+}
+
+fn is_plus_step(expression: &Expr, slot: i64, amount: i128) -> bool {
+    let Expr::Binary { op, left, right, .. } =
+        crate::optimize::peel_parens(Some(expression)).unwrap() else { return false };
+    op == "+" && expr_slot(left) == Some(slot)
+        && matches!(crate::optimize::peel_parens(Some(right)).unwrap(),
+            Expr::IntLiteral { value, .. } if *value == amount)
+}
+
 fn body_is_copy_free(block: &crate::syntax::Block) -> bool {
     fn expression(expr: &Expr) -> bool {
         match expr {
@@ -1408,7 +1448,8 @@ impl CodeGenerator {
                     }
                 }
                 if !self.try_emit_rmw_vector(condition, body, homes)
-                    && !self.try_emit_stdin_scan(condition, body, homes) {
+                    && !self.try_emit_stdin_scan(condition, body, homes)
+                    && !self.try_emit_halving_loop(condition, body, homes) {
                     self.emit_while(condition, body, *countdown, homes);
                 }
                 self.hoist_imm = saved;
@@ -1435,6 +1476,130 @@ impl CodeGenerator {
     }
 
     /// Lower `while i < N { a[i] = a[i] + r; i = i + 1; }` with two SSE2 lanes.
+    /// Emit a fused odd-pair Collatz loop as one unconditional half-step.
+    fn try_emit_halving_loop(&mut self, condition: &Expr, body: &crate::syntax::Block,
+                             homes: &[(i64, &str)]) -> bool {
+        if body.statements.len() != 1 {
+            return false;
+        }
+        let Stmt::If { condition: test, then_block: then_body,
+                       else_block: else_body, .. } = &body.statements[0]
+            else { return false };
+        let Some(else_body) = else_body.as_ref() else { return false };
+        let Expr::Binary { op, left, right, .. } =
+            crate::optimize::peel_parens(Some(condition)).unwrap() else { return false };
+        if op != ">" && op != ">=" {
+            return false;
+        }
+        let Expr::IntLiteral { value: bound, .. } =
+            crate::optimize::peel_parens(Some(right)).unwrap() else { return false };
+        if if op == ">" { *bound < 0 } else { *bound < 1 } {
+            return false;
+        }
+        let Some(k_slot) = expr_slot(left) else { return false };
+        let Expr::Binary { op: test_op, left: parity, right: zero, .. } =
+            crate::optimize::peel_parens(Some(test)).unwrap() else { return false };
+        if test_op != "==" && test_op != "!=" {
+            return false;
+        }
+        if !matches!(crate::optimize::peel_parens(Some(zero)).unwrap(),
+            Expr::IntLiteral { value, .. } if *value == 0) {
+            return false;
+        }
+        let Expr::Binary { op: mod_op, left: modulo_slot, right: divisor, .. } =
+            crate::optimize::peel_parens(Some(parity)).unwrap() else { return false };
+        if mod_op != "%" || expr_slot(modulo_slot) != Some(k_slot) {
+            return false;
+        }
+        if !matches!(crate::optimize::peel_parens(Some(divisor)).unwrap(),
+            Expr::IntLiteral { value, .. } if *value == 2) {
+            return false;
+        }
+        let (even, odd) = if test_op == "==" {
+            (then_body, else_body)
+        } else {
+            (else_body, then_body)
+        };
+        if even.statements.len() != 2 || odd.statements.len() != 2 {
+            return false;
+        }
+        let Stmt::Assign { slot: even_slot, value: even_value, .. } = &even.statements[0]
+            else { return false };
+        if *even_slot != k_slot {
+            return false;
+        }
+        let Expr::Binary { op: division, left: dividend, right: divisor_two, .. } =
+            crate::optimize::peel_parens(Some(&even_value)).unwrap() else { return false };
+        if division != "/" || expr_slot(dividend) != Some(k_slot) {
+            return false;
+        }
+        if !matches!(crate::optimize::peel_parens(Some(divisor_two)).unwrap(),
+            Expr::IntLiteral { value, .. } if *value == 2) {
+            return false;
+        }
+        let Stmt::Assign { slot: odd_slot, value: odd_value, .. } = &odd.statements[0]
+            else { return false };
+        if *odd_slot != k_slot {
+            return false;
+        }
+        let Expr::Binary { op: fused_div, left: sum, right: fused_two, .. } =
+            crate::optimize::peel_parens(Some(&odd_value)).unwrap() else { return false };
+        if fused_div != "/" {
+            return false;
+        }
+        if !matches!(crate::optimize::peel_parens(Some(fused_two)).unwrap(),
+            Expr::IntLiteral { value, .. } if *value == 2) {
+            return false;
+        }
+        let Some((operand, scale_log2, addend)) = scaled_sum_terms(sum) else { return false };
+        if operand != k_slot || !matches!(scale_log2, 1 | 2 | 3) {
+            return false;
+        }
+        let multiplier = (1i128 << scale_log2) + 1;
+        if addend % 2 == 0 || multiplier + addend < 4
+            || (multiplier + addend) / 2 < -0x80000000
+            || (multiplier + addend) / 2 > 0x7FFFFFFF {
+            return false;
+        }
+        let Stmt::Assign { slot: step_slot, value: even_step, .. } = &even.statements[1]
+            else { return false };
+        let Stmt::Assign { slot: odd_step_slot, value: odd_step, .. } = &odd.statements[1]
+            else { return false };
+        if step_slot != odd_step_slot || *step_slot == k_slot {
+            return false;
+        }
+        if !is_plus_step(&even_step, *step_slot, 1) || !is_plus_step(&odd_step, *step_slot, 2) {
+            return false;
+        }
+        let (Some(k_home), Some(step_home)) =
+            (home_for(k_slot, homes), home_for(*step_slot, homes)) else { return false };
+        // The generic loop head reserves start/end before the body specialiser runs.
+        let _ = self.fresh("while.start");
+        let _ = self.fresh("while.end");
+        let end = self.fresh("while.end");
+        let top = self.fresh("while.half");
+        let latch = self.fresh("while.latch");
+        self.emit_condition_polarity(condition, &end, homes, false);
+        let padding = (16 - self.assembler.here() % 16) % 16;
+        if padding > 0 {
+            self.assembler.nop_pad(padding);
+        }
+        let t = top.clone();
+        self.assembler.label(&t);
+        self.assembler.shift_imm(5, k_home, 1);
+        self.assembler.lea_scale("rsi", k_home, k_home, scale_log2 as u8,
+                                 ((multiplier + addend) / 2) as i64);
+        self.assembler.cmov("c", k_home, "rsi");
+        self.assembler.adc_imm(step_home, 1);
+        let l = latch.clone();
+        self.assembler.label(&l);
+        self.emit_condition_polarity(condition, &top, homes, true);
+        self.assembler.jmp(&end);
+        let e = end.clone();
+        self.assembler.label(&e);
+        true
+    }
+
     /// Rotate `while true { c = read_char(); if c < 0 break; total += c }`.
     fn try_emit_stdin_scan(&mut self, condition: &Expr, body: &crate::syntax::Block,
                            homes: &[(i64, &str)]) -> bool {
