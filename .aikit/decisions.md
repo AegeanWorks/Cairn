@@ -1557,3 +1557,10 @@ external compiler and was verified end to end.
 - **Context**: A(hash mixer's (x>>k)&mask is one shr instruction, so the mask never materialises and must not be counted as a hoist candidate.
 - **Decision**: Recognise the (x>>k)&(2**(64-k)-1) shape, skip its mask when counting big literals for hoisting, and lower it as one logical shr both into rax and into a destination home.
 - **Consequences**: splitmix's hoisted constants now match the reference and curated parity stays 58/58; its remaining difference is in-place update folding. Corpus remains 13/27.
+
+### ADR-163: in-place folding, cmov swaps and magic division extend codegen
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Hash-mixer updates, branchless gcd swaps and literal modulo all needed destination-driven lowering rather than a generic rax round trip.
+- **Decision**: Recognise logical-shift operands in combines_in_rax_only, lower three-statement swaps as two cmovs, track break/continue targets, reuse ZF from the last writer, lower variable-count shifts, and emit magic multiply for literal division and modulo, counting the divisor and multiplier in hoist planning.
+- **Consequences**: splitmix is byte-identical and binary_gcd's bgcd function matches; the corpus diagnostic is 14/27. The remaining gaps are user-function inlining, magic-division call shapes, recursion and frame layout. Curated parity stays 58/58.

@@ -354,6 +354,9 @@ pub struct CodeGenerator {
     stdin_base: Option<String>,
     stdin_cursor: Option<String>,
     stdin_count: Option<String>,
+    /// Jump targets of the innermost loop, for break and continue.
+    break_targets: Vec<String>,
+    continue_targets: Vec<String>,
 }
 
 impl CodeGenerator {
@@ -382,6 +385,8 @@ impl CodeGenerator {
             stdin_base: None,
             stdin_cursor: None,
             stdin_count: None,
+            break_targets: Vec::new(),
+            continue_targets: Vec::new(),
         }
     }
 
@@ -408,13 +413,17 @@ impl CodeGenerator {
         }
     }
 
+    fn count_add_raw(counts: &mut Vec<(i128, usize)>, value: i128) {
+        if let Some(entry) = counts.iter_mut().find(|(found, _)| *found == value) {
+            entry.1 += 1;
+        } else {
+            counts.push((value, 1));
+        }
+    }
+
     fn count_add(counts: &mut Vec<(i128, usize)>, value: i128) {
         if value < -0x80000000 || value > 0x7FFFFFFF {
-            if let Some(entry) = counts.iter_mut().find(|(found, _)| *found == value) {
-                entry.1 += 1;
-            } else {
-                counts.push((value, 1));
-            }
+            Self::count_add_raw(counts, value);
         }
     }
 
@@ -424,7 +433,27 @@ impl CodeGenerator {
             Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => {
                 Self::count_literals(inner, counts);
             }
-            Expr::Binary { left, right, .. } | Expr::Index { operand: left, index: right, .. } => {
+            Expr::Binary { op, left, right, .. } => {
+                if op == "/" || op == "%" {
+                    if let Expr::IntLiteral { value: divisor, .. } =
+                        crate::optimize::peel_parens(Some(right)).unwrap() {
+                        if *divisor >= 2 && *divisor & (*divisor - 1) != 0 {
+                            Self::count_add_raw(counts, *divisor);
+                            if let Some((multiplier, _)) =
+                                crate::codegen::magic_division_parameters(*divisor) {
+                                Self::count_add_raw(counts, multiplier);
+                            }
+                        }
+                    }
+                }
+                if let Some((operand, _)) = logical_shift_shape(expr) {
+                    Self::count_literals(operand, counts);
+                } else {
+                    Self::count_literals(left, counts);
+                    Self::count_literals(right, counts);
+                }
+            }
+            Expr::Index { operand: left, index: right, .. } => {
                 if let Some((operand, _)) = logical_shift_shape(expr) {
                     Self::count_literals(operand, counts);
                 } else {
@@ -895,6 +924,11 @@ impl CodeGenerator {
                     | "==" | "!=" | "<" | "<=" | ">" | ">=") {
                     return false;
                 }
+                if op == "&" {
+                    if let Some((operand, _)) = logical_shift_shape(expr) {
+                        return self.combines_in_rax_only(operand, destination, parked_noop, homes);
+                    }
+                }
                 let right = crate::optimize::peel_parens(Some(right)).unwrap();
                 let Expr::IntLiteral { value, .. } = right else { return false };
                 let in_range = *value >= -0x80000000 && *value <= 0x7FFFFFFF;
@@ -1228,7 +1262,21 @@ impl CodeGenerator {
                 }
             }
             Stmt::If { condition, then_block, else_block, .. } => {
-                self.emit_if(condition, then_block, else_block.as_ref(), tail, homes);
+                if else_block.is_none() && then_block.statements.len() == 1 {
+                    let target = match &then_block.statements[0] {
+                        Stmt::Break { .. } => self.break_targets.last(),
+                        Stmt::Continue { .. } => self.continue_targets.last(),
+                        _ => None,
+                    };
+                    if let Some(target) = target.cloned() {
+                        self.emit_condition_polarity(condition, &target, homes, true);
+                        return;
+                    }
+                }
+                if !self.try_emit_cmov_swap(condition, then_block,
+                                            else_block.as_ref(), homes) {
+                    self.emit_if(condition, then_block, else_block.as_ref(), tail, homes);
+                }
             }
             Stmt::While { condition, body, countdown, .. } => {
                 let plan = self.hoist_plans.get(&(statement as *const Stmt as usize)).cloned();
@@ -1247,7 +1295,16 @@ impl CodeGenerator {
                 }
                 self.hoist_imm = saved;
             }
-            Stmt::Break { .. } | Stmt::Continue { .. } => {}
+            Stmt::Break { .. } => {
+                if let Some(target) = self.break_targets.last().cloned() {
+                    self.assembler.jmp(&target);
+                }
+            }
+            Stmt::Continue { .. } => {
+                if let Some(target) = self.continue_targets.last().cloned() {
+                    self.assembler.jmp(&target);
+                }
+            }
             // Wider shapes are added in later slices; refusing beats emitting wrong bytes.
             Stmt::For { .. } => {}
         }
@@ -1407,7 +1464,9 @@ impl CodeGenerator {
         let start_label = start.clone();
         self.assembler.label(&start_label);
         if countdown {
+            self.break_targets.push(end.clone());
             self.emit_block(body, false, homes);
+            self.break_targets.pop();
             let counter = match crate::optimize::peel_parens(Some(condition)).unwrap() {
                 Expr::Binary { left, right, .. } => {
                     expr_slot(left).or_else(|| expr_slot(right))
@@ -1430,7 +1489,11 @@ impl CodeGenerator {
             return;
         }
         let latch = self.fresh("while.latch");
+        self.break_targets.push(end.clone());
+        self.continue_targets.push(latch.clone());
         self.emit_block(body, false, homes);
+        self.break_targets.pop();
+        self.continue_targets.pop();
         let latch_label = latch.clone();
         self.assembler.label(&latch_label);
         self.emit_condition_polarity(condition, &start, homes, true);
@@ -1565,6 +1628,11 @@ impl CodeGenerator {
                     literal
                 };
                 if let Some(home) = home_for(name_slot, homes) {
+                    if literal == 0 && matches!(base_condition, "e" | "ne")
+                        && self.assembler.zf_status.as_deref() == Some(home) {
+                        self.assembler.jcc(condition, target);
+                        return;
+                    }
                     self.assembler.cmp_imm(home, literal);
                 } else {
                     self.load_slot(name_slot, "rax", homes);
@@ -1573,6 +1641,64 @@ impl CodeGenerator {
             }
         }
         self.assembler.jcc(condition, target);
+    }
+
+    /// Lower `if a > b { var t = a; a = b; b = t; }` as a flag-driven pair of cmovs.
+    fn try_emit_cmov_swap(&mut self, condition: &Expr, then_block: &crate::syntax::Block,
+                          else_block: Option<&crate::syntax::Block>,
+                          homes: &[(i64, &str)]) -> bool {
+        if else_block.is_some() || then_block.statements.len() != 3 {
+            return false;
+        }
+        let Stmt::Let { slot: temp_slot, value: temp_value, .. } = &then_block.statements[0]
+            else { return false };
+        let Stmt::Assign { slot: a_slot, value: a_value, .. } = &then_block.statements[1]
+            else { return false };
+        let Stmt::Assign { slot: b_slot, value: b_value, .. } = &then_block.statements[2]
+            else { return false };
+        if temp_slot == a_slot || temp_slot == b_slot || a_slot == b_slot {
+            return false;
+        }
+        if expr_slot(temp_value) != Some(*a_slot)
+            || expr_slot(a_value) != Some(*b_slot)
+            || expr_slot(b_value) != Some(*temp_slot) {
+            return false;
+        }
+        let Expr::Binary { op, left, right, .. } =
+            crate::optimize::peel_parens(Some(condition)).unwrap() else { return false };
+        let (left_slot, right_slot) = (expr_slot(left), expr_slot(right));
+        if !matches!(left_slot, Some(slot) if slot == *a_slot || slot == *b_slot) {
+            return false;
+        }
+        if !matches!(right_slot, Some(slot) if slot == *a_slot || slot == *b_slot) {
+            return false;
+        }
+        if left_slot == right_slot {
+            return false;
+        }
+        let (Some(a_home), Some(b_home)) = (home_for(*a_slot, homes), home_for(*b_slot, homes))
+            else { return false };
+        let base = match op.as_str() {
+            "==" => "e", "!=" => "ne", "<" => "l", "<=" => "le", ">" => "g", ">=" => "ge",
+            _ => return false,
+        };
+        let move_condition = if left_slot == Some(*a_slot) {
+            base
+        } else {
+            match base {
+                "l" => "g", "g" => "l", "le" => "ge", "ge" => "le", other => other,
+            }
+        };
+        let (flags_left, flags_right) = if left_slot == Some(*a_slot) {
+            (a_home, b_home)
+        } else {
+            (b_home, a_home)
+        };
+        self.assembler.cmp_reg_reg(flags_left, flags_right);
+        self.assembler.mov_reg_reg("rax", a_home);
+        self.assembler.cmov(move_condition, a_home, b_home);
+        self.assembler.cmov(move_condition, b_home, "rax");
+        true
     }
 
     fn emit_if(&mut self, condition: &Expr, then_block: &crate::syntax::Block,
@@ -1644,6 +1770,9 @@ impl CodeGenerator {
                 }
             }
             Expr::Binary { op, left, right, .. } => {
+                if self.try_emit_magic_division(op, left, right, homes) {
+                    return;
+                }
                 if op == "&" {
                     if let Some((operand, shift)) = logical_shift_shape(expression) {
                         if matches!(operand, Expr::Name { .. } | Expr::IntLiteral { .. }) {
@@ -1657,6 +1786,47 @@ impl CodeGenerator {
             }
             Expr::Unary { .. } | Expr::Index { .. } | Expr::ArrayLiteral { .. } => {}
         }
+    }
+
+    /// Lower `x / d` or `x % d` for a positive literal divisor as a magic multiply.
+    fn try_emit_magic_division(&mut self, op: &str, left: &Expr, right: &Expr,
+                               homes: &[(i64, &str)]) -> bool {
+        if op != "/" && op != "%" {
+            return false;
+        }
+        let Expr::IntLiteral { value: divisor, .. } =
+            crate::optimize::peel_parens(Some(right)).unwrap() else { return false };
+        if *divisor < 2 {
+            return false;
+        }
+        let Some((multiplier, shift)) = crate::codegen::magic_division_parameters(*divisor)
+            else { return false };
+        self.emit_expression(left, homes);
+        self.assembler.mov_reg_reg("rcx", "rax");
+        match self.hoist_imm.get(&multiplier).cloned() {
+            Some(home) => self.assembler.mov_reg_reg("rsi", &home),
+            None => self.assembler.mov_imm64("rsi", multiplier as i64),
+        }
+        self.assembler.imul_high("rsi");
+        self.assembler.lea_scale("rax", "rdx", "rcx", 0, 0);
+        self.assembler.shift_imm(7, "rax", shift as u8);
+        self.assembler.mov_reg_reg("rdx", "rcx");
+        self.assembler.shift_imm(7, "rdx", 63);
+        self.assembler.binary(0x29, "rax", "rdx");
+        if op == "/" {
+            return true;
+        }
+        self.assembler.mov_reg_reg("rdx", "rax");
+        match self.hoist_imm.get(divisor).cloned() {
+            Some(home) => self.assembler.imul("rdx", &home),
+            None => {
+                self.assembler.mov_imm64("rsi", *divisor as i64);
+                self.assembler.imul("rdx", "rsi");
+            }
+        }
+        self.assembler.mov_reg_reg("rax", "rcx");
+        self.assembler.binary(0x29, "rax", "rdx");
+        true
     }
 
     /// General binary lowering into `rax`, mirroring Python's `_emit_binary` core.
@@ -1687,6 +1857,17 @@ impl CodeGenerator {
                 }
             }
         }
+        if op == "*" {
+            if let Expr::Name { slot, .. } = left {
+                if let (Some(home), Expr::IntLiteral { value, .. }) =
+                    (home_for(*slot, homes), right) {
+                    if *value >= -2147483648 && *value <= 2147483647 {
+                        self.assembler.imul_imm("rax", home, *value as i64);
+                        return;
+                    }
+                }
+            }
+        }
         if let Some(opcode) = arith {
             if let Expr::Name { slot, .. } = left {
                 if let Some(left_home) = home_for(*slot, homes) {
@@ -1697,10 +1878,12 @@ impl CodeGenerator {
             }
         }
         let mut right_home: Option<String> = None;
-        if let Expr::Name { slot, .. } = right {
-            right_home = home_for(*slot, homes).map(str::to_string);
-        } else if let Expr::IntLiteral { value, .. } = right {
-            right_home = self.hoist_imm.get(value).cloned();
+        if arith.is_some() || op == "-" || op == "*" {
+            if let Expr::Name { slot, .. } = right {
+                right_home = home_for(*slot, homes).map(str::to_string);
+            } else if let Expr::IntLiteral { value, .. } = right {
+                right_home = self.hoist_imm.get(value).cloned();
+            }
         }
         if let Some(right_home) = right_home {
             self.emit_expression(left, homes);
@@ -1711,6 +1894,20 @@ impl CodeGenerator {
             } else if let Some(opcode) = arith {
                 self.assembler.binary(opcode, "rax", &right_home);
             }
+            return;
+        }
+        if op == "<<" || op == ">>" {
+            if !expr_has_call(right) && self.emit_left_into(left, "rcx", homes) {
+                self.emit_expression(right, homes);
+            } else {
+                self.emit_expression(left, homes);
+                self.assembler.mov_reg_reg("rcx", "rax");
+                self.emit_expression(right, homes);
+            }
+            self.assembler.mov_reg_reg("rsi", "rax");
+            self.assembler.mov_reg_reg("rax", "rcx");
+            self.assembler.mov_reg_reg("rcx", "rsi");
+            self.assembler.shift_cl(if op == "<<" { 4 } else { 7 });
             return;
         }
         self.emit_expression(left, homes);

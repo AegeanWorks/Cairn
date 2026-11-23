@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795397016.6496098,
+    "updated_at": 1795398651.9181998,
     "owner": "opencode:session",
-    "lease_until": 1795404216.6496098,
+    "lease_until": 1795405851.9181998,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,23 +105,6 @@
         "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
       },
       "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[19/N] run --json ported and gated; 55/55 curated parity across all JSON CLI surfaces; ADR-148; vectorised loops and multi-slot recursion remain",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795385159.198568,
-      "timestamp_str": "2026-11-23 01:05:59",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "handoff": {
-        "state": "102 Rust tests, 55/55 curated parity",
-        "next": "vectorised array loops and multi-slot recursive frames",
-        "evidence": "cargo test, parity, both aikit checks"
-      }
     },
     {
       "task_id": "cairn-rs-codegen",
@@ -329,6 +312,22 @@
       "handoff": {
         "state": "102 Rust tests, 58/58 curated parity",
         "next": "in-place update folding for hash mixers, magic division, pair inlining for fib, multi-slot recursion",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[33/N] in-place folding, cmov swaps, ZF reuse, magic division; splitmatch + bgcd function match; corpus 14/27; curated parity 58/58; ADR-163",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795398651.9181998,
+      "timestamp_str": "2026-11-23 04:50:51",
+      "agent": "opencode:session",
+      "handoff": {
+        "state": "102 Rust tests, 58/58 curated parity",
+        "next": "user-function inlining for fib/bgcd callers, multi-slot recursion, frame layout for mandelbrot/many_params",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }
