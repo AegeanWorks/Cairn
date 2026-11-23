@@ -44,6 +44,81 @@ fn in_array(slot: i64, arrays: &[(i64, usize)]) -> bool {
     arrays.iter().any(|(base, size)| slot >= *base && slot < *base + *size as i64)
 }
 
+fn expr_slot(expr: &Expr) -> Option<i64> {
+    match crate::optimize::peel_parens(Some(expr)).unwrap() {
+        Expr::Name { slot, .. } => Some(*slot),
+        _ => None,
+    }
+}
+
+fn expr_has_call(expr: &Expr) -> bool {
+    match expr {
+        Expr::Call { .. } => true,
+        Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => expr_has_call(inner),
+        Expr::Binary { left, right, .. } | Expr::Index { operand: left, index: right, .. } => {
+            expr_has_call(left) || expr_has_call(right)
+        }
+        Expr::ArrayLiteral { elements, .. } => elements.iter().any(expr_has_call),
+        _ => false,
+    }
+}
+
+fn expression_may_hold(expr: &Expr) -> bool {
+    match expr {
+        Expr::Binary { op, right, .. } => {
+            if op != "&&" && op != "||" && expr_has_call(right) {
+                return true;
+            }
+            match expr {
+                Expr::Binary { left, right, .. } => {
+                    expression_may_hold(left) || expression_may_hold(right)
+                }
+                _ => false,
+            }
+        }
+        Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => {
+            expression_may_hold(inner)
+        }
+        Expr::Call { arguments, .. } => arguments.iter().any(expression_may_hold),
+        _ => false,
+    }
+}
+
+fn body_may_hold(block: &crate::syntax::Block) -> bool {
+    for statement in &block.statements {
+        match statement {
+            Stmt::Let { value, .. } | Stmt::Assign { value, .. }
+            | Stmt::Return { value, .. } | Stmt::ExprStmt { expression: value, .. } => {
+                if expression_may_hold(value) {
+                    return true;
+                }
+            }
+            Stmt::If { condition, then_block, else_block, .. } => {
+                if expression_may_hold(condition) || body_may_hold(then_block) {
+                    return true;
+                }
+                if let Some(otherwise) = else_block {
+                    if body_may_hold(otherwise) {
+                        return true;
+                    }
+                }
+            }
+            Stmt::While { condition, body, .. } => {
+                if expression_may_hold(condition) || body_may_hold(body) {
+                    return true;
+                }
+            }
+            Stmt::Block(inner) => {
+                if body_may_hold(inner) {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 /// The register home of a slot, when the slot is kept in a register.
 fn home_for<'a>(slot: i64, homes: &'a [(i64, &'a str)]) -> Option<&'a str> {
     homes.iter().find(|(found, _)| *found == slot).map(|(_, register)| *register)
@@ -448,6 +523,9 @@ impl CodeGenerator {
             self.hoist_homes.clear();
         }
         let saved_units = callee_count + self.hoist_homes.len();
+        let merging = !frame_function && !delta_eligible && body_may_hold(&body);
+        let pad = frame_function || saved_units % 2 == 0 || merging;
+        let filler = merging && saved_units % 2 == 1;
         if frame_function {
             let frame = crate::codegen::align16((function.slots as usize + callee_count) * 8);
             self.assembler.push("rbp");
@@ -474,8 +552,13 @@ impl CodeGenerator {
             }
             if delta_eligible {
                 self.assembler.sub_rsp(8 * 8);
-            } else if saved_units % 2 == 0 {
-                self.assembler.sub_rsp(8);
+            } else {
+                if filler {
+                    self.assembler.push(crate::codegen::HOME_REGISTERS.last().unwrap());
+                }
+                if pad {
+                    self.assembler.sub_rsp(8);
+                }
             }
             let assigned = assigned_slots(&body);
             for (slot, register) in &homes {
@@ -513,8 +596,13 @@ impl CodeGenerator {
         } else {
             if delta_eligible {
                 self.assembler.add_rsp(8 * 8);
-            } else if saved_units % 2 == 0 {
-                self.assembler.add_rsp(8);
+            } else {
+                if pad {
+                    self.assembler.add_rsp(8);
+                }
+                if filler {
+                    self.assembler.pop(crate::codegen::HOME_REGISTERS.last().unwrap());
+                }
             }
             for register in self.hoist_homes.iter().rev() {
                 self.assembler.pop(register);
@@ -716,7 +804,68 @@ impl CodeGenerator {
         false
     }
 
+    /// Emit `home = home op value` directly when the expression updates its own slot.
+    fn try_fold_update(&mut self, slot: i64, expression: &Expr, home: &str,
+                       homes: &[(i64, &str)]) -> bool {
+        let Expr::Binary { op, left, right, .. } =
+            crate::optimize::peel_parens(Some(expression)).unwrap() else { return false };
+        let commutative = matches!(op.as_str(), "+" | "*" | "&" | "|" | "^");
+        let other = if commutative {
+            if expr_slot(left) == Some(slot) {
+                Some(right.as_ref())
+            } else if expr_slot(right) == Some(slot) {
+                Some(left.as_ref())
+            } else {
+                None
+            }
+        } else if op == "-" && expr_slot(left) == Some(slot) {
+            Some(right.as_ref())
+        } else {
+            None
+        };
+        let Some(other) = other else { return false };
+        let opcode = match op.as_str() {
+            "+" => Some(0x01), "-" => Some(0x29), "&" => Some(0x21),
+            "|" => Some(0x09), "^" => Some(0x31), _ => None,
+        };
+        let other = crate::optimize::peel_parens(Some(other)).unwrap();
+        if matches!(op.as_str(), "+" | "-") {
+            if let Expr::IntLiteral { value, .. } = other {
+                if *value >= -0x80000000 && *value <= 0x7FFFFFFF {
+                    if op == "+" {
+                        self.assembler.add_imm(home, *value as i64);
+                    } else {
+                        self.assembler.sub_imm(home, *value as i64);
+                    }
+                    return true;
+                }
+            }
+        }
+        if let Expr::Name { slot: other_slot, .. } = other {
+            if let Some(other_home) = home_for(*other_slot, homes) {
+                if op == "*" {
+                    self.assembler.imul(home, other_home);
+                } else {
+                    self.assembler.binary(opcode.unwrap(), home, other_home);
+                }
+                return true;
+            }
+        }
+        self.emit_expression(other, homes);
+        if op == "*" {
+            self.assembler.imul(home, "rax");
+        } else {
+            self.assembler.binary(opcode.unwrap(), home, "rax");
+        }
+        true
+    }
+
     fn emit_value(&mut self, slot: i64, expression: &Expr, homes: &[(i64, &str)]) {
+        if let Some(home) = home_for(slot, homes) {
+            if self.try_fold_update(slot, expression, home, homes) {
+                return;
+            }
+        }
         match expression {
             Expr::IntLiteral { value, .. } => {
                 if *value == 0 {
@@ -1197,10 +1346,45 @@ impl CodeGenerator {
                 return;
             }
             "rotl" => {
-                self.emit_expression(&arguments[0], homes);
+                let value = &arguments[0];
+                let mut count = crate::optimize::peel_parens(Some(&arguments[1])).unwrap();
+                if let Expr::Binary { op, left, right, .. } = count {
+                    if op == "&" {
+                        if let Expr::IntLiteral { value: mask, .. } =
+                            crate::optimize::peel_parens(Some(right)).unwrap() {
+                            if *mask & 63 == 63 {
+                                count = crate::optimize::peel_parens(Some(left)).unwrap();
+                            }
+                        }
+                    }
+                }
+                let leaf_value = matches!(crate::optimize::peel_parens(Some(value)).unwrap(),
+                    Expr::Name { .. } | Expr::IntLiteral { .. });
+                let simple_count = matches!(count, Expr::Name { .. } | Expr::IntLiteral { .. });
+                if leaf_value && simple_count {
+                    match count {
+                        Expr::IntLiteral { value: number, .. } => {
+                            self.emit_literal(*number, "rcx");
+                        }
+                        Expr::Name { slot, .. } => {
+                            if let Some(home) = home_for(*slot, homes) {
+                                if home != "rcx" {
+                                    self.assembler.mov_reg_reg("rcx", home);
+                                }
+                            } else {
+                                self.load_slot(*slot, "rcx", homes);
+                            }
+                        }
+                        _ => {}
+                    }
+                    self.emit_expression(value, homes);
+                    self.assembler.rotate_cl(0);
+                    return;
+                }
+                self.emit_expression(value, homes);
                 self.assembler.push("rax");
                 self.depth += 8;
-                self.emit_expression(&arguments[1], homes);
+                self.emit_expression(count, homes);
                 self.assembler.mov_reg_reg("rcx", "rax");
                 self.assembler.pop("rax");
                 self.depth -= 8;

@@ -1501,3 +1501,10 @@ external compiler and was verified end to end.
 - **Context**: Big literals in loops were materialised with movabs on every iteration and general binary expressions emitted nothing, so bswap, clz, ctz and popcount diverged completely.
 - **Decision**: Plan spare homes per loop for the most-used big literals, save them in the frameless prologue, load them at loop entry, and consult the hoist map at every literal site. Port binary-into-destination, a general rax binary lowering, frameless home clears and the inline clz/ctz/bswap/rotl builtins.
 - **Consequences**: bswap now produces a byte-identical full dump; the corpus diagnostic rises from 2/27 to 4/27 (argv_walk and hex_io are excluded because the Python oracle itself errors). Curated parity stays 58/58.
+
+### ADR-155: fold-update, alignment filler and rotl fast path close three more programs
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: Accumulator updates through calls, odd saved-home counts and leaf-value rotates each produced a distinct mismatch in the bitop family.
+- **Decision**: Port _fold_update so slot=slot op value combines straight into the home, add the rdi alignment filler and body-may-hold rule, and use the leaf-value rotate fast path with the redundant mask removed.
+- **Consequences**: clz, ctz and rotl are now byte-identical; the corpus diagnostic is 6/27 and curated parity stays 58/58.

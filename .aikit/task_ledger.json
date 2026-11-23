@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795391763.6852746,
+    "updated_at": 1795392811.0483832,
     "owner": "opencode:session",
-    "lease_until": 1795398963.6852746,
+    "lease_until": 1795400011.0483832,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,23 +105,6 @@
         "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit."
       },
       "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d"
-    },
-    {
-      "task_id": "cairn-rs-codegen",
-      "phase": "in_progress",
-      "phase_num": 4,
-      "description": "[11/N] delta-inlined recursive calls lowered as pure text copies; parity 53/53; ADR-140; real-program .text diagnostic still 2/27 for multi-slot recursive shapes",
-      "files_affected": [],
-      "status": "in_progress",
-      "timestamp": 1795372675.6059904,
-      "timestamp_str": "2026-11-22 21:37:55",
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "handoff": {
-        "state": "102 Rust tests, 53/53 curated parity",
-        "next": "multi-slot recursive shapes and builder/CLI port",
-        "evidence": "cargo test, parity, both aikit checks"
-      }
     },
     {
       "task_id": "cairn-rs-codegen",
@@ -337,6 +320,22 @@
       "handoff": {
         "state": "102 Rust tests, 58/58 curated parity",
         "next": "pair inlining for fib, home-count fixes for clz/ctz/popcount/char_stream, then remaining bitops and recursion",
+        "evidence": "cargo test, parity, both aikit checks"
+      }
+    },
+    {
+      "task_id": "cairn-rs-codegen",
+      "phase": "in_progress",
+      "phase_num": 4,
+      "description": "[25/N] fold-update, alignment filler and rotl fast path; corpus 6/27; curated parity 58/58; ADR-155",
+      "files_affected": [],
+      "status": "in_progress",
+      "timestamp": 1795392811.0483832,
+      "timestamp_str": "2026-11-23 03:13:31",
+      "agent": "opencode:session",
+      "handoff": {
+        "state": "102 Rust tests, 58/58 curated parity",
+        "next": "popcount argument register, xorshift countdown, stdin scans, pair inlining for fib",
         "evidence": "cargo test, parity, both aikit checks"
       }
     }
