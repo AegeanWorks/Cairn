@@ -1739,3 +1739,10 @@ external compiler and was verified end to end.
 - **Context**: After proving byte-identical output across all 25 valid corpus sources, the reference outputs were captured once as a frozen SHA-256 manifest and the front-end-parity gate now runs a Rust integration test.
 - **Decision**: Add parity/golden.sha256 with 431 frozen hashes, a Rust golden_parity integration test that recomputes them with the Rust binary, and point the front-end-parity gate at that test instead of the Python comparator.
 - **Consequences**: Ongoing verification is Rust-only; all 7 cairn gates pass and the corpus is byte-identical for all 25 valid sources.
+
+### ADR-189: repair codegen oracle and close the last two corpus programs
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: The Python codegen oracle ignored the program returned by optimize and never ran lower_for_loops, so argv_walk and hex_io errored; the Rust generator also lacked inlined arg_byte and fused hex-plus-newline emission.
+- **Decision**: Run lower_for_loops before optimize in the oracle, inline arg_byte for token zero with a leaf index, fuse print_hex followed by print_char(10), and extend the Rust golden manifest to all 27 corpus sources while excluding the two environment-dependent run envelopes.
+- **Consequences**: All 27 examples and benchmarks are byte-identical; the Rust golden manifest holds 591 frozen hashes and the corpus diagnostic is 27/27.

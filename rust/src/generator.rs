@@ -1836,8 +1836,37 @@ impl CodeGenerator {
     }
 
     fn emit_block(&mut self, block: &crate::syntax::Block, tail: bool, homes: &[(i64, &str)]) {
-        for (index, statement) in block.statements.iter().enumerate() {
-            self.emit_statement(statement, tail && index + 1 == block.statements.len(), homes);
+        let statements = &block.statements;
+        let mut index = 0;
+        while index < statements.len() {
+            let fused = if index + 1 < statements.len() {
+                let hex_arg = match &statements[index] {
+                    Stmt::ExprStmt { expression: Expr::Call { name, arguments, .. }, .. }
+                        if name == "print_hex" && arguments.len() == 1 => Some(&arguments[0]),
+                    _ => None,
+                };
+                hex_arg.filter(|_| match &statements[index + 1] {
+                    Stmt::ExprStmt { expression: Expr::Call { name, arguments, .. }, .. } =>
+                        name == "print_char" && arguments.len() == 1
+                            && matches!(&arguments[0],
+                                Expr::IntLiteral { value, .. } if *value == 10),
+                    _ => false,
+                })
+            } else {
+                None
+            };
+            if let Some(argument) = fused {
+                self.emit_expression(argument, homes);
+                self.assembler.push("rax");
+                self.depth += 8;
+                self.call_site(crate::runtime::PRINT_HEX_LINE_LABEL);
+                self.depth -= 8;
+                self.assembler.pop("rax");
+                index += 2;
+                continue;
+            }
+            self.emit_statement(&statements[index], tail && index + 1 == statements.len(), homes);
+            index += 1;
         }
     }
 
@@ -3219,6 +3248,46 @@ impl CodeGenerator {
                 self.emit_expression(&arguments[0], homes);
                 self.call_site(crate::runtime::STR_LEN_LABEL);
                 return;
+            }
+            "arg_byte" => {
+                let index = crate::optimize::peel_parens(Some(&arguments[1])).unwrap();
+                if self.temporaries == 0
+                    && matches!(&arguments[0], Expr::IntLiteral { value, .. } if *value == 0)
+                    && !expr_has_call(index)
+                    && !self.extra_homes.iter().any(|home| home == "r10" || home == "r11") {
+                    let miss = self.fresh("arg_byte.miss");
+                    let done = self.fresh("arg_byte.done");
+                    self.emit_expression(index, homes);
+                    self.assembler.mov_load_rip("r10", crate::runtime::ARGV_PTR0_LABEL);
+                    self.assembler.mov_load_rip("r11", crate::runtime::ARGV_LEN0_LABEL);
+                    self.assembler.cmp_reg_reg("rax", "r11");
+                    self.assembler.jcc("ge", &miss);
+                    let masked_nonnegative = matches!(index,
+                        Expr::Binary { op, right, .. }
+                            if op == "&"
+                                && matches!(crate::optimize::peel_parens(Some(right)).unwrap(),
+                                    Expr::IntLiteral { value, .. } if *value >= 0));
+                    let known_nonnegative = masked_nonnegative
+                        || match index {
+                            Expr::Name { slot, .. } => self.nonnegative_slots.contains(slot),
+                            Expr::IntLiteral { value, .. } => *value >= 0,
+                            _ => false,
+                        };
+                    if !known_nonnegative {
+                        self.assembler.test("rax");
+                        self.assembler.jcc("s", &miss);
+                    }
+                    self.assembler.movzx_load8_sib("rax", "r10", "rax");
+                    self.assembler.jmp(&done);
+                    let m = miss.clone();
+                    self.assembler.label(&m);
+                    self.assembler.mov_reg_reg("rdx", "rax");
+                    self.assembler.xor_zero("rcx");
+                    self.call_site(crate::runtime::ARG_BYTE_LABEL);
+                    let d = done.clone();
+                    self.assembler.label(&d);
+                    return;
+                }
             }
             "read_char" => {
                 if self.emit_read_char_into(None) {

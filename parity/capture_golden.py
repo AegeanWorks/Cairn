@@ -82,8 +82,16 @@ def main():
             for source in sources:
                 capture(command, source, oracle)
 
-    for source in sorted((PARITY / "specs" / "codegen").glob("*.crn")):
+    codegen_sources = sorted((PARITY / "specs" / "codegen").glob("*.crn"))
+    codegen_sources += sorted((ROOT / "examples").glob("*.crn"))
+    codegen_sources += sorted((ROOT / "benchmarks").glob("*.crn"))
+    # argv_walk and hex_io fold program-path bytes or wall-clock work into their output,
+    # so their `run --json` envelope is environment-dependent and cannot be frozen.
+    volatile_run = {"argv_walk.crn", "hex_io.crn"}
+    for source in codegen_sources:
         for command, oracle in CODEGEN_CHECKS:
+            if command == "runjson" and source.name in volatile_run:
+                continue
             capture(command, source, oracle)
 
     for command, oracle, spec in BACKEND:

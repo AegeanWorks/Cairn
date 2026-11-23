@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from cairn.codegen import generate  # noqa: E402
 from cairn.diagnostics import DiagnosticError  # noqa: E402
-from cairn.optimize import optimize  # noqa: E402
+from cairn.optimize import lower_for_loops, optimize  # noqa: E402
 from cairn.parser import parse  # noqa: E402
 from cairn.sema import analyze  # noqa: E402
 
@@ -21,7 +21,7 @@ def main(argv=None):
     try:
         program_node = parse(source, arguments[0])
         analyze(program_node, arguments[0])
-        optimize(program_node)
+        program_node = optimize(lower_for_loops(program_node))
         artifact = generate(program_node)
     except DiagnosticError as error:
         text = "\n".join(

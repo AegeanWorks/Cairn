@@ -157,5 +157,5 @@ fn rust_output_matches_frozen_reference_hashes() {
     }
     assert!(failures.is_empty(), "{} of {} golden checks failed:\n{}",
             failures.len(), checked, failures.join("\n"));
-    assert_eq!(checked, 431, "unexpected golden manifest size");
+    assert_eq!(checked, 591, "unexpected golden manifest size");
 }

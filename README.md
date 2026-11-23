@@ -460,7 +460,7 @@ cairn/
 │       ├── optimize.rs       <- folding, wrapping and trap-safety tests
 │       ├── runtime.rs        <- emitted runtime labels, state and fixup tests
 │       ├── sema.rs           <- semantic rule tests ported from Python
-│       └── golden_parity.rs  <- Rust-only golden verification (431 frozen hashes)
+│       └── golden_parity.rs  <- Rust-only golden verification (591 frozen hashes)
 ├── parity/                   <- evidence tooling, outside the Rust-only crate
 │   ├── capture_golden.py     <- one-time capture of the frozen reference hash manifest
 │   ├── golden.sha256         <- frozen reference hashes, captured after Python parity

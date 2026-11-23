@@ -10,7 +10,7 @@
 - **Total Classes**: `224`
 - **Total Top-Level Functions**: `288`
 - **Total Class Methods**: `1202`
-- **Total Source Lines**: `23293`
+- **Total Source Lines**: `23301`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`69` module(s))
@@ -914,7 +914,7 @@
 ### [`parity/capture_golden.py`](parity/capture_golden.py)
 > *One-time capture of the canonical reference-output hash manifest.*
 
-**Size**: `100` lines
+**Size**: `108` lines
 
 **Functions:**
 - `def capture(name, source, oracle, filename)`
