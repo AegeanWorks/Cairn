@@ -101,6 +101,29 @@ fn promotes_stdin_cursor(block: &crate::syntax::Block) -> bool {
     reads && builtins
 }
 
+/// The `(operand, count)` of `(a >> k) & (2**(64-k)-1)`, the logical-shift peephole.
+fn logical_shift_shape(expression: &Expr) -> Option<(&Expr, u8)> {
+    let Expr::Binary { op, left, right, .. } = expression else { return None };
+    if op != "&" {
+        return None;
+    }
+    let Expr::Binary { op: shift_op, left: operand, right: count, .. } =
+        crate::optimize::peel_parens(Some(left)).unwrap() else { return None };
+    if shift_op != ">>" {
+        return None;
+    }
+    let shift = match crate::optimize::peel_parens(Some(count)).unwrap() {
+        Expr::IntLiteral { value, .. } if *value >= 1 && *value <= 63 => *value as u32,
+        _ => return None,
+    };
+    match crate::optimize::peel_parens(Some(right)).unwrap() {
+        Expr::IntLiteral { value, .. } if *value == (1i128 << (64 - shift)) - 1 => {
+            Some((crate::optimize::peel_parens(Some(operand)).unwrap(), shift as u8))
+        }
+        _ => None,
+    }
+}
+
 fn collect_str_lens(block: &crate::syntax::Block,
                     found: &mut std::collections::BTreeMap<i64, i64>) {
     for statement in &block.statements {
@@ -402,8 +425,12 @@ impl CodeGenerator {
                 Self::count_literals(inner, counts);
             }
             Expr::Binary { left, right, .. } | Expr::Index { operand: left, index: right, .. } => {
-                Self::count_literals(left, counts);
-                Self::count_literals(right, counts);
+                if let Some((operand, _)) = logical_shift_shape(expr) {
+                    Self::count_literals(operand, counts);
+                } else {
+                    Self::count_literals(left, counts);
+                    Self::count_literals(right, counts);
+                }
             }
             Expr::Call { arguments, .. } | Expr::ArrayLiteral { elements: arguments, .. } => {
                 for argument in arguments {
@@ -892,6 +919,14 @@ impl CodeGenerator {
         }
         let Expr::Binary { op, left, right, .. } =
             crate::optimize::peel_parens(Some(expression)).unwrap() else { return false };
+        if op == "&" {
+            if let Some((operand, shift)) = logical_shift_shape(expression) {
+                if self.emit_left_into(operand, destination, homes) {
+                    self.assembler.shift_imm(5, destination, shift);
+                    return true;
+                }
+            }
+        }
         let right = crate::optimize::peel_parens(Some(right)).unwrap();
         if let Expr::IntLiteral { value, .. } = right {
             let ext = match op.as_str() {
@@ -1609,6 +1644,15 @@ impl CodeGenerator {
                 }
             }
             Expr::Binary { op, left, right, .. } => {
+                if op == "&" {
+                    if let Some((operand, shift)) = logical_shift_shape(expression) {
+                        if matches!(operand, Expr::Name { .. } | Expr::IntLiteral { .. }) {
+                            self.emit_expression(operand, homes);
+                            self.assembler.shift_imm(5, "rax", shift);
+                            return;
+                        }
+                    }
+                }
                 self.emit_binary(op, left, right, homes);
             }
             Expr::Unary { .. } | Expr::Index { .. } | Expr::ArrayLiteral { .. } => {}

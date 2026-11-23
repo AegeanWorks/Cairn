@@ -1550,3 +1550,10 @@ external compiler and was verified end to end.
 - **Context**: Low-bit comparisons, logical short-circuit conditions and functions with more than four parameters were lowered generically or with the wrong frame shape.
 - **Decision**: Add test-based bit peepholes for (x&m)==0 and x%2**b==0, lower &&/|| as branching chains, force a frame when parameters exceed four, and add the missing runtime-call ABIs.
 - **Consequences**: Thirteen of twenty-five valid corpus programs are byte-identical; curated parity stays 58/58. Pair inlining, magic division and multi-slot recursion remain open.
+
+### ADR-162: logical-shift masks are excluded from hoist counts
+- **Date**: 2026-11-23
+- **Status**: Accepted
+- **Context**: A(hash mixer's (x>>k)&mask is one shr instruction, so the mask never materialises and must not be counted as a hoist candidate.
+- **Decision**: Recognise the (x>>k)&(2**(64-k)-1) shape, skip its mask when counting big literals for hoisting, and lower it as one logical shr both into rax and into a destination home.
+- **Consequences**: splitmix's hoisted constants now match the reference and curated parity stays 58/58; its remaining difference is in-place update folding. Corpus remains 13/27.
