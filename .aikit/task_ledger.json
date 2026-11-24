@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 1,
     "status": "in_progress",
-    "updated_at": 1795506216.9338272,
+    "updated_at": 1795512728.0767562,
     "owner": "opencode",
-    "lease_until": 1795513416.9338272,
+    "lease_until": 1795519928.0767562,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[48/N] temp-pool left hold; nqueens byte-identical; corpus 22/27; curated parity 58/58; ADR-179",
-      "files_affected": [],
-      "handoff": {
-        "evidence": "cargo test, parity, cairn gate",
-        "next": "copy-home inlining for many_params/call_chain, frame layout for mandelbrot",
-        "state": "102 Rust tests, 58/58 curated parity"
-      },
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795409279.363146,
-      "timestamp_str": "2026-11-23 07:47:59"
     },
     {
       "agent": "opencode:session",
@@ -317,6 +301,18 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795506216.9338272,
       "timestamp_str": "2026-11-24 10:43:36"
+    },
+    {
+      "agent": "opencode",
+      "checklists": "passed",
+      "description": "I/O and digit-conversion experiments reverted; no reliable runtime gain; 6/6 gates pass",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 1,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795512728.0767562,
+      "timestamp_str": "2026-11-24 12:32:08"
     }
   ]
 }
