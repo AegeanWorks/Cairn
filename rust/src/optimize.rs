@@ -1680,6 +1680,181 @@ fn unroll_block(block: &mut Block, function_name: &str) -> usize {
     unrolled
 }
 
+/// Unroll a one-bit shift loop by two without changing what it computes.
+///
+/// `while (x & 1) == 0 { x = x >> 1; }` tests once per shift; testing two low bits at
+/// once halves the branches. The original test is kept as an `if` tail, which can run
+/// at most once, so an odd value still exits immediately and `x == 0` still spins in the
+/// wide loop exactly as the original spun in the narrow one.
+pub fn apply_shift_loop_unrolling(program: &mut Program) -> usize {
+    let mut unrolled = 0;
+    for function in &mut program.functions {
+        for _ in 0..64 {
+            if !unroll_shift_once(&mut function.body) {
+                break;
+            }
+            unrolled += 1;
+        }
+    }
+    unrolled
+}
+
+fn unroll_shift_once(block: &mut Block) -> bool {
+    for index in 0..block.statements.len() {
+        match &mut block.statements[index] {
+            Stmt::If { then_block, else_block, .. } => {
+                if unroll_shift_once(then_block) {
+                    return true;
+                }
+                if let Some(otherwise) = else_block {
+                    if unroll_shift_once(otherwise) {
+                        return true;
+                    }
+                }
+            }
+            Stmt::While { body, .. } => {
+                if unroll_shift_once(body) {
+                    return true;
+                }
+            }
+            Stmt::Block(inner) => {
+                if unroll_shift_once(inner) {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    for index in 0..block.statements.len() {
+        let Stmt::While { condition, body, span, countdown } = &block.statements[index] else {
+            continue;
+        };
+        let Some((wide_condition, wide_body, tail_condition, tail_body)) =
+            widened_shift_loop(condition, body) else { continue };
+        let wide = Stmt::While {
+            span: *span, condition: wide_condition, body: wide_body, countdown: *countdown,
+        };
+        let tail = Stmt::If {
+            span: *span, condition: tail_condition, then_block: tail_body, else_block: None,
+        };
+        block.statements[index] = wide;
+        block.statements.insert(index + 1, tail);
+        return true;
+    }
+    false
+}
+
+/// Match `(x & 1) == 0` and return the name it tests.
+fn shift_test(expression: &Expr) -> Option<&Expr> {
+    let Expr::Binary { op, left, right, .. } =
+        peel_parens(Some(expression)).unwrap() else { return None };
+    if op != "=="
+        || !matches!(peel_parens(Some(right)).unwrap(), Expr::IntLiteral { value: 0, .. })
+    {
+        return None;
+    }
+    let Expr::Binary { op: and_op, left: inner_left, right: inner_right, .. } =
+        peel_parens(Some(left)).unwrap() else { return None };
+    if and_op != "&"
+        || !matches!(peel_parens(Some(inner_right)).unwrap(),
+            Expr::IntLiteral { value: 1, .. })
+    {
+        return None;
+    }
+    let operand = peel_parens(Some(inner_left)).unwrap();
+    matches!(operand, Expr::Name { .. }).then_some(operand)
+}
+
+fn shift_test_of(name: &Expr, mask: i128) -> Expr {
+    let span = name.span();
+    let masked = Expr::Binary {
+        span,
+        op: "&".to_string(),
+        left: Box::new(name.clone()),
+        right: Box::new(Expr::IntLiteral { span, value: mask }),
+    };
+    Expr::Binary {
+        span,
+        op: "==".to_string(),
+        left: Box::new(Expr::Parens { span, inner: Box::new(masked) }),
+        right: Box::new(Expr::IntLiteral { span, value: 0 }),
+    }
+}
+
+/// Double the step of one `x = x >> 1` or `k = k + 1` assignment, or refuse.
+fn widen_shift_assignment(statement: &Stmt, tested: &[&Expr]) -> Option<Stmt> {
+    let Stmt::Assign { span, name, value, slot, index: None, temp_slot: None, array_size }
+        = statement else { return None };
+    let Expr::Binary { span: value_span, op, left, right, .. } =
+        peel_parens(Some(value)).unwrap() else { return None };
+    if !matches!(peel_parens(Some(right)).unwrap(), Expr::IntLiteral { value: 1, .. }) {
+        return None;
+    }
+    let Expr::Name { slot: read, .. } = peel_parens(Some(left)).unwrap() else { return None };
+    if read != slot {
+        return None;
+    }
+    if op == ">>" && !tested.iter().any(|candidate| {
+        matches!(candidate, Expr::Name { slot: tested_slot, .. } if tested_slot == slot)
+    }) {
+        return None;
+    }
+    if op != ">>" && op != "+" {
+        return None;
+    }
+    Some(Stmt::Assign {
+        span: *span,
+        name: name.clone(),
+        value: Expr::Binary {
+            span: *value_span,
+            op: op.clone(),
+            left: left.clone(),
+            right: Box::new(Expr::IntLiteral { span: *value_span, value: 2 }),
+        },
+        slot: *slot,
+        index: None,
+        temp_slot: None,
+        array_size: *array_size,
+    })
+}
+
+/// The wide form of a shift loop and the one-shot tail that finishes it.
+fn widened_shift_loop(condition: &Expr, body: &Block) -> Option<(Expr, Block, Expr, Block)> {
+    let peeled = peel_parens(Some(condition)).unwrap();
+    let tested: Vec<&Expr> = match peeled {
+        Expr::Binary { op, left, right, .. } if op == "&&" => {
+            vec![shift_test(left)?, shift_test(right)?]
+        }
+        _ => vec![shift_test(peeled)?],
+    };
+    let mut wide_statements = Vec::new();
+    let mut shifts = 0;
+    for statement in &body.statements {
+        let widened = widen_shift_assignment(statement, &tested)?;
+        if let Stmt::Assign { value: Expr::Binary { op, .. }, .. } = &widened {
+            if op == ">>" {
+                shifts += 1;
+            }
+        }
+        wide_statements.push(widened);
+    }
+    if shifts != tested.len() {
+        return None;
+    }
+    let wide_condition = match tested.as_slice() {
+        [one] => shift_test_of(one, 3),
+        [first, second] => Expr::Binary {
+            span: peeled.span(),
+            op: "&&".to_string(),
+            left: Box::new(shift_test_of(first, 3)),
+            right: Box::new(shift_test_of(second, 3)),
+        },
+        _ => return None,
+    };
+    let wide_body = Block { span: body.span, statements: wide_statements };
+    Some((wide_condition, wide_body, peeled.clone(), body.clone()))
+}
+
 const INLINE_EXPANSION_NODES: usize = 512;
 const INLINE_ROUNDS: usize = 8;
 

@@ -22,6 +22,7 @@ pub enum Stage {
     Countdown,
     OddPair,
     CopyPropAgain,
+    ShiftUnroll,
     Induction,
     Rotate,
     Generate,
@@ -43,7 +44,8 @@ impl Stage {
             Self::Unroll => Self::Countdown,
             Self::Countdown => Self::OddPair,
             Self::OddPair => Self::CopyPropAgain,
-            Self::CopyPropAgain => Self::Induction,
+            Self::CopyPropAgain => Self::ShiftUnroll,
+            Self::ShiftUnroll => Self::Induction,
             Self::Induction => Self::Rotate,
             Self::Rotate => Self::Generate,
             Self::Generate | Self::Done => Self::Done,
@@ -68,6 +70,7 @@ impl Stage {
             Self::Countdown => "countdown",
             Self::OddPair => "odd-pair",
             Self::CopyPropAgain => "copy-prop-again",
+            Self::ShiftUnroll => "shift-unroll",
             Self::Induction => "induction",
             Self::Rotate => "rotate",
             Self::Generate => "generate",
@@ -104,6 +107,9 @@ impl Stage {
                     *program = Optimizer::new().fold_program(program);
                     optimize::apply_odd_pair_fusion(program);
                 }
+            }
+            Self::ShiftUnroll => {
+                optimize::apply_shift_loop_unrolling(program);
             }
             Self::Induction => {
                 optimize::apply_induction_strength_reduction(program);

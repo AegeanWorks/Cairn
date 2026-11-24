@@ -579,6 +579,7 @@ fn main() {
                             result = cairn_rs::optimize::Optimizer::new().fold_program(&result);
                             cairn_rs::optimize::apply_odd_pair_fusion(&mut result);
                         }
+                        cairn_rs::optimize::apply_shift_loop_unrolling(&mut result);
                         cairn_rs::optimize::apply_induction_strength_reduction(&mut result);
                         cairn_rs::optimize::apply_bottom_test_rotation(&mut result);
                         Ok(result)

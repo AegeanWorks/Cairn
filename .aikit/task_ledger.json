@@ -1,55 +1,17 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-bit-builtins",
+    "task_id": "cairn-shift-unroll",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1795559126.5084538,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1795561700.0365047,
     "owner": "kilo:goal",
-    "lease_until": 1795566326.5084538,
+    "lease_until": 1795568900.0365047,
     "started_by": "kilo:goal",
-    "continuations": [],
-    "completed_at": 1795559294.4967537,
-    "completed_head": "ca76211c838661f31b0afc7dda2dd0088eb3a401",
-    "completed_tree": "0dfb11fb23327ce6b2ebd2098108af108238403b"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "agent": "opencode:session",
-      "delivery": {
-        "forced": false,
-        "roots": [
-          "."
-        ]
-      },
-      "description": "Task 'cairn-rs-final-passes' completed successfully.",
-      "head": "a9dca1ab838277e2028a42fa88da1b7a51452bdc",
-      "phase": "completed",
-      "phase_num": 5,
-      "status": "completed",
-      "task_id": "cairn-rs-final-passes",
-      "timestamp": 1795358183.0262487,
-      "timestamp_str": "2026-11-22 17:36:23"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[1/N] port the syntax-tree-to-bytes generator incrementally, beginning with the emitter framework, function frames, literals and simple expressions; each slice gets parity tests",
-      "files_affected": [],
-      "impact_assessment": {
-        "benefits": "A Rust code generator producing the same machine bytes as Python, checked by dumping generated .text for real sources.",
-        "mitigation": "Port in small verifiable slices with a shared codegen dump over the corpus, run all gates before each commit.",
-        "risks": "contract: every lowering rule, frame layout and calling convention must match byte for byte; dependency: std-only Rust; concurrency: none; state: new Rust module, oracle and ADR.",
-        "why": "The last unported compiler component turns the optimized AST into x86-64 bytes; without it the Rust compiler cannot produce an executable."
-      },
-      "phase": "in_progress",
-      "phase_num": 2,
-      "plan_digest": "bb3db141fd396468afc5d1f33876ba619c94741ea4e19304d360f9c08a2f372d",
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795358453.468125,
-      "timestamp_str": "2026-11-22 17:40:53"
-    },
     {
       "agent": "opencode",
       "checklists": "passed",
@@ -281,6 +243,36 @@
       "task_id": "cairn-bit-builtins",
       "timestamp": 1795559294.5687878,
       "timestamp_str": "2026-11-25 01:28:14"
+    },
+    {
+      "agent": "kilo:goal",
+      "description": "[1/2] plan: unroll one-bit shift loops by two with a one-shot tail, preserving the zero case",
+      "files_affected": [],
+      "impact_assessment": {
+        "benefits": "binary_gcd about 8 percent faster, ahead of all three baselines",
+        "mitigation": "three optimizer tests, twin parity, full suite, paired A/B",
+        "risks": "contract: IR and image dumps change; dependency: none; concurrency: none; state: golden manifest refreshed for 6 keys",
+        "why": "binary_gcd was 11 percent behind Rust; LLVM tests two low bits per shift"
+      },
+      "phase": "in_progress",
+      "phase_num": 2,
+      "plan_digest": "6a9ce7f6339b1872c0fa33ef878c584ca14bf9c543ecc56afac78d7cec64469d",
+      "status": "in_progress",
+      "task_id": "cairn-shift-unroll",
+      "timestamp": 1795561683.097083,
+      "timestamp_str": "2026-11-25 02:08:03"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] implementation and verification: 6 golden hashes refreshed, 3 optimizer tests, twin parity and full suite pass; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-shift-unroll",
+      "timestamp": 1795561700.0365047,
+      "timestamp_str": "2026-11-25 02:08:20"
     }
   ]
 }

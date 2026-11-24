@@ -148,6 +148,55 @@ fn a_definition_is_not_forwarded_past_a_write_to_its_operand() {
 }
 
 #[test]
+fn a_single_bit_shift_loop_is_unrolled_by_two_with_a_one_shot_tail() {
+    let mut program = analysed(
+        "fn main() -> i64 { var x: i64 = 12; \
+         while (x & 1) == 0 { x = x >> 1; } return x; }",
+    );
+    let changed = optimize::apply_shift_loop_unrolling(&mut program);
+    assert_eq!(changed, 1, "the loop should be widened exactly once");
+    let statements = &program.functions[0].body.statements;
+    let cairn_rs::syntax::Stmt::While { condition, .. } = &statements[1] else {
+        panic!("expected the widened loop");
+    };
+    assert!(format!("{:?}", condition).contains("IntLiteral"));
+    let text = format!("{:?}", condition);
+    assert!(text.contains("value: 3"), "the wide test should mask two bits");
+    assert!(matches!(&statements[2], cairn_rs::syntax::Stmt::If { .. }),
+            "the one-shot tail should be an if");
+    let tail = format!("{:?}", statements[2]);
+    assert!(tail.contains("value: 1"), "the tail should keep the one-bit test");
+}
+
+#[test]
+fn the_common_even_loop_unrolls_both_shifts_and_the_counter() {
+    let mut program = analysed(
+        "fn main() -> i64 { var a: i64 = 8; var b: i64 = 4; var k: i64 = 0; \
+         while (a & 1) == 0 && (b & 1) == 0 { a = a >> 1; b = b >> 1; k = k + 1; } \
+         return a + b + k; }",
+    );
+    let changed = optimize::apply_shift_loop_unrolling(&mut program);
+    assert_eq!(changed, 1);
+    let statements = &program.functions[0].body.statements;
+    let cairn_rs::syntax::Stmt::While { body, .. } = &statements[3] else {
+        panic!("expected the widened loop");
+    };
+    let text = format!("{:?}", body);
+    assert!(text.contains("value: 2"), "both shifts and the counter should step by two");
+    assert!(!text.contains("value: 1"), "no one-bit step should remain in the wide body");
+}
+
+#[test]
+fn a_shift_loop_that_accumulates_a_value_is_left_alone() {
+    let mut program = analysed(
+        "fn main() -> i64 { var x: i64 = 12; var t: i64 = 0; \
+         while (x & 1) == 0 { x = x >> 1; t = t + x; } return t; }",
+    );
+    let changed = optimize::apply_shift_loop_unrolling(&mut program);
+    assert_eq!(changed, 0, "a body with a second effect must not be unrolled");
+}
+
+#[test]
 fn a_single_return_helper_is_inlined() {
     let mut program = analysed(
         "fn add(a: i64, b: i64) -> i64 { return a + b; } \
