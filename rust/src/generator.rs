@@ -485,6 +485,43 @@ fn expression_may_hold(expr: &Expr) -> bool {
     }
 }
 
+/// True when emitting this function can execute a `call` instruction. A leaf
+/// function does not need its stack kept 16-byte aligned, so the one-slot pad
+/// that exists only for call alignment can be omitted from its prologue.
+fn function_makes_calls(function: &crate::syntax::Function) -> bool {
+    fn in_expr(expression: &Expr) -> bool {
+        match expression {
+            Expr::Call { .. } => true,
+            Expr::Binary { op, left, right, .. } => {
+                op == "/" || op == "%" || in_expr(left) || in_expr(right)
+            }
+            Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => in_expr(inner),
+            Expr::Index { operand, index, .. } => in_expr(operand) || in_expr(index),
+            Expr::ArrayLiteral { elements, .. } => elements.iter().any(in_expr),
+            _ => false,
+        }
+    }
+    fn in_block(block: &crate::syntax::Block) -> bool {
+        block.statements.iter().any(|statement| match statement {
+            crate::syntax::Stmt::Let { value, .. }
+            | crate::syntax::Stmt::Assign { value, .. }
+            | crate::syntax::Stmt::Return { value, .. } => in_expr(value),
+            crate::syntax::Stmt::ExprStmt { expression, .. } => in_expr(expression),
+            crate::syntax::Stmt::If { condition, then_block, else_block, .. } => {
+                in_expr(condition)
+                    || in_block(then_block)
+                    || else_block.as_ref().is_some_and(|block| in_block(block))
+            }
+            crate::syntax::Stmt::While { condition, body, .. } => {
+                in_expr(condition) || in_block(body)
+            }
+            crate::syntax::Stmt::Block(inner) => in_block(inner),
+            _ => false,
+        })
+    }
+    in_block(&function.body)
+}
+
 fn body_may_hold(block: &crate::syntax::Block) -> bool {
     for statement in &block.statements {
         match statement {
@@ -1093,7 +1130,10 @@ impl CodeGenerator {
         }
         let saved_units = pushed.len() + self.hoist_homes.len();
         let merging = !frame_function && !delta_eligible && body_may_hold(&body);
-        let pad = frame_function || saved_units % 2 == 0 || merging;
+        // Only a function that issues a call needs the stack 16-byte aligned.
+        // A leaf can skip the pad even when it has an even number of saved units.
+        let leaf = !frame_function && !function_makes_calls(function);
+        let pad = !leaf && (frame_function || saved_units % 2 == 0 || merging);
         let filler = merging && saved_units % 2 == 1;
         self.pad_slot_active = !frame_function && pad && !filler && !delta_eligible;
         if frame_function {

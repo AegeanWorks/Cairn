@@ -1767,3 +1767,10 @@ external compiler and was verified end to end.
 - **Context**: An earlier ADR numbered 192 added four way unrolling for constant trip loops and was reverted. A noise validated A B using pinned processes and QueryProcessCycleTime showed a control error of 2.31 percent on byte identical executables but only 0.52 percent median improvement on executables whose code actually changed. Earlier wall clock runs swung over 100 percent on identical code.
 - **Decision**: Revert ADR-192 completely and keep the compiler at the byte identical corpus baseline. Do not keep optimizations that cannot be shown to reduce runtime.
 - **Consequences**: The golden manifest returns to its pre ADR-192 hashes and the project stays at the verified corpus parity state. The validated measurement method is recorded in reports combined AIKIT CAIRN UNROLL for future performance work.
+
+### ADR-193: skip stack alignment pad in leaf functions
+- **Date**: 2026-11-24
+- **Status**: Accepted
+- **Context**: The generator pads the stack by eight bytes whenever a function saves an even number of callee saved registers, to keep the stack aligned at call sites. Leaf functions issue no call and do not need that pad. call_chain makes twenty million calls to a leaf helper that paid two instructions per call for nothing.
+- **Decision**: Detect functions whose body contains no call or division operator and skip the alignment pad in their prologue and epilogue. Recursive and calling functions keep the pad.
+- **Consequences**: The call_chain executable is about two percent faster in a validated cycle count A B with a point one one percent control error, repeated across two runs. All twenty seven programs still match their outputs and C twins. Twelve golden hashes changed and two regression tests were added.
