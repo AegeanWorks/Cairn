@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795545811.3032413,
+    "updated_at": 1795548596.3312912,
     "owner": "kilo:goal",
-    "lease_until": 1795553011.3032413,
+    "lease_until": 1795555796.3312912,
     "started_by": "opencode:session",
     "continuations": [
       {
@@ -111,18 +111,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode",
-      "checklists": "passed",
-      "description": "leaf stack pad optimization measured above noise floor, 6/6 gates pass",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 1,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795492235.1158729,
-      "timestamp_str": "2026-11-24 06:50:35"
     },
     {
       "agent": "opencode",
@@ -279,6 +267,18 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795545811.3032413,
       "timestamp_str": "2026-11-24 21:43:31"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[65/N] README performance table refreshed from quiet run e2b12b0: 24 cases, measured image sizes, harness goal lines and band-based verdicts; ADR-202; tests and 5/5 gates",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795548596.3312912,
+      "timestamp_str": "2026-11-24 22:29:56"
     }
   ]
 }
