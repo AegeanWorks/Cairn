@@ -3,13 +3,19 @@
   "active_task": {
     "task_id": "cairn-rs-codegen",
     "last_phase": "in_progress",
-    "active_phase": 1,
+    "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795529529.6979244,
-    "owner": "opencode",
-    "lease_until": 1795536729.6979244,
+    "updated_at": 1795535472.3766382,
+    "owner": "kilo:goal",
+    "lease_until": 1795542672.3766382,
     "started_by": "opencode:session",
-    "continuations": []
+    "continuations": [
+      {
+        "agent": "kilo:goal",
+        "from": "opencode",
+        "at": 1795535381.8818405
+      }
+    ]
   },
   "checkpoints": [
     {
@@ -105,38 +111,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[53/N] redundant-move peephole; call_chain byte-identical; corpus 23/27; curated parity 58/58; ADR-184",
-      "files_affected": [],
-      "handoff": {
-        "evidence": "cargo test, parity, cairn gate",
-        "next": "many_params stack arguments, mandelbrot frame layout",
-        "state": "102 Rust tests, 58/58 curated parity"
-      },
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795429895.487929,
-      "timestamp_str": "2026-11-23 13:31:35"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[54/N] copy-return destination emission; corpus 23/27; curated parity 58/58; ADR-185",
-      "files_affected": [],
-      "handoff": {
-        "evidence": "cargo test, parity, cairn gate",
-        "next": "many_params temp-hold for accumulator chains, mandelbrot frame layout",
-        "state": "102 Rust tests, 58/58 curated parity"
-      },
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795446985.9544818,
-      "timestamp_str": "2026-11-23 18:16:25"
     },
     {
       "agent": "opencode:session",
@@ -297,6 +271,30 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795529529.6979244,
       "timestamp_str": "2026-11-24 17:12:09"
+    },
+    {
+      "agent": "kilo:goal",
+      "continued_from": "opencode",
+      "description": "[59/N] mul hoist combine: splitmix -6.3pct median over 4 clean rounds vs ADR-195 build; 3 hashes refreshed; 70 byte loop pinned; 6/6 gates",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795535381.8818405,
+      "timestamp_str": "2026-11-24 18:49:41"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[59/N] mul hoist combine: splitmix -6.3pct median over 4 clean rounds vs ADR-195 build; 3 hashes refreshed; 70 byte loop pinned; ADR-196; 6/6 gates",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795535472.3766382,
+      "timestamp_str": "2026-11-24 18:51:12"
     }
   ]
 }
