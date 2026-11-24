@@ -368,9 +368,12 @@ at the ISA latency floor (ADR-023) and `mandelbrot` at its recurrence (ADR-106);
 different algorithm, not another lowering tweak, and every remaining gap is argued from
 disassembly and paired A/B runs rather than a single measurement.
 
-The twin-parity check (`python benchmarks/run_benchmarks.py`) compiles all four twins for
-every case and diffs their printed totals, so a standing cannot be earned against a twin that
-computes something else.
+The twin-parity check (`cargo test --manifest-path rust/Cargo.toml --test twin_parity`)
+rebuilds every benchmark with the Rust compiler and compares its stdout digest with
+`parity/twin_expected.sha256`, which holds each C twin's total frozen once after all four
+twins printed identical text, so a standing cannot be earned against a twin that computes
+something else. `argv_walk` is excluded by design: its checksum folds its own build path, as
+its source says.
 
 Run-to-run spread is about 10 percent: use `python benchmarks/run_benchmarks.py --save --compare`
 to append one JSONL record (including the ADR-069 quiet-window probe) and diff against the newest
@@ -559,7 +562,8 @@ cairn/
 │   │   ├── fold_calls.txt
 │   │   ├── magic.txt
 │   │   └── pe_basic.txt
-│   └── golden.sha256
+│   ├── golden.sha256
+│   └── twin_expected.sha256
 ├── rust/
 │   ├── src/
 │   │   ├── builder.rs
@@ -590,6 +594,8 @@ cairn/
 │   ├── tests/
 │   │   ├── backend.rs
 │   │   ├── cli_surface.rs
+│   │   ├── common/
+│   │   │   └── mod.rs
 │   │   ├── front_end.rs
 │   │   ├── golden_parity.rs
 │   │   ├── hoist_direct.rs
@@ -598,7 +604,8 @@ cairn/
 │   │   ├── optimize.rs
 │   │   ├── runtime.rs
 │   │   ├── sema.rs
-│   │   └── values.rs
+│   │   ├── twin_parity.rs
+│   │   ├── values.rs
 │   │   └── vec_wide.rs
 │   ├── Cargo.lock
 │   └── Cargo.toml
