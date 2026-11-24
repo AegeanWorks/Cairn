@@ -1820,3 +1820,9 @@ external compiler and was verified end to end.
 - **Context**: values.rs still claimed the compiler imports only the Python standard library and named deleted Python guard tests; the frozen-surface test only checked that each guard string contained ::test_. The capabilities manifest repeated the Python dependency guarantee. G-003 requires a value change to carry an ADR and a live guard.
 - **Decision**: Rewrite every value's evidence command to the Rust binary and every guard to rust/tests/<file>.rs::<test>. The frozen-surface test now reads the named file and fails unless it contains that test function. Add rust/tests/values.rs::the_crate_declares_no_dependencies, which rejects any entry under [dependencies] in Cargo.toml. Change the manifest guarantee to the Rust standard library.
 - **Consequences**: Every published value names a guard that provably exists. Only the capjson hash changes (1 of 591); README, SPEC and LLM_SYSTEM agree with the binary; cargo tests and 6 of 6 gates pass.
+### ADR-201: drop the dead Python packaging metadata
+- **Date**: 2026-11-24
+- **Status**: Accepted
+- **Context**: pyproject.toml still declared the deleted cairn Python package, its console script and setuptools packaging, so any pip install would fail. Since ADR-190 the build is cargo and the benchmark harness reads stdlib Python directly.
+- **Decision**: Delete pyproject.toml and its README tree entry; Cargo.toml is the only build manifest.
+- **Consequences**: Packaging metadata cannot promise a package that does not exist. No code or dump changes. The auto-detected Python dependency gate disappears with the metadata, leaving 5 of 5 gates; the live zero-dependency guard is now rust/tests/values.rs::the_crate_declares_no_dependencies.

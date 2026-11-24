@@ -223,7 +223,7 @@ cargo test --quiet --manifest-path rust/Cargo.toml   # std-only Rust test suite
   nothing. Corruption tests in `rust/tests/backend.rs` show a broken signature and a broken section each named by code.
 - `listing.rs` prints the bytes the PE writer will place in `.text`, grouped by the label that
   owns them, so a build can be inspected without a debugger.
-- `rust/Cargo.toml` declares no dependencies, and the dependency gate fails if one is added.
+- `rust/Cargo.toml` declares no dependencies, and `rust/tests/values.rs` fails if one is added.
 
 ## How the compiler works
 
@@ -594,7 +594,6 @@ cairn/
 ├── SPEC.md
 ├── char_stream.old.exe
 ├── hex_io.old.exe
-├── pyproject.toml
 ├── rust-toolchain.toml
 └── xorshift.old.exe
 ```
