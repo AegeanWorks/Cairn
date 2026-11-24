@@ -3,27 +3,18 @@
   "active_task": {
     "task_id": "cairn-shift-unroll",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1795563073.718539,
     "owner": "kilo:goal",
     "lease_until": 1795570273.718539,
     "started_by": "kilo:goal",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1795563246.370485,
+    "completed_head": "705b6e076a37b6682c0677a888db07b96bbb2c9f",
+    "completed_tree": "a48d4e5a42d562e67b752c251b2d59ab02bf8d1d"
   },
   "checkpoints": [
-    {
-      "agent": "opencode",
-      "checklists": "passed",
-      "description": "strict AB confirms 4-wide RMW at -3.36pct in clean rounds; fill/sum vectorization reverted as no gain; 6/6 gates",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 1,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795523825.341111,
-      "timestamp_str": "2026-11-24 15:37:05"
-    },
     {
       "agent": "opencode",
       "checklists": "passed",
@@ -273,6 +264,23 @@
       "task_id": "cairn-shift-unroll",
       "timestamp": 1795563073.718539,
       "timestamp_str": "2026-11-25 02:31:13"
+    },
+    {
+      "agent": "kilo:goal",
+      "delivery": {
+        "forced": false,
+        "roots": [
+          "."
+        ]
+      },
+      "description": "Task 'cairn-shift-unroll' completed successfully.",
+      "head": "705b6e076a37b6682c0677a888db07b96bbb2c9f",
+      "phase": "completed",
+      "phase_num": 5,
+      "status": "completed",
+      "task_id": "cairn-shift-unroll",
+      "timestamp": 1795563247.042982,
+      "timestamp_str": "2026-11-25 02:34:07"
     }
   ]
 }
