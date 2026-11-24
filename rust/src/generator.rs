@@ -1487,6 +1487,12 @@ impl CodeGenerator {
                         return true;
                     }
                 }
+                if let Expr::IntLiteral { value, .. } = right {
+                    if let Some(home) = self.hoist_imm.get(value).cloned() {
+                        self.assembler.imul(destination, &home);
+                        return true;
+                    }
+                }
                 self.emit_expression(right, homes);
                 self.assembler.imul(destination, "rax");
                 return true;

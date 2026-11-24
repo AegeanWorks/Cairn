@@ -1788,3 +1788,10 @@ external compiler and was verified end to end.
 - **Context**: try_fold_update copied a hoisted 64 bit constant through rax before adding or multiplying, costing an instruction in every affected loop iteration. splitmix and popcount were the largest losers.
 - **Decision**: When the other operand is an IntLiteral with a hoisted register home, combine directly with that home instead of emitting mov rax home first.
 - **Consequences**: Strict pinned core A B with byte identical controls measured splitmix at minus 3.0 percent over 8 clean rounds and popcount at minus 11.9 percent over 3 clean rounds, with smaller gains on bswap. clz and ctz regressed about 1 percent and hex_io about 1.6 percent, so the net across affected benchmarks is positive but mixed. All 27 outputs match, 21 golden hashes refreshed, one regression test added, 6 of 6 gates pass.
+
+### ADR-196: combine hoisted multiply constants through destination emission
+- **Date**: 2026-11-24
+- **Status**: Accepted
+- **Context**: ADR-195 removed the rax copy for hoisted literals in try_fold_update, but destination-driven lowering (try_emit_binary_into) still emitted mov rax,home before imul for a 64 bit literal right operand with a hoisted home. splitmix's serial multiply chain paid that move every iteration.
+- **Decision**: When a multiplication lowers its left operand into a destination and the right operand is an IntLiteral with a hoisted register home, imul the destination with that home directly instead of loading it through rax.
+- **Consequences**: Pinned core interleaved cycle A B against the ADR-195 build with byte identical controls measured splitmix at a median minus 6.3 percent over 4 clean rounds (range -7.0 to -4.2) with 0.40 percent median control error. Only splitmix's dump changes; 3 golden hashes refreshed, the hoist regression test now pins a 70 byte loop body, all 27 outputs match, and 6 of 6 gates pass. The benchmark compare flagged fib30, folded_math and mandelbrot, whose dumps did not change, so those flags are window noise from a loaded saved baseline (probe 189 ms).
