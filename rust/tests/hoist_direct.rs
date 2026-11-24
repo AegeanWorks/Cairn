@@ -13,7 +13,8 @@ fn splitmix_uses_hoisted_constant_directly() {
         .expect("build the Rust binary before running this test");
     let listing = String::from_utf8_lossy(&output.stdout);
     // The loop body used to be 76 bytes with a `mov rax,r15` before `add`; a
-    // multiply by the other hoisted constant also copied it through rax first.
-    assert!(listing.contains("<while.start.1>  (70 bytes)"),
+    // multiply by the other hoisted constant also copied it through rax first,
+    // and the third constant now lives in caller-saved r8 instead of rax.
+    assert!(listing.contains("<while.start.1>  (60 bytes)"),
             "hoisted-literal copy was not eliminated");
 }

@@ -485,41 +485,54 @@ fn expression_may_hold(expr: &Expr) -> bool {
     }
 }
 
+/// True when evaluating this expression can execute a `call` instruction.
+/// Division and modulo count: their lowering may call a runtime helper.
+fn expr_makes_calls(expression: &Expr) -> bool {
+    match expression {
+        Expr::Call { .. } => true,
+        Expr::Binary { op, left, right, .. } => {
+            op == "/" || op == "%" || expr_makes_calls(left) || expr_makes_calls(right)
+        }
+        Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => expr_makes_calls(inner),
+        Expr::Index { operand, index, .. } => {
+            expr_makes_calls(operand) || expr_makes_calls(index)
+        }
+        Expr::ArrayLiteral { elements, .. } => elements.iter().any(expr_makes_calls),
+        _ => false,
+    }
+}
+
+/// True when emitting this block can execute a `call` instruction.
+fn block_makes_calls(block: &crate::syntax::Block) -> bool {
+    block.statements.iter().any(|statement| match statement {
+        crate::syntax::Stmt::Let { value, .. }
+        | crate::syntax::Stmt::Assign { value, .. }
+        | crate::syntax::Stmt::Return { value, .. } => expr_makes_calls(value),
+        crate::syntax::Stmt::ExprStmt { expression, .. } => expr_makes_calls(expression),
+        crate::syntax::Stmt::If { condition, then_block, else_block, .. } => {
+            expr_makes_calls(condition)
+                || block_makes_calls(then_block)
+                || else_block.as_ref().is_some_and(|block| block_makes_calls(block))
+        }
+        crate::syntax::Stmt::While { condition, body, .. } => {
+            expr_makes_calls(condition) || block_makes_calls(body)
+        }
+        crate::syntax::Stmt::Block(inner) => block_makes_calls(inner),
+        _ => false,
+    })
+}
+
 /// True when emitting this function can execute a `call` instruction. A leaf
 /// function does not need its stack kept 16-byte aligned, so the one-slot pad
 /// that exists only for call alignment can be omitted from its prologue.
 fn function_makes_calls(function: &crate::syntax::Function) -> bool {
-    fn in_expr(expression: &Expr) -> bool {
-        match expression {
-            Expr::Call { .. } => true,
-            Expr::Binary { op, left, right, .. } => {
-                op == "/" || op == "%" || in_expr(left) || in_expr(right)
-            }
-            Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => in_expr(inner),
-            Expr::Index { operand, index, .. } => in_expr(operand) || in_expr(index),
-            Expr::ArrayLiteral { elements, .. } => elements.iter().any(in_expr),
-            _ => false,
-        }
-    }
-    fn in_block(block: &crate::syntax::Block) -> bool {
-        block.statements.iter().any(|statement| match statement {
-            crate::syntax::Stmt::Let { value, .. }
-            | crate::syntax::Stmt::Assign { value, .. }
-            | crate::syntax::Stmt::Return { value, .. } => in_expr(value),
-            crate::syntax::Stmt::ExprStmt { expression, .. } => in_expr(expression),
-            crate::syntax::Stmt::If { condition, then_block, else_block, .. } => {
-                in_expr(condition)
-                    || in_block(then_block)
-                    || else_block.as_ref().is_some_and(|block| in_block(block))
-            }
-            crate::syntax::Stmt::While { condition, body, .. } => {
-                in_expr(condition) || in_block(body)
-            }
-            crate::syntax::Stmt::Block(inner) => in_block(inner),
-            _ => false,
-        })
-    }
-    in_block(&function.body)
+    block_makes_calls(&function.body)
+}
+
+/// A hoist held in a caller-saved register survives only while the loop runs;
+/// a call anywhere in the loop would clobber it.
+fn loop_makes_calls(condition: &Expr, body: &crate::syntax::Block) -> bool {
+    expr_makes_calls(condition) || block_makes_calls(body)
 }
 
 fn body_may_hold(block: &crate::syntax::Block) -> bool {
@@ -841,26 +854,40 @@ impl CodeGenerator {
         let mut loops = Vec::new();
         Self::loops_within(body, &mut loops);
         let mut cursor = 0usize;
+        let mut caller_saved_used = false;
         for statement in loops {
             let Stmt::While { condition, body: loop_body, .. } =
                 (unsafe { &*statement }) else { continue };
             let mut counts = Vec::new();
             Self::count_literals(condition, &mut counts);
             Self::count_literals_block(loop_body, &mut counts);
-            if counts.is_empty() || cursor >= spare.len() {
+            if counts.is_empty() {
+                continue;
+            }
+            // r8/r9 are caller-saved argument registers: free after the prologue
+            // and never written by call-free lowering, so they can hold a third
+            // constant without a spare HOME register.
+            let mut available: Vec<String> = spare[cursor.min(spare.len())..].to_vec();
+            if !caller_saved_used && !loop_makes_calls(condition, loop_body) {
+                available.push("r8".to_string());
+                available.push("r9".to_string());
+            }
+            if available.is_empty() {
                 continue;
             }
             counts.sort_by(|a, b| b.1.cmp(&a.1)); // stable: ties keep first-seen order
-            let take = 3.min(spare.len() - cursor);
+            let take = 3.min(available.len());
             let mut plan = Vec::new();
             for ((value, _), home) in counts.into_iter().take(take)
-                .zip(spare[cursor..cursor + take].iter()) {
+                .zip(available[..take].iter()) {
                 plan.push((value, home.clone()));
                 self.hoist_homes.push(home.clone());
             }
-            cursor += take;
+            let home_taken = take.min(spare.len().saturating_sub(cursor));
+            cursor += home_taken;
+            caller_saved_used |= take > home_taken;
             self.hoist_plans.insert(statement as usize, plan);
-            if cursor >= spare.len() {
+            if cursor >= spare.len() && caller_saved_used {
                 break;
             }
         }
