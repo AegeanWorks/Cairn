@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 1,
     "status": "in_progress",
-    "updated_at": 1795492235.1158729,
+    "updated_at": 1795506216.9338272,
     "owner": "opencode",
-    "lease_until": 1795499435.1158729,
+    "lease_until": 1795513416.9338272,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[47/N] pair depth cap and delta-folded offsets; ackermann byte-identical; corpus 21/27; curated parity 58/58; ADR-177",
-      "files_affected": [],
-      "handoff": {
-        "evidence": "cargo test, parity, cairn gate",
-        "next": "copy-home inlining for many_params/call_chain, multi-slot recursion for nqueens, frame layout for mandelbrot",
-        "state": "102 Rust tests, 58/58 curated parity"
-      },
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795408288.3900652,
-      "timestamp_str": "2026-11-23 07:31:28"
     },
     {
       "agent": "opencode:session",
@@ -321,6 +305,18 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795492235.1158729,
       "timestamp_str": "2026-11-24 06:50:35"
+    },
+    {
+      "agent": "opencode",
+      "checklists": "passed",
+      "description": "four codegen experiments reverted; leaf pad gain proven alignment-mediated; 6/6 gates pass",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 1,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795506216.9338272,
+      "timestamp_str": "2026-11-24 10:43:36"
     }
   ]
 }
