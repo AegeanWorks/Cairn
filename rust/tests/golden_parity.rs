@@ -1,9 +1,11 @@
 //! Rust-only verification against frozen reference-output hashes.
 //!
-//! `parity/golden.sha256` was captured once from the Python compiler after the Rust
-//! implementation was proven byte-identical over the whole corpus. This test regenerates
-//! every canonical dump with the Rust binary and compares SHA-256 digests; no Python
-//! process is involved in ongoing verification.
+//! `parity/golden.sha256` started as a snapshot of the Python compiler after the Rust
+//! implementation was proven byte-identical over the whole corpus (ADR-188). It is now a
+//! frozen Rust-side regression baseline: the 591 hashes were refreshed after the intentional
+//! partial-loop-unrolling change (ADR-192) and runtime outputs were re-verified against the
+//! pre-change baseline first. This test regenerates every canonical dump with the Rust binary
+//! and compares SHA-256 digests; no Python process is involved in ongoing verification.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

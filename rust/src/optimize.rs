@@ -1355,9 +1355,55 @@ fn jumps(statements: &[Stmt]) -> bool {
     })
 }
 
+fn clone_with_replacement(expression: &Expr, slot: i64, replacement: &Expr) -> Expr {
+    match expression {
+        Expr::Name { span, slot: found, .. } if *found == slot => replacement.clone(),
+        Expr::Name { span, name, slot } => Expr::Name {
+            span: *span, name: name.clone(), slot: *slot,
+        },
+        Expr::IntLiteral { span, value } => Expr::IntLiteral { span: *span, value: *value },
+        Expr::StrLiteral { span, text, label } => Expr::StrLiteral {
+            span: *span, text: text.clone(), label: label.clone(),
+        },
+        Expr::Parens { span, inner } => Expr::Parens {
+            span: *span,
+            inner: Box::new(clone_with_replacement(inner, slot, replacement)),
+        },
+        Expr::Unary { span, op, operand } => Expr::Unary {
+            span: *span,
+            op: op.clone(),
+            operand: Box::new(clone_with_replacement(operand, slot, replacement)),
+        },
+        Expr::Binary { span, op, left, right } => Expr::Binary {
+            span: *span,
+            op: op.clone(),
+            left: Box::new(clone_with_replacement(left, slot, replacement)),
+            right: Box::new(clone_with_replacement(right, slot, replacement)),
+        },
+        Expr::Call { span, name, arguments } => Expr::Call {
+            span: *span,
+            name: name.clone(),
+            arguments: arguments.iter()
+                .map(|argument| clone_with_replacement(argument, slot, replacement)).collect(),
+        },
+        Expr::Index { span, operand, index, slot: base, size } => Expr::Index {
+            span: *span,
+            operand: Box::new(clone_with_replacement(operand, slot, replacement)),
+            index: Box::new(clone_with_replacement(index, slot, replacement)),
+            slot: *base,
+            size: *size,
+        },
+        Expr::ArrayLiteral { span, elements } => Expr::ArrayLiteral {
+            span: *span,
+            elements: elements.iter()
+                .map(|element| clone_with_replacement(element, slot, replacement)).collect(),
+        },
+    }
+}
+
 fn clone_with_literal(expression: &Expr, slot: i64, value: i128) -> Expr {
     match expression {
-        Expr::Name { span, name, slot: found } if *found == slot => {
+        Expr::Name { span, slot: found, .. } if *found == slot => {
             Expr::IntLiteral { span: *span, value }
         }
         Expr::Name { span, name, slot } => Expr::Name {
@@ -1506,6 +1552,288 @@ pub fn apply_constant_loop_unrolling(program: &mut Program) -> usize {
         unrolled += unroll_block(&mut function.body, &name);
     }
     unrolled
+}
+
+/// Clone a statement, replacing one slot's reads with `replacement` (partial unrolling).
+fn clone_statement_with_replacement(statement: &Stmt, slot: i64, replacement: &Expr) -> Stmt {
+    match statement {
+        Stmt::Let { span, name, mutable, type_name, value, slot: found, array_size } =>
+            Stmt::Let {
+                span: *span, name: name.clone(), mutable: *mutable, type_name: type_name.clone(),
+                value: clone_with_replacement(value, slot, replacement),
+                slot: *found, array_size: *array_size,
+            },
+        Stmt::Assign { span, name, value, slot: found, index, temp_slot, array_size } =>
+            Stmt::Assign {
+                span: *span, name: name.clone(),
+                value: clone_with_replacement(value, slot, replacement),
+                slot: *found,
+                index: index.as_ref().map(|index| clone_with_replacement(index, slot, replacement)),
+                temp_slot: *temp_slot, array_size: *array_size,
+            },
+        Stmt::Return { span, value } => Stmt::Return {
+            span: *span, value: clone_with_replacement(value, slot, replacement),
+        },
+        Stmt::ExprStmt { span, expression } => Stmt::ExprStmt {
+            span: *span, expression: clone_with_replacement(expression, slot, replacement),
+        },
+        Stmt::If { span, condition, then_block, else_block } => Stmt::If {
+            span: *span,
+            condition: clone_with_replacement(condition, slot, replacement),
+            then_block: clone_block_with_replacement(then_block, slot, replacement),
+            else_block: else_block.as_ref()
+                .map(|block| clone_block_with_replacement(block, slot, replacement)),
+        },
+        Stmt::While { span, condition, body, countdown } => Stmt::While {
+            span: *span,
+            condition: clone_with_replacement(condition, slot, replacement),
+            body: clone_block_with_replacement(body, slot, replacement),
+            countdown: *countdown,
+        },
+        Stmt::Block(block) => Stmt::Block(clone_block_with_replacement(block, slot, replacement)),
+        Stmt::For { .. } | Stmt::Break { .. } | Stmt::Continue { .. } => statement.clone(),
+    }
+}
+
+fn clone_block_with_replacement(block: &Block, slot: i64, replacement: &Expr) -> Block {
+    Block {
+        span: block.span,
+        statements: block.statements.iter()
+            .map(|statement| clone_statement_with_replacement(statement, slot, replacement))
+            .collect(),
+    }
+}
+
+/// Unroll a long, straight-line counted loop by a small factor. The loop's trip
+/// count must be an exact multiple of the factor, so no tail loop is needed.
+/// Returns the replacement `(init, while)`; the caller keeps the original init
+/// and swaps the following while for the returned one.
+const PARTIAL_UNROLL_FACTOR: i128 = 4;
+
+fn uses_slot_in_index(statements: &[Stmt], slot: i64) -> bool {
+    fn in_expr(expression: &Expr, slot: i64, indexed: bool) -> bool {
+        match expression {
+            Expr::Name { slot: found, .. } => indexed && *found == slot,
+            Expr::Index { operand, index, .. } => {
+                in_expr(operand, slot, false) || in_expr(index, slot, true)
+            }
+            Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } =>
+                in_expr(inner, slot, indexed),
+            Expr::Binary { left, right, .. } =>
+                in_expr(left, slot, indexed) || in_expr(right, slot, indexed),
+            Expr::Call { arguments, .. } | Expr::ArrayLiteral { elements: arguments, .. } =>
+                arguments.iter().any(|argument| in_expr(argument, slot, indexed)),
+            _ => false,
+        }
+    }
+    statements.iter().any(|statement| match statement {
+        Stmt::Let { value, .. } | Stmt::Return { value, .. } => in_expr(value, slot, false),
+        Stmt::Assign { value, index, .. } => {
+            in_expr(value, slot, false)
+                || index.as_ref().is_some_and(|index| in_expr(index, slot, true))
+        }
+        Stmt::ExprStmt { expression, .. } => in_expr(expression, slot, false),
+        Stmt::If { condition, then_block, else_block, .. } => {
+            in_expr(condition, slot, false) || uses_slot_in_index(&then_block.statements, slot)
+                || else_block.as_ref()
+                    .is_some_and(|block| uses_slot_in_index(&block.statements, slot))
+        }
+        Stmt::While { condition, body, .. } =>
+            in_expr(condition, slot, false) || uses_slot_in_index(&body.statements, slot),
+        Stmt::Block(block) => uses_slot_in_index(&block.statements, slot),
+        _ => false,
+    })
+}
+
+fn contains_call(statements: &[Stmt]) -> bool {
+    fn in_expr(expression: &Expr) -> bool {
+        match expression {
+            Expr::Call { .. } => true,
+            Expr::Index { operand, index, .. } => in_expr(operand) || in_expr(index),
+            Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => in_expr(inner),
+            Expr::Binary { left, right, .. } => in_expr(left) || in_expr(right),
+            Expr::ArrayLiteral { elements, .. } => elements.iter().any(in_expr),
+            _ => false,
+        }
+    }
+    statements.iter().any(|statement| match statement {
+        Stmt::Let { value, .. } | Stmt::Assign { value, .. } | Stmt::Return { value, .. } =>
+            in_expr(value),
+        Stmt::ExprStmt { expression, .. } => in_expr(expression),
+        Stmt::If { condition, then_block, else_block, .. } => {
+            in_expr(condition) || contains_call(&then_block.statements)
+                || else_block.as_ref().is_some_and(|block| contains_call(&block.statements))
+        }
+        Stmt::While { condition, body, .. } =>
+            in_expr(condition) || contains_call(&body.statements),
+        Stmt::Block(block) => contains_call(&block.statements),
+        _ => false,
+    })
+}
+
+fn contains_nested_loop(statements: &[Stmt]) -> bool {
+    statements.iter().any(|statement| match statement {
+        Stmt::While { .. } => true,
+        Stmt::For { .. } => true,
+        Stmt::If { then_block, else_block, .. } => {
+            contains_nested_loop(&then_block.statements)
+                || else_block.as_ref()
+                    .is_some_and(|block| contains_nested_loop(&block.statements))
+        }
+        Stmt::Block(block) => contains_nested_loop(&block.statements),
+        _ => false,
+    })
+}
+
+fn partial_unroll_loop(init: &Stmt, while_stmt: &Stmt, function_name: &str)
+    -> Option<Stmt> {
+    let Stmt::While { span: loop_span, condition, body, .. } = while_stmt else {
+        return None;
+    };
+    if body.statements.len() < 2 || body.statements.len() > UNROLL_BODY_STATEMENTS
+        || jumps(&body.statements) || calls_self(&body.statements, function_name)
+        || contains_nested_loop(&body.statements) || contains_call(&body.statements)
+    {
+        return None;
+    }
+    let (Stmt::Let { value, slot, .. } | Stmt::Assign { value, slot, .. }) = init else {
+        return None;
+    };
+    if uses_slot_in_index(&body.statements, *slot) {
+        return None;
+    }
+    let Expr::IntLiteral { value: initial, .. } = peel_parens(Some(value)).unwrap() else {
+        return None;
+    };
+    let step = counter_step(body.statements.last().unwrap(), *slot)?;
+    let Step::Add(step_value) = step else { return None };
+    if step_value <= 0 {
+        return None;
+    }
+    let (limit, inclusive) = counter_bound(condition)?;
+    if writes_slot(&body.statements[..body.statements.len() - 1], *slot) {
+        return None;
+    }
+    let trip = if inclusive { limit - *initial + 1 } else { limit - *initial };
+    if trip <= PARTIAL_UNROLL_FACTOR * 2 || trip % (step_value * PARTIAL_UNROLL_FACTOR) != 0 {
+        return None;
+    }
+    let core = &body.statements[..body.statements.len() - 1];
+    let mut unrolled = Vec::with_capacity(core.len() * PARTIAL_UNROLL_FACTOR as usize);
+    for k in 0..PARTIAL_UNROLL_FACTOR {
+        let offset = k * step_value;
+        let replacement = Expr::Binary {
+            span: *loop_span,
+            op: "+".to_string(),
+            left: Box::new(Expr::Name {
+                span: *loop_span, name: "i".to_string(), slot: *slot,
+            }),
+            right: Box::new(Expr::IntLiteral { span: *loop_span, value: offset }),
+        };
+        for statement in core {
+            unrolled.push(clone_statement_with_replacement(statement, *slot, &replacement));
+        }
+    }
+    unrolled.push(Stmt::Assign {
+        span: *loop_span,
+        name: "i".to_string(),
+        value: Expr::Binary {
+            span: *loop_span,
+            op: "+".to_string(),
+            left: Box::new(Expr::Name {
+                span: *loop_span, name: "i".to_string(), slot: *slot,
+            }),
+            right: Box::new(Expr::IntLiteral {
+                span: *loop_span, value: step_value * PARTIAL_UNROLL_FACTOR,
+            }),
+        },
+        slot: *slot,
+        index: None,
+        temp_slot: None,
+        array_size: None,
+    });
+    let new_limit = limit - step_value * (PARTIAL_UNROLL_FACTOR - 1);
+    Some(Stmt::While {
+        span: *loop_span,
+        condition: Expr::Binary {
+            span: *loop_span,
+            op: if inclusive { "<=" } else { "<" }.to_string(),
+            left: Box::new(Expr::Name {
+                span: *loop_span, name: "i".to_string(), slot: *slot,
+            }),
+            right: Box::new(Expr::IntLiteral { span: *loop_span, value: new_limit }),
+        },
+        body: Block { span: body.span, statements: unrolled },
+        countdown: false,
+    })
+}
+
+/// Apply partial unrolling to every qualifying counted loop in the program.
+pub fn apply_partial_unrolling(program: &mut Program) -> usize {
+    let mut changed = 0;
+    for function in &mut program.functions {
+        let name = function.name.clone();
+        changed += partial_unroll_block(&mut function.body, &name);
+    }
+    changed
+}
+
+fn partial_unroll_block(block: &mut Block, function_name: &str) -> usize {
+    let mut changed = 0;
+    for statement in &mut block.statements {
+        match statement {
+            Stmt::If { then_block, else_block, .. } => {
+                changed += partial_unroll_block(then_block, function_name);
+                if let Some(otherwise) = else_block {
+                    changed += partial_unroll_block(otherwise, function_name);
+                }
+            }
+            Stmt::While { body, .. } => {
+                changed += partial_unroll_block(body, function_name);
+            }
+            _ => {}
+        }
+    }
+    let original = std::mem::take(&mut block.statements);
+    let mut statements = Vec::with_capacity(original.len());
+    let mut literal_inits: std::collections::BTreeMap<i64, Stmt> =
+        std::collections::BTreeMap::new();
+    for statement in original {
+        match &statement {
+            Stmt::Let { value, slot, .. } | Stmt::Assign { value, slot, index: None, .. } => {
+                if matches!(peel_parens(Some(value)).unwrap(), Expr::IntLiteral { .. }) {
+                    literal_inits.insert(*slot, statement.clone());
+                } else {
+                    literal_inits.remove(slot);
+                }
+            }
+            Stmt::While { condition, .. } => {
+                let counter = peel_parens(Some(condition)).unwrap();
+                let condition_slot = if let Expr::Binary { left, .. } = counter {
+                    if let Expr::Name { slot, .. } = peel_parens(Some(left)).unwrap() {
+                        Some(*slot)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                let replacement = condition_slot
+                    .and_then(|slot| literal_inits.get(&slot))
+                    .and_then(|init| partial_unroll_loop(init, &statement, function_name));
+                if let Some(replacement) = replacement {
+                    statements.push(replacement);
+                    changed += 1;
+                    continue;
+                }
+                literal_inits.clear();
+            }
+            _ => {}
+        }
+        statements.push(statement);
+    }
+    block.statements = statements;
+    changed
 }
 
 fn unroll_block(block: &mut Block, function_name: &str) -> usize {
