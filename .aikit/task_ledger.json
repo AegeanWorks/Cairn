@@ -3,11 +3,11 @@
   "active_task": {
     "task_id": "cairn-rs-codegen",
     "last_phase": "in_progress",
-    "active_phase": 4,
+    "active_phase": 1,
     "status": "in_progress",
-    "updated_at": 1795459110.08384,
-    "owner": "opencode:session",
-    "lease_until": 1795466310.08384,
+    "updated_at": 1795488001.5733302,
+    "owner": "opencode",
+    "lease_until": 1795495201.5733302,
     "started_by": "opencode:session",
     "continuations": []
   },
@@ -105,22 +105,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode:session",
-      "description": "[45/N] pair-mode detection and r13 reservation; ackermann prologue matches; corpus 20/27; curated parity 58/58; ADR-175",
-      "files_affected": [],
-      "handoff": {
-        "evidence": "cargo test, parity, cairn gate",
-        "next": "pair chain loop and delta copies for ackermann, copy-home inlining for many_params/call_chain, multi-slot recursion for nqueens, frame layout for mandelbrot",
-        "state": "102 Rust tests, 58/58 curated parity"
-      },
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795406984.892701,
-      "timestamp_str": "2026-11-23 07:09:44"
     },
     {
       "agent": "opencode:session",
@@ -329,6 +313,18 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795459110.08384,
       "timestamp_str": "2026-11-23 21:38:30"
+    },
+    {
+      "agent": "opencode",
+      "checklists": "passed",
+      "description": "perf A/B closed: validated cycle harness showed no reliable gain, unrolling reverted",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 1,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795488001.5733302,
+      "timestamp_str": "2026-11-24 05:40:01"
     }
   ]
 }
