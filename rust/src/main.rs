@@ -22,7 +22,7 @@ fn main() {
                             eprintln!("cannot write {}: {}", exe.display(), error);
                             std::process::exit(2);
                         }
-                        let mut child = std::process::Command::new(&exe)
+                        let child = std::process::Command::new(&exe)
                             .stdout(std::process::Stdio::piped())
                             .stderr(std::process::Stdio::piped())
                             .spawn();

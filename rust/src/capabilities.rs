@@ -86,7 +86,7 @@ fn object(fields: Vec<(&str, Json)>) -> Json {
 }
 
 /// The whole surface as one JSON-serialisable value.
-pub fn capabilities() -> Json {
+fn capabilities() -> Json {
     let mut tiers: Vec<(u8, Vec<&str>)> = Vec::new();
     for (symbol, level) in PRECEDENCE {
         if let Some(entry) = tiers.iter_mut().find(|(found, _)| found == level) {

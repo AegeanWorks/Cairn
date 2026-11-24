@@ -28,10 +28,6 @@ pub fn align(value: usize, boundary: usize) -> usize {
     (value + boundary - 1) / boundary * boundary
 }
 
-fn put_u16(buffer: &mut [u8], offset: usize, value: u16) {
-    buffer[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
-}
-
 fn put_u32(buffer: &mut [u8], offset: usize, value: u32) {
     buffer[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
 }
@@ -46,12 +42,6 @@ fn put_i32(buffer: &mut [u8], offset: usize, value: i32) {
 
 fn read_u16(image: &[u8], offset: usize) -> u16 {
     image.get(offset..offset + 2).map_or(0, |part| u16::from_le_bytes([part[0], part[1]]))
-}
-
-fn read_u32(image: &[u8], offset: usize) -> u32 {
-    image
-        .get(offset..offset + 4)
-        .map_or(0, |part| u32::from_le_bytes([part[0], part[1], part[2], part[3]]))
 }
 
 fn reserved_names() -> &'static [&'static str] {

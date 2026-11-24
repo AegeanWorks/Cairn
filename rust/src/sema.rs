@@ -52,12 +52,11 @@ fn stops_program(name: &str) -> bool {
     STOPS_PROGRAM.contains(&name)
 }
 
-/// One name in a function: its frame slot, whether it can be assigned, and where it began.
+/// One name in a function: its frame slot, whether it can be assigned, and its array size.
 #[derive(Debug, Clone, Copy)]
 struct Binding {
     slot: i64,
     mutable: bool,
-    span: Span,
     array_size: Option<usize>,
 }
 
@@ -196,7 +195,6 @@ impl Analyzer {
                 Binding {
                     slot: parameter.slot,
                     mutable: true,
-                    span: parameter.span,
                     array_size: None,
                 },
             );
@@ -302,7 +300,7 @@ impl Analyzer {
         *slot = self.new_slot();
         self.bindings.insert(
             name.clone(),
-            Binding { slot: *slot, mutable: true, span: *span, array_size: None },
+            Binding { slot: *slot, mutable: true, array_size: None },
         );
         self.check_expression(end, path);
         self.loop_depth += 1;
@@ -367,7 +365,6 @@ impl Analyzer {
         self.bindings.entry(name.clone()).or_insert(Binding {
             slot: *slot,
             mutable: *mutable,
-            span: *span,
             array_size: size,
         });
     }
