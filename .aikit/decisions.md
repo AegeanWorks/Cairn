@@ -1774,3 +1774,10 @@ external compiler and was verified end to end.
 - **Context**: The generator pads the stack by eight bytes whenever a function saves an even number of callee saved registers, to keep the stack aligned at call sites. Leaf functions issue no call and do not need that pad. call_chain makes twenty million calls to a leaf helper that paid two instructions per call for nothing.
 - **Decision**: Detect functions whose body contains no call or division operator and skip the alignment pad in their prologue and epilogue. Recursive and calling functions keep the pad.
 - **Consequences**: The call_chain executable is about two percent faster in a validated cycle count A B with a point one one percent control error, repeated across two runs. All twenty seven programs still match their outputs and C twins. Twelve golden hashes changed and two regression tests were added.
+
+### ADR-194: four element SSE2 array RMW loop
+- **Date**: 2026-11-24
+- **Status**: Accepted
+- **Context**: The runtime vectorizer processed two i64 elements per iteration with SSE2. array_sum spends most of its time in that loop and issued one compare and branch per pair.
+- **Decision**: Add a four element fast loop using two XMM registers and a two element tail, keeping the hot loop at the same PE offset. Extend the emitter register table with xmm2 and xmm3.
+- **Consequences**: Six validated interleaved 100 round cycle A B runs showed a median gain of about 2.6 percent on array_sum against roughly 1 percent control error, with the loop offset unchanged. All outputs match, 6 golden hashes refreshed, 1 regression test added, 6 of 6 gates pass.

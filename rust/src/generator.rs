@@ -2151,9 +2151,30 @@ impl CodeGenerator {
 
         let start = self.fresh("vec_rmw.start");
         let end = self.fresh("vec_rmw.end");
+        let wide_start = self.fresh("vec_rmw.wide");
+        let wide_done = self.fresh("vec_rmw.wide.done");
         let displacement = crate::codegen::array_element_base(*store_slot, *array_size as i64);
         self.assembler.movq_from_reg("xmm1", addend_home);
         self.assembler.punpcklqdq("xmm1", "xmm1");
+        // Four elements per iteration while at least four remain. The second
+        // pair sits 16 bytes past the first; both use the same broadcast addend.
+        let wide_label = wide_start.clone();
+        self.assembler.label(&wide_label);
+        self.assembler.cmp_imm(index_home, bound as i64 - 4);
+        let wide_end = wide_done.clone();
+        self.assembler.jcc("g", &wide_end);
+        self.assembler.movdqu_load_indexed("xmm0", "rbp", index_home, 3, displacement);
+        self.assembler.movdqu_load_indexed("xmm2", "rbp", index_home, 3, displacement + 16);
+        self.assembler.paddq_reg("xmm0", "xmm1");
+        self.assembler.paddq_reg("xmm2", "xmm1");
+        self.assembler.movdqu_store_indexed("rbp", index_home, 3, displacement, "xmm0");
+        self.assembler.movdqu_store_indexed("rbp", index_home, 3, displacement + 16, "xmm2");
+        self.assembler.add_imm(index_home, 4);
+        let wide_again = wide_start.clone();
+        self.assembler.jmp(&wide_again);
+        let wide_done_label = wide_done.clone();
+        self.assembler.label(&wide_done_label);
+        // Two-element tail for the final pair (or the whole loop when bound < 4).
         let start_label = start.clone();
         self.assembler.label(&start_label);
         self.assembler.cmp_imm(index_home, bound as i64);

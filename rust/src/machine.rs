@@ -26,10 +26,10 @@ pub fn eight_bit(name: &str) -> u8 {
     }
 }
 
-/// The two SSE2 registers the array vectorizer uses.
+/// The SSE2 registers the array vectorizer uses.
 pub fn xmm_register(name: &str) -> u8 {
     match name {
-        "xmm0" => 0, "xmm1" => 1,
+        "xmm0" => 0, "xmm1" => 1, "xmm2" => 2, "xmm3" => 3,
         other => panic!("unknown xmm register {}", other),
     }
 }

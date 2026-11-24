@@ -579,7 +579,8 @@ cairn/
 │   │   ├── machine.rs
 │   │   ├── optimize.rs
 │   │   ├── runtime.rs
-│   │   └── sema.rs
+│   │   ├── sema.rs
+│   │   └── vec_wide.rs
 │   ├── Cargo.lock
 │   └── Cargo.toml
 ├── .gitignore
