@@ -464,6 +464,29 @@ fn expr_has_call(expr: &Expr) -> bool {
     }
 }
 
+/// True when lowering this expression writes rcx (a division, a variable shift or a call).
+/// A value that leaves rcx alone can be evaluated after rotl's count is set there.
+fn expression_uses_rcx(expression: &Expr) -> bool {
+    match expression {
+        Expr::Call { .. } => true,
+        Expr::Binary { op, left, right, .. } => {
+            let variable_shift = matches!(op.as_str(), "<<" | ">>")
+                && !matches!(crate::optimize::peel_parens(Some(right)).unwrap(),
+                    Expr::IntLiteral { .. });
+            matches!(op.as_str(), "/" | "%") || variable_shift
+                || expression_uses_rcx(left) || expression_uses_rcx(right)
+        }
+        Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => {
+            expression_uses_rcx(inner)
+        }
+        Expr::Index { operand, index, .. } => {
+            expression_uses_rcx(operand) || expression_uses_rcx(index)
+        }
+        Expr::ArrayLiteral { elements, .. } => elements.iter().any(expression_uses_rcx),
+        _ => false,
+    }
+}
+
 fn expression_may_hold(expr: &Expr) -> bool {
     match expr {
         Expr::Binary { op, right, .. } => {
@@ -2871,7 +2894,7 @@ impl CodeGenerator {
             }
         }
         if op == "*" || arith.is_some() {
-            if let Expr::Name { slot, .. } = left {
+            if let Expr::Name { slot, .. } = crate::optimize::peel_parens(Some(left)).unwrap() {
                 if let Some(left_home) = home_for(*slot, homes) {
                     if op != "*" || !expr_has_call(right) {
                         self.emit_expression(right, homes);
@@ -3447,10 +3470,11 @@ impl CodeGenerator {
                         }
                     }
                 }
-                let leaf_value = matches!(crate::optimize::peel_parens(Some(value)).unwrap(),
-                    Expr::Name { .. } | Expr::IntLiteral { .. });
                 let simple_count = matches!(count, Expr::Name { .. } | Expr::IntLiteral { .. });
-                if leaf_value && simple_count {
+                // The count lives in rcx, so it can be set before the value is evaluated
+                // whenever that evaluation cannot touch rcx; this avoids a stack round trip
+                // for a value that is itself an expression.
+                if simple_count && !expression_uses_rcx(value) {
                     match count {
                         Expr::IntLiteral { value: number, .. } => {
                             self.emit_literal(*number, "rcx");
@@ -3526,50 +3550,32 @@ impl CodeGenerator {
                     }
                 }
                 let skips = self.shift_through_skips(name, arguments, homes);
-                // Pure arguments bind straight into their registers in reverse order. An
-                // argument that calls must be evaluated first and parked, because a nested
-                // call clobbers the caller-saved argument registers already bound.
-                if arguments.len() == 2 && !expr_has_call(&arguments[0])
-                    && expr_has_call(&arguments[1]) {
-                    if !skips.contains(&1) {
-                        self.emit_expression(&arguments[1], homes);
-                        self.assembler.mov_reg_reg("rdx", "rax");
-                    }
-                    if !skips.contains(&0) {
-                        self.emit_into(&arguments[0], "rcx", homes);
-                    }
-                    if self.try_emit_foreign_inline(name, arguments, homes) {
-                        return;
-                    }
-                    let label = function_label(name);
-                    self.call_site(&label);
-                    return;
-                }
-                if arguments.len() > 1 && arguments.iter().any(expr_has_call) {
-                    for argument in arguments {
-                        self.emit_expression(argument, homes);
-                        self.assembler.push("rax");
-                        self.depth += 8;
-                    }
-                    for index in (0..arguments.len()).rev() {
-                        let register = ["rcx", "rdx", "r8", "r9"][index];
-                        self.assembler.pop(register);
-                        self.depth -= 8;
-                    }
-                    if self.try_emit_foreign_inline(name, arguments, homes) {
-                        return;
-                    }
-                    let label = function_label(name);
-                    self.call_site(&label);
-                    return;
+                // Arguments bind in reverse order so a later evaluation cannot disturb an
+                // earlier binding. An argument whose lowering writes rcx/rdx/r8/r9 (a call, a
+                // division or a variable shift) clobbers registers that may already hold a
+                // higher-index argument, so it is evaluated first and parked on the stack, then
+                // popped once every direct binding is in place. Everything else binds straight
+                // into its own register, exactly as before.
+                let registers = ["rcx", "rdx", "r8", "r9"];
+                let parkable: Vec<usize> = (0..arguments.len())
+                    .filter(|index| !skips.contains(index)
+                        && delta_argument(&arguments[*index], self.delta_slot).is_none()
+                        && !matches!(crate::optimize::peel_parens(Some(&arguments[*index])).unwrap(),
+                            Expr::IntLiteral { .. } | Expr::Name { .. })
+                        && expression_uses_rcx(&arguments[*index]))
+                    .collect();
+                for index in (0..parkable.len()).rev() {
+                    self.emit_expression(&arguments[parkable[index]], homes);
+                    self.assembler.push("rax");
+                    self.depth += 8;
                 }
                 if arguments.len() <= 4 {
                     for index in (0..arguments.len()).rev() {
-                        if skips.contains(&index) {
+                        if skips.contains(&index) || parkable.contains(&index) {
                             continue;
                         }
                         let argument = &arguments[index];
-                        let register = ["rcx", "rdx", "r8", "r9"][index];
+                        let register = registers[index];
                         if let Expr::IntLiteral { value, .. } = argument {
                             self.assembler.mov_imm64(register, *value as i64);
                         } else if let Expr::Name { slot, .. } = argument {
@@ -3594,6 +3600,12 @@ impl CodeGenerator {
                             self.emit_into(argument, register, homes);
                         }
                     }
+                }
+                for index in &parkable {
+                    self.assembler.pop(registers[*index]);
+                    self.depth -= 8;
+                }
+                if arguments.len() <= 4 {
                     if self.try_emit_foreign_inline(name, arguments, homes) {
                         return;
                     }

@@ -100,11 +100,51 @@ fn copy_propagation_removes_a_single_read_definition() {
     let applied = optimize::apply_copy_propagation(&mut program);
     assert!(applied >= 1);
     let statements = &program.functions[0].body.statements;
-    let cairn_rs::syntax::Stmt::Let { name, value, .. } = &statements[0] else {
-        panic!("expected a binding");
+    assert_eq!(statements.len(), 1, "both single-read bindings should be gone");
+    let cairn_rs::syntax::Stmt::Return { value, .. } = &statements[0] else {
+        panic!("expected the value to be forwarded into the return");
     };
-    assert_eq!(name, "b");
     assert!(matches!(value, Expr::Binary { .. }));
+}
+
+#[test]
+fn a_single_read_definition_is_forwarded_into_a_call_argument() {
+    let mut program = analysed(
+        "fn f(x: i64, y: i64) -> i64 { return x + y; } \
+         fn main() -> i64 { var i: i64 = 3; var t: i64 = 0; \
+         let v: i64 = (i * 7) ^ (i >> 1); t = t + f(v, i + 1); return t; }",
+    );
+    let applied = optimize::apply_copy_propagation(&mut program);
+    assert!(applied >= 1, "the single-read definition was not forwarded");
+    let body = &program.functions[1].body;
+    assert!(body.statements.iter().all(|statement| {
+        !matches!(statement, cairn_rs::syntax::Stmt::Let { name, .. } if name == "v")
+    }), "v should no longer be bound");
+    let call = body.statements.iter().find_map(|statement| {
+        let cairn_rs::syntax::Stmt::Assign { value, .. } = statement else { return None };
+        let Expr::Binary { right, .. } = optimize::peel_parens(Some(value)).unwrap() else {
+            return None;
+        };
+        match optimize::peel_parens(Some(right)).unwrap() {
+            Expr::Call { arguments, .. } => Some(arguments.clone()),
+            _ => None,
+        }
+    }).expect("the call is still in the body");
+    assert!(matches!(optimize::peel_parens(Some(&call[0])).unwrap(), Expr::Binary { .. }),
+            "the call argument should now hold the forwarded expression");
+}
+
+#[test]
+fn a_definition_is_not_forwarded_past_a_write_to_its_operand() {
+    let mut program = analysed(
+        "fn main() -> i64 { var i: i64 = 3; var t: i64 = 0; \
+         let v: i64 = (i * 7) ^ (i >> 1); i = i + 100; t = t + v; return t; }",
+    );
+    optimize::apply_copy_propagation(&mut program);
+    let body = &program.functions[0].body;
+    assert!(body.statements.iter().any(|statement| {
+        matches!(statement, cairn_rs::syntax::Stmt::Let { name, .. } if name == "v")
+    }), "v reads i, which changes before its only use");
 }
 
 #[test]

@@ -638,7 +638,8 @@ fn count_reads_stmt(statement: &Stmt, slot: i64) -> usize {
     }
 }
 
-/// Apply copy propagation: replace `x = t` with t's definition when the copy is t's only read.
+/// Apply copy propagation: replace `x = t` with t's definition when the copy is t's only read,
+/// and forward-substitute a pure definition into its single later use.
 pub fn apply_copy_propagation(program: &mut Program) -> usize {
     let mut propagated = 0;
     for _ in 0..64 {
@@ -646,6 +647,9 @@ pub fn apply_copy_propagation(program: &mut Program) -> usize {
         let mut changed = false;
         for (function, root) in program.functions.iter_mut().zip(roots.iter()) {
             if propagate_once(root, &mut function.body) {
+                changed = true;
+                propagated += 1;
+            } else if substitute_once(root, &mut function.body) {
                 changed = true;
                 propagated += 1;
             }
@@ -753,6 +757,139 @@ fn propagate_once(root: &Block, block: &mut Block) -> bool {
         }
     }
     false
+}
+
+/// Forward-substitute a pure definition into its single later use and drop the `let`.
+///
+/// This is the shape a bit-builtin benchmark takes: `let v = <arithmetic>; total = f(v)`.
+/// Keeping the `let` costs a register round trip because the code generator must park the
+/// value in v's home and then copy it back to rax for the builtin. The substitution is only
+/// made when the value has no call, no trap, no array read and no self-reference, the slot
+/// is read exactly once in the whole function, that read is a plain statement of this same
+/// block, and nothing between writes any slot the value reads.
+fn substitute_once(root: &Block, block: &mut Block) -> bool {
+    for index in 0..block.statements.len() {
+        match &block.statements[index] {
+            Stmt::Break { .. } | Stmt::Continue { .. } | Stmt::Return { .. }
+            | Stmt::ExprStmt { .. } => continue,
+            Stmt::If { then_block, else_block, condition, span } => {
+                let mut then = then_block.clone();
+                let mut otherwise = else_block.clone();
+                if substitute_once(root, &mut then)
+                    || otherwise.as_mut().map_or(false, |block| substitute_once(root, block))
+                {
+                    block.statements[index] = Stmt::If {
+                        span: *span, condition: condition.clone(), then_block: then,
+                        else_block: otherwise,
+                    };
+                    return true;
+                }
+                continue;
+            }
+            Stmt::While { body, condition, span, countdown } => {
+                let mut inner = body.clone();
+                if substitute_once(root, &mut inner) {
+                    block.statements[index] = Stmt::While {
+                        span: *span, condition: condition.clone(), body: inner, countdown: *countdown,
+                    };
+                    return true;
+                }
+                continue;
+            }
+            Stmt::Block(inner) => {
+                let mut nested = inner.clone();
+                if substitute_once(root, &mut nested) {
+                    block.statements[index] = Stmt::Block(nested);
+                    return true;
+                }
+                continue;
+            }
+            Stmt::Let { value, slot, .. } => {
+                let peel = peel_parens(Some(value)).unwrap();
+                let substitutable = !matches!(peel, Expr::Name { .. } | Expr::IntLiteral { .. })
+                    && !has_call(Some(value), &[])
+                    && !may_trap(Some(value))
+                    && !contains_index(value)
+                    && !mentions_slot_expr(value, *slot);
+                if !substitutable || count_reads_block(root, *slot) != 1 {
+                    continue;
+                }
+                let definition = value.clone();
+                let slot = *slot;
+                let mut operands = BTreeSet::new();
+                read_slots(value, &mut operands);
+                let mut use_at = None;
+                let mut blocked = false;
+                for cursor in index + 1..block.statements.len() {
+                    let current = &block.statements[cursor];
+                    let reads = count_reads_stmt(current, slot);
+                    if reads > 0 {
+                        let plain = matches!(current, Stmt::Let { .. } | Stmt::Assign { .. }
+                            | Stmt::Return { .. } | Stmt::ExprStmt { .. });
+                        if plain && reads == 1 {
+                            use_at = Some(cursor);
+                        } else {
+                            blocked = true;
+                        }
+                        break;
+                    }
+                    if mentions_slot_stmt(current, slot)
+                        || operands.iter().any(|operand| {
+                            writes_slot(std::slice::from_ref(current), *operand)
+                        })
+                    {
+                        blocked = true;
+                        break;
+                    }
+                }
+                if blocked {
+                    continue;
+                }
+                let Some(cursor) = use_at else { continue };
+                match &mut block.statements[cursor] {
+                    Stmt::Let { value, .. } | Stmt::Return { value, .. }
+                    | Stmt::ExprStmt { expression: value, .. } => {
+                        replace_slot_expr(value, slot, &definition);
+                    }
+                    Stmt::Assign { value, index, .. } => {
+                        replace_slot_expr(value, slot, &definition);
+                        if let Some(index) = index {
+                            replace_slot_expr(index, slot, &definition);
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+                block.statements.remove(index);
+                return true;
+            }
+            Stmt::For { .. } | Stmt::Assign { .. } => continue,
+        }
+    }
+    false
+}
+
+/// Replace every read of `slot` inside `expression` with `replacement`.
+fn replace_slot_expr(expression: &mut Expr, slot: i64, replacement: &Expr) {
+    match expression {
+        Expr::Name { slot: found, .. } if *found == slot => *expression = replacement.clone(),
+        Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => {
+            replace_slot_expr(inner, slot, replacement);
+        }
+        Expr::Binary { left, right, .. } => {
+            replace_slot_expr(left, slot, replacement);
+            replace_slot_expr(right, slot, replacement);
+        }
+        Expr::Call { arguments, .. } | Expr::ArrayLiteral { elements: arguments, .. } => {
+            for argument in arguments {
+                replace_slot_expr(argument, slot, replacement);
+            }
+        }
+        Expr::Index { operand, index, .. } => {
+            replace_slot_expr(operand, slot, replacement);
+            replace_slot_expr(index, slot, replacement);
+        }
+        Expr::IntLiteral { .. } | Expr::StrLiteral { .. } | Expr::Name { .. } => {}
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
