@@ -94,7 +94,6 @@ impl Stage {
             }
             Self::Unroll => {
                 optimize::apply_constant_loop_unrolling(program);
-                optimize::apply_partial_unrolling(program);
             }
             Self::Countdown => {
                 optimize::apply_countdown_latches(program);

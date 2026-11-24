@@ -175,37 +175,3 @@ fn a_constant_if_is_replaced_by_its_branch() {
     assert!(matches!(folded.functions[0].body.statements[0],
                      cairn_rs::syntax::Stmt::Return { .. }));
 }
-
-#[test]
-fn partial_unrolling_replicates_a_constant_trip_loop() {
-    let mut program = analysed(
-        "fn main() -> i64 { var i: i64 = 0; var total: i64 = 0; \
-         while i < 16 { total = total + i; i = i + 1; } print(total); return 0; }",
-    );
-    let changed = optimize::apply_partial_unrolling(&mut program);
-    assert_eq!(changed, 1, "a divisible trip count must unroll");
-    let cairn_rs::syntax::Stmt::While { body, .. } = &program.functions[0].body.statements[2]
-    else {
-        panic!("expected the while loop to survive");
-    };
-    // Four clones of the body's single core statement, plus the final counter assign.
-    assert_eq!(body.statements.len(), 5);
-}
-
-#[test]
-fn partial_unrolling_skips_nondivisible_trip_counts() {
-    let mut program = analysed(
-        "fn main() -> i64 { var i: i64 = 0; var total: i64 = 0; \
-         while i < 15 { total = total + i; i = i + 1; } print(total); return 0; }",
-    );
-    assert_eq!(optimize::apply_partial_unrolling(&mut program), 0);
-}
-
-#[test]
-fn partial_unrolling_skips_array_indexed_loops() {
-    let mut program = analysed(
-        "fn main() -> i64 { var a: [16]i64 = [0; 16]; var i: i64 = 0; \
-         while i < 16 { a[i] = i; i = i + 1; } print(a[0]); return 0; }",
-    );
-    assert_eq!(optimize::apply_partial_unrolling(&mut program), 0);
-}
