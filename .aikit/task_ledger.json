@@ -3,27 +3,18 @@
   "active_task": {
     "task_id": "cairn-bit-builtins",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1795559126.5084538,
     "owner": "kilo:goal",
     "lease_until": 1795566326.5084538,
     "started_by": "kilo:goal",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1795559294.4967537,
+    "completed_head": "ca76211c838661f31b0afc7dda2dd0088eb3a401",
+    "completed_tree": "0dfb11fb23327ce6b2ebd2098108af108238403b"
   },
   "checkpoints": [
-    {
-      "agent": "opencode:session",
-      "checklists": "passed",
-      "description": "[1/1] all optimizer passes ported; parity 39/39 across 10 dumps; 100 Rust tests; ADR-129 records the slot-order and unsafe-traversal fixes; aikit check 7/7 gates passed",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-final-passes",
-      "timestamp": 1795358120.9314852,
-      "timestamp_str": "2026-11-22 17:35:20"
-    },
     {
       "agent": "opencode:session",
       "delivery": {
@@ -273,6 +264,23 @@
       "task_id": "cairn-bit-builtins",
       "timestamp": 1795559126.5084538,
       "timestamp_str": "2026-11-25 01:25:26"
+    },
+    {
+      "agent": "kilo:goal",
+      "delivery": {
+        "forced": false,
+        "roots": [
+          "."
+        ]
+      },
+      "description": "Task 'cairn-bit-builtins' completed successfully.",
+      "head": "ca76211c838661f31b0afc7dda2dd0088eb3a401",
+      "phase": "completed",
+      "phase_num": 5,
+      "status": "completed",
+      "task_id": "cairn-bit-builtins",
+      "timestamp": 1795559294.5687878,
+      "timestamp_str": "2026-11-25 01:28:14"
     }
   ]
 }
