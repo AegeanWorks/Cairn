@@ -5,31 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795557913.932167,
+    "updated_at": 1795559126.5084538,
     "owner": "kilo:goal",
-    "lease_until": 1795565113.932167,
+    "lease_until": 1795566326.5084538,
     "started_by": "kilo:goal",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "agent": "opencode:session",
-      "description": "[1/1] port odd-pair fusion, induction strength reduction and bottom-test rotation; add fuse and final dumps to the parity gate and commit",
-      "files_affected": [],
-      "impact_assessment": {
-        "benefits": "Full optimizer parity: 39/39 identical sources across every stage from lexing to final loop rewrites.",
-        "mitigation": "Compare canonical dumps over the corpus, run all gates before commit, and record the two bugs found by the gate.",
-        "risks": "contract: shape guards, induction slot order and rotation rewrites must match; dependency: std-only Rust; concurrency: none; state: new Rust code, two oracles and ADR.",
-        "why": "These were the last Python-only optimizer passes; the Rust optimizer is not complete until codegen sees the same transformed program."
-      },
-      "phase": "in_progress",
-      "phase_num": 2,
-      "plan_digest": "ab5a8c0456e1d37f3c78fcfad6cf59be5a7d4b96a93b4c31241243a8a944a4d2",
-      "status": "in_progress",
-      "task_id": "cairn-rs-final-passes",
-      "timestamp": 1795358100.7160404,
-      "timestamp_str": "2026-11-22 17:35:00"
-    },
     {
       "agent": "opencode:session",
       "checklists": "passed",
@@ -279,6 +261,18 @@
       "task_id": "cairn-bit-builtins",
       "timestamp": 1795557913.932167,
       "timestamp_str": "2026-11-25 01:05:13"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[3/3] quiet baseline saved at 4d51404 (probe 14.1ms, 9 rounds), stalled duplicate dropped, README table and banded verdicts refreshed; ADR-206; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-bit-builtins",
+      "timestamp": 1795559126.5084538,
+      "timestamp_str": "2026-11-25 01:25:26"
     }
   ]
 }
