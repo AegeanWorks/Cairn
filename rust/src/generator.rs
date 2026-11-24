@@ -1622,6 +1622,21 @@ impl CodeGenerator {
                 return true;
             }
         }
+        // A hoisted literal already lives in a register; combine with that home
+        // directly instead of copying it through rax first.
+        let hoisted = if let Expr::IntLiteral { value, .. } = other {
+            self.hoist_imm.get(value).cloned()
+        } else {
+            None
+        };
+        if let Some(hoisted) = hoisted {
+            if op == "*" {
+                self.assembler.imul(home, &hoisted);
+            } else {
+                self.assembler.binary(opcode.unwrap(), home, &hoisted);
+            }
+            return true;
+        }
         self.emit_expression(other, homes);
         if op == "*" {
             self.assembler.imul(home, "rax");

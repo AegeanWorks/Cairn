@@ -1781,3 +1781,10 @@ external compiler and was verified end to end.
 - **Context**: The runtime vectorizer processed two i64 elements per iteration with SSE2. array_sum spends most of its time in that loop and issued one compare and branch per pair.
 - **Decision**: Add a four element fast loop using two XMM registers and a two element tail, keeping the hot loop at the same PE offset. Extend the emitter register table with xmm2 and xmm3.
 - **Consequences**: Six validated interleaved 100 round cycle A B runs showed a median gain of about 2.6 percent on array_sum against roughly 1 percent control error, with the loop offset unchanged. All outputs match, 6 golden hashes refreshed, 1 regression test added, 6 of 6 gates pass.
+
+### ADR-195: combine hoisted literals directly with their home
+- **Date**: 2026-11-24
+- **Status**: Accepted
+- **Context**: try_fold_update copied a hoisted 64 bit constant through rax before adding or multiplying, costing an instruction in every affected loop iteration. splitmix and popcount were the largest losers.
+- **Decision**: When the other operand is an IntLiteral with a hoisted register home, combine directly with that home instead of emitting mov rax home first.
+- **Consequences**: Strict pinned core A B with byte identical controls measured splitmix at minus 3.0 percent over 8 clean rounds and popcount at minus 11.9 percent over 3 clean rounds, with smaller gains on bswap. clz and ctz regressed about 1 percent and hex_io about 1.6 percent, so the net across affected benchmarks is positive but mixed. All 27 outputs match, 21 golden hashes refreshed, one regression test added, 6 of 6 gates pass.

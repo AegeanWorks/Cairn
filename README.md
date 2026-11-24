@@ -575,6 +575,7 @@ cairn/
 │   │   ├── backend.rs
 │   │   ├── front_end.rs
 │   │   ├── golden_parity.rs
+│   │   ├── hoist_direct.rs
 │   │   ├── leaf_pad.rs
 │   │   ├── machine.rs
 │   │   ├── optimize.rs
