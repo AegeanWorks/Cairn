@@ -48,6 +48,10 @@ HISTORY = ROOT / ".aikit" / "benchmark_history.jsonl"
 # decision is auditable later.
 QUIET_PROBE_CASE = "many_params"
 QUIET_PROBE_MS = 20.0
+# A mid-run stall inflates every language for a case. A case whose Cairn and C bests
+# both more than double against a quiet record was measured through such an
+# interruption, and saving it would poison the baseline the next run compares against.
+STALL_RATIO = 1.5
 
 C_COMPILERS: Dict[str, List[str]] = {
     "gcc": ["gcc", "-O2", "-o"],
@@ -443,6 +447,32 @@ def record_from_reports(reports: List[Dict[str, object]], compiler: Optional[str
             "rust": bests("rust")}
 
 
+def stalled_cases(record: Dict[str, object],
+                  previous: Optional[Dict[str, object]]) -> List[str]:
+    """Cases where any language's best blew up against a quiet previous record.
+
+    The C, C++ and Rust twins are compiled from unchanged sources, so a best time above
+    the ratio for any of them is a disturbed window, never a repository change. Cairn is
+    held to the same bound because a run that slow would also poison the baseline; the
+    printed report still shows the numbers, and `--compare` still flags the case.
+    """
+    if not isinstance(previous, dict) or previous.get("quiet") is False:
+        return []
+    stalled: List[str] = []
+    for language in ("cairn", "c", "cpp", "rust"):
+        current = record.get(language) or {}
+        before = previous.get(language) or {}
+        for name, best in current.items():
+            old = before.get(name)
+            if not (isinstance(best, (int, float)) and isinstance(old, (int, float))
+                    and old > 0 and best > old * STALL_RATIO):
+                continue
+            label = str(name)
+            if label not in stalled:
+                stalled.append(label)
+    return stalled
+
+
 def save_record(path: Path, record: Dict[str, object]) -> None:
     """Append one record as a single JSONL line."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -657,12 +687,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                   "the scoreboard is whole-process time):")
             for line in compute_adjusted(reports, floors):
                 print(f"  {line}")
-    previous = latest_history_record(HISTORY) if arguments.compare else None
+    previous = latest_history_record(HISTORY) if (arguments.compare or arguments.save) else None
     if arguments.save:
         record = record_from_reports(reports, compiler, rust_compiler,
                                      arguments.rounds, optimise, cpp_compiler)
-        save_record(HISTORY, record)
-        print(f"[SAVED] {HISTORY.relative_to(ROOT)}")
+        stalled = stalled_cases(record, previous)
+        if stalled:
+            print("[REFUSED] the window stalled mid-run on " + ", ".join(stalled)
+                  + f" (Cairn and C bests both over {STALL_RATIO:.0f}x the"
+                  " previous quiet record); rerun with --save in a quiet window")
+        else:
+            save_record(HISTORY, record)
+            print(f"[SAVED] {HISTORY.relative_to(ROOT)}")
         if record.get("quiet") is None:
             print(f"[WINDOW] no {QUIET_PROBE_CASE} reading; window state unknown")
         else:

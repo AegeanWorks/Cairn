@@ -8,9 +8,9 @@
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `3`
 - **Total Classes**: `1`
-- **Total Top-Level Functions**: `33`
+- **Total Top-Level Functions**: `34`
 - **Total Class Methods**: `0`
-- **Total Source Lines**: `877`
+- **Total Source Lines**: `913`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`3` module(s))
@@ -49,7 +49,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `702` lines
+**Size**: `738` lines
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -74,6 +74,7 @@
 - `def window_note(record)` - *A warning when a saved record was measured in a loaded window, else None.*
 - `def latest_history_record(path)` - *The newest valid JSONL record in the history file, or None without one.*
 - `def record_from_reports(reports, compiler, rust_compiler, rounds, optimise, cpp_compiler)` - *One history record: the commit this run measured and each best time by language.*
+- `def stalled_cases(record, previous)` - *Cases where any language's best blew up against a quiet previous record.*
 - `def save_record(path, record)` - *Append one record as a single JSONL line.*
 - `def benchmark_case(case, compiler, rounds, folder, optimise, rust_compiler, cpp_compiler)` - *Measure one case in Cairn and, when available, in C, C++ and Rust.*
 - `def render(reports, compiler, optimise, rust_compiler, cpp_compiler)` - *The human table; one line per case and per measured language.*

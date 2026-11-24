@@ -313,38 +313,38 @@ comparison.
 
 Measured on the development machine (Windows x86-64) with the Rust release build of the
 compiler, against MinGW GCC 16.2.0 (WinLibs UCRT), MinGW G++ 16.2.0 (same WinLibs toolchain,
-`-O2`) and rustc 1.100.0 (pc-windows-gnu). The numbers come from one quiet-window run at
-commit `4d51404` (quiet-window probe 14.1 ms, nine rounds per case, best time kept); it is
-the newest record in `.aikit/benchmark_history.jsonl`.
-Independent runs drift by about 10 percent, so a gap smaller than that band reads as a tie,
-not a standing:
+`-O2`) and rustc 1.100.0 (pc-windows-gnu). The numbers come from the newest clean record in
+`.aikit/benchmark_history.jsonl`, captured at commit `92d2757` with the compiler source of
+this tree (quiet-window probe 13.1 ms, nine rounds per case, best time kept). Independent
+runs drift by about 10 percent, so a gap smaller than that band reads as a tie, not a
+standing:
 
 | Case | Work | Cairn | C | C++ | Rust | Cairn image |
 |---|---|---|---|---|---|---|
-| `xorshift` | 200,000,000 serial xorshift steps | 276.3 ms | 280.4 ms | 306.4 ms | 310.5 ms | 136,704 bytes |
-| `fib30` | 2,692,537 recursive calls | 11.3 ms | 11.1 ms | 11.1 ms | 12.3 ms | 146,944 bytes |
-| `folded_math` | 20,000,000 bit-mixed constant additions | 19.8 ms | 19.4 ms | 19.7 ms | 20.6 ms | 136,704 bytes |
-| `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 102.6 ms | 149.6 ms | 152.8 ms | 147.9 ms | 136,704 bytes |
-| `ackermann` | `A(3,9)`, about 25 million calls | 11.4 ms | 17.1 ms | 16.6 ms | 51.4 ms | 137,216 bytes |
-| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 19.7 ms | 24.3 ms | 24.2 ms | 19.1 ms | 137,728 bytes |
-| `binary_gcd` | 1,000,000 Stein-GCD pairs | 149.1 ms | 175.3 ms | 166.0 ms | 134.1 ms | 137,216 bytes |
-| `call_chain` | 20,000,000 three-argument hot-path calls | 32.5 ms | 32.5 ms | 33.8 ms | 68.3 ms | 136,704 bytes |
-| `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 9.0 ms | 9.0 ms | 9.0 ms | 10.5 ms | 136,704 bytes |
-| `primes` | trial division over 2..300000 | 19.2 ms | 24.8 ms | 25.9 ms | 20.4 ms | 137,216 bytes |
-| `mandelbrot` | four 960x540 frames, 2^21 fixed point | 12.2 ms | 11.6 ms | 11.4 ms | 12.9 ms | 137,216 bytes |
-| `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 78.2 ms | 89.7 ms | 88.2 ms | 100.9 ms | 136,704 bytes |
-| `hex_io` | 400,000 hex-format-then-print values | 26.1 ms | 4815.6 ms | 402.4 ms | 688.2 ms | 136,704 bytes |
-| `many_params` | 10,000,000 six-argument mix calls under an `argc`-derived bound | 14.1 ms | 13.9 ms | 15.9 ms | 14.2 ms | 136,704 bytes |
-| `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 22.0 ms | 21.6 ms | 22.2 ms | 24.5 ms | 136,704 bytes |
-| `char_stream` | 4 MiB piped through `read_char()`, summed | 11.4 ms | 72.1 ms | 72.6 ms | 14.1 ms | 136,704 bytes |
-| `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.6 ms | 13.8 ms | 15.2 ms | 32.8 ms | 136,704 bytes |
-| `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 10.9 ms | 11.1 ms | 10.4 ms | 11.3 ms | 137,216 bytes |
-| `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 9.4 ms | 9.7 ms | 9.5 ms | 10.3 ms | 136,704 bytes |
-| `popcount` | 10,000,000 derived values, set-bit count summed | 14.8 ms | 150.3 ms | 26.3 ms | 18.9 ms | 136,704 bytes |
-| `clz` | 10,000,000 derived values, leading-zero count summed | 14.2 ms | 33.1 ms | 14.6 ms | 15.7 ms | 136,704 bytes |
-| `ctz` | 10,000,000 derived values, trailing-zero count summed | 14.4 ms | 19.4 ms | 14.5 ms | 14.3 ms | 136,704 bytes |
-| `bswap` | 10,000,000 byte-swapped values, summed | 15.4 ms | 43.3 ms | 15.7 ms | 16.8 ms | 136,704 bytes |
-| `rotl` | 10,000,000 rotate-left rounds with a masked accumulator | 17.3 ms | 17.6 ms | 17.8 ms | 15.8 ms | 136,704 bytes |
+| `xorshift` | 200,000,000 serial xorshift steps | 278.1 ms | 275.2 ms | 275.5 ms | 285.6 ms | 136,704 bytes |
+| `fib30` | 2,692,537 recursive calls | 10.6 ms | 10.3 ms | 10.2 ms | 11.8 ms | 146,944 bytes |
+| `folded_math` | 20,000,000 bit-mixed constant additions | 19.1 ms | 19.7 ms | 18.7 ms | 21.2 ms | 136,704 bytes |
+| `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 92.7 ms | 145.4 ms | 147.8 ms | 134.8 ms | 136,704 bytes |
+| `ackermann` | `A(3,9)`, about 25 million calls | 11.5 ms | 16.5 ms | 16.5 ms | 17.9 ms | 137,216 bytes |
+| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 18.9 ms | 23.4 ms | 23.4 ms | 19.0 ms | 137,728 bytes |
+| `binary_gcd` | 1,000,000 Stein-GCD pairs | 123.0 ms | 160.4 ms | 164.2 ms | 141.8 ms | 137,216 bytes |
+| `call_chain` | 20,000,000 three-argument hot-path calls | 35.8 ms | 35.1 ms | 34.0 ms | 76.1 ms | 136,704 bytes |
+| `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 10.2 ms | 9.9 ms | 9.4 ms | 10.5 ms | 136,704 bytes |
+| `primes` | trial division over 2..300000 | 19.8 ms | 26.2 ms | 26.4 ms | 21.4 ms | 137,216 bytes |
+| `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.3 ms | 12.3 ms | 12.1 ms | 13.2 ms | 137,216 bytes |
+| `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 81.1 ms | 93.3 ms | 95.7 ms | 98.9 ms | 136,704 bytes |
+| `hex_io` | 400,000 hex-format-then-print values | 26.0 ms | 4702.8 ms | 393.6 ms | 650.9 ms | 136,704 bytes |
+| `many_params` | 10,000,000 six-argument mix calls under an `argc`-derived bound | 13.1 ms | 13.3 ms | 15.6 ms | 14.1 ms | 136,704 bytes |
+| `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 20.3 ms | 21.4 ms | 21.7 ms | 24.7 ms | 136,704 bytes |
+| `char_stream` | 4 MiB piped through `read_char()`, summed | 10.5 ms | 75.0 ms | 72.8 ms | 14.2 ms | 136,704 bytes |
+| `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.8 ms | 13.9 ms | 13.7 ms | 31.7 ms | 136,704 bytes |
+| `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 9.9 ms | 10.2 ms | 10.2 ms | 11.2 ms | 137,216 bytes |
+| `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 9.3 ms | 9.6 ms | 9.0 ms | 10.4 ms | 136,704 bytes |
+| `popcount` | 10,000,000 derived values, set-bit count summed | 14.9 ms | 149.3 ms | 27.2 ms | 19.2 ms | 136,704 bytes |
+| `clz` | 10,000,000 derived values, leading-zero count summed | 14.0 ms | 31.2 ms | 15.0 ms | 14.8 ms | 136,704 bytes |
+| `ctz` | 10,000,000 derived values, trailing-zero count summed | 14.1 ms | 19.0 ms | 14.5 ms | 13.9 ms | 136,704 bytes |
+| `bswap` | 10,000,000 byte-swapped values, summed | 15.0 ms | 41.6 ms | 15.4 ms | 14.8 ms | 136,704 bytes |
+| `rotl` | 10,000,000 rotate-left rounds with a masked accumulator | 16.5 ms | 16.8 ms | 17.2 ms | 14.8 ms | 136,704 bytes |
 
 The size column is the linked executable's image size. Every program carries the runtime
 (argv arena, 64 KiB stdin state, printers, divide trap) and an 8 MiB stack reserve (ADR-068)
@@ -353,24 +353,24 @@ from each other only in their `.text` and `.rdata` sizes.
 
 `popcount`, `clz`, `ctz` and `bswap` are the single-instruction bit cases (ADR-101 to
 ADR-111): each lowers to one x86-64 instruction. In this run each beats C by 26 to 90
-percent; against C++ `clz`, `ctz` and `bswap` are inside the band and `popcount` is 44
+percent; against C++ `clz`, `ctz` and `bswap` are inside the band and `popcount` is 45
 percent faster; against Rust `clz`, `ctz` and `bswap` are inside the band and `popcount`
 is 22 percent faster. `rotl` lowers to one ROL (ADR-114), its hot loop shrank from 18 to 13
 instructions (ADR-115, ADR-116) and to 10 after single-read substitution (ADR-204); in this
-run it ties C and C++ and trails Rust by 9.5 percent, inside the band.
+run it ties C and C++ and trails Rust by 11 percent. `binary_gcd` shifts two bits per test
+after ADR-207 and in this run beats C, C++ and Rust by 23, 25 and 13 percent.
 
-The harness's own goal lines for this run: faster than C not met on `fib30`, `folded_math`,
-`call_chain`, `tak`, `mandelbrot`, `many_params` and `argv_walk`; faster than C++ not met on
-`fib30`, `folded_math`, `mandelbrot` and `array_sum`; faster than Rust not met on `nqueens`,
-`binary_gcd`, `ctz` and `rotl`. Those lines are strict comparisons, so they also list cases
-whose gap sits inside the noise band; the banded read is the honest one: outside 10
-percent Cairn beats C on 12 of 24 cases and loses to it on none, beats C++ on 11 and loses
-to it on none, and beats Rust on 11 and loses only to `binary_gcd` (11 percent behind, the
-one remaining large gap). `xorshift` sits at the ISA latency floor (ADR-023) and
-`mandelbrot` at its recurrence (ADR-106); both need a different algorithm, not another
-lowering tweak, and every remaining gap is argued from disassembly and paired A/B runs
-rather than a single measurement.
-
+The harness's own goal lines for this run: faster than C not met on `xorshift`, `fib30`,
+`call_chain`, `tak` and `mandelbrot`; faster than C++ not met on `xorshift`, `fib30`,
+`folded_math`, `call_chain`, `tak`, `mandelbrot`, `str_scan` and `sieve`; faster than Rust
+not met on `mandelbrot`, `ctz`, `bswap` and `rotl`. Those lines are strict comparisons, so
+they also list cases whose gap sits inside the noise band; the banded read is the honest
+one: outside 10 percent Cairn beats C on 12 of 24 cases and loses to it on none, beats C++
+on 10 and loses only to `mandelbrot` (10 percent), and beats Rust on 12 while losing only to
+`rotl` (11 percent). `xorshift` sits at the ISA latency floor (ADR-023) and `mandelbrot` at
+its recurrence (ADR-106); both need a different algorithm, not another lowering tweak, and
+every remaining gap is argued from disassembly and paired A/B runs rather than a single
+measurement.
 The twin-parity check (`cargo test --manifest-path rust/Cargo.toml --test twin_parity`)
 rebuilds every benchmark with the Rust compiler and compares its stdout digest with
 `parity/twin_expected.sha256`, which holds each C twin's total frozen once after all four
@@ -386,8 +386,10 @@ its source says.
 
 Run-to-run spread is about 10 percent: use `python benchmarks/run_benchmarks.py --save --compare`
 to append one JSONL record (including the ADR-069 quiet-window probe) and diff against the newest
-saved record; a Cairn regression beyond the band exits nonzero. Every case is scored on
-whole-process time; `--floors` prints a compute-adjusted diagnostic.
+saved record; a Cairn regression beyond the band exits nonzero. A run where any language's best
+for a case jumps by more than half against a quiet record is refused instead of saved, because
+the unchanged twins prove a disturbed window (ADR-208). Every case is scored on whole-process
+time; `--floors` prints a compute-adjusted diagnostic.
 
 Three user-recorded project rules: after every change to `cairn/` code, run the full benchmark
 suite and compare; every new language feature ships its own tests in the same change; every new

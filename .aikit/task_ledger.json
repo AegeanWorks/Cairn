@@ -5,25 +5,13 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795561700.0365047,
+    "updated_at": 1795563073.718539,
     "owner": "kilo:goal",
-    "lease_until": 1795568900.0365047,
+    "lease_until": 1795570273.718539,
     "started_by": "kilo:goal",
     "continuations": []
   },
   "checkpoints": [
-    {
-      "agent": "opencode",
-      "checklists": "passed",
-      "description": "four element SSE2 RMW loop kept after validated A B; median 2.6 percent on array_sum vs 1 percent control",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 1,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795518439.7318702,
-      "timestamp_str": "2026-11-24 14:07:19"
-    },
     {
       "agent": "opencode",
       "checklists": "passed",
@@ -273,6 +261,18 @@
       "task_id": "cairn-shift-unroll",
       "timestamp": 1795561700.0365047,
       "timestamp_str": "2026-11-25 02:08:20"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] README table refreshed from the clean record, stall guard added to the harness (1.5x, any language) with ADR-208 and a README rule; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-shift-unroll",
+      "timestamp": 1795563073.718539,
+      "timestamp_str": "2026-11-25 02:31:13"
     }
   ]
 }
