@@ -1760,3 +1760,10 @@ external compiler and was verified end to end.
 - **Context**: A second AIKit project, projects/cairn-rs, was a thin CLI wrapper with a path dependency on the real compiler in projects/cairn/rust, duplicating its entry point and leaving two folders named Cairn.
 - **Decision**: Remove projects/cairn-rs; projects/cairn/rust is the single compiler and CLI, and all gates run from that one project.
 - **Consequences**: One Cairn project folder remains, with 6/6 AIKit gates and the 591-hash Rust golden verification unchanged.
+
+### ADR-192: withdraw partial loop unrolling
+- **Date**: 2026-11-24
+- **Status**: Accepted
+- **Context**: An earlier ADR numbered 192 added four way unrolling for constant trip loops and was reverted. A noise validated A B using pinned processes and QueryProcessCycleTime showed a control error of 2.31 percent on byte identical executables but only 0.52 percent median improvement on executables whose code actually changed. Earlier wall clock runs swung over 100 percent on identical code.
+- **Decision**: Revert ADR-192 completely and keep the compiler at the byte identical corpus baseline. Do not keep optimizations that cannot be shown to reduce runtime.
+- **Consequences**: The golden manifest returns to its pre ADR-192 hashes and the project stays at the verified corpus parity state. The validated measurement method is recorded in reports combined AIKIT CAIRN UNROLL for future performance work.
