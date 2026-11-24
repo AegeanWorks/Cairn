@@ -5,9 +5,9 @@
     "last_phase": "in_progress",
     "active_phase": 4,
     "status": "in_progress",
-    "updated_at": 1795548596.3312912,
+    "updated_at": 1795550771.003971,
     "owner": "kilo:goal",
-    "lease_until": 1795555796.3312912,
+    "lease_until": 1795557971.003971,
     "started_by": "opencode:session",
     "continuations": [
       {
@@ -111,18 +111,6 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795358453.468125,
       "timestamp_str": "2026-11-22 17:40:53"
-    },
-    {
-      "agent": "opencode",
-      "checklists": "passed",
-      "description": "four codegen experiments reverted; leaf pad gain proven alignment-mediated; 6/6 gates pass",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 1,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795506216.9338272,
-      "timestamp_str": "2026-11-24 10:43:36"
     },
     {
       "agent": "opencode",
@@ -279,6 +267,18 @@
       "task_id": "cairn-rs-codegen",
       "timestamp": 1795548596.3312912,
       "timestamp_str": "2026-11-24 22:29:56"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[66/N] twin totals frozen: parity/twin_expected.sha256 plus rust/tests/twin_parity.rs over 23 cases (argv_walk path-dependent by design); shared SHA-256 helper; ADR-203",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-rs-codegen",
+      "timestamp": 1795550771.003971,
+      "timestamp_str": "2026-11-24 23:06:11"
     }
   ]
 }
