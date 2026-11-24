@@ -101,8 +101,14 @@ fn a_diagnostic_has_the_contract_json_key_order() {
 fn the_value_list_is_frozen_and_every_guard_is_named() {
     assert_eq!(values::VALUES.len(), 6);
     assert_eq!(values::by_key("verifiable").map(|value| value.name), Some("Verifiable"));
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     for value in values::VALUES {
-        assert!(value.guard.contains("::test_"));
+        let (file, test) = value.guard.split_once("::")
+            .expect("a guard must name rust/tests/<file>.rs::<test>");
+        let source = std::fs::read_to_string(root.join(file))
+            .unwrap_or_else(|error| panic!("guard file {} is unreadable: {}", file, error));
+        assert!(source.contains(&format!("fn {}()", test)),
+                "guard {} names no live test in {}", value.guard, file);
     }
     assert_eq!(values::values_manifest().len(), 6);
 }

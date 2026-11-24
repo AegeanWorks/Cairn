@@ -16,46 +16,46 @@ the integer semantics it does define, and diagnostics that carry stable codes an
 
 ## Core values, each with the command that proves it
 
-Six values decide every trade-off in this repository. Each one is a record in `cairn/values.py`
+Six values decide every trade-off in this repository. Each one is a record in `rust/src/values.rs`
 with the command that demonstrates it and the test that fails when it stops being true, published
-by `cairn capabilities --json` and asserted by `tests/test_values.py`.
+by `rust/target/release/cairn-rs.exe capabilities` and asserted by the Rust test suite.
 
 | Value | What it means here | Prove it with |
 |---|---|---|
 | **No Dependency** | The Rust compiler uses only the standard library; a produced `.exe` needs 64-bit Windows and nothing else. | `cargo test --quiet --manifest-path rust/Cargo.toml` |
-| **AI Compatible** | One JSON object describes the whole surface, and every failure is one object with a stable code. | `python -m cairn capabilities --json` |
-| **Easily Understandable** | One type, one binding form per intent, one flat scope, no implicit conversion. | `python -m cairn capabilities` |
-| **Almost Machine Language Like** | Source maps to emitted x86-64 bytes with no interpreter, GC or hidden runtime, readable label by label. | `python -m cairn listing examples/hello.crn` |
-| **Verifiable** | An artifact is proved well formed from its bytes alone, and two builds are byte-identical. | `python -m cairn verify examples/hello.crn` |
-| **Easily Problem Understood via Error Codes** | Every diagnostic code is registered, documented and published; a corrupt image names the invariant it broke. | `python -m cairn check broken.crn --json` |
+| **AI Compatible** | One JSON object describes the whole surface, and every failure is one object with a stable code. | `rust/target/release/cairn-rs.exe capabilities` |
+| **Easily Understandable** | One type, one binding form per intent, one flat scope, no implicit conversion. | `rust/target/release/cairn-rs.exe capabilities` |
+| **Almost Machine Language Like** | Source maps to emitted x86-64 bytes with no interpreter, GC or hidden runtime, readable label by label. | `rust/target/release/cairn-rs.exe listing examples/hello.crn` |
+| **Verifiable** | An artifact is proved well formed from its bytes alone, and two builds are byte-identical. | `rust/target/release/cairn-rs.exe verify examples/hello.crn` |
+| **Easily Problem Understood via Error Codes** | Every diagnostic code is registered, documented and published; a corrupt image names the invariant it broke. | `rust/target/release/cairn-rs.exe check broken.crn --json` |
 
 ## Specification
 
 The language law is `SPEC.md` (§-numbered, with the §16 validity checklist an LLM can walk),
 the compressed agent card is `LLM_SYSTEM.md`, and `examples/alloy_probe/` records the Alloy
 backend probe (fit and misfit with equal weight). If this README and the machine sources
-disagree, `python -m cairn capabilities --json` wins.
+disagree, `rust/target/release/cairn-rs.exe capabilities` wins.
 
 ## ⚡ 30-Second Cold-Start Quick Reference
 
-- **Runtime Prerequisites**: Python 3.10 or newer to run the compiler (developed on Python 3.14);
-  no C toolchain, assembler, linker or third-party package is needed, standard library only.
-  The produced `.exe` needs 64-bit Windows and nothing else.
+- **Runtime Prerequisites**: Rust 1.70 or newer (the pinned `stable-x86_64-pc-windows-gnu` channel in `rust-toolchain.toml`) to build the
+  compiler; no C toolchain, assembler, linker or third-party crate is needed, standard library
+  only. The produced `.exe` needs 64-bit Windows and nothing else.
 - **Canonical Regression Shield Gate**:
   ```bash
-  cargo test --quiet --manifest-path rust/Cargo.toml
+  cargo build --release --quiet --manifest-path rust/Cargo.toml
   cargo test --quiet --manifest-path rust/Cargo.toml
   cargo test --quiet --manifest-path rust/Cargo.toml --test golden_parity
   ```
   (run from `projects/cairn`)
 - **Compile and run something now** (under 10 seconds):
   ```bash
-  python -m cairn run examples/hello.crn
-  python -m cairn run examples/fib.crn
-  python -m cairn build examples/hello.crn -o hello.exe
-  python -m cairn verify examples/hello.crn
-  python -m cairn listing examples/hello.crn
-  python -m cairn capabilities --json
+  rust/target/release/cairn-rs.exe run examples/hello.crn
+  rust/target/release/cairn-rs.exe run examples/fib.crn
+  rust/target/release/cairn-rs.exe build examples/hello.crn -o hello.exe
+  rust/target/release/cairn-rs.exe verify hello.exe
+  rust/target/release/cairn-rs.exe listing examples/hello.crn
+  rust/target/release/cairn-rs.exe capabilities
   python benchmarks/run_benchmarks.py
   ```
 
@@ -128,10 +128,10 @@ Defined semantics a C programmer would have to look up:
 
 ## Diagnostics for agents
 
-Every failure is one object with a stable code, a span and a fix. `--json` is the contract:
+Every failure is one object with a stable code, a span and a fix; `check` always prints that object:
 
 ```bash
-python -m cairn check broken.crn --json
+rust/target/release/cairn-rs.exe check broken.crn --json
 ```
 
 ```json
@@ -200,55 +200,54 @@ A built executable is checked by the same contract. `verify` reads the bytes and
 | V0010 | The file is shorter than its section table claims |
 
 Exit codes: `0` success, `1` the source did not compile or the program could not start, `2`
-bad command line or unreadable input. `cairn run` forwards the program's own exit code.
+bad command line or unreadable input. `cairn-rs run` forwards the program's own exit code.
 
 ## Machine-checkable surface
 
 The core values are commands and tests, not prose an agent has to trust:
 
 ```bash
-python -m cairn capabilities --json   # every accepted form, limit, exit code and diagnostic
-python -m cairn verify build.exe      # structural proof of a built PE, nothing executed
-python -m cairn verify source.crn     # the same checks on a source compiled in memory
-python -m cairn listing source.crn    # exact .text bytes grouped by label
+rust/target/release/cairn-rs.exe capabilities   # every accepted form, limit, exit code and diagnostic
+rust/target/release/cairn-rs.exe verify build.exe      # structural proof of a built PE, nothing executed
+rust/target/release/cairn-rs.exe verify source.crn     # the same checks on a source compiled in memory
+rust/target/release/cairn-rs.exe listing source.crn    # exact .text bytes grouped by label
 cargo test --quiet --manifest-path rust/Cargo.toml   # std-only Rust test suite
 ```
 
-- `capabilities.py` builds its object from the same constants the parser, sema, optimiser and
+- `capabilities.rs` builds its object from the same constants the parser, sema, optimiser and
   image use, so it cannot drift from the compiler without a test failing.
-- `codes.py` is the diagnostic registry. A test asserts three directions: every code literal in
-  the package is registered, every registered code is documented in this README, and every
+- `codes.rs` is the diagnostic registry. A test asserts three directions: every code literal in
+  the crate is registered, every registered code is documented in this README, and every
   registered code is published by `capabilities`.
-- `verify.py` is pure over bytes and reports `V####` codes; it writes nothing and executes
-  nothing. Ten independent corruptions in `tests/test_verify.py` prove every code is reachable.
-- `listing.py` prints the bytes the PE writer will place in `.text`, grouped by the label that
+- `verify.rs` is pure over bytes and reports `V####` codes; it writes nothing and executes
+  nothing. Corruption tests in `rust/tests/backend.rs` show a broken signature and a broken section each named by code.
+- `listing.rs` prints the bytes the PE writer will place in `.text`, grouped by the label that
   owns them, so a build can be inspected without a debugger.
-- `tests/test_capabilities.py` parses the compiler's imports with `ast` and fails if any module
-  outside the Python standard library or `cairn` itself is referenced.
+- `rust/Cargo.toml` declares no dependencies, and the dependency gate fails if one is added.
 
 ## How the compiler works
 
 ```text
 source.crn
-   │  lexer.py        tokens, one integer type, ASCII only
-   │  parser.py       recursive descent, C operator precedence
-   │  sema.py         names, slots, mutability, arity, return paths
-   │  optimize.py     constant folding, neutral operands, dead branches
-   │  codegen.py      x86-64, first six slots in callee-saved registers
-   │  runtime.py      print and divide-by-zero trap as machine code
-   │  pe.py           section layout, fixups, PE32+ headers, imports
+   │  lexer.rs        tokens, one integer type, ASCII only
+   │  parser.rs       recursive descent, C operator precedence
+   │  sema.rs         names, slots, mutability, arity, return paths
+   │  optimize.rs     constant folding, neutral operands, dead branches
+   │  generator.rs    x86-64, first six slots in callee-saved registers
+   │  runtime.rs      print and divide-by-zero trap as machine code
+   │  pe.rs           section layout, fixups, PE32+ headers, imports
    ▼
 program.exe
 ```
 
-The backend is a byte emitter, not a wrapper: `machine.py` writes the encodings, `pe.py` writes
+The backend is a byte emitter, not a wrapper: `machine.rs` writes the encodings, `pe.rs` writes
 the image. Imports are limited to `GetStdHandle`, `WriteFile` and `ExitProcess`, resolved through
 an import table the writer builds. Builds are deterministic: the timestamp fields are zero, so
 compiling the same source twice produces identical bytes (tested).
 
 ## The optimiser
 
-`optimize.py` runs after semantic analysis and before code generation. It is conservative by
+`optimize.rs` runs after semantic analysis and before code generation. It is conservative by
 design: a rewrite happens only when the result is byte-for-byte what the machine would compute.
 
 | Rewrite | Condition |
@@ -263,10 +262,10 @@ design: a rewrite happens only when the result is byte-for-byte what the machine
 | `while 0 { ... }` | Removed: the body never runs |
 | Statements after `return`/`break`/`continue` | Removed: they are unreachable |
 
-`--no-optimize` skips the pass on `build`, `check` and `run`, which is how the differential test
-in `tests/test_end_to_end.py` proves both code paths behave identically. `check --json` reports
-how many rewrites fired in the `folded` field. The benchmark harness accepts the same flag, so the
-effect is reproducible with `python benchmarks/run_benchmarks.py --no-optimize`.
+`--no-optimize` skips the pass on `build` and `run`; the benchmark harness accepts the
+same flag, so both code paths are compared against the same C twins with
+`python benchmarks/run_benchmarks.py --no-optimize`. `check --json` reports
+how many rewrites fired in the `folded` field.
 
 Measured effect on the constant-heavy benchmark, same source, nine runs each:
 
@@ -280,7 +279,7 @@ body is a serial chain of shifts and xors over a live value, so there is no cons
 
 ## The backend: slot homes, in-place updates, direct branches
 
-`codegen.py` gives a function's first six slots — parameters first, then locals in declaration
+`generator.rs` gives a function's first six slots — parameters first, then locals in declaration
 order — a home in a callee-saved register (`rbx`, `r12`-`r15`, `rdi`) instead of a frame slot.
 Every function saves the homes it uses on entry and restores them in a single epilogue that every
 `return` jumps to, so a call cannot clobber the caller's locals. A function with more than six
@@ -312,7 +311,7 @@ on `PATH`: a C baseline for `gcc`, `clang` or `cl`, a C++ baseline for `g++`, `c
 none is found the relevant line reports `baseline: unavailable` rather than inventing a
 comparison.
 
-Measured on the development machine (Windows x86-64, Python 3.14 bootstrap), against MinGW GCC
+Measured on the development machine (Windows x86-64, Rust release build), against MinGW GCC
 16.2.0 (WinLibs UCRT), MinGW G++ 16.2.0 (same WinLibs toolchain, `-O2`) and rustc 1.100.0
 (pc-windows-gnu). Because independent runs drift by more than the
 gaps being measured, each row shows the best times across that session's saved
@@ -352,7 +351,7 @@ The remaining cases are ties or small bounded gaps documented in the ADRs cited 
 argued from disassembly and paired A/B measurements, never from a single run. `mandelbrot` is a
 known bounded loss to C (ADR-106) that needs a different recurrence, not another lowering tweak.
 
-The twin-parity gate (`tests/test_end_to_end.py::TwinParityTest`) compiles all four twins for every
+The twin-parity gate (`python benchmarks/run_benchmarks.py`) compiles all four twins for every
 case and fails unless they print the same total, so a standing cannot be earned against a twin that
 computes something else.
 
@@ -366,8 +365,8 @@ suite and compare; every new language feature ships its own tests in the same ch
 feature ships a C/C++/Rust benchmark twin in the same change.
 
 What is *not* claimed: that Cairn beats optimising compilers in general. It claims a zero-cost
-execution model on its subset, sub-second compiles, deterministic output, and one Python
-interpreter as its only dependency.
+execution model on its subset, sub-second compiles, deterministic output, and a Rust
+compiler with no dependency outside the standard library.
 
 ### Goal: faster than C, C++ and Rust, measured per case
 
@@ -573,6 +572,7 @@ cairn/
 │   │   └── version.rs
 │   ├── tests/
 │   │   ├── backend.rs
+│   │   ├── cli_surface.rs
 │   │   ├── front_end.rs
 │   │   ├── golden_parity.rs
 │   │   ├── hoist_direct.rs
@@ -581,6 +581,7 @@ cairn/
 │   │   ├── optimize.rs
 │   │   ├── runtime.rs
 │   │   ├── sema.rs
+│   │   └── values.rs
 │   │   └── vec_wide.rs
 │   ├── Cargo.lock
 │   └── Cargo.toml

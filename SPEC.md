@@ -11,8 +11,8 @@ deliberate divergence is recorded. Alloy has no license file at the
 checked revision, so this file is original text under Cairn's own license.
 
 Precedence: if this file and the machine sources disagree, the sources win
-in this order: emitted bytes, `python -m cairn capabilities --json`,
-`cairn/codes.py` plus `README.md`, then this file. Stage 4 of the adopting
+in this order: emitted bytes, `rust/target/release/cairn-rs.exe capabilities`,
+`rust/src/codes.rs` plus `README.md`, then this file. Stage 4 of the adopting
 task re-verifies every claim below against those sources.
 
 ## 1. Design axioms
@@ -198,7 +198,7 @@ a[i] = expr;   store into element i
 | Array element address | Element `i` sits at the element span's lowest displacement plus `8i`; static indices are bounds-checked at analysis time (`E3017`), dynamic indices are never re-checked at runtime |
 | Array element store order | `index`, then `value`; a literal or register value writes in one indexed memory instruction, any other value's address is parked in the frame across its evaluation |
 
-Folding (`optimize.py`) preserves these answers exactly: it never folds a zero
+Folding (`optimize.rs`) preserves these answers exactly: it never folds a zero
 divisor or `i64.min / -1`, never drops a `print`, and `while 0` removal plus
 dead-branch selection keep the zeroed-frame rule observable in both build modes.
 
@@ -262,12 +262,12 @@ means success; any other return is that exit code. (Cf. Alloy SPEC §11, whose
 ## 12. Build interface
 
 ```
-python -m cairn build <file>.crn [-o out.exe] [--json] [--no-optimize]
-python -m cairn check <file>.crn [--json] [--no-optimize]
-python -m cairn run <file>.crn [--timeout S] [--no-optimize] [--json]
-python -m cairn verify <target.exe|file.crn> [--json]
-python -m cairn listing <file>.crn [--json]
-python -m cairn capabilities [--json]
+rust/target/release/cairn-rs.exe build <file>.crn [-o out.exe] [--json] [--no-optimize]
+rust/target/release/cairn-rs.exe check <file>.crn [--json]
+rust/target/release/cairn-rs.exe run <file>.crn [--timeout S] [--no-optimize] [--json]
+rust/target/release/cairn-rs.exe verify <target.exe|file.crn> [--json]
+rust/target/release/cairn-rs.exe listing <file>.crn [--json]
+rust/target/release/cairn-rs.exe capabilities [--json]
 ```
 
 - `build` writes a PE; `check` compiles in memory and writes nothing; `run` builds to a temp file, runs it, and forwards its exit code; `verify` decides the ten `V0001`–`V0010` artifact rules from bytes alone; `listing` prints `.text` bytes grouped by label; `capabilities` prints §10 plus codes, limits, and guarantees as JSON.
@@ -357,9 +357,9 @@ A source file is valid Cairn 0.1 if every box ticks:
 - [ ] Every call has exact arity per §10 (`exit` sits only as its own statement)
 - [ ] `fn main() -> i64` exists, takes no parameters, and every function ends in `return`
 - [ ] No statement besides assignment or call sits bare; `break`/`continue` are inside a loop (a `while` or a `for`)
-- [ ] `python -m cairn check file.crn --json` reports `ok: true`
-- [ ] `python -m cairn verify file.crn` reports verified (same ten `V####` rules as a built `.exe`)
-- [ ] `python -m cairn run file.crn` prints the expected integers and forwards the expected exit code
+- [ ] `rust/target/release/cairn-rs.exe check file.crn --json` reports `ok: true`
+- [ ] `rust/target/release/cairn-rs.exe verify file.crn` reports verified (same ten `V####` rules as a built `.exe`)
+- [ ] `rust/target/release/cairn-rs.exe run file.crn` prints the expected integers and forwards the expected exit code
 
 Non-goals for 0.1 (explicit): floats, structs, modules,
 closures, generics, exceptions, threads, GC, pointers, interfaces, DI,

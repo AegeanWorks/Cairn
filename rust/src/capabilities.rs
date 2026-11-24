@@ -210,7 +210,7 @@ fn capabilities() -> Json {
             "no undefined behaviour: integer overflow wraps, division by zero traps",
             "deterministic output: the same source produces byte-identical executables",
             "no external toolchain: no assembler, linker, C compiler or runtime library",
-            "no third-party dependency: the compiler imports only the Python standard library",
+            "no third-party dependency: the compiler imports only the Rust standard library",
             "defined reads: every frame slot is zeroed on entry",
             "one repair pass: semantic analysis reports every finding, not just the first",
         ].into_iter().map(Json::string).collect())),

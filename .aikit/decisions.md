@@ -1807,3 +1807,16 @@ external compiler and was verified end to end.
 - **Context**: A clean cargo build still emitted four warnings: capabilities() exposed the private Json tree, pe.rs kept two unused helpers, Binding carried an unread span, and the run path bound an unused mut.
 - **Decision**: Make capabilities() module-private because capabilities_json() is the public surface, delete the unused put_u16 and read_u32 helpers, drop the unread Binding.span field, and remove the redundant mut.
 - **Consequences**: cargo build is warning-free, no generated dump changes, so the golden manifest is untouched; cargo tests pass and 6 of 6 gates pass.
+### ADR-199: restore the user-facing CLI surface after the Python removal
+- **Date**: 2026-11-24
+- **Status**: Accepted
+- **Context**: ADR-190 deleted the Python compiler but left README, SPEC and LLM_SYSTEM documenting its run, build, verify, listing and capabilities commands. The Rust binary only carried parity commands, so the published UX and the shipped binary disagreed.
+- **Decision**: Add run, build with -o/--json/--no-optimize, verify for a source or an image, listing, and capabilities to cairn-rs. build with no -o writes the sibling .exe; verify prints a human verdict or a JSON envelope and exits nonzero on problems; run forwards captured stdout, stderr and the program's exit code. Rename the parity hex dump from build to buildimage and rename its 44 golden keys, leaving every hash unchanged.
+- **Consequences**: The documented commands work again. runjson still emits the identical envelope (verified byte for byte) and golden parity passes 591 of 591. Five CLI integration tests cover build, run, verify, listing and capabilities. README, SPEC and LLM_SYSTEM now invoke rust/target/release/cairn-rs.exe, and the README prerequisites name Rust 1.70 or newer.
+
+### ADR-200: bind the core values to live Rust evidence
+- **Date**: 2026-11-24
+- **Status**: Accepted
+- **Context**: values.rs still claimed the compiler imports only the Python standard library and named deleted Python guard tests; the frozen-surface test only checked that each guard string contained ::test_. The capabilities manifest repeated the Python dependency guarantee. G-003 requires a value change to carry an ADR and a live guard.
+- **Decision**: Rewrite every value's evidence command to the Rust binary and every guard to rust/tests/<file>.rs::<test>. The frozen-surface test now reads the named file and fails unless it contains that test function. Add rust/tests/values.rs::the_crate_declares_no_dependencies, which rejects any entry under [dependencies] in Cargo.toml. Change the manifest guarantee to the Rust standard library.
+- **Consequences**: Every published value names a guard that provably exists. Only the capjson hash changes (1 of 591); README, SPEC and LLM_SYSTEM agree with the binary; cargo tests and 6 of 6 gates pass.
