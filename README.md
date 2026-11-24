@@ -311,48 +311,65 @@ on `PATH`: a C baseline for `gcc`, `clang` or `cl`, a C++ baseline for `g++`, `c
 none is found the relevant line reports `baseline: unavailable` rather than inventing a
 comparison.
 
-Measured on the development machine (Windows x86-64, Rust release build), against MinGW GCC
-16.2.0 (WinLibs UCRT), MinGW G++ 16.2.0 (same WinLibs toolchain, `-O2`) and rustc 1.100.0
-(pc-windows-gnu). Because independent runs drift by more than the
-gaps being measured, each row shows the best times across that session's saved
-`--save --compare` gate runs, which keeps every comparison same-revision while still reporting
-a spread:
+Measured on the development machine (Windows x86-64) with the Rust release build of the
+compiler, against MinGW GCC 16.2.0 (WinLibs UCRT), MinGW G++ 16.2.0 (same WinLibs toolchain,
+`-O2`) and rustc 1.100.0 (pc-windows-gnu). The numbers come from one quiet-window
+`--save --compare` run at commit `e2b12b0` (quiet-window probe 15.1 ms, five rounds per case,
+best time kept); later commits changed only the CLI and documentation, not code generation.
+Independent runs drift by about 10 percent, so a gap smaller than that band reads as a tie,
+not a standing:
 
-| Case | Work | Cairn best | C best | C++ best | Rust best | Cairn size |
+| Case | Work | Cairn | C | C++ | Rust | Cairn image |
 |---|---|---|---|---|---|---|
-| `xorshift` | 200,000,000 serial xorshift steps | 283-306 ms | 283-306 ms | 287-300 ms | 292-314 ms | 71,168 bytes |
-| `fib30` | 2,692,537 recursive calls | 9.6-12.7 ms | 8.7-11.8 ms | 8.7-10.7 ms | 10.6-13.1 ms | 81,408 bytes |
-| `folded_math` | 20,000,000 bit-mixed constant additions | 18.4-20.4 ms | 18.0-22.0 ms | 18.3-22.1 ms | 19.2-23.1 ms | 71,168 bytes |
-| `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 104-106 ms | 158-164 ms | 160-164 ms | 140-150 ms | 71,168 bytes |
-| `ackermann` | `A(3,9)`, about 25 million calls | 10.2-13.9 ms | 15.2-19.4 ms | 15.4-18.0 ms | 18.4-64.5 ms | 71,680 bytes |
-| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 17.7-19.0 ms (ADR-088 self-call unrolling) | 22.1-25.1 ms | 22.8-24.9 ms | 18.4-20.4 ms | 71,168 bytes |
-| `binary_gcd` | 1,000,000 Stein-GCD pairs | 147-162 ms | 158-180 ms | 173-181 ms | 139-154 ms | 71,680 bytes |
-| `call_chain` | 20,000,000 three-argument hot-path calls | 45-48 ms | 33-37 ms | 34-37 ms | 74-79 ms | 71,168 bytes |
-| `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 7.8-9.7 ms | 7.7-10.7 ms | 7.7-10.9 ms | 8.6-10.8 ms | 71,168 bytes |
-| `primes` | trial division over 2..300000 | 17.9-19.1 ms (ADR-085 32-bit divide) | 24.5-27.3 ms | 24.1-26.3 ms | 18.9-23.2 ms | 71,168 bytes |
-| `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.1-16.1 ms | 11.1-13.3 ms | 10.9-13.4 ms | 12.0-14.4 ms | 71,168 bytes |
-| `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 94.3-96.7 ms | 92.5-101.5 ms | 96.4-102.9 ms | 105.9-113.5 ms | 71,168 bytes |
-| `hex_io` | 400,000 hex-format-then-print values | 612-645 ms | 4,764-5,095 ms | 397-467 ms | 677-723 ms | 71,168 bytes |
-| `many_params` | 10,000,000 six-argument mix calls under an `argc`-derived bound (ADR-074, ADR-075, ADR-076) | 13.2-13.7 ms | 12.5-12.7 ms | 14.3-14.8 ms | 13.4-13.8 ms | 136,704 bytes |
-| `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 20.0-23.7 ms | 18.5-24.2 ms | 19.1-22.5 ms | 25.5-28.4 ms | 71,168 bytes |
-| `char_stream` | 4 MiB piped through `read_char()`, summed (ADR-103 stream) | 9.1 ms | 74.6 ms | 72.5 ms | 13.1 ms | 136,704 bytes |
-| `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.9-18.4 ms | 11.8-16.6 ms | 12.2-19.6 ms | 28.2-37.0 ms | 71,168 bytes |
-| `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 10.8-11.4 ms (ADR-073 SIB addressing) | 10.2-11.9 ms | 10.0-11.9 ms | 11.6-13.0 ms | 136,704 bytes |
-| `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 9.3-9.4 ms (ADR-073 SIB addressing) | 9.3-10.0 ms | 10.1-10.9 ms | 11.2-11.8 ms | 136,704 bytes |
-| `popcount` | 10,000,000 derived values, set-bit count summed | 12.2 ms (ADR-102 POPCNT) | 149.2 ms | 21.5 ms | 16.3 ms | 136,704 bytes |
+| `xorshift` | 200,000,000 serial xorshift steps | 313.3 ms | 316.5 ms | 308.7 ms | 311.7 ms | 136,704 bytes |
+| `fib30` | 2,692,537 recursive calls | 10.4 ms | 12.2 ms | 10.6 ms | 15.7 ms | 146,944 bytes |
+| `folded_math` | 20,000,000 bit-mixed constant additions | 20.6 ms | 23.4 ms | 20.9 ms | 27.2 ms | 136,704 bytes |
+| `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 128.2 ms | 169.5 ms | 180.2 ms | 166.9 ms | 136,704 bytes |
+| `ackermann` | `A(3,9)`, about 25 million calls | 13.2 ms | 20.2 ms | 21.8 ms | 56.6 ms | 137,216 bytes |
+| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 24.2 ms | 27.2 ms | 27.9 ms | 24.6 ms | 137,728 bytes |
+| `binary_gcd` | 1,000,000 Stein-GCD pairs | 148.3 ms | 187.7 ms | 192.5 ms | 157.5 ms | 137,216 bytes |
+| `call_chain` | 20,000,000 three-argument hot-path calls | 39.2 ms | 39.2 ms | 35.9 ms | 75.9 ms | 136,704 bytes |
+| `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 8.8 ms | 10.0 ms | 10.9 ms | 10.7 ms | 136,704 bytes |
+| `primes` | trial division over 2..300000 | 20.3 ms | 25.8 ms | 26.2 ms | 20.9 ms | 137,216 bytes |
+| `mandelbrot` | four 960x540 frames, 2^21 fixed point | 14.6 ms | 13.6 ms | 13.4 ms | 13.6 ms | 137,216 bytes |
+| `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 88.3 ms | 109.8 ms | 111.9 ms | 109.8 ms | 136,704 bytes |
+| `hex_io` | 400,000 hex-format-then-print values | 27.7 ms | 5,451.3 ms | 476.8 ms | 724.8 ms | 136,704 bytes |
+| `many_params` | 10,000,000 six-argument mix calls under an `argc`-derived bound | 15.1 ms | 14.9 ms | 18.5 ms | 16.7 ms | 136,704 bytes |
+| `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 22.8 ms | 21.7 ms | 25.5 ms | 25.2 ms | 136,704 bytes |
+| `char_stream` | 4 MiB piped through `read_char()`, summed | 10.9 ms | 82.9 ms | 85.8 ms | 16.8 ms | 136,704 bytes |
+| `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 14.0 ms | 16.6 ms | 17.4 ms | 40.4 ms | 136,704 bytes |
+| `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 12.1 ms | 16.6 ms | 12.8 ms | 15.4 ms | 137,216 bytes |
+| `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 11.0 ms | 11.6 ms | 12.6 ms | 14.1 ms | 136,704 bytes |
+| `popcount` | 10,000,000 derived values, set-bit count summed | 18.9 ms | 208.2 ms | 34.3 ms | 27.1 ms | 136,704 bytes |
+| `clz` | 10,000,000 derived values, leading-zero count summed | 17.9 ms | 40.6 ms | 18.3 ms | 17.1 ms | 136,704 bytes |
+| `ctz` | 10,000,000 derived values, trailing-zero count summed | 18.1 ms | 23.3 ms | 23.5 ms | 16.6 ms | 136,704 bytes |
+| `bswap` | 10,000,000 byte-swapped values, summed | 22.1 ms | 57.7 ms | 18.0 ms | 20.8 ms | 136,704 bytes |
+| `rotl` | 10,000,000 rotate-left rounds with a masked accumulator | 25.5 ms | 24.4 ms | 24.3 ms | 20.2 ms | 136,704 bytes |
 
-The size column is the executable's `.text` frame at the current revision: the runtime helpers (argv arena, 64 KiB stdin state, printers, divide trap) ride in every program, so most cases share the same 71,168-byte base. `array_sum` and sieve reserve 8 MiB of stack in the PE header (ADR-068), and `many_params` links the argument arena for its `argc`-derived bound (ADR-074), so their base carries the bigger frame.
+The size column is the linked executable's image size. Every program carries the runtime
+(argv arena, 64 KiB stdin state, printers, divide trap) and an 8 MiB stack reserve (ADR-068)
+that costs nothing on disk, so most images share the same 136,704-byte base; the rest differ
+from each other only in their `.text` and `.rdata` sizes.
 
-`popcount`, `clz`, `ctz` and `bswap` are the single-instruction bit cases (ADR-101 to ADR-111): each lowers to one x86-64 instruction, and the authoritative 23-case verdict measures each faster than C and tied with C++ and Rust. `rotl` (one ROL, ADR-114) is the newest; ADR-115 and ADR-116 shrank its hot loop from 18 to 13 instructions (no push/pop around the count, no redundant `& 63`, the accumulator mask applied in place), and its measured verdicts read as ties against all three baselines.
+`popcount`, `clz`, `ctz` and `bswap` are the single-instruction bit cases (ADR-101 to
+ADR-111): each lowers to one x86-64 instruction. In this run each beats C by 22 to 91
+percent; `clz` is inside the band of C++ and Rust, `ctz` also beats C++ and is inside the
+band of Rust, and `bswap` trails C++ by about 23 percent. `rotl` lowers to one ROL (ADR-114)
+and its hot loop shrank from 18 to 13 instructions (ADR-115, ADR-116); in this run it ties
+C and C++ and trails Rust by 26 percent.
 
-Standings per case: `collatz`, `ackermann`, `tak`, `folded_math` and `splitmix` win outright;
-`hex_io` wins after ADR-091/092; `xorshift` is a structural tie at the ISA latency floor (ADR-023).
-The remaining cases are ties or small bounded gaps documented in the ADRs cited above; each is
-argued from disassembly and paired A/B measurements, never from a single run. `mandelbrot` is a
-known bounded loss to C (ADR-106) that needs a different recurrence, not another lowering tweak.
+The harness's own goal lines for this run: faster than C not met on `mandelbrot`,
+`many_params`, `argv_walk` and `rotl`; faster than C++ not met on `xorshift`, `call_chain`,
+`mandelbrot`, `bswap` and `rotl`; faster than Rust not met on `xorshift`, `mandelbrot`,
+`clz`, `ctz`, `bswap` and `rotl`. Outside the 10 percent band, `collatz`, `ackermann`, `tak`,
+`splitmix`, `hex_io`, `char_stream`, `popcount`, `str_scan`, `nqueens`, `binary_gcd`,
+`primes` and `ctz` beat C and C++, and the first eight of those beat Rust too. `xorshift` is
+at the ISA latency floor (ADR-023) and `mandelbrot` at its recurrence (ADR-106); both need a
+different algorithm, not another lowering tweak, and every remaining gap is argued from
+disassembly and paired A/B runs rather than a single measurement.
 
-The twin-parity gate (`python benchmarks/run_benchmarks.py`) compiles all four twins for every
-case and fails unless they print the same total, so a standing cannot be earned against a twin that
+The twin-parity check (`python benchmarks/run_benchmarks.py`) compiles all four twins for
+every case and diffs their printed totals, so a standing cannot be earned against a twin that
 computes something else.
 
 Run-to-run spread is about 10 percent: use `python benchmarks/run_benchmarks.py --save --compare`
