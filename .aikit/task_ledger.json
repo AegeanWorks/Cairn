@@ -1,34 +1,19 @@
 {
   "active_task": {
-    "active_phase": 4,
+    "active_phase": 5,
+    "completed_at": 1795621545.68694,
+    "completed_head": "7d116456bdf66a5b73fd1e500a854eed08405613",
+    "completed_tree": "8d62b6a0cb30c4101ad3f3311ade48a09519b849",
     "continuations": [],
     "last_phase": "in_progress",
     "lease_until": 1795628728.5031,
     "owner": "kilo:goal",
     "started_by": "kilo:goal",
-    "status": "in_progress",
+    "status": "completed",
     "task_id": "cairn-alias-fixes",
     "updated_at": 1795621528.5031
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "description": "[1/2] plan: --pin CORE with read-back verification, pin-aware history, probe drift refusal",
-      "files_affected": [],
-      "impact_assessment": {
-        "benefits": "clean best times on a busy machine; pinned and unpinned baselines never mix",
-        "mitigation": "core scan proves a quiet core exists; drift guard refuses a run that starts clean and decays",
-        "risks": "contract: history records gain a pin field; dependency: none; concurrency: children inherit the parent mask; state: three disturbed records deleted",
-        "why": "three hours of --save attempts were refused because other sessions hold most cores"
-      },
-      "phase": "in_progress",
-      "phase_num": 2,
-      "plan_digest": "4d45d50775a91c31ed4fd9a26dd69ce4c9aa854d69a44dd2c91f32645bd47da5",
-      "status": "in_progress",
-      "task_id": "cairn-harness-pin",
-      "timestamp": 1795601129.499097,
-      "timestamp_str": "2026-11-25 13:05:29"
-    },
     {
       "agent": "kilo:goal",
       "checklists": "passed",
@@ -322,6 +307,23 @@
       "task_id": "cairn-alias-fixes",
       "timestamp": 1795621528.5031,
       "timestamp_str": "2026-11-25 18:45:28"
+    },
+    {
+      "agent": "kilo:goal",
+      "delivery": {
+        "forced": false,
+        "roots": [
+          ""
+        ]
+      },
+      "description": "Task 'cairn-alias-fixes' completed successfully.",
+      "head": "7d116456bdf66a5b73fd1e500a854eed08405613",
+      "phase": "completed",
+      "phase_num": 5,
+      "status": "completed",
+      "task_id": "cairn-alias-fixes",
+      "timestamp": 1795621545.68694,
+      "timestamp_str": "2026-11-25 18:45:45"
     }
   ],
   "version": 1
