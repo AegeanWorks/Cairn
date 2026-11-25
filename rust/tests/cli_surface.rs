@@ -381,3 +381,58 @@ fn main() -> i64 {
     }
     assert_eq!(text.trim(), want.to_string(), "the loop totals disagree");
 }
+
+/// The destination of an in-place multiply must not be written before the other
+/// operand reads it. `v2 = 5 * (7 & v2)` used to materialise 5 into v2's home
+/// first, so the guarded read saw 5 instead of v2.
+#[test]
+fn an_in_place_multiply_keeps_the_operand_it_still_reads() {
+    let text = run_source("multiply-alias", "\
+fn main() -> i64 {
+    var one: i64 = 1;
+    var v2: i64 = 100;
+    v2 = one / 65537;
+    print(v2);
+    v2 = 5 * (7 & v2);
+    print(v2);
+    return 0;
+}
+");
+    assert_eq!(text.trim(), "0\n0", "the multiply read the clobbered destination");
+}
+
+/// The generic fallback parks the left operand in rcx, which a division inside the
+/// right operand also uses.
+#[test]
+fn a_division_inside_a_compound_operand_keeps_the_parked_side() {
+    let text = run_source("rcx-parked", "\
+fn main() -> i64 {
+    var v0: i64 = 4096;
+    var v3: i64 = 0;
+    var v4: i64 = 0 - 7;
+    var v1: i64 = (((v0 / 7) ^ (2147483647 >> 70)) - (13 * ((3 - v4) + (v3 / 11))));
+    print(v1);
+    return 0;
+}
+");
+    // 4096/7 = 585, 2147483647 >> 6 = 33554431, 585 ^ that = 33553846,
+    // 13 * (10 + 0) = 130, so the total is 33553716.
+    assert_eq!(text.trim(), "33553716", "the parked left side was clobbered by a division");
+}
+
+/// A shift inside the operand overwrites rcx, so the shift lowerer must keep the
+/// value it holds in another register across the nested evaluation.
+#[test]
+fn a_shift_inside_an_operand_keeps_the_outer_value() {
+    let text = run_source("shift-nested", "\
+fn main() -> i64 {
+    var v0: i64 = 0;
+    var v1: i64 = 0 - 7;
+    var v4: i64 = ((v1 * ((v0 << 64) - (11 << 0))) << 70);
+    print(v4);
+    return 0;
+}
+");
+    // (0 << 64) - 11 = -11; -7 * -11 = 77; 77 << 6 = 4928.
+    assert_eq!(text.trim(), "4928", "a nested shift clobbered the outer value");
+}

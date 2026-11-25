@@ -1398,6 +1398,34 @@ impl CodeGenerator {
         }
     }
 
+    /// True when evaluating this expression reads a slot whose home is `destination`.
+    /// A destination-aware lowering must not write the destination first when the
+    /// other operand still needs its old value.
+    fn reads_slot_in_home(expression: &Expr, destination: &str,
+                          homes: &[(i64, &str)]) -> bool {
+        match crate::optimize::peel_parens(Some(expression)).unwrap() {
+            Expr::Name { slot, .. } => home_for(*slot, homes) == Some(destination),
+            Expr::Binary { left, right, .. } => {
+                Self::reads_slot_in_home(left, destination, homes)
+                    || Self::reads_slot_in_home(right, destination, homes)
+            }
+            Expr::Parens { inner, .. } | Expr::Unary { operand: inner, .. } => {
+                Self::reads_slot_in_home(inner, destination, homes)
+            }
+            Expr::Index { operand, index, .. } => {
+                Self::reads_slot_in_home(operand, destination, homes)
+                    || Self::reads_slot_in_home(index, destination, homes)
+            }
+            Expr::Call { arguments, .. } => arguments
+                .iter()
+                .any(|argument| Self::reads_slot_in_home(argument, destination, homes)),
+            Expr::ArrayLiteral { elements, .. } => elements
+                .iter()
+                .any(|element| Self::reads_slot_in_home(element, destination, homes)),
+            Expr::IntLiteral { .. } | Expr::StrLiteral { .. } => false,
+        }
+    }
+
     fn combines_in_rax_only(&self, expression: &Expr, destination: &str,
                             parked_noop: bool, homes: &[(i64, &str)]) -> bool {
         let expr = crate::optimize::peel_parens(Some(expression)).unwrap();
@@ -1452,7 +1480,12 @@ impl CodeGenerator {
     /// `_emit_binary_into`; refuses shapes it cannot keep destination untouched.
     fn try_emit_binary_into(&mut self, expression: &Expr, destination: &str,
                             homes: &[(i64, &str)]) -> bool {
-        if destination == "rax" {
+        // An in-place lowering writes its destination before the other operand is
+        // evaluated, so the destination must be a register the expression evaluator
+        // never uses as scratch: a real home. rax is the expression register, rcx and
+        // rsi carry shift counts and division operands, rdx the high half, and r10/r11
+        // the nested holds, so none of those may be targeted here.
+        if !crate::codegen::HOME_REGISTERS.contains(&destination) {
             return false;
         }
         if let Expr::Call { name, arguments, .. } =
@@ -1542,7 +1575,9 @@ impl CodeGenerator {
         if op == "-" {
             if let Expr::Name { slot, .. } = right {
                 if let Some(right_home) = home_for(*slot, homes) {
-                    if self.emit_left_into(left, destination, homes) {
+                    if right_home != destination
+                        && self.emit_left_into(left, destination, homes)
+                    {
                         self.assembler.binary(0x29, destination, right_home);
                         return true;
                     }
@@ -1580,7 +1615,11 @@ impl CodeGenerator {
                     }
                 }
             }
-            if self.emit_left_into(left, destination, homes) {
+            // The left operand is written into the destination first, so the right
+            // operand must not need the destination's old value.
+            if !Self::reads_slot_in_home(right, destination, homes)
+                && self.emit_left_into(left, destination, homes)
+            {
                 if let Expr::Name { slot, .. } = right {
                     if let Some(home) = home_for(*slot, homes) {
                         self.assembler.imul(destination, home);
@@ -3146,8 +3185,18 @@ impl CodeGenerator {
             self.temporaries -= 1;
         } else {
             self.emit_expression(left, homes);
-            self.assembler.mov_reg_reg("rcx", "rax");
-            self.emit_expression(right, homes);
+            // rcx parks the left operand, so an operand whose own lowering writes rcx
+            // (a division, a variable shift or a call) must not be evaluated over it.
+            if expression_uses_rcx(right) {
+                self.assembler.push("rax");
+                self.depth += 8;
+                self.emit_expression(right, homes);
+                self.assembler.pop("rcx");
+                self.depth -= 8;
+            } else {
+                self.assembler.mov_reg_reg("rcx", "rax");
+                self.emit_expression(right, homes);
+            }
         }
         match op {
             "+" | "&" | "|" | "^" => self.assembler.binary(arith.unwrap(), "rax", &hold),
