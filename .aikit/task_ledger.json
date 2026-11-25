@@ -3,27 +3,18 @@
   "active_task": {
     "task_id": "cairn-edge-tests",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1795602665.4671452,
     "owner": "kilo:goal",
     "lease_until": 1795609865.4671452,
     "started_by": "kilo:goal",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1795602667.2226627,
+    "completed_head": "300543f88982cf1bff2f86db9f4050c55abecf43",
+    "completed_tree": "ea265befc69f3ca87d454874d39cf87a846d1145"
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[2/2] implementation and verification: 6 golden hashes refreshed, 3 optimizer tests, twin parity and full suite pass; checklists: passed",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-shift-unroll",
-      "timestamp": 1795561700.0365047,
-      "timestamp_str": "2026-11-25 02:08:20"
-    },
     {
       "agent": "kilo:goal",
       "checklists": "passed",
@@ -317,6 +308,23 @@
       "task_id": "cairn-edge-tests",
       "timestamp": 1795602665.4671452,
       "timestamp_str": "2026-11-25 13:31:05"
+    },
+    {
+      "agent": "kilo:goal",
+      "delivery": {
+        "forced": false,
+        "roots": [
+          "."
+        ]
+      },
+      "description": "Task 'cairn-edge-tests' completed successfully.",
+      "head": "300543f88982cf1bff2f86db9f4050c55abecf43",
+      "phase": "completed",
+      "phase_num": 5,
+      "status": "completed",
+      "task_id": "cairn-edge-tests",
+      "timestamp": 1795602667.294758,
+      "timestamp_str": "2026-11-25 13:31:07"
     }
   ]
 }
