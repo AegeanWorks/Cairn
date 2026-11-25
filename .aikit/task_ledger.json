@@ -1,34 +1,19 @@
 {
   "active_task": {
-    "active_phase": 4,
+    "active_phase": 5,
+    "completed_at": 1795616734.45801,
+    "completed_head": "ed539beedd3867815672115b1ce32765019bcd67",
+    "completed_tree": "2401fee3caa1596da3cff2dfece07e6f4fb59cec",
     "continuations": [],
     "last_phase": "in_progress",
     "lease_until": 1795623933.26693,
     "owner": "kilo:goal",
     "started_by": "kilo:goal",
-    "status": "in_progress",
+    "status": "completed",
     "task_id": "cairn-magic-div",
     "updated_at": 1795616733.26693
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "description": "[1/2] docs-only: state nine changed cases, fifteen byte-identical, and the measured per-case deltas",
-      "files_affected": [],
-      "impact_assessment": {
-        "benefits": "provenance matches the shipped code",
-        "mitigation": "deltas reproducible from two compiler builds",
-        "risks": "contract: none; dependency: none; concurrency: none; state: none",
-        "why": "the README claimed loop duplication was the only post-table change"
-      },
-      "phase": "in_progress",
-      "phase_num": 2,
-      "plan_digest": "3c460a2e4cdda1d6eb2d4c7bfad63bf7b7dcd67fe9fceaaa9aac20896856713c",
-      "status": "in_progress",
-      "task_id": "cairn-table-provenance",
-      "timestamp": 1795595394.729995,
-      "timestamp_str": "2026-11-25 11:29:54"
-    },
     {
       "agent": "kilo:goal",
       "checklists": "passed",
@@ -322,6 +307,23 @@
       "task_id": "cairn-magic-div",
       "timestamp": 1795616733.26693,
       "timestamp_str": "2026-11-25 17:25:33"
+    },
+    {
+      "agent": "kilo:goal",
+      "delivery": {
+        "forced": false,
+        "roots": [
+          ""
+        ]
+      },
+      "description": "Task 'cairn-magic-div' completed successfully.",
+      "head": "ed539beedd3867815672115b1ce32765019bcd67",
+      "phase": "completed",
+      "phase_num": 5,
+      "status": "completed",
+      "task_id": "cairn-magic-div",
+      "timestamp": 1795616734.45801,
+      "timestamp_str": "2026-11-25 17:25:34"
     }
   ],
   "version": 1
