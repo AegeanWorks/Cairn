@@ -1,48 +1,16 @@
 {
   "active_task": {
-    "active_phase": 5,
-    "completed_at": 1795621545.68694,
-    "completed_head": "7d116456bdf66a5b73fd1e500a854eed08405613",
-    "completed_tree": "8d62b6a0cb30c4101ad3f3311ade48a09519b849",
+    "active_phase": 4,
     "continuations": [],
     "last_phase": "in_progress",
-    "lease_until": 1795628728.5031,
+    "lease_until": 1795630131.72928,
     "owner": "kilo:goal",
     "started_by": "kilo:goal",
-    "status": "completed",
-    "task_id": "cairn-alias-fixes",
-    "updated_at": 1795621528.5031
+    "status": "in_progress",
+    "task_id": "cairn-prov-222",
+    "updated_at": 1795622931.72928
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[2/2] landed: --pin with read-back, pin-aware stalls, probe drift refusal; three disturbed records removed; ADR-215; 5/5 gates; checklists: passed",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-harness-pin",
-      "timestamp": 1795601482.371565,
-      "timestamp_str": "2026-11-25 13:11:22"
-    },
-    {
-      "agent": "kilo:goal",
-      "delivery": {
-        "forced": false,
-        "roots": [
-          "."
-        ]
-      },
-      "description": "Task 'cairn-harness-pin' completed successfully.",
-      "head": "2f445e231757df0523aad493c09cbba01905de84",
-      "phase": "completed",
-      "phase_num": 5,
-      "status": "completed",
-      "task_id": "cairn-harness-pin",
-      "timestamp": 1795601511.1843042,
-      "timestamp_str": "2026-11-25 13:11:51"
-    },
     {
       "agent": "kilo:goal",
       "description": "[1/2] tests-only: rotl count aliasing the destination, popcount home targeting, duplicated body with break",
@@ -324,6 +292,36 @@
       "task_id": "cairn-alias-fixes",
       "timestamp": 1795621545.68694,
       "timestamp_str": "2026-11-25 18:45:45"
+    },
+    {
+      "agent": "kilo:goal",
+      "description": "[1/2] docs-only: drop the spawn-noisy record and state the A/B evidence plus the spawn-noise limit",
+      "files_affected": [],
+      "impact_assessment": {
+        "benefits": "the table stays honest without publishing spawn noise",
+        "mitigation": "A/B evidence per affected case",
+        "risks": "contract: none; dependency: none; concurrency: none; state: one record deleted",
+        "why": "the reference table predates four correctness commits and a save attempt showed spurious losses"
+      },
+      "phase": "in_progress",
+      "phase_num": 2,
+      "plan_digest": "16828a414a2025b68205b5ee4e7f3a336fd85f5f09a550387608a2c1f32f260d",
+      "status": "in_progress",
+      "task_id": "cairn-prov-222",
+      "timestamp": 1795622825.06616,
+      "timestamp_str": "2026-11-25 19:07:05"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] landed: noisy record dropped, provenance names the 15 changed cases, the within-1pct A/B and the spawn-noise limit; ADR-222; 5/5 gates; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-prov-222",
+      "timestamp": 1795622931.72928,
+      "timestamp_str": "2026-11-25 19:08:51"
     }
   ],
   "version": 1

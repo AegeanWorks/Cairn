@@ -317,7 +317,12 @@ compiler, against MinGW GCC 16.2.0 (WinLibs UCRT), MinGW G++ 16.2.0 (same WinLib
 `.aikit/benchmark_history.jsonl`, captured at commit `18331c7` with the harness and every
 program pinned to one CPU (quiet-window probe 14.0 ms, seven rounds per case, best time
 kept). Independent runs drift by about 10 percent, so a gap smaller than that band reads as
-a tie, not a standing:
+a tie, not a standing. Later commits changed instruction selection for fifteen of these
+cases while fixing four correctness bugs (ADR-218 to ADR-221); a pinned-core cycle A/B put
+every affected case within 1 percent of this table's compiler, and every image kept the same
+size. A 10 ms case spends most of its time in process spawn, shared by all four languages,
+and that cost moves by over 10 percent between windows, so the short rows carry more noise
+than the band implies:
 
 | Case | Work | Cairn | C | C++ | Rust | Cairn image |
 |---|---|---|---|---|---|---|
