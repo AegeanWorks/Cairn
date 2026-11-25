@@ -3,27 +3,18 @@
   "active_task": {
     "task_id": "cairn-harness-pin",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1795601482.371565,
     "owner": "kilo:goal",
     "lease_until": 1795608682.371565,
     "started_by": "kilo:goal",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1795601510.888659,
+    "completed_head": "2f445e231757df0523aad493c09cbba01905de84",
+    "completed_tree": "5fc29b035b799d7236941eb69e8f6f5e6f08002e"
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[3/3] quiet baseline saved at 4d51404 (probe 14.1ms, 9 rounds), stalled duplicate dropped, README table and banded verdicts refreshed; ADR-206; checklists: passed",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-bit-builtins",
-      "timestamp": 1795559126.5084538,
-      "timestamp_str": "2026-11-25 01:25:26"
-    },
     {
       "agent": "kilo:goal",
       "delivery": {
@@ -317,6 +308,23 @@
       "task_id": "cairn-harness-pin",
       "timestamp": 1795601482.371565,
       "timestamp_str": "2026-11-25 13:11:22"
+    },
+    {
+      "agent": "kilo:goal",
+      "delivery": {
+        "forced": false,
+        "roots": [
+          "."
+        ]
+      },
+      "description": "Task 'cairn-harness-pin' completed successfully.",
+      "head": "2f445e231757df0523aad493c09cbba01905de84",
+      "phase": "completed",
+      "phase_num": 5,
+      "status": "completed",
+      "task_id": "cairn-harness-pin",
+      "timestamp": 1795601511.1843042,
+      "timestamp_str": "2026-11-25 13:11:51"
     }
   ]
 }
