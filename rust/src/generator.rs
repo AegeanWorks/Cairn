@@ -2949,7 +2949,15 @@ impl CodeGenerator {
             None => self.assembler.mov_imm64("rsi", multiplier as i64),
         }
         self.assembler.imul_high("rsi");
-        self.assembler.lea_scale("rax", "rdx", "rcx", 0, 0);
+        // The helper reports the magic as `pattern - 2**64`. When that value is
+        // below i64::MIN the loaded pattern is positive and the 2**64 wrap has
+        // already added the dividend to the high half, so adding it again would
+        // be wrong; only a negative pattern needs the add-shift correction.
+        if (multiplier as u64) >> 63 == 1 {
+            self.assembler.lea_scale("rax", "rdx", "rcx", 0, 0);
+        } else {
+            self.assembler.mov_reg_reg("rax", "rdx");
+        }
         self.assembler.shift_imm(7, "rax", shift as u8);
         self.assembler.mov_reg_reg("rdx", "rcx");
         self.assembler.shift_imm(7, "rdx", 63);

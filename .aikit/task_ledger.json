@@ -1,48 +1,16 @@
 {
   "active_task": {
-    "active_phase": 5,
-    "completed_at": 1795613639.91014,
-    "completed_head": "94456ece17a1f3fc52b754b21b00f09ea4b47008",
-    "completed_tree": "0db1470467cf4ec33336145343a377703c13ad18",
+    "active_phase": 4,
     "continuations": [],
     "last_phase": "in_progress",
-    "lease_until": 1795620777.03036,
+    "lease_until": 1795623933.26693,
     "owner": "kilo:goal",
     "started_by": "kilo:goal",
-    "status": "completed",
-    "task_id": "cairn-bool-values",
-    "updated_at": 1795613577.03036
+    "status": "in_progress",
+    "task_id": "cairn-magic-div",
+    "updated_at": 1795616733.26693
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[2/2] landed: popcount -11.9pct cycles (p10 -10.8pct), builtin assignment 3 to 2 instructions; 3 hashes; 23 cases byte-identical; machine tests; full suite and 5/5 gates; checklists: passed",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-builtin-dest",
-      "timestamp": 1795593269.275066,
-      "timestamp_str": "2026-11-25 10:54:29"
-    },
-    {
-      "agent": "kilo:goal",
-      "delivery": {
-        "forced": false,
-        "roots": [
-          "."
-        ]
-      },
-      "description": "Task 'cairn-builtin-dest' completed successfully.",
-      "head": "6724fc36287a7ac4cf2be441b0c5508a5c9fb437",
-      "phase": "completed",
-      "phase_num": 5,
-      "status": "completed",
-      "task_id": "cairn-builtin-dest",
-      "timestamp": 1795593295.061942,
-      "timestamp_str": "2026-11-25 10:54:55"
-    },
     {
       "agent": "kilo:goal",
       "description": "[1/2] docs-only: state nine changed cases, fifteen byte-identical, and the measured per-case deltas",
@@ -324,6 +292,36 @@
       "task_id": "cairn-bool-values",
       "timestamp": 1795613639.91014,
       "timestamp_str": "2026-11-25 16:33:59"
+    },
+    {
+      "agent": "kilo:goal",
+      "description": "[1/2] plan: add the dividend only when the magic pattern is signed-negative; wrapped positive patterns take the high half",
+      "files_affected": [],
+      "impact_assessment": {
+        "benefits": "correct truncating division for all constant divisors",
+        "mitigation": "159510-case model, 675-result constant sweep, 169-result variable sweep, two tests",
+        "risks": "contract: none for benchmarks; dependency: none; concurrency: none; state: none",
+        "why": "every constant division and remainder whose magic wraps below i64::MIN was wrong"
+      },
+      "phase": "in_progress",
+      "phase_num": 2,
+      "plan_digest": "fd6759344ded8256187e0fa73e972451dcc6c29270e2ff383f2ad3ea1ed0c6bf",
+      "status": "in_progress",
+      "task_id": "cairn-magic-div",
+      "timestamp": 1795616545.56447,
+      "timestamp_str": "2026-11-25 17:22:25"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] landed: conditional add-shift for signed-negative magics; 159510 model + 675 + 169 sweep results agree; 2 tests; golden untouched; twin parity and full suite; ADR-220; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-magic-div",
+      "timestamp": 1795616733.26693,
+      "timestamp_str": "2026-11-25 17:25:33"
     }
   ],
   "version": 1

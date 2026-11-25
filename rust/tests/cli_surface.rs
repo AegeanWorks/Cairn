@@ -327,3 +327,57 @@ fn main() -> i64 {
     // Neither call may run: the first body is skipped and only the second runs.
     assert_eq!(text.trim(), "10", "a short-circuit evaluated the right side anyway");
 }
+
+/// Magic-multiply division must truncate toward zero for both signs. The
+/// multiplier for a divisor whose magic is below i64::MIN wraps to a positive
+/// pattern, which used to add the dividend twice with the add-shift correction.
+#[test]
+fn division_and_remainder_by_constant_divisors_truncate() {
+    let text = run_source("magic-division", "\
+fn main() -> i64 {
+    var cases: [8]i64 = [0; 8];
+    cases[0] = 7 / 5;
+    cases[1] = (0 - 7) / 5;
+    cases[2] = 7 % 5;
+    cases[3] = (0 - 7) % 5;
+    cases[4] = 1000 / 3;
+    cases[5] = (0 - 1000) / 3;
+    cases[6] = 1000 % 3;
+    cases[7] = (0 - 1000) % 3;
+    var i: i64 = 0;
+    while i < 8 {
+        print(cases[i]);
+        i = i + 1;
+    }
+    return 0;
+}
+");
+    // Truncation toward zero: -7/5 = -1 with remainder -2, -1000/3 = -333 with -1.
+    assert_eq!(text.trim(), "1\n-1\n2\n-2\n333\n-333\n1\n-1",
+               "constant division did not truncate toward zero");
+}
+
+/// Every divisor's magic is exercised through a loop so the compiler cannot
+/// fold the arithmetic into literals.
+#[test]
+fn division_in_a_loop_matches_truncating_arithmetic() {
+    let text = run_source("magic-loop", "\
+fn main() -> i64 {
+    var total: i64 = 0;
+    var i: i64 = 0 - 60;
+    while i < 61 {
+        total = total + i / 5;
+        total = total + i % 7;
+        i = i + 1;
+    }
+    print(total);
+    return 0;
+}
+");
+    // Reference: sum(trunc(i/5) + trunc(i%7) for i in -60..=60).
+    let mut want = 0i64;
+    for value in -60..=60 {
+        want += value / 5 + value % 7;
+    }
+    assert_eq!(text.trim(), want.to_string(), "the loop totals disagree");
+}
