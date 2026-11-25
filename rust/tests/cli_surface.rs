@@ -260,3 +260,70 @@ fn main() -> i64 {
     // 10>=8 holds (+10), 15>=8 holds (+10): total 21.
     assert_eq!(text.trim(), "21", "two element expressions did not compare correctly");
 }
+
+/// SPEC.md line 112: a comparison yields 0 or 1 and is usable as an integer.
+/// Before this test the relation leaked its right operand into the assignment.
+#[test]
+fn a_comparison_used_as_a_value_yields_one_or_zero() {
+    let text = run_source("compare-value", "\
+fn main() -> i64 {
+    var x: i64 = 5;
+    var below: i64 = x < 6;
+    var above: i64 = x > 6;
+    var equal: i64 = x == 5;
+    var different: i64 = x != 5;
+    print(below);
+    print(above);
+    print(equal);
+    print(different);
+    print(x < 6);
+    print((x < 6) + (x > 6));
+    return 0;
+}
+");
+    assert_eq!(text.trim(), "1\n0\n1\n0\n1\n1",
+               "a comparison did not yield 0 or 1 as an integer");
+}
+
+/// SPEC.md line 113: `&&` and `||` short-circuit and yield 0 or 1.
+#[test]
+fn logical_operators_yield_one_or_zero_when_used_as_values() {
+    let text = run_source("logic-value", "\
+fn main() -> i64 {
+    var x: i64 = 5;
+    var n: i64 = 0 - 2;
+    var both: i64 = x > 3 && x < 9;
+    var partial: i64 = x > 3 && n > 9;
+    var either: i64 = x > 30 || n < 9;
+    var neither: i64 = x > 30 || n > 9;
+    print(both);
+    print(partial);
+    print(either);
+    print(neither);
+    print(x > 30 || x > 3);
+    return 0;
+}
+");
+    assert_eq!(text.trim(), "1\n0\n1\n0\n1",
+               "a logical operator did not yield 0 or 1 as a value");
+}
+
+/// Short-circuiting must not evaluate the right side once the left decides.
+#[test]
+fn logical_operators_short_circuit() {
+    let text = run_source("logic-short", "\
+fn noisy(v: i64) -> i64 {
+    print(v);
+    return v;
+}
+fn main() -> i64 {
+    var t: i64 = 0;
+    if 0 != 0 && noisy(7) != 0 { t = t + 1; }
+    if 1 != 0 || noisy(9) != 0 { t = t + 10; }
+    print(t);
+    return 0;
+}
+");
+    // Neither call may run: the first body is skipped and only the second runs.
+    assert_eq!(text.trim(), "10", "a short-circuit evaluated the right side anyway");
+}

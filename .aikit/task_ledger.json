@@ -1,48 +1,16 @@
 {
   "active_task": {
-    "active_phase": 5,
-    "completed_at": 1795611392.101,
-    "completed_head": "ab82951fdbdd1ae7ca38904a878d7eada1e68383",
-    "completed_tree": "96b6f7a01cb74123f13b3f12d3fa0ec9001723a3",
+    "active_phase": 4,
     "continuations": [],
     "last_phase": "in_progress",
-    "lease_until": 1795618580.58592,
+    "lease_until": 1795620777.03036,
     "owner": "kilo:goal",
     "started_by": "kilo:goal",
-    "status": "completed",
-    "task_id": "cairn-compare-fixes",
-    "updated_at": 1795611380.58592
+    "status": "in_progress",
+    "task_id": "cairn-bool-values",
+    "updated_at": 1795613577.03036
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[2/2] landed: inner loop 22 to 19 instructions, -1.7pct median cycles (p10 -4.3pct); 3 hashes; full suite, twin parity, 5/5 gates; checklists: passed",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-mandelbrot-div",
-      "timestamp": 1795587845.2054372,
-      "timestamp_str": "2026-11-25 09:24:05"
-    },
-    {
-      "agent": "kilo:goal",
-      "delivery": {
-        "forced": false,
-        "roots": [
-          "."
-        ]
-      },
-      "description": "Task 'cairn-mandelbrot-div' completed successfully.",
-      "head": "ded2d7b36ee734251425d902a53227a41eb741dc",
-      "phase": "completed",
-      "phase_num": 5,
-      "status": "completed",
-      "task_id": "cairn-mandelbrot-div",
-      "timestamp": 1795587890.1325202,
-      "timestamp_str": "2026-11-25 09:24:50"
-    },
     {
       "agent": "kilo:goal",
       "description": "[1/2] plan: destination-aware bit builtins, inline POPCNT, rotate_cl_reg encoder",
@@ -324,6 +292,36 @@
       "task_id": "cairn-compare-fixes",
       "timestamp": 1795611392.101,
       "timestamp_str": "2026-11-25 15:56:32"
+    },
+    {
+      "agent": "kilo:goal",
+      "description": "[1/2] plan: materialise relations with setcc and implement short-circuit logical values",
+      "files_affected": [],
+      "impact_assessment": {
+        "benefits": "correct boolean values in expression position",
+        "mitigation": "61 probe programs against a Python reference, three end-to-end tests",
+        "risks": "contract: none for benchmarks; dependency: setcc existed unused; concurrency: none; state: none",
+        "why": "SPEC 112/113 promise 0/1 but the generator leaked the right operand"
+      },
+      "phase": "in_progress",
+      "phase_num": 2,
+      "plan_digest": "5f4916d0e198e6aaa320137632b21bd19958e3b4c83a6ca7a168567aab762386",
+      "status": "in_progress",
+      "task_id": "cairn-bool-values",
+      "timestamp": 1795613368.67184,
+      "timestamp_str": "2026-11-25 16:29:28"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] landed: relations materialised with setcc, logical values short-circuit; 61 probes and 3 end-to-end tests agree; golden untouched; twin parity and full suite; ADR-219; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-bool-values",
+      "timestamp": 1795613577.03036,
+      "timestamp_str": "2026-11-25 16:32:57"
     }
   ],
   "version": 1

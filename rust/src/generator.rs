@@ -2807,6 +2807,9 @@ impl CodeGenerator {
                         crate::codegen::array_element_base(*slot, *size as i64));
                 }
             }
+            Expr::Binary { op, left, right, .. } if op == "&&" || op == "||" => {
+                self.emit_logical_value(op, left, right, homes);
+            }
             Expr::Binary { op, left, right, .. } => {
                 if op == "<<" {
                     if let Expr::Name { slot, .. } =
@@ -3148,8 +3151,50 @@ impl CodeGenerator {
                 self.assembler.mov_reg_reg("rax", "rcx");
             }
             "*" => self.assembler.imul("rax", &hold),
+            // A relation used as a value yields 0 or 1 (SPEC.md line 112), so the
+            // flags `cmp left, right` produces are materialised with setcc.
+            "==" | "!=" | "<" | "<=" | ">" | ">=" => {
+                let condition = match op {
+                    "==" => "e", "!=" => "ne", "<" => "l", "<=" => "le",
+                    ">" => "g", _ => "ge",
+                };
+                self.assembler.cmp_reg_reg(&hold, "rax");
+                self.assembler.setcc(condition);
+            }
             _ => {}
         }
+    }
+
+    /// Emit `left && right` or `left || right` as a short-circuit value: 0 or 1.
+    fn emit_logical_value(&mut self, op: &str, left: &Expr, right: &Expr,
+                          homes: &[(i64, &str)]) {
+        let done = self.fresh("logic.done");
+        let short = self.fresh("logic.short");
+        self.emit_expression(left, homes);
+        self.assembler.test("rax");
+        if op == "&&" {
+            let s = short.clone();
+            self.assembler.jcc("z", &s);
+            self.emit_expression(right, homes);
+            self.assembler.test("rax");
+            self.assembler.setcc("ne");
+            self.assembler.jmp(&done);
+            let s = short.clone();
+            self.assembler.label(&s);
+            self.assembler.xor_zero("rax");
+        } else {
+            let s = short.clone();
+            self.assembler.jcc("nz", &s);
+            self.emit_expression(right, homes);
+            self.assembler.test("rax");
+            self.assembler.setcc("ne");
+            self.assembler.jmp(&done);
+            let s = short.clone();
+            self.assembler.label(&s);
+            self.assembler.mov_imm64("rax", 1);
+        }
+        let d = done.clone();
+        self.assembler.label(&d);
     }
 
     /// Lower a constant-delta self-call as a pure-text copy of the current body.
