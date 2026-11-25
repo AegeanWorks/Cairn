@@ -1,44 +1,17 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-mandelbrot-div",
+    "task_id": "cairn-builtin-dest",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1795587845.2054372,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1795593269.275066,
     "owner": "kilo:goal",
-    "lease_until": 1795595045.2054372,
+    "lease_until": 1795600469.275066,
     "started_by": "kilo:goal",
-    "continuations": [],
-    "completed_at": 1795587890.049354,
-    "completed_head": "ded2d7b36ee734251425d902a53227a41eb741dc",
-    "completed_tree": "b08e9bb0b71ef3c10b69eb2723f676a5ef675a59"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[62/N] user-facing CLI restored (run/build -o/verify/listing/capabilities), parity build renamed buildimage with 44 keys and unchanged hashes; values guard live Rust tests; README/SPEC/LLM match binary; 6/6 gates",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795545264.2561028,
-      "timestamp_str": "2026-11-24 21:34:24"
-    },
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[63/N] removed dead pyproject.toml packaging metadata and its README tree entry; Cargo is the only build manifest; ADR-201; 6/6 gates",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795545492.253713,
-      "timestamp_str": "2026-11-24 21:38:12"
-    },
     {
       "agent": "kilo:goal",
       "checklists": "passed",
@@ -303,6 +276,36 @@
       "task_id": "cairn-mandelbrot-div",
       "timestamp": 1795587890.1325202,
       "timestamp_str": "2026-11-25 09:24:50"
+    },
+    {
+      "agent": "kilo:goal",
+      "description": "[1/2] plan: destination-aware bit builtins, inline POPCNT, rotate_cl_reg encoder",
+      "files_affected": [],
+      "impact_assessment": {
+        "benefits": "popcount -11.9pct cycles; builtin assignment 3 to 2 instructions",
+        "mitigation": "pinned A/B, machine encoder tests, byte-identity check for the other 23 cases, full suite",
+        "risks": "contract: popcount dumps change; dependency: POPCNT requires 2007+ x86-64; concurrency: none; state: golden refreshed for 3 keys",
+        "why": "direct assignments copied through rax; popcount paid call+ret in hot loops"
+      },
+      "phase": "in_progress",
+      "phase_num": 2,
+      "plan_digest": "45eb173e5d016389d48bc1e0f9d137cdb7bfaa9f2822de486327168530b9e3c7",
+      "status": "in_progress",
+      "task_id": "cairn-builtin-dest",
+      "timestamp": 1795592918.199967,
+      "timestamp_str": "2026-11-25 10:48:38"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] landed: popcount -11.9pct cycles (p10 -10.8pct), builtin assignment 3 to 2 instructions; 3 hashes; 23 cases byte-identical; machine tests; full suite and 5/5 gates; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-builtin-dest",
+      "timestamp": 1795593269.275066,
+      "timestamp_str": "2026-11-25 10:54:29"
     }
   ]
 }

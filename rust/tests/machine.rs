@@ -122,3 +122,14 @@ fn an_immediate_beyond_32_bits_is_refused() {
     let mut assembler = Assembler::new();
     assembler.group1_store_rbp_imm(0, -8, 1i64 << 32);
 }
+
+#[test]
+fn bit_count_and_rotate_encodings() {
+    assert_eq!(code(|a| a.popcnt("rax", "rax")),
+               [0xF3, 0x48, 0x0F, 0xB8, 0xC0]);
+    assert_eq!(code(|a| a.popcnt("r13", "r13")),
+               [0xF3, 0x4D, 0x0F, 0xB8, 0xED]);
+    assert_eq!(code(|a| a.rotate_cl_reg("r13", 0)), [0x49, 0xD3, 0xC5]);
+    assert_eq!(code(|a| a.rotate_cl_reg("rax", 0)), [0x48, 0xD3, 0xC0]);
+    assert_eq!(code(|a| a.shift_cl_reg("r14", 7)), [0x49, 0xD3, 0xFE]);
+}

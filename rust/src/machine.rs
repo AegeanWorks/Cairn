@@ -637,11 +637,23 @@ impl Assembler {
     }
 
     pub fn shift_cl(&mut self, extension: u8) {
-        self.emit([0x48, 0xD3, 0xC0 | (extension << 3)]);
+        self.shift_cl_reg("rax", extension);
+    }
+
+    /// `r/m64 shift-by-cl` into any register: extension 4 is SHL, 5 SHR, 7 SAR.
+    pub fn shift_cl_reg(&mut self, reg: &str, extension: u8) {
+        let code = register(reg);
+        self.emit([rex(true, 0, 0, code >> 3), 0xD3,
+                   0xC0 | (extension << 3) | (code & 7)]);
+    }
+
+    /// `rol reg, cl` (extension 0) or `ror reg, cl` (extension 1) into any register.
+    pub fn rotate_cl_reg(&mut self, reg: &str, extension: u8) {
+        self.shift_cl_reg(reg, extension);
     }
 
     pub fn rotate_cl(&mut self, extension: u8) {
-        self.emit([0x48, 0xD3, 0xC0 | (extension << 3)]);
+        self.rotate_cl_reg("rax", extension);
     }
 
     pub fn shift_imm(&mut self, extension: u8, reg: &str, count: u8) {

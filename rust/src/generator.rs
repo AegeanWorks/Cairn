@@ -1392,6 +1392,8 @@ impl CodeGenerator {
                 }
             },
             Expr::Binary { .. } => self.try_emit_binary_into(expr, destination, homes),
+            Expr::Call { name, arguments, .. } =>
+                self.try_emit_builtin_into(name, arguments, destination, homes),
             _ => false,
         }
     }
@@ -1452,6 +1454,10 @@ impl CodeGenerator {
                             homes: &[(i64, &str)]) -> bool {
         if destination == "rax" {
             return false;
+        }
+        if let Expr::Call { name, arguments, .. } =
+            crate::optimize::peel_parens(Some(expression)).unwrap() {
+            return self.try_emit_builtin_into(name, arguments, destination, homes);
         }
         let Expr::Binary { op, left, right, .. } =
             crate::optimize::peel_parens(Some(expression)).unwrap() else { return false };
@@ -3447,6 +3453,120 @@ impl CodeGenerator {
         skips
     }
 
+    /// Load a rotate count into rcx without disturbing any home register.
+    fn rotate_count_into_rcx(&mut self, count: &Expr, homes: &[(i64, &str)]) {
+        let mut count = crate::optimize::peel_parens(Some(count)).unwrap();
+        if let Expr::Binary { op, left, right, .. } = count {
+            if op == "&" {
+                if let Expr::IntLiteral { value: mask, .. } =
+                    crate::optimize::peel_parens(Some(right)).unwrap()
+                {
+                    if *mask & 63 == 63 {
+                        count = crate::optimize::peel_parens(Some(left)).unwrap();
+                    }
+                }
+            }
+        }
+        match count {
+            Expr::IntLiteral { value: number, .. } => self.emit_literal(*number, "rcx"),
+            Expr::Name { slot, .. } => match home_for(*slot, homes) {
+                Some(home) if home != "rcx" => self.assembler.mov_reg_reg("rcx", home),
+                Some(_) => {}
+                None => self.load_slot(*slot, "rcx", homes),
+            },
+            other => {
+                self.emit_expression(other, homes);
+                self.assembler.mov_reg_reg("rcx", "rax");
+            }
+        }
+    }
+
+    /// True when the count can be loaded into rcx before the value is evaluated.
+    fn rotate_count_is_simple(count: &Expr) -> bool {
+        let count = crate::optimize::peel_parens(Some(count)).unwrap();
+        let peeled = if let Expr::Binary { op, left, right, .. } = count {
+            if op == "&" {
+                match crate::optimize::peel_parens(Some(right)).unwrap() {
+                    Expr::IntLiteral { value: mask, .. } if *mask & 63 == 63 =>
+                        crate::optimize::peel_parens(Some(left)).unwrap(),
+                    _ => count,
+                }
+            } else {
+                count
+            }
+        } else {
+            count
+        };
+        matches!(peeled, Expr::Name { .. } | Expr::IntLiteral { .. })
+    }
+
+    /// Evaluate one value into the requested register: rax keeps the plain
+    /// expression path, any other register uses the in-place lowering.
+    fn emit_value_into(&mut self, value: &Expr, destination: &str,
+                       homes: &[(i64, &str)]) -> bool {
+        if destination == "rax" {
+            self.emit_expression(value, homes);
+            return true;
+        }
+        if self.emit_left_into(value, destination, homes) {
+            return true;
+        }
+        self.emit_expression(value, homes);
+        self.assembler.mov_reg_reg(destination, "rax");
+        true
+    }
+
+    /// Lower rotl into a destination register, setting rcx first when that is safe.
+    fn emit_rotl_into(&mut self, value: &Expr, count: &Expr, destination: &str,
+                      homes: &[(i64, &str)]) {
+        if Self::rotate_count_is_simple(count)
+            && destination != "rcx"
+            && !expression_uses_rcx(value)
+        {
+            self.rotate_count_into_rcx(count, homes);
+            self.emit_value_into(value, destination, homes);
+            self.assembler.rotate_cl_reg(destination, 0);
+            return;
+        }
+        self.emit_value_into(value, destination, homes);
+        self.assembler.push(destination);
+        self.depth += 8;
+        self.emit_expression(count, homes);
+        self.assembler.mov_reg_reg("rcx", "rax");
+        self.assembler.pop(destination);
+        self.depth -= 8;
+        self.assembler.rotate_cl_reg(destination, 0);
+    }
+
+    /// Lower a one-argument bit builtin straight into a destination register.
+    /// popcount is a runtime call, so it keeps the rax path.
+    fn try_emit_builtin_into(&mut self, name: &str, arguments: &[Expr],
+                            destination: &str, homes: &[(i64, &str)]) -> bool {
+        match name {
+            "clz" | "ctz" | "bswap" | "popcount" if arguments.len() == 1 => {
+                if destination != "rax"
+                    && !matches!(crate::optimize::peel_parens(Some(&arguments[0])).unwrap(),
+                        Expr::Name { .. } | Expr::IntLiteral { .. } | Expr::Binary { .. })
+                {
+                    return false;
+                }
+                self.emit_value_into(&arguments[0], destination, homes);
+                match name {
+                    "clz" => self.assembler.lzcnt(destination, destination),
+                    "ctz" => self.assembler.tzcnt(destination, destination),
+                    "popcount" => self.assembler.popcnt(destination, destination),
+                    _ => self.assembler.bswap(destination),
+                }
+                true
+            }
+            "rotl" if arguments.len() == 2 => {
+                self.emit_rotl_into(&arguments[0], &arguments[1], destination, homes);
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn emit_call(&mut self, name: &str, arguments: &[Expr], homes: &[(i64, &str)]) {
         match name {
             "clz" => {
@@ -3465,8 +3585,11 @@ impl CodeGenerator {
                 return;
             }
             "popcount" => {
+                // POPCNT has been in every x86-64 part since 2007 and the compiler
+                // already requires LZCNT and TZCNT, so the runtime helper's call and
+                // return are pure overhead in a hot loop.
                 self.emit_expression(&arguments[0], homes);
-                self.call_site(crate::runtime::POPCOUNT_LABEL);
+                self.assembler.popcnt("rax", "rax");
                 return;
             }
             "str_len" => {
@@ -3551,50 +3674,7 @@ impl CodeGenerator {
                 }
             }
             "rotl" => {
-                let value = &arguments[0];
-                let mut count = crate::optimize::peel_parens(Some(&arguments[1])).unwrap();
-                if let Expr::Binary { op, left, right, .. } = count {
-                    if op == "&" {
-                        if let Expr::IntLiteral { value: mask, .. } =
-                            crate::optimize::peel_parens(Some(right)).unwrap() {
-                            if *mask & 63 == 63 {
-                                count = crate::optimize::peel_parens(Some(left)).unwrap();
-                            }
-                        }
-                    }
-                }
-                let simple_count = matches!(count, Expr::Name { .. } | Expr::IntLiteral { .. });
-                // The count lives in rcx, so it can be set before the value is evaluated
-                // whenever that evaluation cannot touch rcx; this avoids a stack round trip
-                // for a value that is itself an expression.
-                if simple_count && !expression_uses_rcx(value) {
-                    match count {
-                        Expr::IntLiteral { value: number, .. } => {
-                            self.emit_literal(*number, "rcx");
-                        }
-                        Expr::Name { slot, .. } => {
-                            if let Some(home) = home_for(*slot, homes) {
-                                if home != "rcx" {
-                                    self.assembler.mov_reg_reg("rcx", home);
-                                }
-                            } else {
-                                self.load_slot(*slot, "rcx", homes);
-                            }
-                        }
-                        _ => {}
-                    }
-                    self.emit_expression(value, homes);
-                    self.assembler.rotate_cl(0);
-                    return;
-                }
-                self.emit_expression(value, homes);
-                self.assembler.push("rax");
-                self.depth += 8;
-                self.emit_expression(count, homes);
-                self.assembler.mov_reg_reg("rcx", "rax");
-                self.assembler.pop("rax");
-                self.depth -= 8;
-                self.assembler.rotate_cl(0);
+                self.emit_rotl_into(&arguments[0], &arguments[1], "rax", homes);
                 return;
             }
             "argc" => {
