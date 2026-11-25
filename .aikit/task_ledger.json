@@ -1,44 +1,17 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-loop-duplicate",
+    "task_id": "cairn-mandelbrot-div",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1795578205.3798313,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1795587845.2054372,
     "owner": "kilo:goal",
-    "lease_until": 1795585405.3798313,
+    "lease_until": 1795595045.2054372,
     "started_by": "kilo:goal",
-    "continuations": [],
-    "completed_at": 1795578244.4264927,
-    "completed_head": "15e0d48d1b077ec6ac70c6b485d493999e798e49",
-    "completed_tree": "316be182718a0e2ced07c08649685710a5fa1a0b"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[59/N] mul hoist combine: splitmix -6.3pct median over 4 clean rounds vs ADR-195 build; 3 hashes refreshed; 70 byte loop pinned; ADR-196; 6/6 gates",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795535472.3766382,
-      "timestamp_str": "2026-11-24 18:51:12"
-    },
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[60/N] caller-saved r8 hoist: splitmix loop 70->60 bytes, median -1.5pct over 12 clean A/B rounds; 3 hashes refreshed; ADR-197; 6/6 gates",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795540014.052521,
-      "timestamp_str": "2026-11-24 20:06:54"
-    },
     {
       "agent": "kilo:goal",
       "checklists": "passed",
@@ -292,6 +265,36 @@
       "task_id": "cairn-loop-duplicate",
       "timestamp": 1795578244.5027487,
       "timestamp_str": "2026-11-25 06:44:04"
+    },
+    {
+      "agent": "kilo:goal",
+      "description": "[1/2] plan: cqo division in the destination register; in-place multiply when dest is the right home",
+      "files_affected": [],
+      "impact_assessment": {
+        "benefits": "inner loop to 19 instructions; 1.7-4.3pct fewer cycles",
+        "mitigation": "full suite, twin parity, pinned A/B",
+        "risks": "contract: mandelbrot dumps change; dependency: none; concurrency: none; state: golden refreshed for 3 keys",
+        "why": "mandelbrot inner loop ran 22 instructions against GCC 19"
+      },
+      "phase": "in_progress",
+      "phase_num": 2,
+      "plan_digest": "829c332515ae0983304ce19f36d09793e2e68abd68115d560d7cbbf3096d79d5",
+      "status": "in_progress",
+      "task_id": "cairn-mandelbrot-div",
+      "timestamp": 1795587470.0374856,
+      "timestamp_str": "2026-11-25 09:17:50"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] landed: inner loop 22 to 19 instructions, -1.7pct median cycles (p10 -4.3pct); 3 hashes; full suite, twin parity, 5/5 gates; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-mandelbrot-div",
+      "timestamp": 1795587845.2054372,
+      "timestamp_str": "2026-11-25 09:24:05"
     }
   ]
 }

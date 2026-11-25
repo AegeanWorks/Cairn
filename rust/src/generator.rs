@@ -1503,6 +1503,36 @@ impl CodeGenerator {
                 }
             }
         }
+        if op == "/" || op == "%" {
+            // Division by a positive power of two lowers in place, so an assignment
+            // whose destination is a home register never round-trips through rax.
+            if let Expr::IntLiteral { value: divisor, .. } = right {
+                if *divisor > 0 {
+                    let power = (127 - (*divisor as u128).leading_zeros()) as u32;
+                    if power >= 1 && power <= 63 && (1i128 << power) == *divisor
+                        && self.emit_left_into(left, destination, homes)
+                    {
+                        self.assembler.cqo();
+                        self.assembler.shift_imm(5, "rdx", (64 - power) as u8);
+                        self.assembler.binary(0x01, destination, "rdx");
+                        if op == "/" {
+                            self.assembler.shift_imm(7, destination, power as u8);
+                        } else {
+                            let mask = (1i128 << power) - 1;
+                            if mask <= 0x7FFFFFFF {
+                                self.assembler.arith_imm(4, destination, mask as i64);
+                            } else {
+                                self.assembler.mov_imm64("rsi", mask as i64);
+                                self.assembler.binary(0x21, destination, "rsi");
+                            }
+                            self.assembler.binary(0x29, destination, "rdx");
+                        }
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
         if op == "-" {
             if let Expr::Name { slot, .. } = right {
                 if let Some(right_home) = home_for(*slot, homes) {
@@ -1516,6 +1546,20 @@ impl CodeGenerator {
         }
         if op == "*" {
             let peeled_left = crate::optimize::peel_parens(Some(left)).unwrap();
+            // `dest = x * dest_slot_value`: a two-operand imul reads both sources
+            // before writing, so the multiply lands in the destination with no copy.
+            if let Expr::Name { slot: right_slot, .. } = right {
+                if home_for(*right_slot, homes) == Some(destination) {
+                    if let Expr::Name { slot: left_slot, .. } = peeled_left {
+                        if let Some(left_home) = home_for(*left_slot, homes) {
+                            if left_home != destination {
+                                self.assembler.imul(destination, left_home);
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
             if let Expr::Name { slot, .. } = peeled_left {
                 if let (Some(home), Expr::IntLiteral { value, .. }) =
                     (home_for(*slot, homes), right) {
@@ -2755,10 +2799,12 @@ impl CodeGenerator {
             return false;
         }
         self.emit_expression(left, homes);
-        self.assembler.mov_reg_reg("rcx", "rax");
-        self.assembler.shift_imm(7, "rcx", 63);
-        self.assembler.shift_imm(5, "rcx", (64 - power) as u8);
-        self.assembler.binary(0x01, "rax", "rcx");
+        // cqo fills rdx with the dividend's sign (0 or all ones), and a logical shift
+        // turns that into the truncation bias 0 or 2^k - 1 in one instruction instead
+        // of the copy/sar/shr chain the earlier form spent on rcx.
+        self.assembler.cqo();
+        self.assembler.shift_imm(5, "rdx", (64 - power) as u8);
+        self.assembler.binary(0x01, "rax", "rdx");
         if op == "/" {
             self.assembler.shift_imm(7, "rax", power as u8);
         } else {
@@ -2769,7 +2815,7 @@ impl CodeGenerator {
                 self.assembler.mov_imm64("rsi", mask as i64);
                 self.assembler.binary(0x21, "rax", "rsi");
             }
-            self.assembler.binary(0x29, "rax", "rcx");
+            self.assembler.binary(0x29, "rax", "rdx");
         }
         true
     }
