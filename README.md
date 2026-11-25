@@ -315,10 +315,16 @@ Measured on the development machine (Windows x86-64) with the Rust release build
 compiler, against MinGW GCC 16.2.0 (WinLibs UCRT), MinGW G++ 16.2.0 (same WinLibs toolchain,
 `-O2`) and rustc 1.100.0 (pc-windows-gnu). The numbers come from the newest clean record in
 `.aikit/benchmark_history.jsonl`, captured at commit `92d2757` (quiet-window probe 13.1 ms,
-nine rounds per case, best time kept); later commits change loop duplication only, and their
-effect is listed under the table once a quiet window is available. Independent
-runs drift by about 10 percent, so a gap smaller than that band reads as a tie, not a
-standing:
+nine rounds per case, best time kept). Independent runs drift by about 10 percent, so a gap
+smaller than that band reads as a tie, not a standing. Later commits changed code generation
+for nine of these cases; the other fifteen are byte-identical. Against the compiler of that
+row, a pinned-core best-of-12 cycle A/B with control error near 1 percent measured inline
+POPCNT taking `popcount` 11.4 percent lower, counted-loop duplication taking `rotl` 6.6,
+`ctz` 6.1, `clz` 4.3 and `bswap` 1.4 percent lower, and cqo division in the destination
+taking `mandelbrot` 2.6 percent lower; `array_sum`, `hex_io` and `many_params` moved less
+than 1.5 percent, inside that method's noise. No case regressed. The table will be
+re-captured when the machine next yields a quiet window; the harness refuses to save a
+record when any language stalls by more than half.
 
 | Case | Work | Cairn | C | C++ | Rust | Cairn image |
 |---|---|---|---|---|---|---|

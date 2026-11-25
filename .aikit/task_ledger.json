@@ -1,44 +1,17 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-builtin-dest",
+    "task_id": "cairn-table-provenance",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1795593269.275066,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1795595917.5724552,
     "owner": "kilo:goal",
-    "lease_until": 1795600469.275066,
+    "lease_until": 1795603117.5724552,
     "started_by": "kilo:goal",
-    "continuations": [],
-    "completed_at": 1795593294.9931982,
-    "completed_head": "6724fc36287a7ac4cf2be441b0c5508a5c9fb437",
-    "completed_tree": "94d1185162c8ff7982aecac6b9e211853e3b7dfe"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[65/N] README performance table refreshed from quiet run e2b12b0: 24 cases, measured image sizes, harness goal lines and band-based verdicts; ADR-202; tests and 5/5 gates",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795548596.3312912,
-      "timestamp_str": "2026-11-24 22:29:56"
-    },
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[66/N] twin totals frozen: parity/twin_expected.sha256 plus rust/tests/twin_parity.rs over 23 cases (argv_walk path-dependent by design); shared SHA-256 helper; ADR-203",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795550771.003971,
-      "timestamp_str": "2026-11-24 23:06:11"
-    },
     {
       "agent": "kilo:goal",
       "delivery": {
@@ -314,6 +287,36 @@
       "task_id": "cairn-builtin-dest",
       "timestamp": 1795593295.061942,
       "timestamp_str": "2026-11-25 10:54:55"
+    },
+    {
+      "agent": "kilo:goal",
+      "description": "[1/2] docs-only: state nine changed cases, fifteen byte-identical, and the measured per-case deltas",
+      "files_affected": [],
+      "impact_assessment": {
+        "benefits": "provenance matches the shipped code",
+        "mitigation": "deltas reproducible from two compiler builds",
+        "risks": "contract: none; dependency: none; concurrency: none; state: none",
+        "why": "the README claimed loop duplication was the only post-table change"
+      },
+      "phase": "in_progress",
+      "phase_num": 2,
+      "plan_digest": "3c460a2e4cdda1d6eb2d4c7bfad63bf7b7dcd67fe9fceaaa9aac20896856713c",
+      "status": "in_progress",
+      "task_id": "cairn-table-provenance",
+      "timestamp": 1795595394.729995,
+      "timestamp_str": "2026-11-25 11:29:54"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] landed: README provenance names nine changed cases, fifteen identical, and measured deltas; ADR-214; 5/5 gates; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-table-provenance",
+      "timestamp": 1795595917.5724552,
+      "timestamp_str": "2026-11-25 11:38:37"
     }
   ]
 }
