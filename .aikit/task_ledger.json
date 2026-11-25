@@ -3,27 +3,18 @@
   "active_task": {
     "task_id": "cairn-builtin-dest",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1795593269.275066,
     "owner": "kilo:goal",
     "lease_until": 1795600469.275066,
     "started_by": "kilo:goal",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1795593294.9931982,
+    "completed_head": "6724fc36287a7ac4cf2be441b0c5508a5c9fb437",
+    "completed_tree": "94d1185162c8ff7982aecac6b9e211853e3b7dfe"
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[64/N] correction to [63/N]: with pyproject.toml gone the auto-detected Python dependency gate no longer applies, so the suite is 5/5; the zero-dependency guard is rust/tests/values.rs::the_crate_declares_no_dependencies",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795545811.3032413,
-      "timestamp_str": "2026-11-24 21:43:31"
-    },
     {
       "agent": "kilo:goal",
       "checklists": "passed",
@@ -306,6 +297,23 @@
       "task_id": "cairn-builtin-dest",
       "timestamp": 1795593269.275066,
       "timestamp_str": "2026-11-25 10:54:29"
+    },
+    {
+      "agent": "kilo:goal",
+      "delivery": {
+        "forced": false,
+        "roots": [
+          "."
+        ]
+      },
+      "description": "Task 'cairn-builtin-dest' completed successfully.",
+      "head": "6724fc36287a7ac4cf2be441b0c5508a5c9fb437",
+      "phase": "completed",
+      "phase_num": 5,
+      "status": "completed",
+      "task_id": "cairn-builtin-dest",
+      "timestamp": 1795593295.061942,
+      "timestamp_str": "2026-11-25 10:54:55"
     }
   ]
 }
