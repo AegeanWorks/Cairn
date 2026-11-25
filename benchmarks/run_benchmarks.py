@@ -20,6 +20,7 @@ Usage:
 
 import argparse
 import json
+import os
 import shutil
 import statistics
 import subprocess
@@ -52,6 +53,10 @@ QUIET_PROBE_MS = 20.0
 # both more than double against a quiet record was measured through such an
 # interruption, and saving it would poison the baseline the next run compares against.
 STALL_RATIO = 1.5
+PIN_CORE: Optional[int] = None
+# A saved record's own probe must also stay near the newest quiet record's probe;
+# a machine can pass the absolute criterion while every case runs far slower.
+PROBE_DRIFT_RATIO = 1.25
 
 C_COMPILERS: Dict[str, List[str]] = {
     "gcc": ["gcc", "-O2", "-o"],
@@ -174,6 +179,44 @@ def decode_output(raw: bytes) -> str:
     """
     text = raw.decode("utf-8", errors="replace")
     return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def pin_process(core: int) -> bool:
+    """Pin this process, and therefore every child it spawns, to one CPU.
+
+    Windows children inherit the parent's affinity mask, and POSIX children do too,
+    so setting it once here covers the probe and every timed run without a race.
+    """
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            kernel32 = ctypes.windll.kernel32
+            kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+            kernel32.SetProcessAffinityMask.argtypes = [wintypes.HANDLE, ctypes.c_size_t]
+            kernel32.SetProcessAffinityMask.restype = wintypes.BOOL
+            kernel32.GetProcessAffinityMask.argtypes = [
+                wintypes.HANDLE, ctypes.POINTER(ctypes.c_size_t),
+                ctypes.POINTER(ctypes.c_size_t)]
+            kernel32.GetProcessAffinityMask.restype = wintypes.BOOL
+            process = kernel32.GetCurrentProcess()
+            if not kernel32.SetProcessAffinityMask(process, 1 << core):
+                return False
+            # Verify: the call can succeed for a truncated pseudo handle, so read back.
+            current = ctypes.c_size_t()
+            system = ctypes.c_size_t()
+            if not kernel32.GetProcessAffinityMask(process, ctypes.byref(current),
+                                                   ctypes.byref(system)):
+                return False
+            return current.value == (1 << core)
+        except Exception:
+            return False
+    try:
+        os.sched_setaffinity(0, {core})
+        return True
+    except Exception:
+        return False
 
 
 def run_command(argv: Sequence[str], timeout: float,
@@ -440,7 +483,7 @@ def record_from_reports(reports: List[Dict[str, object]], compiler: Optional[str
     probe = cairn.get(QUIET_PROBE_CASE)
     return {"timestamp": round(time.time(), 3), "commit": commit, "rounds": rounds,
             "optimise": optimise, "c_compiler": compiler, "rust_compiler": rust_compiler,
-            "cpp_compiler": cpp_compiler,
+            "cpp_compiler": cpp_compiler, "pin": PIN_CORE,
             "probe_ms": None if probe is None else round(float(probe), 2),
             "quiet": None if probe is None else bool(probe <= QUIET_PROBE_MS),
             "cairn": cairn, "c": bests("c"), "cpp": bests("cpp"),
@@ -457,6 +500,8 @@ def stalled_cases(record: Dict[str, object],
     printed report still shows the numbers, and `--compare` still flags the case.
     """
     if not isinstance(previous, dict) or previous.get("quiet") is False:
+        return []
+    if previous.get("pin") != PIN_CORE:
         return []
     stalled: List[str] = []
     for language in ("cairn", "c", "cpp", "rust"):
@@ -642,7 +687,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--compare", action="store_true",
                         help="diff this run's Cairn best times against the newest saved "
                              "record and exit 1 on a regression beyond the noise band")
+    parser.add_argument("--pin", type=int, default=None, metavar="CORE",
+                        help="pin the harness and every child it spawns to one CPU, so a "
+                             "loaded machine still yields clean best times")
     arguments = parser.parse_args(argv)
+    global PIN_CORE
+    if arguments.pin is not None:
+        if pin_process(arguments.pin):
+            PIN_CORE = arguments.pin
+            print(f"[PIN] harness and children pinned to CPU {arguments.pin}")
+        else:
+            print(f"[PIN] could not pin to CPU {arguments.pin}; measuring unpinned")
     compiler = find_c_compiler()
     rust_compiler = find_rust_compiler()
     cpp_compiler = find_cpp_compiler()
@@ -691,12 +746,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if arguments.save:
         record = record_from_reports(reports, compiler, rust_compiler,
                                      arguments.rounds, optimise, cpp_compiler)
-        stalled = stalled_cases(record, previous)
+        probe = record.get("probe_ms")
+        previous_probe = previous.get("probe_ms") if isinstance(previous, dict) else None
+        drifted = (record.get("quiet") is True
+                   and isinstance(probe, (int, float))
+                   and isinstance(previous_probe, (int, float))
+                   and previous_probe > 0
+                   and probe > previous_probe * PROBE_DRIFT_RATIO)
+        refusal = None
+        if record.get("quiet") is False:
+            refusal = (f"the quiet-window probe measured {probe} ms against the "
+                       f"{QUIET_PROBE_MS:g} ms criterion, so this window is loaded; rerun "
+                       "with --save on a quiet core (--pin) or at a quieter time")
+        elif drifted:
+            refusal = (f"the quiet-window probe measured {probe} ms against {previous_probe} "
+                       f"ms in the newest quiet record, above the "
+                       f"{PROBE_DRIFT_RATIO:g}x drift bound, so this window is disturbed; "
+                       "rerun with --save in a quieter window")
+        stalled = [] if refusal else stalled_cases(record, previous)
+        if refusal:
+            print(f"[REFUSED] {refusal}")
         if stalled:
             print("[REFUSED] the window stalled mid-run on " + ", ".join(stalled)
                   + f" (a best above {STALL_RATIO:g}x the previous"
                   " quiet record); rerun with --save in a quiet window")
-        else:
+        if not refusal and not stalled:
             save_record(HISTORY, record)
             print(f"[SAVED] {HISTORY.relative_to(ROOT)}")
         if record.get("quiet") is None:

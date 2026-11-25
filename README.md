@@ -395,8 +395,11 @@ Run-to-run spread is about 10 percent: use `python benchmarks/run_benchmarks.py 
 to append one JSONL record (including the ADR-069 quiet-window probe) and diff against the newest
 saved record; a Cairn regression beyond the band exits nonzero. A run where any language's best
 for a case jumps by more than half against a quiet record is refused instead of saved, because
-the unchanged twins prove a disturbed window (ADR-208). Every case is scored on whole-process
-time; `--floors` prints a compute-adjusted diagnostic.
+the unchanged twins prove a disturbed window (ADR-208); a run is also refused when its own
+quiet-window probe is loaded or drifts past 1.25 times the newest quiet record's probe (ADR-215).
+`--pin CORE` pins the harness and every child it spawns to one CPU, so a busy machine still
+yields usable best times; the affinity is read back to prove it took. Every case is scored on
+whole-process time; `--floors` prints a compute-adjusted diagnostic.
 
 Three user-recorded project rules: after every change to `cairn/` code, run the full benchmark
 suite and compare; every new language feature ships its own tests in the same change; every new

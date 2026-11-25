@@ -8,9 +8,9 @@
 ## 📊 Codebase Metrics
 - **Total Python Modules**: `3`
 - **Total Classes**: `1`
-- **Total Top-Level Functions**: `34`
+- **Total Top-Level Functions**: `35`
 - **Total Class Methods**: `0`
-- **Total Source Lines**: `913`
+- **Total Source Lines**: `987`
 
 ## 🧭 Map Coverage
 - **Indexed**: python (`3` module(s))
@@ -49,7 +49,7 @@
 ### [`benchmarks/run_benchmarks.py`](benchmarks/run_benchmarks.py)
 > *Benchmark harness: measure Cairn executables and, when one exists, C, C++ and Rust baselines.*
 
-**Size**: `738` lines
+**Size**: `812` lines
 
 **Classes:**
 - `class Case` - *One benchmark: a Cairn source, equivalent C, C++ and Rust sources, and its unit.*
@@ -59,6 +59,7 @@
 - `def find_rust_compiler()` - *The first Rust compiler already installed, or None when the machine has none.*
 - `def find_cpp_compiler()` - *The first C++ compiler already installed, or None when the machine has none.*
 - `def decode_output(raw)` - *Decode captured bytes with the universal newlines of a text-mode run.*
+- `def pin_process(core)` - *Pin this process, and therefore every child it spawns, to one CPU.*
 - `def run_command(argv, timeout, cwd, stdin)` - *Run one command with a hard limit, capturing text.*
 - `def cairn_build_command(source, destination, optimise)` - *The exact Rust `cairn-rs buildexe` command for one case.*
 - `def build_cairn(source, destination, optimise)` - *Compile one Cairn case and return the compile time in milliseconds.*
