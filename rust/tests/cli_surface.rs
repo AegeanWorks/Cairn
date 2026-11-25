@@ -193,3 +193,70 @@ fn main() -> i64 {
 ");
     assert_eq!(text.trim(), "3\n3", "a duplicated body ignored the early exit");
 }
+
+/// `3 < x` puts the literal on the left, which x86 cannot compare directly; the
+/// relation must be mirrored rather than read as `x < 3`.
+#[test]
+fn a_literal_on_the_left_keeps_its_relation() {
+    let text = run_source("literal-left", "\
+fn main() -> i64 {
+    var x: i64 = 5;
+    var n: i64 = 0 - 5;
+    var t: i64 = 0;
+    if 3 < x { t = t + 1; }
+    if 3 < n { t = t + 10; }
+    if 5 == x { t = t + 100; }
+    if 0 <= x { t = t + 1000; }
+    print(t);
+    return 0;
+}
+");
+    // 3 < 5 holds, 3 < -5 fails, 5 == 5 holds, 0 <= 5 holds.
+    assert_eq!(text.trim(), "1101", "a literal-first relation was inverted");
+}
+
+/// An element compared against a named value has no register-register shortcut;
+/// it must still emit a real comparison instead of falling through.
+#[test]
+fn an_element_compared_with_a_name_jumps_correctly() {
+    let text = run_source("index-name", "\
+fn main() -> i64 {
+    var a: [3]i64 = [10, 20, 30];
+    var x: i64 = 25;
+    var t: i64 = 0;
+    var i: i64 = 0;
+    while i < 3 {
+        if a[i] < x { t = t + i + 1; }
+        i = i + 1;
+    }
+    print(t);
+    return 0;
+}
+");
+    // Only a[0]=10 and a[1]=20 are below 25, contributing 1 and 2.
+    assert_eq!(text.trim(), "3", "an element-to-name compare did not jump");
+}
+
+/// An element of one array compared with an element of another exercises the
+/// general two-expression fallback.
+#[test]
+fn two_element_expressions_compare_correctly() {
+    let text = run_source("index-index", "\
+fn main() -> i64 {
+    var a: [3]i64 = [5, 10, 15];
+    var b: [3]i64 = [8, 8, 8];
+    var t: i64 = 0;
+    var i: i64 = 0;
+    while i < 3 {
+        if a[i] < b[i] { t = t + 1; }
+        if a[i] >= b[i] { t = t + 10; }
+        i = i + 1;
+    }
+    print(t);
+    return 0;
+}
+");
+    // a[0]=5<a[0]... 5<8 holds (+1), 10<8 fails, 15<8 fails; 5>=8 fails,
+    // 10>=8 holds (+10), 15>=8 holds (+10): total 21.
+    assert_eq!(text.trim(), "21", "two element expressions did not compare correctly");
+}

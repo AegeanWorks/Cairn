@@ -133,3 +133,13 @@ fn bit_count_and_rotate_encodings() {
     assert_eq!(code(|a| a.rotate_cl_reg("rax", 0)), [0x48, 0xD3, 0xC0]);
     assert_eq!(code(|a| a.shift_cl_reg("r14", 7)), [0x49, 0xD3, 0xFE]);
 }
+
+#[test]
+fn indexed_compare_against_a_literal() {
+    // cmp qword [rbp+rbx*8-524288], 0 with an imm8
+    assert_eq!(code(|a| a.group1_store_indexed_imm(7, "rbp", "r13", 3, -524288, 0)),
+               [0x4A, 0x83, 0xBC, 0xED, 0x00, 0x00, 0xF8, 0xFF, 0x00]);
+    // cmp qword [rbp+rbx*8-64], 1000 with an imm32
+    assert_eq!(code(|a| a.group1_store_indexed_imm(7, "rbp", "rbx", 3, -64, 1000)),
+               [0x48, 0x81, 0x7C, 0xDD, 0xC0, 0xE8, 0x03, 0x00, 0x00]);
+}

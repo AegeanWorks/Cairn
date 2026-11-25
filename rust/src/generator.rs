@@ -2523,6 +2523,11 @@ impl CodeGenerator {
                 return;
             }
         }
+        // `3 < x` means `x > 3`: a literal on the left mirrors an ordered relation.
+        let mirror = |code: &'static str| match code {
+            "l" => "g", "g" => "l", "le" => "ge", "ge" => "le", other => other,
+        };
+        let mut condition = condition;
         match (left.as_ref(), right.as_ref()) {
             (Expr::Binary { .. }, Expr::IntLiteral { value, .. }) => {
                 self.emit_expression(left.as_ref(), homes);
@@ -2533,24 +2538,47 @@ impl CodeGenerator {
                 self.load_slot(*slot, "rax", homes);
                 self.assembler.cmp_reg_reg("rcx", "rax");
             }
-            (Expr::Index { .. }, Expr::IntLiteral { value, .. }) => {
-                self.emit_expression(left.as_ref(), homes);
-                self.assembler.cmp_imm("rax", *value as i64);
+            (Expr::Index { slot: array_slot, size, index, .. }, Expr::IntLiteral { value, .. }) => {
+                if !self.emit_index_compare_imm(*array_slot, *size, index, *value, homes) {
+                    self.emit_expression(left.as_ref(), homes);
+                    self.assembler.cmp_imm("rax", *value as i64);
+                }
             }
-            (Expr::IntLiteral { value, .. }, Expr::Index { .. }) => {
-                self.emit_expression(right.as_ref(), homes);
-                self.assembler.cmp_imm("rax", *value as i64);
+            (Expr::IntLiteral { value, .. }, Expr::Index { slot: array_slot, size, index, .. }) => {
+                condition = mirror(condition);
+                if !self.emit_index_compare_imm(*array_slot, *size, index, *value, homes) {
+                    self.emit_expression(right.as_ref(), homes);
+                    self.assembler.cmp_imm("rax", *value as i64);
+                }
             }
             _ => {
-                let (name_slot, literal) = match (left.as_ref(), right.as_ref()) {
+                // `cmp left, right` computes left - right, so the relation keeps its
+                // order. A literal on the left mirrors it, because x86 cannot compare
+                // an immediate with a register operand in the other direction.
+                let (name_slot, literal, mirrored) = match (left.as_ref(), right.as_ref()) {
                     (Expr::Name { slot, .. }, Expr::IntLiteral { value, .. }) => {
-                        (*slot, *value as i64)
+                        (*slot, *value as i64, false)
                     }
                     (Expr::IntLiteral { value, .. }, Expr::Name { slot, .. }) => {
-                        (*slot, *value as i64)
+                        (*slot, *value as i64, true)
                     }
-                    _ => return,
+                    _ => {
+                        // Last resort: evaluate both sides and compare the registers.
+                        self.emit_expression(left.as_ref(), homes);
+                        self.assembler.push("rax");
+                        self.depth += 8;
+                        self.emit_expression(right.as_ref(), homes);
+                        self.assembler.mov_reg_reg("rcx", "rax");
+                        self.assembler.pop("rax");
+                        self.depth -= 8;
+                        self.assembler.cmp_reg_reg("rax", "rcx");
+                        self.assembler.jcc(condition, target);
+                        return;
+                    }
                 };
+                if mirrored {
+                    condition = mirror(condition);
+                }
                 let literal = if name_slot == self.delta_slot {
                     literal + self.delta_value
                 } else {
@@ -2570,6 +2598,36 @@ impl CodeGenerator {
             }
         }
         self.assembler.jcc(condition, target);
+    }
+
+    /// Compare one array element against a literal without loading it: `cmp [mem], imm`.
+    /// Reports false when the index shape or the immediate cannot take the fused form.
+    fn emit_index_compare_imm(&mut self, array_slot: i64, size: usize, index: &Expr,
+                              literal: i128, homes: &[(i64, &str)]) -> bool {
+        if !(-0x80000000..=0x7FFFFFFF).contains(&literal) {
+            return false;
+        }
+        let literal = literal as i64;
+        let base = crate::codegen::array_element_base(array_slot, size as i64);
+        let index = crate::optimize::peel_parens(Some(index)).unwrap();
+        match index {
+            Expr::Name { slot, .. } => match home_for(*slot, homes) {
+                Some(index_home) => {
+                    self.assembler.group1_store_indexed_imm(7, "rbp", index_home, 3, base, literal);
+                    true
+                }
+                None => false,
+            },
+            Expr::IntLiteral { value, .. } => {
+                if !(-0x80000000..=0x7FFFFFFF).contains(value) {
+                    return false;
+                }
+                let offset = base + 8 * (*value as i64);
+                self.assembler.group1_store_rbp_imm(7, offset, literal);
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Lower `if t > c { t = t - c; } else { t = t + c; }` as lea, sub, cmov.

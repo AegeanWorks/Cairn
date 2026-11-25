@@ -1,48 +1,16 @@
 {
   "active_task": {
-    "active_phase": 5,
-    "completed_at": 1795609641.01384,
-    "completed_head": "3098abdf49f21bba6d38888f41c3fcd20cd34fa9",
-    "completed_tree": "182fa3f6e7941915b217afdb24b0526a12a0aff6",
+    "active_phase": 4,
     "continuations": [],
     "last_phase": "in_progress",
-    "lease_until": 1795616805.46603,
+    "lease_until": 1795618580.58592,
     "owner": "kilo:goal",
     "started_by": "kilo:goal",
-    "status": "completed",
-    "task_id": "cairn-table-refresh",
-    "updated_at": 1795609605.46603
+    "status": "in_progress",
+    "task_id": "cairn-compare-fixes",
+    "updated_at": 1795611380.58592
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[2/2] landed: rotl -6.2pct in pinned A/B, element-store bug fixed, vector tail guarded; 36 golden hashes, 5 new tests, twin parity and full suite pass; checklists: passed",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-loop-duplicate",
-      "timestamp": 1795578205.3798313,
-      "timestamp_str": "2026-11-25 06:43:25"
-    },
-    {
-      "agent": "kilo:goal",
-      "delivery": {
-        "forced": false,
-        "roots": [
-          "."
-        ]
-      },
-      "description": "Task 'cairn-loop-duplicate' completed successfully.",
-      "head": "15e0d48d1b077ec6ac70c6b485d493999e798e49",
-      "phase": "completed",
-      "phase_num": 5,
-      "status": "completed",
-      "task_id": "cairn-loop-duplicate",
-      "timestamp": 1795578244.5027487,
-      "timestamp_str": "2026-11-25 06:44:04"
-    },
     {
       "agent": "kilo:goal",
       "description": "[1/2] plan: cqo division in the destination register; in-place multiply when dest is the right home",
@@ -324,6 +292,36 @@
       "task_id": "cairn-table-refresh",
       "timestamp": 1795609641.01384,
       "timestamp_str": "2026-11-25 15:27:21"
+    },
+    {
+      "agent": "kilo:goal",
+      "description": "[1/2] plan: mirror literal-first relations, general compare fallback, fused element-literal compare",
+      "files_affected": [],
+      "impact_assessment": {
+        "benefits": "correct a[i] < x and 3 < x; sieve 2.8pct fewer cycles",
+        "mitigation": "three end-to-end tests, encoder byte test, twin parity, full suite",
+        "risks": "contract: sieve dumps change; dependency: group1_store_indexed_imm already existed; concurrency: none; state: golden refreshed for 3 keys",
+        "why": "two silent condition bugs produced wrong answers; sieve can compare memory directly"
+      },
+      "phase": "in_progress",
+      "phase_num": 2,
+      "plan_digest": "2dbd3e316cfff3729ccd885138393eb5252f29a83463eb395afeb2bd3dc285a2",
+      "status": "in_progress",
+      "task_id": "cairn-compare-fixes",
+      "timestamp": 1795611222.74321,
+      "timestamp_str": "2026-11-25 15:53:42"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] landed: literal-first relations mirrored, general compare fallback, fused element compare; sieve 2.8pct in a busy window; 3 end-to-end tests plus encoder test; twin parity and full suite; ADR-218; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-compare-fixes",
+      "timestamp": 1795611380.58592,
+      "timestamp_str": "2026-11-25 15:56:20"
     }
   ],
   "version": 1
