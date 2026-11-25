@@ -3,27 +3,18 @@
   "active_task": {
     "task_id": "cairn-mandelbrot-div",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1795587845.2054372,
     "owner": "kilo:goal",
     "lease_until": 1795595045.2054372,
     "started_by": "kilo:goal",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1795587890.049354,
+    "completed_head": "ded2d7b36ee734251425d902a53227a41eb741dc",
+    "completed_tree": "b08e9bb0b71ef3c10b69eb2723f676a5ef675a59"
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[61/N] warning-free build: private capabilities, dead pe helpers, unread Binding.span, unused mut; no dump changes; ADR-198; 6/6 gates",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795540539.4416275,
-      "timestamp_str": "2026-11-24 20:15:39"
-    },
     {
       "agent": "kilo:goal",
       "checklists": "passed",
@@ -295,6 +286,23 @@
       "task_id": "cairn-mandelbrot-div",
       "timestamp": 1795587845.2054372,
       "timestamp_str": "2026-11-25 09:24:05"
+    },
+    {
+      "agent": "kilo:goal",
+      "delivery": {
+        "forced": false,
+        "roots": [
+          "."
+        ]
+      },
+      "description": "Task 'cairn-mandelbrot-div' completed successfully.",
+      "head": "ded2d7b36ee734251425d902a53227a41eb741dc",
+      "phase": "completed",
+      "phase_num": 5,
+      "status": "completed",
+      "task_id": "cairn-mandelbrot-div",
+      "timestamp": 1795587890.1325202,
+      "timestamp_str": "2026-11-25 09:24:50"
     }
   ]
 }
