@@ -3,27 +3,18 @@
   "active_task": {
     "task_id": "cairn-loop-duplicate",
     "last_phase": "in_progress",
-    "active_phase": 4,
-    "status": "in_progress",
+    "active_phase": 5,
+    "status": "completed",
     "updated_at": 1795578205.3798313,
     "owner": "kilo:goal",
     "lease_until": 1795585405.3798313,
     "started_by": "kilo:goal",
-    "continuations": []
+    "continuations": [],
+    "completed_at": 1795578244.4264927,
+    "completed_head": "15e0d48d1b077ec6ac70c6b485d493999e798e49",
+    "completed_tree": "316be182718a0e2ced07c08649685710a5fa1a0b"
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "continued_from": "opencode",
-      "description": "[59/N] mul hoist combine: splitmix -6.3pct median over 4 clean rounds vs ADR-195 build; 3 hashes refreshed; 70 byte loop pinned; 6/6 gates",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795535381.8818405,
-      "timestamp_str": "2026-11-24 18:49:41"
-    },
     {
       "agent": "kilo:goal",
       "checklists": "passed",
@@ -284,6 +275,23 @@
       "task_id": "cairn-loop-duplicate",
       "timestamp": 1795578205.3798313,
       "timestamp_str": "2026-11-25 06:43:25"
+    },
+    {
+      "agent": "kilo:goal",
+      "delivery": {
+        "forced": false,
+        "roots": [
+          "."
+        ]
+      },
+      "description": "Task 'cairn-loop-duplicate' completed successfully.",
+      "head": "15e0d48d1b077ec6ac70c6b485d493999e798e49",
+      "phase": "completed",
+      "phase_num": 5,
+      "status": "completed",
+      "task_id": "cairn-loop-duplicate",
+      "timestamp": 1795578244.5027487,
+      "timestamp_str": "2026-11-25 06:44:04"
     }
   ]
 }
