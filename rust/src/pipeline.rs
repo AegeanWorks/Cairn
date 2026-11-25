@@ -24,6 +24,7 @@ pub enum Stage {
     CopyPropAgain,
     ShiftUnroll,
     Induction,
+    LoopDuplicate,
     Rotate,
     Generate,
     Done,
@@ -46,7 +47,8 @@ impl Stage {
             Self::OddPair => Self::CopyPropAgain,
             Self::CopyPropAgain => Self::ShiftUnroll,
             Self::ShiftUnroll => Self::Induction,
-            Self::Induction => Self::Rotate,
+            Self::Induction => Self::LoopDuplicate,
+            Self::LoopDuplicate => Self::Rotate,
             Self::Rotate => Self::Generate,
             Self::Generate | Self::Done => Self::Done,
         }
@@ -72,6 +74,7 @@ impl Stage {
             Self::CopyPropAgain => "copy-prop-again",
             Self::ShiftUnroll => "shift-unroll",
             Self::Induction => "induction",
+            Self::LoopDuplicate => "loop-duplicate",
             Self::Rotate => "rotate",
             Self::Generate => "generate",
             Self::Done => "done",
@@ -113,6 +116,9 @@ impl Stage {
             }
             Self::Induction => {
                 optimize::apply_induction_strength_reduction(program);
+            }
+            Self::LoopDuplicate => {
+                optimize::apply_counted_loop_duplication(program);
             }
             Self::Rotate => {
                 optimize::apply_bottom_test_rotation(program);
@@ -166,7 +172,7 @@ mod tests {
         while !stage.is_terminal() {
             stage = stage.next();
             count += 1;
-            assert!(count <= 16);
+            assert!(count <= 17);
         }
         assert_eq!(stage, Stage::Done);
         assert_eq!(Stage::Done.next(), Stage::Done);

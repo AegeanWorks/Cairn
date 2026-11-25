@@ -581,6 +581,7 @@ fn main() {
                         }
                         cairn_rs::optimize::apply_shift_loop_unrolling(&mut result);
                         cairn_rs::optimize::apply_induction_strength_reduction(&mut result);
+                        cairn_rs::optimize::apply_counted_loop_duplication(&mut result);
                         cairn_rs::optimize::apply_bottom_test_rotation(&mut result);
                         Ok(result)
                     });

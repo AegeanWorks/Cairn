@@ -1885,6 +1885,41 @@ impl CodeGenerator {
                     _ => self.emit_value(*slot, value, homes),
                 }
             }
+            Stmt::Assign { slot, value, index: Some(index), array_size: Some(size), .. } => {
+                // Any other element store: `a[e] = value`. The index is settled first so
+                // a value that reads the array or calls cannot disturb it, then the value
+                // is evaluated into rax and stored through the element address.
+                let displacement = crate::codegen::array_element_base(*slot, *size as i64);
+                enum Anchor<'a> { Home(&'a str), Constant(i128), Pushed }
+                let anchor = match crate::optimize::peel_parens(Some(index)).unwrap() {
+                    Expr::Name { slot: index_slot, .. }
+                        if home_for(*index_slot, homes).is_some() =>
+                    {
+                        Anchor::Home(home_for(*index_slot, homes).unwrap())
+                    }
+                    Expr::IntLiteral { value, .. } => Anchor::Constant(*value),
+                    other => {
+                        self.emit_into(other, "rax", homes);
+                        self.assembler.push("rax");
+                        self.depth += 8;
+                        Anchor::Pushed
+                    }
+                };
+                self.emit_expression(value, homes);
+                match anchor {
+                    Anchor::Home(index_home) => self.assembler.mov_store_indexed(
+                        "rbp", index_home, 3, displacement, "rax"),
+                    Anchor::Constant(constant) => {
+                        let offset = displacement + 8 * constant as i64;
+                        self.assembler.binary_store_rbp(0x89, offset, "rax");
+                    }
+                    Anchor::Pushed => {
+                        self.assembler.pop("rcx");
+                        self.depth -= 8;
+                        self.assembler.mov_store_indexed("rbp", "rcx", 3, displacement, "rax");
+                    }
+                }
+            }
             Stmt::Let { slot, value, .. } | Stmt::Assign { slot, value, .. } => {
                 if !self.try_fold_frame_update(*slot, value, homes) {
                     self.emit_value(*slot, value, homes);
@@ -2245,12 +2280,13 @@ impl CodeGenerator {
         self.assembler.jmp(&wide_again);
         let wide_done_label = wide_done.clone();
         self.assembler.label(&wide_done_label);
-        // Two-element tail for the final pair (or the whole loop when bound < 4).
+        // Two-element pass for the remaining pair; the guard is `i <= bound - 2` so it
+        // never reads past the bound however the loop's start lines up with its bound.
         let start_label = start.clone();
         self.assembler.label(&start_label);
-        self.assembler.cmp_imm(index_home, bound as i64);
+        self.assembler.cmp_imm(index_home, bound as i64 - 2);
         let done = end.clone();
-        self.assembler.jcc("ge", &done);
+        self.assembler.jcc("g", &done);
         self.assembler.movdqu_load_indexed("xmm0", "rbp", index_home, 3, displacement);
         self.assembler.paddq_reg("xmm0", "xmm1");
         self.assembler.movdqu_store_indexed("rbp", index_home, 3, displacement, "xmm0");
@@ -2259,6 +2295,17 @@ impl CodeGenerator {
         self.assembler.jmp(&again);
         let end_label = end.clone();
         self.assembler.label(&end_label);
+        // A single scalar element when the pair passes leave one behind (an odd start or
+        // an odd bound). At most one element can remain, so no loop is needed.
+        self.assembler.cmp_imm(index_home, bound as i64);
+        let scalar_done = self.fresh("vec_rmw.scalar.done");
+        self.assembler.jcc("ge", &scalar_done);
+        self.assembler.mov_load_indexed("rax", "rbp", index_home, 3, displacement);
+        self.assembler.binary(0x01, "rax", addend_home);
+        self.assembler.mov_store_indexed("rbp", index_home, 3, displacement, "rax");
+        self.assembler.add_imm(index_home, 1);
+        let scalar_label = scalar_done.clone();
+        self.assembler.label(&scalar_label);
         true
     }
 

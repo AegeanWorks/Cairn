@@ -1369,6 +1369,155 @@ pub fn apply_countdown_latches(program: &mut Program) -> usize {
     changed
 }
 
+const DUPLICATED_BODY_STATEMENTS: usize = 10;
+// Builtins the generator lowers inline; duplicating them costs only the instructions.
+const DUPLICATED_BODY_BUILTINS: &[&str] = &["clz", "ctz", "bswap", "rotl"];
+
+/// Duplicate a counted loop body so two iterations share one test.
+///
+/// `while i < N { BODY }`, where BODY ends in `i = i + 1` and nothing else writes i,
+/// becomes `while i < N-1 { BODY BODY }` followed by the original loop. The wide loop
+/// only runs when two full iterations are still owed, so its two bodies are exactly the
+/// next two iterations; the tail can then run at most once. Both loops test a live value,
+/// so a bound that is never reached still spins exactly as before. Negated and inclusive
+/// bounds are rewritten to the same `i < N'` form, and nothing about the body's order or
+/// effects changes, which the twin gate checks byte for byte.
+pub fn apply_counted_loop_duplication(program: &mut Program) -> usize {
+    let mut duplicated = 0;
+    for function in &mut program.functions {
+        duplicated += duplicate_counted_once(&mut function.body);
+    }
+    duplicated
+}
+
+fn duplicate_counted_once(block: &mut Block) -> usize {
+    for index in 0..block.statements.len() {
+        match &mut block.statements[index] {
+            Stmt::If { then_block, else_block, .. } => {
+                let found = duplicate_counted_once(then_block);
+                if found > 0 {
+                    return found;
+                }
+                if let Some(otherwise) = else_block {
+                    let found = duplicate_counted_once(otherwise);
+                    if found > 0 {
+                        return found;
+                    }
+                }
+            }
+            Stmt::While { body, .. } => {
+                let found = duplicate_counted_once(body);
+                if found > 0 {
+                    return found;
+                }
+            }
+            Stmt::Block(inner) => {
+                let found = duplicate_counted_once(inner);
+                if found > 0 {
+                    return found;
+                }
+            }
+            _ => {}
+        }
+    }
+    for index in 0..block.statements.len() {
+        let Stmt::While { condition, body, span, countdown } = &block.statements[index] else {
+            continue;
+        };
+        let Some((counter, counter_name, bound, inclusive)) = counted_loop_shape(condition) else {
+            continue;
+        };
+        if !is_duplicable_body(body, counter) {
+            continue;
+        }
+        let wide_bound = if inclusive { bound } else { bound - 1 };
+        let wide_condition = Expr::Binary {
+            span: condition.span(),
+            op: "<".to_string(),
+            left: Box::new(Expr::Name {
+                span: condition.span(),
+                name: counter_name.to_string(),
+                slot: counter,
+            }),
+            right: Box::new(Expr::IntLiteral { span: condition.span(), value: wide_bound }),
+        };
+        let mut doubled = body.statements.clone();
+        doubled.extend(body.statements.iter().cloned());
+        let wide = Stmt::While {
+            span: *span,
+            condition: wide_condition,
+            body: Block { span: body.span, statements: doubled },
+            countdown: *countdown,
+        };
+        let tail = block.statements[index].clone();
+        block.statements[index] = wide;
+        block.statements.insert(index + 1, tail);
+        return 1;
+    }
+    0
+}
+
+/// `while i < N` or `while i <= N` with a literal bound, as the counter and its bound.
+fn counted_loop_shape(condition: &Expr) -> Option<(i64, &str, i128, bool)> {
+    let Expr::Binary { op, left, right, .. } = peel_parens(Some(condition)).unwrap() else {
+        return None;
+    };
+    if op != "<" && op != "<=" {
+        return None;
+    }
+    let Expr::Name { name, slot, .. } = peel_parens(Some(left)).unwrap() else {
+        return None;
+    };
+    let Expr::IntLiteral { value, .. } = peel_parens(Some(right)).unwrap() else {
+        return None;
+    };
+    if op == "<" && *value == i128::MIN {
+        return None;
+    }
+    Some((*slot, name.as_str(), *value, op == "<="))
+}
+
+/// True when the body can be executed twice in a row without changing meaning: every
+/// statement is straight-line, nothing jumps out of the loop, there is no inner loop to
+/// multiply, and the only write to the counter is the final `+ 1`.
+fn is_duplicable_body(body: &Block, counter: i64) -> bool {
+    if body.statements.is_empty() || body.statements.len() > DUPLICATED_BODY_STATEMENTS {
+        return false;
+    }
+    let Some(last) = body.statements.last() else {
+        return false;
+    };
+    if !matches!(counter_step(last, counter), Some(Step::Add(1))) {
+        return false;
+    }
+    if writes_slot(&body.statements[..body.statements.len() - 1], counter) {
+        return false;
+    }
+    body.statements.iter().all(duplicable_statement)
+}
+
+fn duplicable_statement(statement: &Stmt) -> bool {
+    match statement {
+        // An element store breaks the shapes the vectoriser and the array-fill helper
+        // recognise, and a call makes the body expensive to repeat, so both stay alone.
+        Stmt::Assign { index: Some(_), .. } => false,
+        Stmt::Let { value, .. } | Stmt::Assign { value, .. } => {
+            !has_call(Some(value), DUPLICATED_BODY_BUILTINS)
+        }
+        Stmt::ExprStmt { .. } => false,
+        Stmt::If { condition, then_block, else_block, .. } => {
+            !has_call(Some(condition), DUPLICATED_BODY_BUILTINS)
+                && then_block.statements.iter().all(duplicable_statement)
+                && else_block.as_ref().map_or(true, |block| {
+                    block.statements.iter().all(duplicable_statement)
+                })
+        }
+        Stmt::Block(inner) => inner.statements.iter().all(duplicable_statement),
+        Stmt::While { .. } | Stmt::For { .. } | Stmt::Break { .. }
+        | Stmt::Continue { .. } | Stmt::Return { .. } => false,
+    }
+}
+
 const UNROLL_TRIP_LIMIT: usize = 16;
 const UNROLL_BODY_STATEMENTS: usize = 8;
 
@@ -2772,8 +2921,11 @@ fn induction_block(block: &mut Block, next_slot: &mut usize) -> usize {
                     other => rewritten.push(other.clone()),
                 }
             }
-            rewritten.push(body.statements.last().unwrap().clone());
+            // The running-product updates go before the counter step so the loop body
+            // still ends with `i = i + 1`; the later body-duplication stage copies the
+            // whole body, updates included, and so keeps the product correct.
             rewritten.extend(increments);
+            rewritten.push(body.statements.last().unwrap().clone());
             let mut new_statement = statement;
             if let Stmt::While { body: target, .. } = &mut new_statement {
                 target.statements = rewritten;

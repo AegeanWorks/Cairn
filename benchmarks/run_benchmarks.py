@@ -694,8 +694,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         stalled = stalled_cases(record, previous)
         if stalled:
             print("[REFUSED] the window stalled mid-run on " + ", ".join(stalled)
-                  + f" (Cairn and C bests both over {STALL_RATIO:.0f}x the"
-                  " previous quiet record); rerun with --save in a quiet window")
+                  + f" (a best above {STALL_RATIO:g}x the previous"
+                  " quiet record); rerun with --save in a quiet window")
         else:
             save_record(HISTORY, record)
             print(f"[SAVED] {HISTORY.relative_to(ROOT)}")

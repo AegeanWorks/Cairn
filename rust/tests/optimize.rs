@@ -264,3 +264,64 @@ fn a_constant_if_is_replaced_by_its_branch() {
     assert!(matches!(folded.functions[0].body.statements[0],
                      cairn_rs::syntax::Stmt::Return { .. }));
 }
+
+#[test]
+fn a_counted_loop_body_is_duplicated_behind_a_shrunk_bound() {
+    let mut program = analysed(
+        "fn main() -> i64 { var t: i64 = 0; var i: i64 = 0; \
+         while i < 10 { t = t + i; i = i + 1; } return t; }",
+    );
+    let changed = optimize::apply_counted_loop_duplication(&mut program);
+    assert_eq!(changed, 1, "the loop should be duplicated exactly once");
+    let statements = &program.functions[0].body.statements;
+    let cairn_rs::syntax::Stmt::While { condition, body, .. } = &statements[2] else {
+        panic!("expected the widened loop at index 2");
+    };
+    assert_eq!(format!("{}", condition.span().start) != "", true);
+    let text = format!("{:?}", condition);
+    assert!(text.contains("value: 9"), "the wide bound should be one less");
+    assert_eq!(body.statements.len(), 4, "two copies of a two-statement body");
+    assert!(matches!(&statements[3], cairn_rs::syntax::Stmt::While { .. }),
+            "the original loop must follow as the one-shot tail");
+    let tail = format!("{:?}", statements[3]);
+    assert!(tail.contains("value: 10"), "the tail keeps the original bound");
+}
+
+#[test]
+fn an_inclusive_bound_duplicates_with_the_same_literal() {
+    let mut program = analysed(
+        "fn main() -> i64 { var t: i64 = 0; var i: i64 = 0; \
+         while i <= 10 { t = t + i; i = i + 1; } return t; }",
+    );
+    assert_eq!(optimize::apply_counted_loop_duplication(&mut program), 1);
+    let statements = &program.functions[0].body.statements;
+    let wide = format!("{:?}", statements[2]);
+    assert!(wide.contains("value: 10"), "i <= 10 widens to i < 10");
+}
+
+#[test]
+fn a_loop_whose_counter_moves_elsewhere_is_left_alone() {
+    let mut program = analysed(
+        "fn main() -> i64 { var t: i64 = 0; var i: i64 = 0; \
+         while i < 10 { i = i + 1; t = t + i; i = i + 1; } return t; }",
+    );
+    assert_eq!(optimize::apply_counted_loop_duplication(&mut program), 0);
+}
+
+#[test]
+fn only_the_inner_loop_is_duplicated_when_loops_nest() {
+    let mut program = analysed(
+        "fn main() -> i64 { var t: i64 = 0; var i: i64 = 0; var j: i64 = 0; \
+         while i < 10 { j = 0; while j < 3 { j = j + 1; } t = t + j; i = i + 1; } return t; }",
+    );
+    assert_eq!(optimize::apply_counted_loop_duplication(&mut program), 1);
+    let statements = &program.functions[0].body.statements;
+    let outer = statements.iter().find_map(|statement| {
+        let cairn_rs::syntax::Stmt::While { .. } = statement else { return None };
+        Some(format!("{:?}", statement))
+    }).expect("the outer loop is still in the body");
+    assert!(outer.contains("value: 10"),
+            "the outer loop keeps its bound because its body holds a loop");
+    assert_eq!(outer.matches("value: 3").count(), 1,
+               "just the inner loop is widened");
+}

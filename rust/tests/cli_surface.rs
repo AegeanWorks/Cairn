@@ -87,3 +87,34 @@ fn capabilities_publishes_the_manifest() {
     assert!(text.contains("\"name\": \"cairn\""), "manifest has no name");
     assert!(text.contains("\"commands\""), "manifest has no command list");
 }
+
+#[test]
+fn an_indexed_store_with_an_expression_writes_the_element() {
+    let folder = scratch("indexed-store");
+    let source = folder.join("store.crn");
+    std::fs::write(&source, "\
+fn main() -> i64 {
+    var a: [4]i64 = [0; 4];
+    var i: i64 = 0;
+    while i < 4 { a[i] = i + 10; i = i + 1; }
+    var r: i64 = 0;
+    while r < 3 {
+        i = 0;
+        while i < 4 { a[i] = a[i] + 1; i = i + 1; }
+        r = r + 1;
+    }
+    print(a[0]);
+    print(a[1]);
+    print(a[2]);
+    print(a[3]);
+    return 0;
+}
+").unwrap();
+    let output = std::process::Command::new(binary())
+        .arg("run").arg(&source)
+        .output().expect("build the Rust binary before running this test");
+    assert!(output.status.success(), "{}",
+            String::from_utf8_lossy(&output.stderr));
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "13\n14\n15\n16\n");
+    let _ = std::fs::remove_dir_all(&folder);
+}

@@ -1,44 +1,17 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-shift-unroll",
+    "task_id": "cairn-loop-duplicate",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1795563073.718539,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1795578205.3798313,
     "owner": "kilo:goal",
-    "lease_until": 1795570273.718539,
+    "lease_until": 1795585405.3798313,
     "started_by": "kilo:goal",
-    "continuations": [],
-    "completed_at": 1795563246.370485,
-    "completed_head": "705b6e076a37b6682c0677a888db07b96bbb2c9f",
-    "completed_tree": "a48d4e5a42d562e67b752c251b2d59ab02bf8d1d"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "agent": "opencode",
-      "checklists": "passed",
-      "description": "extended strict AB: 8 clean rounds all negative median -1.84 and -2.68 pct vs control 0.15-0.63 pct; 6/6 gates",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 1,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795526026.833166,
-      "timestamp_str": "2026-11-24 16:13:46"
-    },
-    {
-      "agent": "opencode",
-      "checklists": "passed",
-      "description": "direct hoisted literal combine: popcount -11.9pct splitmix -3.0pct robust; mixed small effects elsewhere; 6/6 gates",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 1,
-      "status": "in_progress",
-      "task_id": "cairn-rs-codegen",
-      "timestamp": 1795529529.6979244,
-      "timestamp_str": "2026-11-24 17:12:09"
-    },
     {
       "agent": "kilo:goal",
       "continued_from": "opencode",
@@ -281,6 +254,36 @@
       "task_id": "cairn-shift-unroll",
       "timestamp": 1795563247.042982,
       "timestamp_str": "2026-11-25 02:34:07"
+    },
+    {
+      "agent": "kilo:goal",
+      "description": "[1/2] plan: duplicate counted loop bodies after induction, fix general element stores, guard the vector tail",
+      "files_affected": [],
+      "impact_assessment": {
+        "benefits": "rotl 6.2pct faster; correct a[i] = expression stores",
+        "mitigation": "twin parity, four optimizer tests, one end-to-end store test, full suite",
+        "risks": "contract: IR and image dumps change; dependency: none; concurrency: none; state: golden manifest refreshed",
+        "why": "rotl trailed Rust by 11pct; two latent element-store bugs surfaced"
+      },
+      "phase": "in_progress",
+      "phase_num": 2,
+      "plan_digest": "7d1844149c778490cd57e837fd49d339288ecbd09204ae07e3aae015eb5b5e6d",
+      "status": "in_progress",
+      "task_id": "cairn-loop-duplicate",
+      "timestamp": 1795578034.9659252,
+      "timestamp_str": "2026-11-25 06:40:34"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] landed: rotl -6.2pct in pinned A/B, element-store bug fixed, vector tail guarded; 36 golden hashes, 5 new tests, twin parity and full suite pass; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-loop-duplicate",
+      "timestamp": 1795578205.3798313,
+      "timestamp_str": "2026-11-25 06:43:25"
     }
   ]
 }

@@ -314,8 +314,9 @@ comparison.
 Measured on the development machine (Windows x86-64) with the Rust release build of the
 compiler, against MinGW GCC 16.2.0 (WinLibs UCRT), MinGW G++ 16.2.0 (same WinLibs toolchain,
 `-O2`) and rustc 1.100.0 (pc-windows-gnu). The numbers come from the newest clean record in
-`.aikit/benchmark_history.jsonl`, captured at commit `92d2757` with the compiler source of
-this tree (quiet-window probe 13.1 ms, nine rounds per case, best time kept). Independent
+`.aikit/benchmark_history.jsonl`, captured at commit `92d2757` (quiet-window probe 13.1 ms,
+nine rounds per case, best time kept); later commits change loop duplication only, and their
+effect is listed under the table once a quiet window is available. Independent
 runs drift by about 10 percent, so a gap smaller than that band reads as a tie, not a
 standing:
 
