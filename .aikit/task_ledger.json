@@ -1,55 +1,17 @@
 {
   "version": 1,
   "active_task": {
-    "task_id": "cairn-harness-pin",
+    "task_id": "cairn-edge-tests",
     "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1795601482.371565,
+    "active_phase": 4,
+    "status": "in_progress",
+    "updated_at": 1795602665.4671452,
     "owner": "kilo:goal",
-    "lease_until": 1795608682.371565,
+    "lease_until": 1795609865.4671452,
     "started_by": "kilo:goal",
-    "continuations": [],
-    "completed_at": 1795601510.888659,
-    "completed_head": "2f445e231757df0523aad493c09cbba01905de84",
-    "completed_tree": "5fc29b035b799d7236941eb69e8f6f5e6f08002e"
+    "continuations": []
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "delivery": {
-        "forced": false,
-        "roots": [
-          "."
-        ]
-      },
-      "description": "Task 'cairn-bit-builtins' completed successfully.",
-      "head": "ca76211c838661f31b0afc7dda2dd0088eb3a401",
-      "phase": "completed",
-      "phase_num": 5,
-      "status": "completed",
-      "task_id": "cairn-bit-builtins",
-      "timestamp": 1795559294.5687878,
-      "timestamp_str": "2026-11-25 01:28:14"
-    },
-    {
-      "agent": "kilo:goal",
-      "description": "[1/2] plan: unroll one-bit shift loops by two with a one-shot tail, preserving the zero case",
-      "files_affected": [],
-      "impact_assessment": {
-        "benefits": "binary_gcd about 8 percent faster, ahead of all three baselines",
-        "mitigation": "three optimizer tests, twin parity, full suite, paired A/B",
-        "risks": "contract: IR and image dumps change; dependency: none; concurrency: none; state: golden manifest refreshed for 6 keys",
-        "why": "binary_gcd was 11 percent behind Rust; LLVM tests two low bits per shift"
-      },
-      "phase": "in_progress",
-      "phase_num": 2,
-      "plan_digest": "6a9ce7f6339b1872c0fa33ef878c584ca14bf9c543ecc56afac78d7cec64469d",
-      "status": "in_progress",
-      "task_id": "cairn-shift-unroll",
-      "timestamp": 1795561683.097083,
-      "timestamp_str": "2026-11-25 02:08:03"
-    },
     {
       "agent": "kilo:goal",
       "checklists": "passed",
@@ -325,6 +287,36 @@
       "task_id": "cairn-harness-pin",
       "timestamp": 1795601511.1843042,
       "timestamp_str": "2026-11-25 13:11:51"
+    },
+    {
+      "agent": "kilo:goal",
+      "description": "[1/2] tests-only: rotl count aliasing the destination, popcount home targeting, duplicated body with break",
+      "files_affected": [],
+      "impact_assessment": {
+        "benefits": "wrong answers fail the suite",
+        "mitigation": "three end-to-end value assertions",
+        "risks": "contract: none; dependency: none; concurrency: none; state: none",
+        "why": "the new transforms fail silently if wrong and no benchmark covers their risky shapes"
+      },
+      "phase": "in_progress",
+      "phase_num": 2,
+      "plan_digest": "41a9f916d48059383d8f3a3979b58fab23d12cb10393f959f87afcecbaf52c76",
+      "status": "in_progress",
+      "task_id": "cairn-edge-tests",
+      "timestamp": 1795602511.1615388,
+      "timestamp_str": "2026-11-25 13:28:31"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] landed: three end-to-end value tests for rotl aliasing, popcount homes and break guard; ADR-216; full suite and 5/5 gates; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-edge-tests",
+      "timestamp": 1795602665.4671452,
+      "timestamp_str": "2026-11-25 13:31:05"
     }
   ]
 }
