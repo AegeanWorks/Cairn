@@ -1,34 +1,19 @@
 {
   "active_task": {
-    "active_phase": 4,
+    "active_phase": 5,
+    "completed_at": 1795611392.101,
+    "completed_head": "ab82951fdbdd1ae7ca38904a878d7eada1e68383",
+    "completed_tree": "96b6f7a01cb74123f13b3f12d3fa0ec9001723a3",
     "continuations": [],
     "last_phase": "in_progress",
     "lease_until": 1795618580.58592,
     "owner": "kilo:goal",
     "started_by": "kilo:goal",
-    "status": "in_progress",
+    "status": "completed",
     "task_id": "cairn-compare-fixes",
     "updated_at": 1795611380.58592
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "description": "[1/2] plan: cqo division in the destination register; in-place multiply when dest is the right home",
-      "files_affected": [],
-      "impact_assessment": {
-        "benefits": "inner loop to 19 instructions; 1.7-4.3pct fewer cycles",
-        "mitigation": "full suite, twin parity, pinned A/B",
-        "risks": "contract: mandelbrot dumps change; dependency: none; concurrency: none; state: golden refreshed for 3 keys",
-        "why": "mandelbrot inner loop ran 22 instructions against GCC 19"
-      },
-      "phase": "in_progress",
-      "phase_num": 2,
-      "plan_digest": "829c332515ae0983304ce19f36d09793e2e68abd68115d560d7cbbf3096d79d5",
-      "status": "in_progress",
-      "task_id": "cairn-mandelbrot-div",
-      "timestamp": 1795587470.0374856,
-      "timestamp_str": "2026-11-25 09:17:50"
-    },
     {
       "agent": "kilo:goal",
       "checklists": "passed",
@@ -322,6 +307,23 @@
       "task_id": "cairn-compare-fixes",
       "timestamp": 1795611380.58592,
       "timestamp_str": "2026-11-25 15:56:20"
+    },
+    {
+      "agent": "kilo:goal",
+      "delivery": {
+        "forced": false,
+        "roots": [
+          ""
+        ]
+      },
+      "description": "Task 'cairn-compare-fixes' completed successfully.",
+      "head": "ab82951fdbdd1ae7ca38904a878d7eada1e68383",
+      "phase": "completed",
+      "phase_num": 5,
+      "status": "completed",
+      "task_id": "cairn-compare-fixes",
+      "timestamp": 1795611392.101,
+      "timestamp_str": "2026-11-25 15:56:32"
     }
   ],
   "version": 1
