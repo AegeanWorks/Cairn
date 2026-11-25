@@ -1,49 +1,16 @@
 {
-  "version": 1,
   "active_task": {
-    "task_id": "cairn-edge-tests",
-    "last_phase": "in_progress",
-    "active_phase": 5,
-    "status": "completed",
-    "updated_at": 1795602665.4671452,
-    "owner": "kilo:goal",
-    "lease_until": 1795609865.4671452,
-    "started_by": "kilo:goal",
+    "active_phase": 4,
     "continuations": [],
-    "completed_at": 1795602667.2226627,
-    "completed_head": "300543f88982cf1bff2f86db9f4050c55abecf43",
-    "completed_tree": "ea265befc69f3ca87d454874d39cf87a846d1145"
+    "last_phase": "in_progress",
+    "lease_until": 1795616805.46603,
+    "owner": "kilo:goal",
+    "started_by": "kilo:goal",
+    "status": "in_progress",
+    "task_id": "cairn-table-refresh",
+    "updated_at": 1795609605.46603
   },
   "checkpoints": [
-    {
-      "agent": "kilo:goal",
-      "checklists": "passed",
-      "description": "[2/2] README table refreshed from the clean record, stall guard added to the harness (1.5x, any language) with ADR-208 and a README rule; checklists: passed",
-      "files_affected": [],
-      "phase": "in_progress",
-      "phase_num": 4,
-      "status": "in_progress",
-      "task_id": "cairn-shift-unroll",
-      "timestamp": 1795563073.718539,
-      "timestamp_str": "2026-11-25 02:31:13"
-    },
-    {
-      "agent": "kilo:goal",
-      "delivery": {
-        "forced": false,
-        "roots": [
-          "."
-        ]
-      },
-      "description": "Task 'cairn-shift-unroll' completed successfully.",
-      "head": "705b6e076a37b6682c0677a888db07b96bbb2c9f",
-      "phase": "completed",
-      "phase_num": 5,
-      "status": "completed",
-      "task_id": "cairn-shift-unroll",
-      "timestamp": 1795563247.042982,
-      "timestamp_str": "2026-11-25 02:34:07"
-    },
     {
       "agent": "kilo:goal",
       "description": "[1/2] plan: duplicate counted loop bodies after induction, fix general element stores, guard the vector tail",
@@ -325,6 +292,37 @@
       "task_id": "cairn-edge-tests",
       "timestamp": 1795602667.294758,
       "timestamp_str": "2026-11-25 13:31:07"
+    },
+    {
+      "agent": "kilo:goal",
+      "description": "[1/2] docs-only: rebuild the table from the pinned core-10 record and state the banded standings",
+      "files_affected": [],
+      "impact_assessment": {
+        "benefits": "the table matches the shipped compiler, with zero banded losses",
+        "mitigation": "record is pinned with probe 13.97 ms; sizes measured from the current compiler",
+        "risks": "contract: none; dependency: none; concurrency: none; state: one new history record",
+        "why": "the table predated ADR-212/213/215"
+      },
+      "phase": "in_progress",
+      "phase_num": 2,
+      "plan_digest": "e3d793279a305d4290087b2237503bf0e4d28ad3b6670f70ec4d912e1d6a5363",
+      "status": "in_progress",
+      "task_id": "cairn-table-refresh",
+      "timestamp": 1795609353.87405,
+      "timestamp_str": "2026-11-25 15:22:33"
+    },
+    {
+      "agent": "kilo:goal",
+      "checklists": "passed",
+      "description": "[2/2] landed: table rebuilt from the core-10 pinned record (probe 13.97 ms); zero banded losses vs all three baselines; ADR-217; 5/5 gates; checklists: passed",
+      "files_affected": [],
+      "phase": "in_progress",
+      "phase_num": 4,
+      "status": "in_progress",
+      "task_id": "cairn-table-refresh",
+      "timestamp": 1795609605.46603,
+      "timestamp_str": "2026-11-25 15:26:45"
     }
-  ]
+  ],
+  "version": 1
 }

@@ -314,44 +314,37 @@ comparison.
 Measured on the development machine (Windows x86-64) with the Rust release build of the
 compiler, against MinGW GCC 16.2.0 (WinLibs UCRT), MinGW G++ 16.2.0 (same WinLibs toolchain,
 `-O2`) and rustc 1.100.0 (pc-windows-gnu). The numbers come from the newest clean record in
-`.aikit/benchmark_history.jsonl`, captured at commit `92d2757` (quiet-window probe 13.1 ms,
-nine rounds per case, best time kept). Independent runs drift by about 10 percent, so a gap
-smaller than that band reads as a tie, not a standing. Later commits changed code generation
-for nine of these cases; the other fifteen are byte-identical. Against the compiler of that
-row, a pinned-core best-of-12 cycle A/B with control error near 1 percent measured inline
-POPCNT taking `popcount` 11.4 percent lower, counted-loop duplication taking `rotl` 6.6,
-`ctz` 6.1, `clz` 4.3 and `bswap` 1.4 percent lower, and cqo division in the destination
-taking `mandelbrot` 2.6 percent lower; `array_sum`, `hex_io` and `many_params` moved less
-than 1.5 percent, inside that method's noise. No case regressed. The table will be
-re-captured when the machine next yields a quiet window; the harness refuses to save a
-record when any language stalls by more than half.
+`.aikit/benchmark_history.jsonl`, captured at commit `18331c7` with the harness and every
+program pinned to one CPU (quiet-window probe 14.0 ms, seven rounds per case, best time
+kept). Independent runs drift by about 10 percent, so a gap smaller than that band reads as
+a tie, not a standing:
 
 | Case | Work | Cairn | C | C++ | Rust | Cairn image |
 |---|---|---|---|---|---|---|
-| `xorshift` | 200,000,000 serial xorshift steps | 278.1 ms | 275.2 ms | 275.5 ms | 285.6 ms | 136,704 bytes |
-| `fib30` | 2,692,537 recursive calls | 10.6 ms | 10.3 ms | 10.2 ms | 11.8 ms | 146,944 bytes |
-| `folded_math` | 20,000,000 bit-mixed constant additions | 19.1 ms | 19.7 ms | 18.7 ms | 21.2 ms | 136,704 bytes |
-| `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 92.7 ms | 145.4 ms | 147.8 ms | 134.8 ms | 136,704 bytes |
-| `ackermann` | `A(3,9)`, about 25 million calls | 11.5 ms | 16.5 ms | 16.5 ms | 17.9 ms | 137,216 bytes |
-| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 18.9 ms | 23.4 ms | 23.4 ms | 19.0 ms | 137,728 bytes |
-| `binary_gcd` | 1,000,000 Stein-GCD pairs | 123.0 ms | 160.4 ms | 164.2 ms | 141.8 ms | 137,216 bytes |
-| `call_chain` | 20,000,000 three-argument hot-path calls | 35.8 ms | 35.1 ms | 34.0 ms | 76.1 ms | 136,704 bytes |
-| `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 10.2 ms | 9.9 ms | 9.4 ms | 10.5 ms | 136,704 bytes |
-| `primes` | trial division over 2..300000 | 19.8 ms | 26.2 ms | 26.4 ms | 21.4 ms | 137,216 bytes |
-| `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.3 ms | 12.3 ms | 12.1 ms | 13.2 ms | 137,216 bytes |
-| `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 81.1 ms | 93.3 ms | 95.7 ms | 98.9 ms | 136,704 bytes |
-| `hex_io` | 400,000 hex-format-then-print values | 26.0 ms | 4702.8 ms | 393.6 ms | 650.9 ms | 136,704 bytes |
-| `many_params` | 10,000,000 six-argument mix calls under an `argc`-derived bound | 13.1 ms | 13.3 ms | 15.6 ms | 14.1 ms | 136,704 bytes |
-| `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 20.3 ms | 21.4 ms | 21.7 ms | 24.7 ms | 136,704 bytes |
-| `char_stream` | 4 MiB piped through `read_char()`, summed | 10.5 ms | 75.0 ms | 72.8 ms | 14.2 ms | 136,704 bytes |
-| `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 13.8 ms | 13.9 ms | 13.7 ms | 31.7 ms | 136,704 bytes |
-| `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 9.9 ms | 10.2 ms | 10.2 ms | 11.2 ms | 137,216 bytes |
-| `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 9.3 ms | 9.6 ms | 9.0 ms | 10.4 ms | 136,704 bytes |
-| `popcount` | 10,000,000 derived values, set-bit count summed | 14.9 ms | 149.3 ms | 27.2 ms | 19.2 ms | 136,704 bytes |
-| `clz` | 10,000,000 derived values, leading-zero count summed | 14.0 ms | 31.2 ms | 15.0 ms | 14.8 ms | 136,704 bytes |
-| `ctz` | 10,000,000 derived values, trailing-zero count summed | 14.1 ms | 19.0 ms | 14.5 ms | 13.9 ms | 136,704 bytes |
-| `bswap` | 10,000,000 byte-swapped values, summed | 15.0 ms | 41.6 ms | 15.4 ms | 14.8 ms | 136,704 bytes |
-| `rotl` | 10,000,000 rotate-left rounds with a masked accumulator | 16.5 ms | 16.8 ms | 17.2 ms | 14.8 ms | 136,704 bytes |
+| `xorshift` | 200,000,000 serial xorshift steps | 291.8 ms | 301.5 ms | 282.5 ms | 287.9 ms | 136,704 bytes |
+| `fib30` | 2,692,537 recursive calls | 11.0 ms | 11.7 ms | 11.4 ms | 13.3 ms | 146,944 bytes |
+| `folded_math` | 20,000,000 bit-mixed constant additions | 20.4 ms | 20.6 ms | 21.4 ms | 21.7 ms | 136,704 bytes |
+| `collatz` | 1,000,000 probes of the `3k+1` map, 131,434,272 steps | 103.7 ms | 166.5 ms | 152.3 ms | 142.9 ms | 136,704 bytes |
+| `ackermann` | `A(3,9)`, about 25 million calls | 12.0 ms | 17.0 ms | 17.3 ms | 50.3 ms | 137,216 bytes |
+| `nqueens` | N=12 bitmask backtracking, 14,200 solutions | 19.9 ms | 23.3 ms | 24.4 ms | 20.4 ms | 137,728 bytes |
+| `binary_gcd` | 1,000,000 Stein-GCD pairs | 129.3 ms | 165.4 ms | 165.4 ms | 145.1 ms | 137,216 bytes |
+| `call_chain` | 20,000,000 three-argument hot-path calls | 33.9 ms | 36.2 ms | 35.2 ms | 72.3 ms | 136,704 bytes |
+| `tak` | Takeuchi `tak(18,12,6)`, 63,609 three-argument calls | 9.4 ms | 9.9 ms | 9.8 ms | 11.4 ms | 136,704 bytes |
+| `primes` | trial division over 2..300000 | 18.9 ms | 25.7 ms | 24.4 ms | 22.2 ms | 137,216 bytes |
+| `mandelbrot` | four 960x540 frames, 2^21 fixed point | 13.0 ms | 12.4 ms | 12.3 ms | 14.2 ms | 137,216 bytes |
+| `splitmix` | 100,000,000 splitmix64 mixes, 64-bit wrap | 81.5 ms | 91.9 ms | 90.5 ms | 105.0 ms | 136,704 bytes |
+| `hex_io` | 400,000 hex-format-then-print values | 27.3 ms | 3178.4 ms | 657.3 ms | 513.3 ms | 136,704 bytes |
+| `many_params` | 10,000,000 six-argument mix calls under an `argc`-derived bound | 14.0 ms | 13.5 ms | 18.4 ms | 15.0 ms | 136,704 bytes |
+| `argv_walk` | 12.8M data-dependent `arg_byte` reads steering the walk | 21.3 ms | 21.5 ms | 22.4 ms | 24.3 ms | 136,704 bytes |
+| `char_stream` | 4 MiB piped through `read_char()`, summed | 10.6 ms | 75.2 ms | 74.2 ms | 16.3 ms | 136,704 bytes |
+| `str_scan` | 200 passes x 66-byte NUL-terminated scan, 12.8M reads | 15.0 ms | 15.2 ms | 16.6 ms | 36.8 ms | 136,704 bytes |
+| `array_sum` | 65536 elements: fill, 100 read-modify-write passes, one summation pass | 11.2 ms | 10.9 ms | 11.4 ms | 11.8 ms | 137,216 bytes |
+| `sieve` | Eratosthenes sieve over 0..65536, 6,542 primes, nested `a[j]` stores | 9.7 ms | 9.9 ms | 10.4 ms | 11.8 ms | 136,704 bytes |
+| `popcount` | 10,000,000 derived values, set-bit count summed | 13.6 ms | 154.8 ms | 26.5 ms | 19.9 ms | 136,704 bytes |
+| `clz` | 10,000,000 derived values, leading-zero count summed | 14.4 ms | 36.7 ms | 16.2 ms | 16.3 ms | 136,704 bytes |
+| `ctz` | 10,000,000 derived values, trailing-zero count summed | 14.3 ms | 19.9 ms | 15.8 ms | 15.5 ms | 136,704 bytes |
+| `bswap` | 10,000,000 byte-swapped values, summed | 15.6 ms | 41.0 ms | 16.5 ms | 16.0 ms | 136,704 bytes |
+| `rotl` | 10,000,000 rotate-left rounds with a masked accumulator | 17.3 ms | 18.0 ms | 16.7 ms | 16.4 ms | 136,704 bytes |
 
 The size column is the linked executable's image size. Every program carries the runtime
 (argv arena, 64 KiB stdin state, printers, divide trap) and an 8 MiB stack reserve (ADR-068)
@@ -359,25 +352,25 @@ that costs nothing on disk, so most images share the same 136,704-byte base; the
 from each other only in their `.text` and `.rdata` sizes.
 
 `popcount`, `clz`, `ctz` and `bswap` are the single-instruction bit cases (ADR-101 to
-ADR-111): each lowers to one x86-64 instruction. In this run each beats C by 26 to 90
-percent; against C++ `clz`, `ctz` and `bswap` are inside the band and `popcount` is 45
-percent faster; against Rust `clz`, `ctz` and `bswap` are inside the band and `popcount`
-is 22 percent faster. `rotl` lowers to one ROL (ADR-114), its hot loop shrank from 18 to 13
-instructions (ADR-115, ADR-116) and to 10 after single-read substitution (ADR-204); in this
-run it ties C and C++ and trails Rust by 11 percent. `binary_gcd` shifts two bits per test
-after ADR-207 and in this run beats C, C++ and Rust by 23, 25 and 13 percent.
+ADR-111, ADR-213): each lowers to one x86-64 instruction, with popcount emitted inline
+rather than called. In this run each beats C by 25 to 91 percent and each is inside the
+band of C++ and Rust except `popcount`, which beats them by 49 and 32 percent. `rotl`
+lowers to one ROL (ADR-114), its hot loop shrank from 18 to 13 instructions (ADR-115,
+ADR-116) and to 10 after single-read substitution (ADR-204), and counted-loop duplication
+(ADR-209) took it 6.6 percent lower; in this run it is 4 percent behind C and 6 percent
+behind Rust, both inside the band. `binary_gcd` shifts two bits per test after ADR-207 and
+here beats C, C++ and Rust by 22, 22 and 11 percent. `mandelbrot`'s inner loop runs 19
+instructions per iteration after the cqo division change (ADR-212), the same count GCC emits.
 
-The harness's own goal lines for this run: faster than C not met on `xorshift`, `fib30`,
-`call_chain`, `tak` and `mandelbrot`; faster than C++ not met on `xorshift`, `fib30`,
-`folded_math`, `call_chain`, `tak`, `mandelbrot`, `str_scan` and `sieve`; faster than Rust
-not met on `mandelbrot`, `ctz`, `bswap` and `rotl`. Those lines are strict comparisons, so
-they also list cases whose gap sits inside the noise band; the banded read is the honest
-one: outside 10 percent Cairn beats C on 12 of 24 cases and loses to it on none, beats C++
-on 10 and loses only to `mandelbrot` (10 percent), and beats Rust on 12 while losing only to
-`rotl` (11 percent). `xorshift` sits at the ISA latency floor (ADR-023) and `mandelbrot` at
-its recurrence (ADR-106); both need a different algorithm, not another lowering tweak, and
-every remaining gap is argued from disassembly and paired A/B runs rather than a single
-measurement.
+This is the first record with no loss outside the 10 percent band against any baseline:
+12 wins, 12 ties and no losses against C; 10 wins, 14 ties and no losses against C++; 15
+wins, 9 ties and no losses against Rust. The harness's own strict lines (Cairn at least as
+fast on every case) still name `mandelbrot`, `many_params` and `array_sum` against C,
+`xorshift`, `mandelbrot` and `rotl` against C++, and `xorshift` and `rotl` against Rust,
+but every one of those gaps is inside the band. `xorshift` sits at the ISA latency floor
+(ADR-023) and `mandelbrot` at its recurrence (ADR-106); both need a different algorithm,
+not another lowering tweak, and every remaining gap is argued from disassembly and paired
+A/B runs rather than a single measurement.
 The twin-parity check (`cargo test --manifest-path rust/Cargo.toml --test twin_parity`)
 rebuilds every benchmark with the Rust compiler and compares its stdout digest with
 `parity/twin_expected.sha256`, which holds each C twin's total frozen once after all four

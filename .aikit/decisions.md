@@ -1928,3 +1928,10 @@ external compiler and was verified end to end.
 - **Context**: ADR-209 and ADR-213 added transforms whose failures would be silent: duplicating a loop body that can leave early, and writing a bit builtin into a destination that also holds the rotate count. Neither shape appeared in the benchmark suite, so nothing would catch a wrong answer.
 - **Decision**: Add three end-to-end tests that compile and run inline programs: rotl whose count lives in the destination home, popcount into a fresh home and into its own value, and a counted loop containing break.
 - **Consequences**: Each test asserts the printed values, so a mis-lowered rotate, popcount or duplicated body fails the suite instead of producing a plausible wrong total. No generated code changed, so the golden manifest is untouched.
+
+### ADR-217: re-capture the performance table on a pinned core
+- **Date**: 2026-11-25
+- **Status**: Accepted
+- **Context**: The published table came from an unpinned quiet record at 92d2757, and three later ADRs changed code generation. Repeated save attempts were refused because other sessions held most cores, until a core scan found core 10 measuring 13.8 ms on the quiet-window probe.
+- **Decision**: Save a pinned record on core 10 (probe 13.97 ms, seven rounds, best kept) and rebuild the table from it, with image sizes measured by the current release compiler. Replace the provenance sentence that listed the post-table deltas with the new record's commit and pin, since the deltas are now inside the table itself.
+- **Consequences**: This record has no loss outside the 10 percent band against any baseline: 12 wins, 12 ties and no losses against C; 10 wins, 14 ties and no losses against C++; 15 wins, 9 ties and no losses against Rust. Every remaining strict miss (mandelbrot, many_params, array_sum against C; xorshift, mandelbrot, rotl against C++; xorshift, rotl against Rust) is inside the band. No code changed, so tests and golden hashes are untouched, and twin parity still passes over 23 cases.
